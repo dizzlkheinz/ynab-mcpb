@@ -203,7 +203,12 @@ export class SecurityMiddleware {
 }
 
 /**
- * Convenience function to wrap tool handlers with security
+ * Create a curried wrapper that applies validation, rate limiting, and logging to a tool handler.
+ *
+ * @param toolName - The name of the tool being invoked
+ * @param operation - The operation or action name within the tool
+ * @param schema - Zod schema used to validate input parameters before the handler runs
+ * @returns A function that takes an `accessToken` and returns a function that takes raw `params`, which returns a function that accepts a handler `(validated: T) => Promise<CallToolResult>`; when invoked, the handler is executed under the security middleware and its `CallToolResult` is returned
  */
 export function withSecurityWrapper<T extends Record<string, unknown>>(
   toolName: string,

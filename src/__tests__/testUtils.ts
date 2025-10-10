@@ -44,7 +44,12 @@ export async function createTestServer(): Promise<YNABMCPServer> {
 }
 
 /**
- * Execute a tool call on the server
+ * Execute a named tool through the server's tool registry.
+ *
+ * @param toolName - The tool identifier to run; a leading `ynab:` prefix will be removed if present.
+ * @param args - Optional arguments to pass to the tool.
+ * @returns The tool's raw execution result as a `CallToolResult`.
+ * @throws Error if the `YNAB_ACCESS_TOKEN` environment variable is not set.
  */
 export async function executeToolCall(
   server: YNABMCPServer,
@@ -69,7 +74,12 @@ export async function executeToolCall(
 }
 
 /**
- * Validate tool result structure
+ * Asserts that a CallToolResult contains a non-empty `content` array composed of text items.
+ *
+ * Verifies the result and its `content` are defined, that `content` is a non-empty array,
+ * and that every item in the array has `type` equal to `'text'` and a `text` property of type `string`.
+ *
+ * @param result - The CallToolResult to validate
  */
 export function validateToolResult(result: CallToolResult): void {
   expect(result).toBeDefined();
@@ -84,7 +94,12 @@ export function validateToolResult(result: CallToolResult): void {
 }
 
 /**
- * Check if a CallToolResult contains an error
+ * Determines whether a tool call result represents an error.
+ *
+ * Inspects the first content item (must be of type `text`) and treats the result as an error
+ * if that text parses to a JSON object containing an `error` property.
+ *
+ * @returns `true` if the first text content parses as a JSON object with an `error` field, `false` otherwise.
  */
 export function isErrorResult(result: CallToolResult): boolean {
   if (!result.content || result.content.length === 0) {
@@ -105,7 +120,9 @@ export function isErrorResult(result: CallToolResult): boolean {
 }
 
 /**
- * Extract error message from a CallToolResult that contains an error
+ * Extracts a human-readable error message from a CallToolResult when the result contains an error.
+ *
+ * @returns A human-readable error message extracted from `result` (falls back to the raw text), or an empty string if no error message is available.
  */
 export function getErrorMessage(result: CallToolResult): string {
   if (!isErrorResult(result)) {
@@ -166,7 +183,11 @@ export function getErrorMessage(result: CallToolResult): string {
 }
 
 /**
- * Parse JSON from tool result
+ * Parse and normalize JSON payload from a CallToolResult's text content.
+ *
+ * @param result - The tool call result whose first content item must be a text string containing JSON.
+ * @returns If the parsed JSON is an object with a `data` property, returns that object (adding `success: true` if missing). If the parsed JSON is an object without `data`, returns `{ success: true, data: <parsed> }`. If the parsed JSON is a non-object or array, returns the parsed value directly.
+ * @throws If the result has no text content, the text is not a string, or the text cannot be parsed as JSON.
  */
 export function parseToolResult<T = any>(result: CallToolResult): T {
   validateToolResult(result);
@@ -370,7 +391,12 @@ export const YNABAssertions = {
   },
 };
 /**
- * Check if an error is a rate limit error
+ * Determine whether a value represents a rate-limit (HTTP 429 / "too many requests") error.
+ *
+ * Inspects common error shapes and messages to identify rate-limit responses.
+ *
+ * @param error - The error value to inspect (may be a string, Error, or an object with status/statusCode/error fields)
+ * @returns `true` if the provided value represents a rate limit error, `false` otherwise.
  */
 export function isRateLimitError(error: any): boolean {
   if (!error) return false;
@@ -402,18 +428,11 @@ export function isRateLimitError(error: any): boolean {
 }
 
 /**
- * Wrapper for integration tests that skips gracefully on rate limit
+ * Runs a test function and skips the test if a YNAB API rate limit error occurs.
  *
- * Usage:
- * ```typescript
- * test('my integration test', async (ctx) => {
- *   await skipOnRateLimit(async () => {
- *     // Test code that might hit rate limits
- *     const result = await callYNABAPI();
- *     expect(result).toBeDefined();
- *   }, ctx);
- * });
- * ```
+ * @param testFn - The test code to execute.
+ * @param context - Optional test context providing a `skip()` method; if present, it will be called when a rate limit is detected.
+ * @returns The value returned by `testFn` or `undefined` if the test was skipped due to a rate limit.
  */
 export async function skipOnRateLimit<T>(
   testFn: () => Promise<T>,

@@ -715,7 +715,10 @@ export class ErrorHandler {
 }
 
 /**
- * Factory function for creating ErrorHandler instances
+ * Create an ErrorHandler configured with the given response formatter.
+ *
+ * @param formatter - Formatter used to convert structured error responses into strings for tool output
+ * @returns A new ErrorHandler configured to use the provided `formatter`
  */
 export function createErrorHandler(formatter: ResponseFormatterContract): ErrorHandler {
   return new ErrorHandler(formatter);
