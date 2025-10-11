@@ -488,29 +488,37 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       it('should demonstrate cache warming after default budget set', async () => {
         if (testConfig.skipE2ETests) return;
 
-        // Get initial cache stats
-        const initialStatsResult = await executeToolCall(server, 'ynab:diagnostic_info');
-        const initialStats = parseToolResult(initialStatsResult);
-        const initialCacheStats = initialStats.data?.cache;
+        // Enable caching for this test
+        testEnv.enableCache();
 
-        // Set default budget (should trigger cache warming)
-        await executeToolCall(server, 'ynab:set_default_budget', {
-          budget_id: testBudgetId,
-        });
+        try {
+          // Get initial cache stats
+          const initialStatsResult = await executeToolCall(server, 'ynab:diagnostic_info');
+          const initialStats = parseToolResult(initialStatsResult);
+          const initialCacheStats = initialStats.data?.cache;
 
-        // Allow time for cache warming (fire-and-forget)
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+          // Set default budget (should trigger cache warming)
+          await executeToolCall(server, 'ynab:set_default_budget', {
+            budget_id: testBudgetId,
+          });
 
-        // Get updated cache stats
-        const finalStatsResult = await executeToolCall(server, 'ynab:diagnostic_info');
-        const finalStats = parseToolResult(finalStatsResult);
-        const finalCacheStats = finalStats.data?.cache;
+          // Allow time for cache warming (fire-and-forget)
+          await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // Verify cache warming occurred
-        expect(finalCacheStats?.entries).toBeGreaterThan(
-          initialCacheStats?.entries || 0,
-        );
-        expect(finalCacheStats?.hits).toBeGreaterThanOrEqual(0);
+          // Get updated cache stats
+          const finalStatsResult = await executeToolCall(server, 'ynab:diagnostic_info');
+          const finalStats = parseToolResult(finalStatsResult);
+          const finalCacheStats = finalStats.data?.cache;
+
+          // Verify cache warming occurred
+          expect(finalCacheStats?.entries).toBeGreaterThan(
+            initialCacheStats?.entries || 0,
+          );
+          expect(finalCacheStats?.hits).toBeGreaterThanOrEqual(0);
+        } finally {
+          // Restore original NODE_ENV
+          testEnv.restoreEnv();
+        }
       });
 
       it('should demonstrate LRU eviction and observability metrics', async () => {
