@@ -16,6 +16,33 @@ const __dirname = path.dirname(__filename);
 const templatePath = path.join(__dirname, '..', '.github', 'pull_request_template.md');
 const template = fs.readFileSync(templatePath, 'utf-8');
 
+// Function to detect the repository's default branch
+function getDefaultBranch() {
+  try {
+    // Try to get the default branch from origin/HEAD
+    const defaultBranch = execSync('git symbolic-ref refs/remotes/origin/HEAD', {
+      encoding: 'utf-8'
+    })
+      .trim()
+      .replace('refs/remotes/origin/', '');
+    return defaultBranch;
+  } catch (err) {
+    // Fallback: try common branch names
+    try {
+      execSync('git rev-parse --verify origin/main', { encoding: 'utf-8', stdio: 'ignore' });
+      return 'main';
+    } catch {
+      try {
+        execSync('git rev-parse --verify origin/master', { encoding: 'utf-8', stdio: 'ignore' });
+        return 'master';
+      } catch {
+        console.warn('Could not detect default branch, using "main" as fallback');
+        return 'main';
+      }
+    }
+  }
+}
+
 // Read package.json for version info
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8')
@@ -32,14 +59,16 @@ try {
   // No changelog
 }
 
+// Detect the default branch
+const defaultBranch = getDefaultBranch();
+
 // Get git info
 let commitMessages = '';
 try {
   const branch = execSync('git branch --show-current', { encoding: 'utf-8' }).trim();
-  const baseBranch = 'master'; // or 'main'
 
-  // Get commit messages since branching
-  const commits = execSync(`git log ${baseBranch}..${branch} --pretty=format:"- %s"`, {
+  // Get commit messages since branching from default branch
+  const commits = execSync(`git log ${defaultBranch}..${branch} --pretty=format:"- %s"`, {
     encoding: 'utf-8'
   }).trim();
 
@@ -53,7 +82,7 @@ try {
 // Get file change stats
 let changeStats = '';
 try {
-  const stats = execSync('git diff --shortstat master...HEAD', {
+  const stats = execSync(`git diff --shortstat ${defaultBranch}...HEAD`, {
     encoding: 'utf-8'
   }).trim();
 
@@ -62,6 +91,42 @@ try {
   }
 } catch (err) {
   console.warn('Could not get change stats');
+}
+
+// Get previous version from default branch
+function getPreviousVersion() {
+  try {
+    // Try to get package.json from default branch
+    const previousPackageJson = execSync(`git show origin/${defaultBranch}:package.json`, {
+      encoding: 'utf-8'
+    });
+    const previousPkg = JSON.parse(previousPackageJson);
+    return previousPkg.version;
+  } catch (err) {
+    // Fallback: try to get the latest git tag
+    try {
+      const latestTag = execSync('git describe --tags --abbrev=0', {
+        encoding: 'utf-8'
+      }).trim();
+      // Remove 'v' prefix if present
+      return latestTag.replace(/^v/, '');
+    } catch {
+      // Fallback: try to get tags sorted by version
+      try {
+        const tags = execSync('git tag --sort=-v:refname', {
+          encoding: 'utf-8'
+        }).trim();
+        const latestTag = tags.split('\n')[0];
+        if (latestTag) {
+          return latestTag.replace(/^v/, '');
+        }
+      } catch {
+        console.warn('Could not determine previous version, using current version as fallback');
+        return packageJson.version;
+      }
+    }
+  }
+  return packageJson.version;
 }
 
 // Smart defaults based on branch name and commits
@@ -106,9 +171,10 @@ if (changeType === 'Major') {
 
 // Add version info
 const currentVersion = packageJson.version;
+const previousVersion = getPreviousVersion();
 description = description.replace(
   '`X.Y.Z` → `X.Y.Z`',
-  `\`${currentVersion}\` → \`${currentVersion}\``
+  `\`${previousVersion}\` → \`${currentVersion}\``
 );
 
 // Add changelog entries if available

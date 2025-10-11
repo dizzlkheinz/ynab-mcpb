@@ -5,7 +5,7 @@ This guide provides the fastest path to test the YNAB MCP server with Claude Des
 ## Prerequisites
 
 1. **YNAB Account**: Active YNAB subscription with transaction data
-2. **YNAB Token**: Personal Access Token from https://app.youneedabudget.com/settings/developer
+2. **YNAB Token**: Personal Access Token from [YNAB developer settings](https://app.youneedabudget.com/settings/developer)
 3. **Node.js**: Version 18.0.0 or higher (`node --version`)
 4. **Claude Desktop**: Latest version installed
 
@@ -158,7 +158,7 @@ Run the same commands from Step 4 again and notice:
 ### Issue: "Invalid or expired token"
 **Solution**:
 1. Check YNAB_ACCESS_TOKEN in .env file
-2. Generate new token at https://app.youneedabudget.com/settings/developer
+2. Generate new token at [YNAB developer settings](https://app.youneedabudget.com/settings/developer)
 3. Restart Claude Desktop after updating token
 
 ### Issue: "No default budget set"

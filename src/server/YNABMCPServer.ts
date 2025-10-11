@@ -749,6 +749,20 @@ export class YNABMCPServer {
   }
 
   /**
+   * Clears the default budget ID (primarily for testing purposes)
+   */
+  clearDefaultBudget(): void {
+    this.defaultBudgetId = undefined;
+  }
+
+  /**
+   * Gets the tool registry instance (for testing purposes)
+   */
+  getToolRegistry(): ToolRegistry {
+    return this.toolRegistry;
+  }
+
+  /**
    * Gets the budget ID to use - either provided or default
    *
    * @deprecated This method is deprecated and should not be used.

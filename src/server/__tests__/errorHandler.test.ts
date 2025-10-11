@@ -9,6 +9,11 @@ import {
   createErrorHandler,
 } from '../errorHandler.js';
 
+afterEach(() => {
+  // Reset global ErrorHandler after each test to prevent cross-suite contamination
+  (ErrorHandler as any).defaultInstance = undefined;
+});
+
 describe('ErrorHandler', () => {
   describe('handleError', () => {
     it('should handle YNABAPIError correctly', () => {

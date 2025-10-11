@@ -362,13 +362,13 @@ Monitor cache performance using the diagnostic tool:
 // Get current cache statistics
 const result = await executeToolCall(server, 'diagnostic_info');
 const diagnostics = JSON.parse(result.content[0].text);
-const cacheStats = diagnostics.data.diagnostics.cache_stats;
+const cacheStats = diagnostics.data.cache;
 
 console.log('Cache Metrics:', {
-  hitRate: `${(cacheStats.hit_rate * 100).toFixed(1)}%`,
-  totalHits: cacheStats.total_hits,
-  totalMisses: cacheStats.total_misses,
-  entries: cacheStats.total_entries,
+  hitRate: `${(cacheStats.hitRate * 100).toFixed(1)}%`,
+  totalHits: cacheStats.hits,
+  totalMisses: cacheStats.misses,
+  entries: cacheStats.entries,
   evictions: cacheStats.evictions
 });
 ```
@@ -388,9 +388,9 @@ console.log('Cache Metrics:', {
 // Monitor memory efficiency
 const stats = cacheManager.getStats();
 const memoryEfficiency = {
-  entriesPerEviction: stats.total_entries / (stats.evictions || 1),
-  cacheUtilization: stats.total_entries / maxEntries,
-  recommendation: stats.evictions > stats.total_hits * 0.1 ?
+  entriesPerEviction: stats.entries / (stats.evictions || 1),
+  cacheUtilization: stats.entries / maxEntries,
+  recommendation: stats.evictions > stats.hits * 0.1 ?
     'Consider increasing YNAB_MCP_CACHE_MAX_ENTRIES' :
     'Memory usage optimal'
 };
@@ -403,11 +403,11 @@ const memoryEfficiency = {
 setInterval(() => {
   const stats = cacheManager.getStats();
 
-  if (stats.hit_rate < 0.5) {
-    console.warn('Low cache hit rate detected:', stats.hit_rate);
+  if (stats.hitRate < 0.5) {
+    console.warn('Low cache hit rate detected:', stats.hitRate);
   }
 
-  if (stats.evictions > stats.total_hits * 0.2) {
+  if (stats.evictions > stats.hits * 0.2) {
     console.warn('High eviction rate detected, consider increasing cache size');
   }
 }, 300000); // Every 5 minutes
@@ -487,7 +487,7 @@ class CacheOptimizer {
     const stats = cacheManager.getStats();
 
     return {
-      performance: this.getPerformanceRating(stats.hit_rate),
+      performance: this.getPerformanceRating(stats.hitRate),
       recommendations: this.getRecommendations(stats),
       efficiency: this.calculateEfficiency(stats)
     };
@@ -503,16 +503,16 @@ class CacheOptimizer {
   static getRecommendations(stats: CacheStats): string[] {
     const recommendations = [];
 
-    if (stats.hit_rate < 0.5) {
+    if (stats.hitRate < 0.5) {
       recommendations.push('Consider implementing cache warming');
       recommendations.push('Review TTL settings for frequently accessed data');
     }
 
-    if (stats.evictions > stats.total_hits * 0.2) {
+    if (stats.evictions > stats.hits * 0.2) {
       recommendations.push('Increase YNAB_MCP_CACHE_MAX_ENTRIES');
     }
 
-    if (stats.total_entries < 10) {
+    if (stats.entries < 10) {
       recommendations.push('Cache usage seems low, verify data access patterns');
     }
 

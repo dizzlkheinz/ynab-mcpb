@@ -603,7 +603,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         if (testConfig.skipE2ETests) return;
 
         // Clear default budget first
-        server['defaultBudgetId'] = undefined;
+        server.clearDefaultBudget();
 
         // Test multiple tools for consistent error handling
         const toolsToTest = [
@@ -858,7 +858,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         if (testConfig.skipE2ETests) return;
 
         // Clear default budget
-        server['defaultBudgetId'] = undefined;
+        server.clearDefaultBudget();
 
         const result = await executeToolCall(server, 'ynab:list_accounts', {});
         expect(isErrorResult(result)).toBe(true);

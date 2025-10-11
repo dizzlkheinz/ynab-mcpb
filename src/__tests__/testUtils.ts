@@ -1,4 +1,3 @@
-import type { ToolRegistry } from '../server/toolRegistry.js';
 /**
  * Test utilities for comprehensive testing suite
  */
@@ -61,7 +60,7 @@ export async function executeToolCall(
     throw new Error('YNAB_ACCESS_TOKEN is required for tool execution');
   }
 
-  const registry = (server as unknown as { toolRegistry: ToolRegistry }).toolRegistry;
+  const registry = server.getToolRegistry();
   const normalizedName = toolName.startsWith('ynab:')
     ? toolName.slice(toolName.indexOf(':') + 1)
     : toolName;

@@ -125,10 +125,9 @@ export interface YNABTransaction {
 
 export interface TransactionMatch {
   bank_transaction: BankTransaction;
-  ynab_transaction: YNABTransaction | null;
-  match_confidence: number;
-  match_type: 'exact' | 'fuzzy' | 'none';
-  suggestions?: PayeeSuggestion[];
+  ynab_transaction: YNABTransaction;
+  match_score: number;
+  match_reasons: string[];
 }
 
 export interface ParsedCSVData {
@@ -262,7 +261,7 @@ export function findMatches(
     const match = findBestMatch(bankTxn, ynabTransactions, usedYnabIds, matchConfig);
     matches.push(match);
 
-    if (match.ynab_transaction && match.match_confidence > 0.8) {
+    if (match.match_score > 80) {
       usedYnabIds.add(match.ynab_transaction.id);
     }
   }
@@ -279,55 +278,72 @@ function findBestMatch(
   usedIds: Set<string>,
   config: MatchingConfig
 ): TransactionMatch {
-  let bestMatch: TransactionMatch = {
-    bank_transaction: bankTxn,
-    ynab_transaction: null,
-    match_confidence: 0,
-    match_type: 'none'
-  };
+  let bestMatch: TransactionMatch | null = null;
+  let bestScore = 0;
 
   for (const ynabTxn of ynabTransactions) {
     if (usedIds.has(ynabTxn.id)) continue;
 
-    const confidence = calculateMatchConfidence(bankTxn, ynabTxn, config);
+    const { score, reasons } = calculateMatchScore(bankTxn, ynabTxn, config);
 
-    if (confidence > bestMatch.match_confidence) {
+    if (score > bestScore) {
+      bestScore = score;
       bestMatch = {
         bank_transaction: bankTxn,
         ynab_transaction: ynabTxn,
-        match_confidence: confidence,
-        match_type: confidence > 0.95 ? 'exact' : confidence > 0.6 ? 'fuzzy' : 'none'
+        match_score: score,
+        match_reasons: reasons
       };
     }
   }
 
-  return bestMatch;
+  // Return best match or create a no-match entry
+  return bestMatch || createNoMatch(bankTxn);
 }
 
 /**
- * Calculates match confidence between bank and YNAB transactions
+ * Creates a no-match entry for unmatched bank transactions
  */
-function calculateMatchConfidence(
+function createNoMatch(bankTxn: BankTransaction): TransactionMatch {
+  return {
+    bank_transaction: bankTxn,
+    ynab_transaction: createPlaceholderYNABTransaction(),
+    match_score: 0,
+    match_reasons: ['No matching transaction found in YNAB']
+  };
+}
+
+/**
+ * Calculates match score and reasons between bank and YNAB transactions
+ */
+function calculateMatchScore(
   bankTxn: BankTransaction,
   ynabTxn: YNABTransaction,
   config: MatchingConfig
-): number {
+): { score: number; reasons: string[] } {
+  const reasons: string[] = [];
+
   // Date similarity
   const dateSimilarity = calculateDateSimilarity(bankTxn.date, ynabTxn.date, config.dateToleranceDays);
+  if (dateSimilarity > 0.9) reasons.push('Matching dates');
 
   // Amount similarity
   const amountSimilarity = calculateAmountSimilarity(bankTxn.amount, ynabTxn.amount, config.amountToleranceCents);
+  if (amountSimilarity > 0.9) reasons.push('Matching amounts');
 
   // Description similarity
   const descriptionSimilarity = calculateDescriptionSimilarity(bankTxn.description, ynabTxn.payee_name);
+  if (descriptionSimilarity > 0.7) reasons.push('Similar descriptions');
 
-  // Weighted average
+  // Weighted average (0-100 scale)
   const weights = { date: 0.4, amount: 0.4, description: 0.2 };
-  return (
+  const score = Math.round((
     dateSimilarity * weights.date +
     amountSimilarity * weights.amount +
     descriptionSimilarity * weights.description
-  );
+  ) * 100);
+
+  return { score, reasons };
 }
 
 // Utility functions for similarity calculations
@@ -346,7 +362,7 @@ function calculateDescriptionSimilarity(desc1: string, desc2: string | null): nu
 
 #### formatter.ts - Response Formatting
 ```typescript
-import type { TransactionMatch, PayeeSuggestion } from './types.js';
+import type { TransactionMatch } from './types.js';
 
 /**
  * Formats comparison results for response
@@ -354,12 +370,10 @@ import type { TransactionMatch, PayeeSuggestion } from './types.js';
 export function formatComparisonResults(matches: TransactionMatch[]): any {
   const summary = generateSummary(matches);
   const formattedMatches = matches.map(formatMatch);
-  const suggestions = generatePayeeSuggestions(matches);
 
   return {
     summary,
     matches: formattedMatches,
-    payee_suggestions: suggestions,
     recommendations: generateRecommendations(matches)
   };
 }
@@ -368,16 +382,16 @@ export function formatComparisonResults(matches: TransactionMatch[]): any {
  * Generates summary statistics
  */
 function generateSummary(matches: TransactionMatch[]) {
-  const exactMatches = matches.filter(m => m.match_type === 'exact').length;
-  const fuzzyMatches = matches.filter(m => m.match_type === 'fuzzy').length;
-  const unmatched = matches.filter(m => m.match_type === 'none').length;
+  const highConfidenceMatches = matches.filter(m => m.match_score >= 95).length;
+  const mediumConfidenceMatches = matches.filter(m => m.match_score >= 60 && m.match_score < 95).length;
+  const lowConfidenceMatches = matches.filter(m => m.match_score < 60).length;
 
   return {
     total_bank_transactions: matches.length,
-    exact_matches: exactMatches,
-    fuzzy_matches: fuzzyMatches,
-    unmatched_transactions: unmatched,
-    match_rate: ((exactMatches + fuzzyMatches) / matches.length * 100).toFixed(1)
+    high_confidence_matches: highConfidenceMatches,
+    medium_confidence_matches: mediumConfidenceMatches,
+    low_confidence_matches: lowConfidenceMatches,
+    match_rate: ((highConfidenceMatches + mediumConfidenceMatches) / matches.length * 100).toFixed(1)
   };
 }
 
@@ -391,25 +405,17 @@ function formatMatch(match: TransactionMatch) {
       amount: formatAmount(match.bank_transaction.amount),
       description: match.bank_transaction.description
     },
-    ynab_transaction: match.ynab_transaction ? {
+    ynab_transaction: {
       id: match.ynab_transaction.id,
       date: match.ynab_transaction.date,
       amount: formatAmount(match.ynab_transaction.amount / 1000), // Convert from milliunits
       payee: match.ynab_transaction.payee_name,
       category: match.ynab_transaction.category_name,
       cleared: match.ynab_transaction.cleared
-    } : null,
-    match_confidence: Math.round(match.match_confidence * 100),
-    match_type: match.match_type,
-    suggestions: match.suggestions || []
+    },
+    match_score: match.match_score,
+    match_reasons: match.match_reasons
   };
-}
-
-/**
- * Generates payee suggestions for unmatched transactions
- */
-function generatePayeeSuggestions(matches: TransactionMatch[]): PayeeSuggestion[] {
-  // Implementation for generating intelligent payee suggestions
 }
 
 /**
@@ -432,20 +438,16 @@ function formatAmount(amount: number): string {
 
 #### index.ts - Main Handler and Barrel Exports
 ```typescript
-// Main handler orchestration
-import { handleCompareTransactions } from './handler.js';
-
-// Barrel exports for backward compatibility
-export { handleCompareTransactions };
+// Type exports for backward compatibility
 export type * from './types.js';
 
 // Module exports for reuse
 export { parseBankCSV, detectDelimiter } from './parser.js';
-export { findMatches, calculateMatchConfidence } from './matcher.js';
+export { findMatches } from './matcher.js';
 export { formatComparisonResults } from './formatter.js';
 
-// Main handler implementation
-async function handleCompareTransactionsImpl(params: CompareTransactionsRequest) {
+// Main handler implementation - exported for backward compatibility
+export async function handleCompareTransactions(params: CompareTransactionsRequest) {
   // Orchestrate the parsing, matching, and formatting
   const csvData = parseBankCSV(params.csv_content);
   const ynabTransactions = await fetchYNABTransactions(params.budget_id, params.account_id);
@@ -1077,8 +1079,8 @@ describe('compareTransactions integration', () => {
 
     expect(parsed.transactions).toHaveLength(1);
     expect(matches).toHaveLength(1);
-    expect(matches[0].match_type).toBe('exact');
-    expect(formatted.summary.exact_matches).toBe(1);
+    expect(matches[0].match_score).toBeGreaterThan(95);
+    expect(formatted.summary.high_confidence_matches).toBe(1);
   });
 });
 ```
@@ -1115,7 +1117,7 @@ describe('compareTransactions handler', () => {
     const result = await handleCompareTransactions(params);
 
     expect(result.success).toBe(true);
-    expect(result.data.comparison_result.summary.exact_matches).toBe(1);
+    expect(result.data.comparison_result.summary.high_confidence_matches).toBe(1);
     expect(result.data.csv_info.valid_rows).toBe(1);
   });
 });

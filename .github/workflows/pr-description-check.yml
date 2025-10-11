@@ -4,14 +4,20 @@ on:
   pull_request:
     types: [opened, edited, synchronize]
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
 jobs:
   check-description:
     runs-on: ubuntu-latest
     steps:
       - name: Check PR Description Format
-        uses: actions/github-script@v7
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           script: |
+            const core = require('@actions/core');
             const body = context.payload.pull_request.body || '';
 
             // Required sections from template
@@ -26,27 +32,50 @@ jobs:
             );
 
             if (missingSections.length > 0) {
-              const comment = `⚠️ **PR Description Check Failed**
+              // Build comment as array to avoid YAML indentation issues
+              const commentLines = [
+                '⚠️ **PR Description Check Failed**',
+                '',
+                'The PR description is missing required sections from the template:',
+                ...missingSections.map(s => `- ${s}`),
+                '',
+                'Please update the description to include these sections. You can view the template at:',
+                `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/master/.github/pull_request_template.md`,
+                '',
+                'Or run this command to update it:',
+                '```bash',
+                `gh pr edit ${context.payload.pull_request.number} --body-file .github/pull_request_template.md`,
+                '```'
+              ];
+              const comment = commentLines.join('\n');
 
-The PR description is missing required sections from the template:
-${missingSections.map(s => `- ${s}`).join('\n')}
-
-Please update the description to include these sections. You can view the template at:
-https://github.com/${context.repo.owner}/${context.repo.repo}/blob/master/.github/pull_request_template.md
-
-Or run this command to update it:
-\`\`\`bash
-gh pr edit ${context.payload.pull_request.number} --body-file .github/pull_request_template.md
-\`\`\`
-`;
-
-              // Post comment
-              await github.rest.issues.createComment({
+              // Upsert comment: update existing bot comment or create new one
+              const botCommentPrefix = '⚠️ **PR Description Check Failed**';
+              const { data: comments } = await github.rest.issues.listComments({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                body: comment
+                issue_number: context.payload.pull_request.number
               });
+
+              const existingComment = comments.find(
+                c => c.user.type === 'Bot' && c.body.startsWith(botCommentPrefix)
+              );
+
+              if (existingComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existingComment.id,
+                  body: comment
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body: comment
+                });
+              }
 
               // Fail the check
               core.setFailed(`Missing required sections: ${missingSections.join(', ')}`);

@@ -1,9 +1,9 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 /**
- * Response formatter contract for dependency injection
+ * Response formatter contract for dependency injection in error handling
  */
-interface ResponseFormatterContract {
+interface ErrorResponseFormatter {
   format(value: unknown): string;
 }
 
@@ -72,17 +72,17 @@ export class ValidationError extends Error {
  * Centralized error handling middleware for all YNAB MCP tools
  */
 export class ErrorHandler {
-  private formatter: ResponseFormatterContract;
+  private formatter: ErrorResponseFormatter;
   private static defaultInstance: ErrorHandler;
 
-  constructor(formatter: ResponseFormatterContract) {
+  constructor(formatter: ErrorResponseFormatter) {
     this.formatter = formatter;
   }
 
   /**
    * Creates a fallback formatter for when no formatter is injected
    */
-  private static createFallbackFormatter(): ResponseFormatterContract {
+  private static createFallbackFormatter(): ErrorResponseFormatter {
     return {
       format: (value: unknown) => JSON.stringify(value, null, 2),
     };
@@ -91,7 +91,7 @@ export class ErrorHandler {
   /**
    * Sets the formatter for the default instance (backward compatibility)
    */
-  static setFormatter(formatter: ResponseFormatterContract): void {
+  static setFormatter(formatter: ErrorResponseFormatter): void {
     ErrorHandler.defaultInstance = new ErrorHandler(formatter);
   }
 
@@ -632,10 +632,14 @@ export class ErrorHandler {
 
     // Remove sensitive information patterns
     details = details
-      .replace(/token[s]?[:\s=]+[a-zA-Z0-9_-]+/gi, 'token=***')
-      .replace(/key[s]?[:\s=]+[a-zA-Z0-9_-]+/gi, 'key=***')
-      .replace(/password[s]?[:\s=]+[a-zA-Z0-9_-]+/gi, 'password=***')
-      .replace(/authorization[:\s=]+[a-zA-Z0-9\s_-]+/gi, 'authorization=***');
+      // token=..., token: ..., token ... → redact until line/quote end
+      .replace(/token[s]?[:\s=]+[^\r\n"']+/gi, 'token=***')
+      .replace(/key[s]?[:\s=]+[^\r\n"']+/gi, 'key=***')
+      .replace(/password[s]?[:\s=]+[^\r\n"']+/gi, 'password=***')
+      // Authorization header (any scheme), redact rest of value
+      .replace(/authorization[:\s=]+[^\r\n]+/gi, 'authorization=***')
+      // Common Bearer/JWT forms in free text
+      .replace(/\bBearer\s+[A-Za-z0-9._-]+/gi, 'Bearer ***');
 
     return details;
   }
@@ -720,7 +724,7 @@ export class ErrorHandler {
  * @param formatter - Formatter used to convert structured error responses into strings for tool output
  * @returns A new ErrorHandler configured to use the provided `formatter`
  */
-export function createErrorHandler(formatter: ResponseFormatterContract): ErrorHandler {
+export function createErrorHandler(formatter: ErrorResponseFormatter): ErrorHandler {
   return new ErrorHandler(formatter);
 }
 
