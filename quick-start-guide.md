@@ -11,19 +11,7 @@ This guide provides the fastest path to test the YNAB MCP server with Claude Des
 
 ## Step 1: Environment Setup
 
-```bash
-# Navigate to the project directory (replace with your local path)
-cd /path/to/ynab-mcp-dxt
-
-# Install dependencies (if not already done)
-npm install
-
-# If this is your first time, create the env file:
-# cp .env.example .env    # or create .env manually if the example is unavailable
 # Then open .env in your editor and add/update:
-
-**Verify your .env file contains**:
-- `YNAB_ACCESS_TOKEN=your_actual_token`
 - `LOG_LEVEL=debug` (for detailed testing logs)
 - `YNAB_EXPORT_PATH=./test-exports` (for testing exports)
 ## Step 2: Build and Test

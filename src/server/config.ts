@@ -8,10 +8,10 @@
 import { ServerConfig, ConfigurationError } from '../types/index.js';
 
 /**
- * Validates required environment variables and returns server configuration
+ * Create a ServerConfig from environment variables after validating required values.
  *
- * @returns ServerConfig with validated configuration
- * @throws ConfigurationError if environment validation fails
+ * @returns The validated ServerConfig.
+ * @throws ConfigurationError if `YNAB_ACCESS_TOKEN` is missing or not a non-empty string.
  */
 export function validateEnvironment(): ServerConfig {
   const accessToken = process.env['YNAB_ACCESS_TOKEN'];

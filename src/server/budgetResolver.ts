@@ -196,30 +196,29 @@ You can use the list_budgets tool to see available budget IDs.`;
  */
 
 /**
- * Resolves a budget ID using provided ID or default, with standardized error handling
+ * Resolve a budget ID from a provided value or a default, producing standardized validation errors when necessary.
  *
- * @param providedId - The budget ID provided by the user (optional)
- * @param defaultId - The default budget ID to fall back to (optional)
- * @returns The resolved budget ID string or CallToolResult with error
+ * @param providedId - Budget ID supplied by the caller (optional)
+ * @param defaultId - Default budget ID to use if `providedId` is not present (optional)
+ * @returns The resolved budget ID string, or a `CallToolResult` describing a validation error
  */
 export function resolveBudgetId(providedId?: string, defaultId?: string): string | CallToolResult {
   return BudgetResolver.resolveBudgetId(providedId, defaultId);
 }
 
 /**
- * Validates that a budget ID has the correct format
+ * Validates a budget identifier and returns the canonical budget ID when valid.
  *
- * @param budgetId - The budget ID to validate
- * @returns The validated budget ID or CallToolResult with error
+ * @returns The validated budget ID string, or a CallToolResult describing the validation error.
  */
 export function validateBudgetId(budgetId: string): string | CallToolResult {
   return BudgetResolver.validateBudgetId(budgetId);
 }
 
 /**
- * Creates a standardized error response for missing budget scenarios
+ * Construct a standardized validation error indicating a budget ID is required.
  *
- * @returns CallToolResult with standardized error response
+ * @returns A CallToolResult representing a validation error that explains a budget_id is missing and provides guidance to supply a `budget_id` or configure a default budget.
  */
 export function createMissingBudgetError(): CallToolResult {
   return BudgetResolver.createMissingBudgetError();
