@@ -102,7 +102,7 @@ export class YNABMCPServer {
   private ynabAPI: ynab.API;
   private config: ServerConfig;
   private exitOnError: boolean;
-  private defaultBudgetId?: string;
+  private defaultBudgetId: string | undefined;
   private serverVersion: string;
   private toolRegistry: ToolRegistry;
   private resourceManager: ResourceManager;
