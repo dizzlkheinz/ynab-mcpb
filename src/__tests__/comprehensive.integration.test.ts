@@ -776,12 +776,14 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
     });
 
     afterAll(() => {
+      // Restore NODE_ENV after all caching tests complete
       if (previousNodeEnv === undefined) {
         delete process.env['NODE_ENV'];
       } else {
         process.env['NODE_ENV'] = previousNodeEnv;
       }
     });
+
     it('should cache budget list requests and improve performance on subsequent calls', async () => {
       const mockBudgets = {
         data: {
@@ -1047,11 +1049,6 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
 
       // Verify API was only called once (second call used cache)
       expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledTimes(1);
-    });
-
-    afterEach(() => {
-      // Reset NODE_ENV back to test
-      process.env['NODE_ENV'] = 'test';
     });
   });
 });

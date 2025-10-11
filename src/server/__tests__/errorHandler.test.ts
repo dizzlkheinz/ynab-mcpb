@@ -324,7 +324,7 @@ describe('Static method delegation', () => {
 
 describe('Fallback formatter', () => {
   it('should use fallback formatter when none is set initially', () => {
-    // Reset to ensure we start fresh
+    // Note: Global state reset happens via afterEach in "Static method delegation" block
     const error = new ValidationError('Test error');
     const result = ErrorHandler.handleError(error, 'testing');
 
@@ -334,6 +334,12 @@ describe('Fallback formatter', () => {
 });
 
 describe('Instance vs static behavior', () => {
+  afterEach(() => {
+    // Reset the global ErrorHandler formatter after each test
+    // This ensures tests don't pollute each other with custom formatters
+    (ErrorHandler as any).defaultInstance = undefined;
+  });
+
   it('should produce identical results for instance and static calls', () => {
     const formatter = { format: (value: unknown) => JSON.stringify(value) };
     const errorHandler = createErrorHandler(formatter);

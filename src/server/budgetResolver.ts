@@ -9,7 +9,7 @@ export class BudgetResolver {
   /**
    * UUID format validation regex (accepts UUID versions 1-5)
    */
-  private static readonly UUID_V4_REGEX =
+  private static readonly UUID_REGEX =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   /**
@@ -20,6 +20,12 @@ export class BudgetResolver {
   /**
    * Resolves a budget ID using provided ID or default, with standardized error handling.
    * Maps keywords ('default') to concrete budget IDs to prevent 404s from YNAB API.
+   *
+   * Note: While YNAB API natively supports the "default" keyword, this MCP server
+   * intentionally intercepts it to use its own locally-stored default budget ID
+   * (set via set_default_budget tool). This provides caching, consistency, and
+   * allows the MCP server to maintain default budget state independently of YNAB's
+   * OAuth default budget setting.
    *
    * @param providedId - The budget ID provided by the user (optional)
    * @param defaultId - The default budget ID to fall back to (optional)
@@ -32,11 +38,12 @@ export class BudgetResolver {
 
       // Handle special keywords
       if (trimmed === 'default') {
-        // For "default" keyword, we need to use the actual default budget ID if available
+        // For "default" keyword, we use the MCP server's stored default budget ID
+        // rather than passing "default" to YNAB API (see function JSDoc for rationale)
         if (defaultId) {
           return this.validateBudgetId(defaultId);
         }
-        // No default budget set, return error
+        // No default budget set in MCP server, return error
         return this.createMissingBudgetError();
       }
 
@@ -93,7 +100,7 @@ export class BudgetResolver {
     }
 
     // Validate UUID format
-    if (!this.UUID_V4_REGEX.test(trimmed)) {
+    if (!this.UUID_REGEX.test(trimmed)) {
       return this.createInvalidBudgetError(
         `Invalid budget ID format: '${trimmed}'. Must be a valid UUID format (versions 1-5)`,
       );
