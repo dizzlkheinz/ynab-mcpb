@@ -27,15 +27,6 @@ A Model Context Protocol (MCP) server that provides AI assistants with secure ac
 - **📊 Enhanced Observability**: Comprehensive cache metrics and diagnostics for better system monitoring
 - **🔄 100% Backward Compatibility**: All v0.7.x functionality preserved with identical API behavior
 
-## 🎉 What's New in v0.6.0
-
-- **🔧 Consolidated Debug Tools**: Streamlined 5 debug tools into a single comprehensive `diagnostic_info` tool with flexible parameters
-- **🏦 Enhanced Bank Reconciliation**: Smart duplicate amount matching with chronological order preference (fixes multiple identical transactions)
-- **📅 Automatic Date Adjustment**: Sync YNAB transaction dates with bank processing dates for perfect alignment
-- **🎯 Exact Balance Matching**: Zero tolerance reconciliation ensures perfect balance alignment
-- **📊 Improved Date Range Reporting**: Clear visibility into reconciliation time periods and data ranges
-- **⚡ Better Tool Organization**: Cleaner MCP interface with 80% reduction in debug tool clutter
-
 ## Features
 
 - **Complete YNAB Integration**: Access all major YNAB features including budgets, accounts, transactions, categories, payees, and monthly data
