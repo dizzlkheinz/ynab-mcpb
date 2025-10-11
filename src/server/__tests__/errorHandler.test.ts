@@ -334,6 +334,11 @@ describe('Fallback formatter', () => {
 });
 
 describe('Instance vs static behavior', () => {
+  afterEach(() => {
+    // Reset the global ErrorHandler formatter after each test
+    (ErrorHandler as any).defaultInstance = undefined;
+  });
+
   it('should produce identical results for instance and static calls', () => {
     const formatter = { format: (value: unknown) => JSON.stringify(value) };
     const errorHandler = createErrorHandler(formatter);
