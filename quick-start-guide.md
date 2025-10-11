@@ -18,15 +18,14 @@ cd /path/to/ynab-mcp-dxt
 # Install dependencies (if not already done)
 npm install
 
-# Your .env file is already configured with development settings
-# Just need to ensure your YNAB_ACCESS_TOKEN is set correctly
-```
+# If this is your first time, create the env file:
+# cp .env.example .env    # or create .env manually if the example is unavailable
+# Then open .env in your editor and add/update:
 
 **Verify your .env file contains**:
 - `YNAB_ACCESS_TOKEN=your_actual_token`
 - `LOG_LEVEL=debug` (for detailed testing logs)
 - `YNAB_EXPORT_PATH=./test-exports` (for testing exports)
-
 ## Step 2: Build and Test
 
 ```bash
