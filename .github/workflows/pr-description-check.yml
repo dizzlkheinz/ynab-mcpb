@@ -50,11 +50,16 @@ jobs:
 
               // Upsert comment: update existing bot comment or create new one
               const botCommentPrefix = '⚠️ **PR Description Check Failed**';
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number
-              });
+              // Paginate through all comments to handle PRs with >30 comments
+              const comments = await github.paginate(
+                github.rest.issues.listComments,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  per_page: 100
+                }
+              );
 
               const existingComment = comments.find(
                 c => c.user.type === 'Bot' && c.body.startsWith(botCommentPrefix)
