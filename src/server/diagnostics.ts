@@ -98,7 +98,10 @@ export interface DiagnosticDependencies {
 }
 
 /**
- * Utility functions for formatting diagnostic data
+ * Formats a duration given in milliseconds into a concise human-readable uptime string.
+ *
+ * @param ms - Duration in milliseconds
+ * @returns A string such as "1d 2h 3m 4s", "2h 3m 4s", "3m 4s", or "45s" depending on the magnitude
  */
 export function formatUptime(ms: number): string {
   const seconds = Math.floor(ms / 1000);
@@ -117,10 +120,28 @@ export function formatUptime(ms: number): string {
   }
 }
 
+/**
+ * Convert a byte count to megabytes with two-decimal precision.
+ *
+ * @param bytes - The number of bytes to convert
+ * @returns The size in megabytes rounded to two decimal places
+ */
 export function formatBytes(bytes: number): number {
   return Math.round((bytes / 1024 / 1024) * 100) / 100;
 }
 
+/**
+ * Produce a masked preview of an access token for safe display.
+ *
+ * The masking rules:
+ * - If `token` is falsy, returns `null`.
+ * - If `token` length is less than 8, returns the first character followed by `***`.
+ * - Otherwise, returns the first four characters, `...`, and the last four characters.
+ * - If the token contains a trailing hyphen segment within 6 characters of the end, the trailing segment (including the hyphen) is used as the last part.
+ *
+ * @param token - The token to mask
+ * @returns The masked token preview, or `null` if `token` is falsy
+ */
 export function maskToken(token: string | undefined): string | null {
   if (!token) return null;
 
