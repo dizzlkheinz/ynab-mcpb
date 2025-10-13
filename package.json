@@ -10,7 +10,7 @@
   "scripts": {
     "prebuild": "npm run clean",
     "build": "rimraf dist && tsc && npm run bundle",
-    "postbuild": "npm run generate:dxt",
+    "postbuild": "node scripts/run-generate-dxt.js",
     "build:no-lint": "npm run clean && tsc && npm run bundle",
     "build:prod": "npm run prebuild && tsc --project tsconfig.prod.json && npm run bundle:prod && npm run verify-build",
     "clean": "rimraf dist",
@@ -35,7 +35,7 @@
     "test:comprehensive": "tsx src/__tests__/testRunner.ts",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:performance",
     "filter-test-results": "node -e \"const fs = require('fs'); try { const results = JSON.parse(fs.readFileSync('test-results.json', 'utf-8')); results.testResults = results.testResults.filter(r => r.status === 'fail'); fs.writeFileSync('test-results.json', JSON.stringify(results, null, 2)); } catch (e) { console.error('Failed to filter test results:', e); process.exit(1); }\"",
-    "generate:dxt": "powershell -ExecutionPolicy Bypass -File scripts/generate-dxt.ps1",
+    "generate:dxt": "node scripts/run-generate-dxt.js",
     "bundle": "esbuild dist/index.js --bundle --platform=node --format=cjs --outfile=dist/bundle/index.cjs --sourcemap",
     "bundle:prod": "esbuild dist/index.js --bundle --platform=node --format=cjs --outfile=dist/bundle/index.cjs --minify",
     "package:dxt": "npm run build:prod && npm run generate:dxt",
