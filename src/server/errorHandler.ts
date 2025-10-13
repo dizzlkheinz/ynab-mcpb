@@ -632,10 +632,10 @@ export class ErrorHandler {
 
     // Remove sensitive information patterns
     details = details
-      // token=..., token: ..., token ... → redact until line/quote end
-      .replace(/token[s]?[:\s=]+[^\r\n"']+/gi, 'token=***')
-      .replace(/key[s]?[:\s=]+[^\r\n"']+/gi, 'key=***')
-      .replace(/password[s]?[:\s=]+[^\r\n"']+/gi, 'password=***')
+      // token=..., token: ..., token ... → redact until delimiter or whitespace
+      .replace(/token[s]?[:\s=]+([^\s,"']+)/gi, 'token=***')
+      .replace(/key[s]?[:\s=]+([^\s,"']+)/gi, 'key=***')
+      .replace(/password[s]?[:\s=]+([^\s,"']+)/gi, 'password=***')
       // Authorization header (any scheme), redact rest of value
       .replace(/authorization[:\s=]+[^\r\n]+/gi, 'authorization=***')
       // Common Bearer/JWT forms in free text
