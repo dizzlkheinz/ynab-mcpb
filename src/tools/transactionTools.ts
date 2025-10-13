@@ -5,7 +5,7 @@ import { SaveSubTransaction } from 'ynab/dist/models/SaveSubTransaction.js';
 import { z } from 'zod/v4';
 import { withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
-import { milliunitsToAmount } from '../utils/amountUtils.js';
+import { amountToMilliunits, milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
 
 /**
@@ -95,6 +95,93 @@ export const CreateTransactionSchema = z
   });
 
 export type CreateTransactionParams = z.infer<typeof CreateTransactionSchema>;
+
+const ReceiptSplitItemSchema = z
+  .object({
+    name: z.string().min(1, 'Item name is required'),
+    amount: z
+      .number()
+      .finite('Item amount must be a finite number')
+      .refine((value) => value >= 0, 'Item amount must be zero or greater'),
+    quantity: z
+      .number()
+      .finite('Quantity must be a finite number')
+      .positive('Quantity must be greater than zero')
+      .optional(),
+    memo: z.string().optional(),
+  })
+  .strict();
+
+const ReceiptSplitCategorySchema = z
+  .object({
+    category_id: z.string().min(1, 'Category ID is required'),
+    category_name: z.string().optional(),
+    items: z.array(ReceiptSplitItemSchema).min(1, 'Each category must include at least one item'),
+  })
+  .strict();
+
+export const CreateReceiptSplitTransactionSchema = z
+  .object({
+    budget_id: z.string().min(1, 'Budget ID is required'),
+    account_id: z.string().min(1, 'Account ID is required'),
+    payee_name: z.string().min(1, 'Payee name is required'),
+    date: z
+      .string()
+      .regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
+      .optional(),
+    memo: z.string().optional(),
+    receipt_subtotal: z
+      .number()
+      .finite('Receipt subtotal must be a finite number')
+      .refine((value) => value >= 0, 'Receipt subtotal must be zero or greater')
+      .optional(),
+    receipt_tax: z
+      .number()
+      .finite('Receipt tax must be a finite number')
+      .refine((value) => value >= 0, 'Receipt tax must be zero or greater'),
+    receipt_total: z
+      .number()
+      .finite('Receipt total must be a finite number')
+      .refine((value) => value > 0, 'Receipt total must be greater than zero'),
+    categories: z
+      .array(ReceiptSplitCategorySchema)
+      .min(1, 'At least one categorized group is required to create a split transaction'),
+    cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
+    approved: z.boolean().optional(),
+    flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional(),
+    dry_run: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    const itemsSubtotal = data.categories
+      .flatMap((category) => category.items)
+      .reduce((sum, item) => sum + item.amount, 0);
+
+    if (data.receipt_subtotal !== undefined) {
+      const delta = Math.abs(data.receipt_subtotal - itemsSubtotal);
+      if (delta > 0.01) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Receipt subtotal (${data.receipt_subtotal.toFixed(2)}) does not match categorized items total (${itemsSubtotal.toFixed(2)})`,
+          path: ['receipt_subtotal'],
+        });
+      }
+    }
+
+    const expectedTotal = itemsSubtotal + data.receipt_tax;
+    const deltaTotal = Math.abs(expectedTotal - data.receipt_total);
+    if (deltaTotal > 0.01) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Receipt total (${data.receipt_total.toFixed(2)}) does not match subtotal plus tax (${expectedTotal.toFixed(2)})`,
+        path: ['receipt_total'],
+      });
+    }
+  });
+
+export type CreateReceiptSplitTransactionParams = z.infer<
+  typeof CreateReceiptSplitTransactionSchema
+>;
 
 /**
  * Schema for ynab:update_transaction tool parameters
@@ -489,6 +576,225 @@ export async function handleCreateTransaction(
   } catch (error) {
     return handleTransactionError(error, 'Failed to create transaction');
   }
+}
+
+interface ReceiptCategoryCalculation {
+  category_id: string;
+  category_name: string | undefined;
+  subtotal_milliunits: number;
+  tax_milliunits: number;
+  items: {
+    name: string;
+    amount_milliunits: number;
+    quantity: number | undefined;
+    memo: string | undefined;
+  }[];
+}
+
+interface SubtransactionInput {
+  amount: number;
+  payee_name?: string;
+  payee_id?: string;
+  category_id?: string;
+  memo?: string;
+}
+
+function buildItemMemo(item: {
+  name: string;
+  quantity: number | undefined;
+  memo: string | undefined;
+}): string | undefined {
+  const quantitySuffix = item.quantity ? ` (x${item.quantity})` : '';
+  if (item.memo && item.memo.trim().length > 0) {
+    return `${item.name}${quantitySuffix} - ${item.memo}`;
+  }
+  if (quantitySuffix) {
+    return `${item.name}${quantitySuffix}`;
+  }
+  return item.name;
+}
+
+function distributeTaxProportionally(
+  subtotalMilliunits: number,
+  totalTaxMilliunits: number,
+  categories: ReceiptCategoryCalculation[],
+): void {
+  if (totalTaxMilliunits === 0) {
+    for (const category of categories) category.tax_milliunits = 0;
+    return;
+  }
+
+  if (subtotalMilliunits <= 0) {
+    throw new Error('Receipt subtotal must be greater than zero to distribute tax');
+  }
+
+  let allocated = 0;
+  categories.forEach((category, index) => {
+    if (index === categories.length - 1) {
+      category.tax_milliunits = totalTaxMilliunits - allocated;
+    } else {
+      const proportionalTax = Math.round(
+        (totalTaxMilliunits * category.subtotal_milliunits) / subtotalMilliunits,
+      );
+      category.tax_milliunits = proportionalTax;
+      allocated += proportionalTax;
+    }
+  });
+}
+
+export async function handleCreateReceiptSplitTransaction(
+  ynabAPI: ynab.API,
+  params: CreateReceiptSplitTransactionParams,
+): Promise<CallToolResult> {
+  const date = params.date ?? new Date().toISOString().slice(0, 10);
+
+  const categoryCalculations: ReceiptCategoryCalculation[] = params.categories.map((category) => {
+    const items = category.items.map((item) => ({
+      name: item.name,
+      amount_milliunits: amountToMilliunits(item.amount),
+      quantity: item.quantity,
+      memo: item.memo,
+    }));
+    const subtotalMilliunits = items.reduce((sum, item) => sum + item.amount_milliunits, 0);
+    return {
+      category_id: category.category_id,
+      category_name: category.category_name,
+      subtotal_milliunits: subtotalMilliunits,
+      tax_milliunits: 0,
+      items,
+    };
+  });
+
+  const subtotalMilliunits = categoryCalculations.reduce(
+    (sum, category) => sum + category.subtotal_milliunits,
+    0,
+  );
+
+  const declaredSubtotalMilliunits =
+    params.receipt_subtotal !== undefined ? amountToMilliunits(params.receipt_subtotal) : undefined;
+  if (
+    declaredSubtotalMilliunits !== undefined &&
+    Math.abs(declaredSubtotalMilliunits - subtotalMilliunits) > 1
+  ) {
+    throw new Error(
+      `Categorized items subtotal (${milliunitsToAmount(subtotalMilliunits)}) does not match receipt subtotal (${milliunitsToAmount(declaredSubtotalMilliunits)})`,
+    );
+  }
+
+  const taxMilliunits = amountToMilliunits(params.receipt_tax);
+  const totalMilliunits = amountToMilliunits(params.receipt_total);
+  const computedTotal = subtotalMilliunits + taxMilliunits;
+  if (Math.abs(computedTotal - totalMilliunits) > 1) {
+    throw new Error(
+      `Receipt total (${milliunitsToAmount(totalMilliunits)}) does not equal subtotal plus tax (${milliunitsToAmount(computedTotal)})`,
+    );
+  }
+
+  distributeTaxProportionally(subtotalMilliunits, taxMilliunits, categoryCalculations);
+
+  const subtransactions: SubtransactionInput[] = categoryCalculations.flatMap((category) => {
+    const itemSubtransactions: SubtransactionInput[] = category.items.map((item) => {
+      const memo = buildItemMemo({ name: item.name, quantity: item.quantity, memo: item.memo });
+      const payload: SubtransactionInput = {
+        amount: -item.amount_milliunits,
+        category_id: category.category_id,
+      };
+      if (memo) payload.memo = memo;
+      return payload;
+    });
+
+    const taxSubtransaction: SubtransactionInput[] =
+      category.tax_milliunits > 0
+        ? [
+            {
+              amount: -category.tax_milliunits,
+              category_id: category.category_id,
+              memo: `Tax - ${category.category_name ?? 'Uncategorized'}`,
+            },
+          ]
+        : [];
+
+    return [...itemSubtransactions, ...taxSubtransaction];
+  });
+
+  const receiptSummary = {
+    subtotal: milliunitsToAmount(subtotalMilliunits),
+    tax: milliunitsToAmount(taxMilliunits),
+    total: milliunitsToAmount(totalMilliunits),
+    categories: categoryCalculations.map((category) => ({
+      category_id: category.category_id,
+      category_name: category.category_name,
+      items: category.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        amount: milliunitsToAmount(item.amount_milliunits),
+        memo: item.memo,
+      })),
+      subtotal: milliunitsToAmount(category.subtotal_milliunits),
+      tax: milliunitsToAmount(category.tax_milliunits),
+      total: milliunitsToAmount(category.subtotal_milliunits + category.tax_milliunits),
+    })),
+  };
+
+  if (params.dry_run) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: responseFormatter.format({
+            dry_run: true,
+            action: 'create_receipt_split_transaction',
+            transaction_preview: {
+              account_id: params.account_id,
+              payee_name: params.payee_name,
+              date,
+              amount: milliunitsToAmount(totalMilliunits),
+              cleared: params.cleared ?? 'uncleared',
+            },
+            receipt_summary: receiptSummary,
+            subtransactions: subtransactions.map((subtransaction) => ({
+              amount: milliunitsToAmount(-subtransaction.amount),
+              category_id: subtransaction.category_id,
+              memo: subtransaction.memo,
+            })),
+          }),
+        },
+      ],
+    };
+  }
+
+  const createTransactionParams: CreateTransactionParams = {
+    budget_id: params.budget_id,
+    account_id: params.account_id,
+    amount: -totalMilliunits,
+    date,
+    payee_name: params.payee_name,
+    memo: params.memo,
+    cleared: params.cleared ?? 'uncleared',
+    flag_color: params.flag_color,
+    subtransactions: subtransactions,
+  };
+
+  if (params.approved !== undefined) {
+    createTransactionParams.approved = params.approved;
+  }
+
+  const baseResult = await handleCreateTransaction(ynabAPI, createTransactionParams);
+
+  const firstContent = baseResult.content?.[0];
+  if (!firstContent || typeof firstContent.text !== 'string') {
+    return baseResult;
+  }
+
+  try {
+    const parsed = JSON.parse(firstContent.text) as Record<string, unknown>;
+    parsed['receipt_summary'] = receiptSummary;
+    firstContent.text = responseFormatter.format(parsed);
+  } catch {
+    // If parsing fails, return the original result without augmentation.
+  }
+
+  return baseResult;
 }
 
 /**

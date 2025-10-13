@@ -538,6 +538,106 @@ When `subtransactions` are supplied, their `amount` values must sum to the paren
 }
 ```
 
+### create_receipt_split_transaction
+
+Creates a split transaction from categorized receipt data and allocates taxes proportionally across the selected categories. Use this helper after the user has confirmed the receipt breakdown and category assignments.
+
+**Parameters:**
+- `budget_id` (string, required): The ID of the budget
+- `account_id` (string, required): The ID of the account
+- `payee_name` (string, required): Payee to assign to the transaction (e.g., the store name)
+- `date` (string, optional): Transaction date in ISO format (defaults to today when omitted)
+- `memo` (string, optional): Memo applied to the parent transaction
+- `receipt_subtotal` (number, optional): Pre-tax subtotal for validation (calculated automatically if omitted)
+- `receipt_tax` (number, required): Total tax collected on the receipt
+- `receipt_total` (number, required): Final total including tax
+- `categories` (array, required): Categorized line items. Each entry accepts:
+  - `category_id` (string, required)
+  - `category_name` (string, optional, used for tax memo labels)
+  - `items` (array, required): Each item includes `name` (string), `amount` (number), optional `quantity` (number), and optional `memo` (string)
+- `cleared` (string, optional): Cleared status (`cleared`, `uncleared`, `reconciled`). Defaults to `uncleared`
+- `approved` (boolean, optional): Whether the transaction should be marked approved
+- `flag_color` (string, optional): Flag color (`red`, `orange`, `yellow`, `green`, `blue`, `purple`)
+- `dry_run` (boolean, optional): When true, returns a preview without calling YNAB
+
+**Example Request:**
+```json
+{
+  "name": "create_receipt_split_transaction",
+  "arguments": {
+    "budget_id": "12345678-1234-1234-1234-123456789012",
+    "account_id": "87654321-4321-4321-4321-210987654321",
+    "payee_name": "IKEA",
+    "date": "2025-10-13",
+    "memo": "Receipt import",
+    "receipt_subtotal": 112.34,
+    "receipt_tax": 11.84,
+    "receipt_total": 124.18,
+    "categories": [
+      {
+        "category_id": "baby-stuff",
+        "category_name": "Baby Stuff",
+        "items": [
+          { "name": "Crib pillow", "amount": 12.99 },
+          { "name": "Bed linen", "amount": 24.99 }
+        ]
+      },
+      {
+        "category_id": "home-maintenance",
+        "category_name": "Home Maintenance",
+        "items": [
+          { "name": "Teapot", "amount": 19.99 },
+          { "name": "Toothbrush holder", "amount": 3.99 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Example Response:**
+```json
+{
+  "transaction": {
+    "id": "new-transaction-456",
+    "amount": -124.18,
+    "payee_name": "IKEA",
+    "cleared": "uncleared",
+    "subtransactions": [
+      { "memo": "Crib pillow", "amount": -12.99, "category_id": "baby-stuff" },
+      { "memo": "Bed linen", "amount": -24.99, "category_id": "baby-stuff" },
+      { "memo": "Tax - Baby Stuff", "amount": -6.11, "category_id": "baby-stuff" },
+      { "memo": "Teapot", "amount": -19.99, "category_id": "home-maintenance" },
+      { "memo": "Toothbrush holder", "amount": -3.99, "category_id": "home-maintenance" },
+      { "memo": "Tax - Home Maintenance", "amount": -5.99, "category_id": "home-maintenance" }
+    ],
+    "account_balance": 2534.87,
+    "account_cleared_balance": 2450.22
+  },
+  "receipt_summary": {
+    "subtotal": 112.34,
+    "tax": 11.84,
+    "total": 124.18,
+    "categories": [
+      {
+        "category_id": "baby-stuff",
+        "category_name": "Baby Stuff",
+        "subtotal": 37.98,
+        "tax": 6.11,
+        "total": 44.09
+      },
+      {
+        "category_id": "home-maintenance",
+        "category_name": "Home Maintenance",
+        "subtotal": 74.36,
+        "tax": 5.73,
+        "total": 80.09
+      }
+    ]
+  }
+}
+```
+
 ### update_transaction
 
 Updates an existing transaction.

@@ -4,11 +4,13 @@ import {
   handleListTransactions,
   handleGetTransaction,
   handleCreateTransaction,
+  handleCreateReceiptSplitTransaction,
   handleUpdateTransaction,
   handleDeleteTransaction,
   ListTransactionsSchema,
   GetTransactionSchema,
   CreateTransactionSchema,
+  CreateReceiptSplitTransactionSchema,
   UpdateTransactionSchema,
   DeleteTransactionSchema,
 } from '../transactionTools.js';
@@ -1043,6 +1045,242 @@ describe('transactionTools', () => {
         date: '2024-01-01',
         dry_run: true,
       });
+    });
+  });
+
+  describe('CreateReceiptSplitTransactionSchema', () => {
+    const basePayload = {
+      budget_id: 'budget-123',
+      account_id: 'account-456',
+      payee_name: 'IKEA',
+      receipt_subtotal: 50,
+      receipt_tax: 5,
+      receipt_total: 55,
+      categories: [
+        {
+          category_id: 'category-a',
+          category_name: 'Home',
+          items: [
+            { name: 'Lamp', amount: 20 },
+            { name: 'Rug', amount: 30 },
+          ],
+        },
+      ],
+    } as const;
+
+    it('should validate a well-formed receipt split payload', () => {
+      const result = CreateReceiptSplitTransactionSchema.safeParse(basePayload);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject when subtotal does not match categorized items', () => {
+      const invalidPayload = {
+        ...basePayload,
+        receipt_subtotal: 40,
+      };
+
+      const result = CreateReceiptSplitTransactionSchema.safeParse(invalidPayload);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject when total does not equal subtotal plus tax', () => {
+      const invalidPayload = {
+        ...basePayload,
+        receipt_total: 56,
+      };
+
+      const result = CreateReceiptSplitTransactionSchema.safeParse(invalidPayload);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('handleCreateReceiptSplitTransaction', () => {
+    const mockSplitTransaction = {
+      id: 'new-transaction-456',
+      date: '2025-10-13',
+      amount: -55000,
+      memo: 'Receipt import',
+      cleared: 'uncleared' as const,
+      approved: false,
+      flag_color: null,
+      account_id: 'account-456',
+      payee_id: null,
+      category_id: null,
+      transfer_account_id: null,
+      transfer_transaction_id: null,
+      matched_transaction_id: null,
+      import_id: null,
+      deleted: false,
+      subtransactions: [
+        {
+          id: 'sub-1',
+          transaction_id: 'new-transaction-456',
+          amount: -20000,
+          memo: 'Lamp',
+          payee_id: null,
+          payee_name: null,
+          category_id: 'category-home',
+          category_name: 'Home',
+          transfer_account_id: null,
+          transfer_transaction_id: null,
+          deleted: false,
+        },
+        {
+          id: 'sub-2',
+          transaction_id: 'new-transaction-456',
+          amount: -10000,
+          memo: 'Shelf',
+          payee_id: null,
+          payee_name: null,
+          category_id: 'category-home',
+          category_name: 'Home',
+          transfer_account_id: null,
+          transfer_transaction_id: null,
+          deleted: false,
+        },
+        {
+          id: 'sub-3',
+          transaction_id: 'new-transaction-456',
+          amount: -15000,
+          memo: 'Pan',
+          payee_id: null,
+          payee_name: null,
+          category_id: 'category-kitchen',
+          category_name: 'Kitchen',
+          transfer_account_id: null,
+          transfer_transaction_id: null,
+          deleted: false,
+        },
+        {
+          id: 'sub-4',
+          transaction_id: 'new-transaction-456',
+          amount: -10000,
+          memo: 'Tax - Home',
+          payee_id: null,
+          payee_name: null,
+          category_id: 'category-home',
+          category_name: 'Home',
+          transfer_account_id: null,
+          transfer_transaction_id: null,
+          deleted: false,
+        },
+        {
+          id: 'sub-5',
+          transaction_id: 'new-transaction-456',
+          amount: -5000,
+          memo: 'Tax - Kitchen',
+          payee_id: null,
+          payee_name: null,
+          category_id: 'category-kitchen',
+          category_name: 'Kitchen',
+          transfer_account_id: null,
+          transfer_transaction_id: null,
+          deleted: false,
+        },
+      ],
+    };
+
+    const mockAccountResponse = {
+      data: {
+        account: {
+          id: 'account-456',
+          balance: 500000,
+          cleared_balance: 450000,
+        },
+      },
+    };
+
+    beforeEach(() => {
+      (mockYnabAPI.transactions.createTransaction as any).mockReset();
+      (mockYnabAPI.accounts.getAccountById as any).mockReset();
+    });
+
+    it('should return a detailed dry-run summary without calling the API', async () => {
+      const params = {
+        budget_id: 'budget-123',
+        account_id: 'account-456',
+        payee_name: 'IKEA',
+        date: '2025-10-13',
+        receipt_tax: 5,
+        receipt_total: 55,
+        categories: [
+          {
+            category_id: 'category-home',
+            category_name: 'Home',
+            items: [
+              { name: 'Lamp', amount: 20 },
+              { name: 'Shelf', amount: 10 },
+            ],
+          },
+          {
+            category_id: 'category-kitchen',
+            category_name: 'Kitchen',
+            items: [{ name: 'Pan', amount: 20 }],
+          },
+        ],
+        receipt_subtotal: 50,
+        dry_run: true,
+      } as const;
+
+      const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+
+      expect(mockYnabAPI.transactions.createTransaction).not.toHaveBeenCalled();
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.dry_run).toBe(true);
+      expect(parsed.receipt_summary.total).toBe(55);
+      expect(parsed.subtransactions).toHaveLength(5);
+    });
+
+    it('should create a split transaction and attach receipt summary', async () => {
+      (mockYnabAPI.transactions.createTransaction as any).mockResolvedValue({
+        data: {
+          transaction: mockSplitTransaction,
+        },
+      });
+      (mockYnabAPI.accounts.getAccountById as any).mockResolvedValue(mockAccountResponse);
+
+      const params = {
+        budget_id: 'budget-123',
+        account_id: 'account-456',
+        payee_name: 'IKEA',
+        memo: 'Store receipt import',
+        date: '2025-10-13',
+        receipt_tax: 5,
+        receipt_total: 55,
+        categories: [
+          {
+            category_id: 'category-home',
+            category_name: 'Home',
+            items: [
+              { name: 'Lamp', amount: 20 },
+              { name: 'Shelf', amount: 10 },
+            ],
+          },
+          {
+            category_id: 'category-kitchen',
+            category_name: 'Kitchen',
+            items: [{ name: 'Pan', amount: 20 }],
+          },
+        ],
+        receipt_subtotal: 50,
+      } as const;
+
+      const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+
+      expect(mockYnabAPI.transactions.createTransaction).toHaveBeenCalledTimes(1);
+      const callArgs = (mockYnabAPI.transactions.createTransaction as any).mock.calls[0];
+      expect(callArgs[0]).toBe('budget-123');
+      expect(callArgs[1].transaction.amount).toBe(-55000);
+      expect(callArgs[1].transaction.subtransactions).toHaveLength(5);
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.receipt_summary.total).toBe(55);
+      const homeCategory = parsed.receipt_summary.categories.find(
+        (category: any) => category.category_id === 'category-home',
+      );
+      expect(homeCategory).toBeDefined();
+      expect(homeCategory.tax).toBeCloseTo(3);
+      expect(homeCategory.total).toBeCloseTo(33);
     });
   });
 

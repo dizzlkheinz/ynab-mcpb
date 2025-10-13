@@ -16,11 +16,12 @@
 
 A Model Context Protocol (MCP) server that provides AI assistants with secure access to You Need A Budget (YNAB) data and functionality. This server enables AI applications to help users manage their personal finances by interacting with YNAB budgets, accounts, transactions, and categories through a comprehensive set of tools.
 
-## 🎉 What's New in v0.8.1
+## 🎉 What's New in v0.8.2
 
-- **🔸 Split Transaction Support**: `create_transaction` now accepts subtransactions, enabling granular splits across categories, payees, and memos in a single call.
-- **🧪 Strengthened Validation**: New schema safeguards ensure parent transaction amounts match the sum of split lines, preventing malformed requests.
-- **📘 Documentation Refresh**: Updated API guides, quick start, and testing checklists cover split workflows and expected responses.
+- **🧾 Receipt Split Tool**: `create_receipt_split_transaction` converts confirmed receipt breakdowns into multi-line splits with proportional tax allocation and optional dry-run previews.
+- **🔸 Split Transaction Support**: `create_transaction` accepts subtransactions out of the box, enabling granular category assignments without manual math.
+- **🧪 Strengthened Validation**: Schema safeguards ensure parent transaction totals match their split lines, preventing malformed requests.
+- **📘 Documentation Refresh**: API guides, quick start, and testing checklists highlight the receipt workflow and split best practices.
 
 ### Highlights from v0.8.0
 

@@ -74,6 +74,7 @@ A comprehensive testing checklist for validating the YNAB MCP server with Claude
 ## Transaction Management
 
 - [ ] **create_transaction** creates transactions successfully in YNAB
+- [ ] **create_receipt_split_transaction** builds multi-line splits with proportional tax allocation
 - [ ] **update_transaction** modifies existing transactions correctly
 - [ ] **delete_transaction** removes transactions from YNAB
 - [ ] **export_transactions** creates files in test-exports directory
@@ -226,5 +227,5 @@ Use this space to record:
 **Testing Date**: ________________
 **Tester**: ________________
 **Claude Desktop Version**: ________________
-**Server Version**: v0.8.1
+**Server Version**: v0.8.2
 **Overall Result**: [ ] PASS [ ] FAIL [ ] NEEDS REVIEW

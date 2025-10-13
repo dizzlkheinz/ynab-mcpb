@@ -37,11 +37,13 @@ import {
   handleListTransactions,
   handleGetTransaction,
   handleCreateTransaction,
+  handleCreateReceiptSplitTransaction,
   handleUpdateTransaction,
   handleDeleteTransaction,
   ListTransactionsSchema,
   GetTransactionSchema,
   CreateTransactionSchema,
+  CreateReceiptSplitTransactionSchema,
   UpdateTransactionSchema,
   DeleteTransactionSchema,
 } from '../tools/transactionTools.js';
@@ -516,6 +518,15 @@ export class YNABMCPServer {
       inputSchema: CreateTransactionSchema,
       handler: adapt(handleCreateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionSchema>>(),
+    });
+
+    register({
+      name: 'create_receipt_split_transaction',
+      description:
+        'Create a split transaction from receipt items with proportional tax allocation',
+      inputSchema: CreateReceiptSplitTransactionSchema,
+      handler: adapt(handleCreateReceiptSplitTransaction),
+      defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
     });
 
     register({
