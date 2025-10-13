@@ -141,7 +141,9 @@ describe('exportTransactions', () => {
       // Verify response message indicates minimal export
       const responseText = result.content[0].text;
       expect(responseText).toContain('(minimal fields)');
-      expect(responseText).toContain('"export_mode": "minimal"');
+      const responseJson = JSON.parse(responseText);
+      expect(responseJson.export_mode).toBe('minimal');
+      expect(responseJson.minimal_fields).toBe('id, date, amount, payee_name, cleared');
     });
 
     it('should export all fields when minimal is false', async () => {
@@ -185,7 +187,9 @@ describe('exportTransactions', () => {
       // Verify response message indicates full export
       const responseText = result.content[0].text;
       expect(responseText).toContain('(full fields)');
-      expect(responseText).toContain('"export_mode": "full"');
+      const responseJson = JSON.parse(responseText);
+      expect(responseJson.export_mode).toBe('full');
+      expect(responseJson.minimal_fields).toBeNull();
     });
 
     it('should include "minimal" in filename by default', async () => {
