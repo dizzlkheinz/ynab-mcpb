@@ -27,4 +27,7 @@ jobs:
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+        run: |
+          echo "CI detected, using unit tests only"
+          npm run test:unit
+          npm publish --provenance --access public
