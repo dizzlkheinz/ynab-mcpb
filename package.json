@@ -1,5 +1,5 @@
 {
-  "name": "ynab-mcp-server",
+  "name": "@frogstein/ynab-mcp-server",
   "version": "0.8.2",
   "description": "Model Context Protocol server for YNAB (You Need A Budget) integration",
   "main": "dist/index.js",
