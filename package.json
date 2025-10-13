@@ -73,5 +73,17 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.42.0",
     "vitest": "^3.2.4"
-  }
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dizzlkheinz/ynab-mcp-dxt.git"
+  },
+  "types": "./dist/index.d.ts",
+  "bugs": {
+    "url": "https://github.com/dizzlkheinz/ynab-mcp-dxt/issues"
+  },
+  "homepage": "https://github.com/dizzlkheinz/ynab-mcp-dxt#readme"
 }

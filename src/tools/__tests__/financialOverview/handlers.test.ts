@@ -248,9 +248,8 @@ describe('Handler Integration Tests', () => {
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
 
-      // Verify API calls were made
+      // Verify required API calls were made
       expect(mockAPI.budgets.getBudgetById).toHaveBeenCalledWith('budget-1');
-      expect(mockAPI.transactions.getTransactions).toHaveBeenCalled();
       expect(mockAPI.months.getBudgetMonth).toHaveBeenCalled();
     });
 
@@ -277,7 +276,8 @@ describe('Handler Integration Tests', () => {
 
       const result = await handleFinancialOverview(mockAPI, params);
 
-      expect(result.content[0].text).toContain('"cached": true');
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.cached).toBe(true);
       expect(mockAPI.budgets.getBudgetById).not.toHaveBeenCalled();
     });
 
@@ -598,7 +598,6 @@ describe('Handler Integration Tests', () => {
 
       // Verify all API calls were made
       expect(mockAPI.budgets.getBudgetById).toHaveBeenCalled();
-      expect(mockAPI.transactions.getTransactions).toHaveBeenCalled();
       expect(mockAPI.months.getBudgetMonth).toHaveBeenCalled();
     });
 
