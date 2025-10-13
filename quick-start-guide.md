@@ -11,9 +11,10 @@ This guide provides the fastest path to test the YNAB MCP server with Claude Des
 
 ## Step 1: Environment Setup
 
-# Then open .env in your editor and add/update:
-- `LOG_LEVEL=debug` (for detailed testing logs)
-- `YNAB_EXPORT_PATH=./test-exports` (for testing exports)
+1. Install dependencies with `npm install` if you haven’t already.
+2. Create or update a `.env` file with useful testing values:
+   - `LOG_LEVEL=debug` (surface detailed logs while validating)
+   - `YNAB_EXPORT_PATH=./test-exports` (keep test exports in a disposable folder)
 ## Step 2: Build and Test
 
 ```bash
@@ -129,7 +130,16 @@ Export my transactions to a file using the export_transactions tool.
 
 **Expected**: Creates a file in the test-exports directory.
 
-### 5.4 CSV Comparison Testing
+### 5.4 Receipt Split Workflow
+**Ask Claude**:
+```
+Create a receipt split transaction with these categorized items…
+```
+Provide the categorized items and tax totals you gathered.
+
+**Expected**: Claude reviews the categorization, optionally returns a dry-run preview, and creates the split with proportional tax allocation using `create_receipt_split_transaction`.
+
+### 5.5 CSV Comparison Testing
 **Ask Claude**:
 ```
 Compare the CSV file test-csv-sample.csv with my YNAB transactions using the compare_transactions tool.
