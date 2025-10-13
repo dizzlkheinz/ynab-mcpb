@@ -4,6 +4,9 @@
   "description": "Model Context Protocol server for YNAB (You Need A Budget) integration",
   "main": "dist/index.js",
   "type": "module",
+  "bin": {
+    "ynab-mcp-server": "bin/ynab-mcp-server.cjs"
+  },
   "scripts": {
     "prebuild": "npm run clean",
     "build": "rimraf dist && tsc && npm run bundle",

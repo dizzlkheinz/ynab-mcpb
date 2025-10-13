@@ -163,3 +163,4 @@ test-results/**/*.csv
 
 # Overrides for npm package contents
 !dist/
+!bin/
