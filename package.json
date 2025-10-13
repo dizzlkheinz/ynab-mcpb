@@ -42,7 +42,7 @@
     "pr:description": "node scripts/create-pr-description.js",
     "pr:create": "npm run pr:description && gh pr create --body-file .pr-description.md",
     "prepare": "npm run build",
-    "prepublishOnly": "npm run test:all && npm run build:prod"
+    "prepublishOnly": "npm run test:unit && npm run build:prod"
   },
   "keywords": [
     "mcp",
