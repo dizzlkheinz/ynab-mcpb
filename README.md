@@ -23,7 +23,7 @@ A Model Context Protocol (MCP) server that provides AI assistants with secure ac
 - **🧪 Strengthened Validation**: Schema safeguards ensure parent transaction totals match their split lines, preventing malformed requests.
 - **📘 Documentation Refresh**: API guides, quick start, and testing checklists highlight the receipt workflow and split best practices.
 
-### Highlights from v0.8.0
+### Highlights from the v0.8.x Series
 
 - **🏗️ Modular Architecture**: Redesigned server architecture with composable services (Config, Resources, Prompts, Diagnostics) for improved maintainability and testability
 - **🎯 Centralized Tool Registry**: Unified tool registration system with consistent validation, security, and error handling across all tools
@@ -159,7 +159,7 @@ Tool responses are JSON strings. To save context, outputs are minified by defaul
 - `YNAB_MCP_MINIFY_OUTPUT` (default: `true`) — when `true`, responses are compact (no whitespace).
 - `YNAB_MCP_PRETTY_SPACES` (default: `2`) — number of spaces used only if minification is disabled.
 
-**Enhanced Caching (v0.8.0):**
+**Enhanced Caching (v0.8.x):**
 
 - `YNAB_MCP_CACHE_MAX_ENTRIES` (default: `1000`) — Maximum number of cache entries before LRU eviction
 - `YNAB_MCP_CACHE_DEFAULT_TTL_MS` (default: `1800000` - 30 minutes) — Default cache TTL in milliseconds
@@ -265,7 +265,7 @@ The server provides 25 core tools for budgets, accounts, transactions, categorie
 ```
 ynab-mcp-server/
 ├── src/
-│   ├── server/           # Core server implementation (v0.8.0 modular architecture)
+│   ├── server/           # Core server implementation (v0.8.x modular architecture)
 │   │   ├── YNABMCPServer.ts     # Main orchestration server
 │   │   ├── toolRegistry.ts     # Centralized tool registry
 │   │   ├── cacheManager.ts     # Enhanced caching with observability
@@ -296,7 +296,7 @@ ynab-mcp-server/
 │   └── __tests__/        # Global test utilities and E2E tests
 ├── dist/                 # Built JavaScript output
 ├── docs/                 # Complete documentation
-│   └── ADR/              # Architecture Decision Records (v0.8.0)
+│   └── ADR/              # Architecture Decision Records (v0.8.x)
 ├── scripts/              # Build and utility scripts
 └── README.md            # This file
 ```

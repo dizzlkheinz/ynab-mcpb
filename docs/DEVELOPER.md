@@ -5,11 +5,11 @@ This guide provides best practices, common patterns, and practical examples for 
 ## Table of Contents
 
 - [Getting Started](#getting-started)
-- [v0.8.0 Modular Architecture](#v080-modular-architecture)
-- [Developing Tools with v0.8.0](#developing-tools-with-v080)
+- [v0.8.x Modular Architecture](#v08x-modular-architecture)
+- [Developing Tools with v0.8.x](#developing-tools-with-v08x)
 - [Cache Management Guide](#cache-management-guide)
 - [Service Module Patterns](#service-module-patterns)
-- [Migration from v0.7.x to v0.8.0](#migration-from-v07x-to-v080)
+- [Migration from v0.7.x to v0.8.x](#migration-from-v07x-to-v08x)
 - [Common Patterns](#common-patterns)
 - [Best Practices](#best-practices)
 - [Error Handling Strategies](#error-handling-strategies)
@@ -49,13 +49,13 @@ try {
 }
 ```
 
-## v0.8.0 Modular Architecture
+## v0.8.x Modular Architecture
 
-v0.8.0 introduces a completely refactored architecture that improves maintainability, testability, and performance while maintaining 100% backward compatibility. Understanding this architecture helps you build better integrations and troubleshoot issues more effectively.
+The v0.8.x series introduces a completely refactored architecture that improves maintainability, testability, and performance while maintaining 100% backward compatibility. Understanding this architecture helps you build better integrations and troubleshoot issues more effectively.
 
 ### Architecture Overview
 
-The v0.8.0 architecture consists of several key components working together:
+The v0.8.x architecture consists of several key components working together:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -129,10 +129,10 @@ Focused modules handling specific server concerns:
 
 ### Dependency Injection Pattern
 
-v0.8.0 adopts explicit dependency injection for better testability and maintainability:
+The v0.8.x releases adopt explicit dependency injection for better testability and maintainability:
 
 ```typescript
-// v0.8.0 pattern - explicit dependencies
+// v0.8.x pattern - explicit dependencies
 class MyService {
   constructor(
     private cacheManager: CacheManager,
@@ -157,11 +157,11 @@ class MyService {
 const myService = new MyService(cacheManager, errorHandler, budgetResolver);
 ```
 
-## Developing Tools with v0.8.0
+## Developing Tools with v0.8.x
 
 ### Tool Development Patterns
 
-Creating new tools in v0.8.0 follows the Tool Registry pattern for consistency and maintainability.
+Creating new tools in v0.8.x follows the Tool Registry pattern for consistency and maintainability.
 
 #### 1. Define Tool Schema
 
@@ -287,7 +287,7 @@ export async function handleMyTool(params: MyToolRequest): Promise<any> {
 
 ### Understanding the Enhanced Cache System
 
-v0.8.0 introduces a sophisticated caching system designed for performance and observability.
+The v0.8.x line introduces a sophisticated caching system designed for performance and observability.
 
 #### Cache Configuration
 
@@ -461,7 +461,7 @@ export async function handleSetDefaultBudget(params: SetDefaultBudgetRequest) {
 
 ### Working with Service Modules
 
-v0.8.0 decomposes server functionality into focused service modules.
+The v0.8.x releases decompose server functionality into focused service modules.
 
 #### Resource Manager
 
@@ -566,11 +566,11 @@ class MyDiagnosticManager extends DiagnosticManager {
 }
 ```
 
-## Migration from v0.7.x to v0.8.0
+## Migration from v0.7.x to v0.8.x
 
 ### No Breaking Changes for Users
 
-**Important:** All v0.7.x tool calls, parameters, and responses work identically in v0.8.0. This section is for developers working with the internal architecture.
+**Important:** All v0.7.x tool calls, parameters, and responses work identically in v0.8.x. This section is for developers working with the internal architecture.
 
 ### Internal API Changes
 
@@ -584,7 +584,7 @@ if (!budgetId) {
 }
 ```
 
-**v0.8.0 Pattern:**
+**v0.8.x Pattern:**
 ```typescript
 // Centralized error handling with consistent format
 const result = BudgetResolver.resolveBudgetId(providedId, defaultId);
@@ -608,7 +608,7 @@ cacheManager.set(key, result, ttl);
 return result;
 ```
 
-**v0.8.0 Pattern:**
+**v0.8.x Pattern:**
 ```typescript
 // Enhanced cache wrapper with observability
 return cacheManager.wrap(key, {
@@ -630,7 +630,7 @@ case 'my_tool':
   });
 ```
 
-**v0.8.0 Pattern:**
+**v0.8.x Pattern:**
 ```typescript
 // Registry-based registration
 registry.register({
@@ -647,7 +647,7 @@ registry.register({
 **Enhanced Dependency Injection for Testing:**
 
 ```typescript
-// v0.8.0 - Mock individual services
+// v0.8.x - Mock individual services
 const mockCacheManager = {
   wrap: vi.fn().mockImplementation((key, options) => options.loader()),
   getStats: vi.fn().mockReturnValue({ hit_rate: 0.5 })
@@ -1150,14 +1150,14 @@ class CircuitBreaker {
 
 ## Performance Optimization
 
-v0.8.0 introduces significant performance improvements through enhanced caching, modular architecture, and optimized data access patterns.
+The v0.8.x series introduces significant performance improvements through enhanced caching, modular architecture, and optimized data access patterns.
 
-### 1. Enhanced Caching (v0.8.0)
+### 1. Enhanced Caching (v0.8.x)
 
 The new caching system provides automatic performance improvements with minimal code changes:
 
 ```javascript
-// v0.8.0 - Automatic caching with observability
+// v0.8.x - Automatic caching with observability
 class OptimizedYNABData {
   constructor(budgetId) {
     this.budgetId = budgetId;
@@ -1233,7 +1233,7 @@ Combine lazy loading patterns with automatic caching:
 class LazyYNABData {
   constructor(budgetId) {
     this.budgetId = budgetId;
-    // No need to manually manage cache - v0.8.0 handles it
+    // No need to manually manage cache - v0.8.x handles it
   }
 
   async getAccounts() {
@@ -1297,8 +1297,8 @@ async function getBudgetOverview(budgetId) {
 
 // Performance comparison (example measurements):
 // v0.7.x: ~800ms (4 API calls)
-// v0.8.0 first call: ~800ms (4 API calls, cache population)
-// v0.8.0 subsequent calls: ~50ms (4 cache hits)
+// v0.8.x first call: ~800ms (4 API calls, cache population)
+// v0.8.x subsequent calls: ~50ms (4 cache hits)
 ```
 
 ### 5. Cache-Conscious Data Strategy
@@ -1356,7 +1356,7 @@ class PerformantBudgetManager {
 
 ### 6. Modular Architecture Performance Benefits
 
-v0.8.0's modular architecture provides performance improvements through:
+The v0.8.x modular architecture provides performance improvements through:
 
 **Reduced Memory Footprint:**
 - Service modules load only when needed
@@ -1374,7 +1374,7 @@ v0.8.0's modular architecture provides performance improvements through:
 - Faster schema validation
 
 ```javascript
-// v0.8.0 performance monitoring
+// v0.8.x performance monitoring
 class PerformanceMonitor {
   async getSystemMetrics() {
     const result = await client.callTool('diagnostic_info');
@@ -1403,7 +1403,7 @@ class PerformanceMonitor {
 
 ### Performance Best Practices Summary
 
-1. **Leverage Automatic Caching**: Let v0.8.0's enhanced caching handle performance optimization
+1. **Leverage Automatic Caching**: Let v0.8.x's enhanced caching handle performance optimization
 2. **Monitor Cache Performance**: Use diagnostic tools to track hit rates and optimize access patterns
 3. **Warm Cache Proactively**: Use `set_default_budget` to trigger cache warming
 4. **Design for Cache Effectiveness**: Group related operations to maximize cache hits

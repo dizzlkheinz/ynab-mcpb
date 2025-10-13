@@ -1,6 +1,6 @@
 # Enhanced Caching System
 
-v0.8.0 introduces a sophisticated caching system designed for performance, observability, and intelligent data management. This documentation provides comprehensive information about the enhanced caching features and how to use them effectively.
+The v0.8.x series introduces a sophisticated caching system designed for performance, observability, and intelligent data management. This documentation provides comprehensive information about the enhanced caching features and how to use them effectively.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ v0.8.0 introduces a sophisticated caching system designed for performance, obser
 
 ## Cache Overview
 
-The enhanced caching system in v0.8.0 provides significant performance improvements through:
+The enhanced caching system in v0.8.x provides significant performance improvements through:
 
 ### Key Features
 
@@ -660,4 +660,4 @@ class CacheDebugger {
 
 ---
 
-The enhanced caching system in v0.8.0 provides significant performance improvements while maintaining simplicity for developers. By following these guidelines and best practices, you can maximize cache effectiveness and deliver optimal user experiences.
+The enhanced caching system in v0.8.x provides significant performance improvements while maintaining simplicity for developers. By following these guidelines and best practices, you can maximize cache effectiveness and deliver optimal user experiences.
