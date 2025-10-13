@@ -498,6 +498,9 @@ Creates a new transaction in the specified budget and account.
 - `approved` (boolean, optional): Whether the transaction is approved
 - `flag_color` (string, optional): Transaction flag color (`red`, `orange`, `yellow`, `green`, `blue`, `purple`)
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
+- `subtransactions` (array, optional): Split line items; each entry accepts `amount` (milliunits), plus optional `memo`, `category_id`, `payee_id`, and `payee_name`
+
+When `subtransactions` are supplied, their `amount` values must sum to the parent `amount`, matching YNAB API requirements.
 
 **Example Request:**
 ```json
@@ -513,6 +516,24 @@ Creates a new transaction in the specified budget and account.
     "memo": "Morning coffee",
     "cleared": "cleared",
     "approved": true
+  }
+}
+```
+
+**Split Transaction Example:**
+```json
+{
+  "name": "create_transaction",
+  "arguments": {
+    "budget_id": "12345678-1234-1234-1234-123456789012",
+    "account_id": "87654321-4321-4321-4321-210987654321",
+    "amount": -125000,
+    "date": "2024-02-01",
+    "memo": "Rent and utilities",
+    "subtransactions": [
+      { "amount": -100000, "category_id": "rent-category", "memo": "Rent" },
+      { "amount": -25000, "category_id": "utilities-category", "memo": "Utilities" }
+    ]
   }
 }
 ```

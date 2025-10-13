@@ -226,5 +226,5 @@ Use this space to record:
 **Testing Date**: ________________
 **Tester**: ________________
 **Claude Desktop Version**: ________________
-**Server Version**: v0.8.0
+**Server Version**: v0.8.1
 **Overall Result**: [ ] PASS [ ] FAIL [ ] NEEDS REVIEW

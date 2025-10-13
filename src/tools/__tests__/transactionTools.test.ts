@@ -132,6 +132,7 @@ describe('transactionTools', () => {
       matched_transaction_id: null,
       import_id: null,
       deleted: false,
+      subtransactions: [],
     };
 
     it('should bypass cache in test environment for unfiltered requests', async () => {
@@ -607,6 +608,55 @@ describe('transactionTools', () => {
       const result = CreateTransactionSchema.safeParse(invalidParams);
       expect(result.success).toBe(false);
     });
+
+    it('should validate parameters with subtransactions when totals match', () => {
+      const validParams = {
+        budget_id: 'budget-123',
+        account_id: 'account-456',
+        amount: -75000,
+        date: '2024-01-01',
+        subtransactions: [
+          {
+            amount: -25000,
+            memo: 'Groceries',
+            category_id: 'category-groceries',
+          },
+          {
+            amount: -50000,
+            memo: 'Rent',
+            category_id: 'category-rent',
+          },
+        ],
+      };
+
+      const result = CreateTransactionSchema.safeParse(validParams);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject parameters when subtransaction totals do not match amount', () => {
+      const invalidParams = {
+        budget_id: 'budget-123',
+        account_id: 'account-456',
+        amount: -70000,
+        date: '2024-01-01',
+        subtransactions: [
+          {
+            amount: -25000,
+          },
+          {
+            amount: -40000,
+          },
+        ],
+      };
+
+      const result = CreateTransactionSchema.safeParse(invalidParams);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toBe(
+          'Amount must equal the sum of subtransaction amounts',
+        );
+      }
+    });
   });
 
   describe('handleCreateTransaction', () => {
@@ -656,20 +706,18 @@ describe('transactionTools', () => {
       };
       const result = await handleCreateTransaction(mockYnabAPI, params);
 
-      expect(mockYnabAPI.transactions.createTransaction).toHaveBeenCalledWith('budget-123', {
-        transaction: {
-          account_id: 'account-456',
-          amount: -50000,
-          date: '2024-01-01',
-          payee_name: undefined,
-          payee_id: undefined,
-          category_id: undefined,
-          memo: undefined,
-          cleared: undefined,
-          approved: undefined,
-          flag_color: undefined,
-        },
+      const createCall = (mockYnabAPI.transactions.createTransaction as any).mock.calls[0];
+      expect(createCall[0]).toBe('budget-123');
+      const payload = createCall[1];
+      expect(payload.transaction).toMatchObject({
+        account_id: 'account-456',
+        amount: -50000,
+        date: '2024-01-01',
+        cleared: undefined,
+        flag_color: undefined,
       });
+      expect(payload.transaction).not.toHaveProperty('subtransactions');
+      expect(payload.transaction).not.toHaveProperty('approved');
 
       const response = JSON.parse(result.content[0].text);
       expect(response.transaction.id).toBe('new-transaction-123');
@@ -711,23 +759,158 @@ describe('transactionTools', () => {
       };
       const result = await handleCreateTransaction(mockYnabAPI, params);
 
-      expect(mockYnabAPI.transactions.createTransaction).toHaveBeenCalledWith('budget-123', {
-        transaction: {
-          account_id: 'account-456',
-          amount: -50000,
-          date: '2024-01-01',
-          payee_name: 'Test Payee',
-          payee_id: 'payee-789',
-          category_id: 'category-101',
-          memo: 'Test memo',
-          cleared: 'cleared',
-          approved: true,
-          flag_color: 'red',
-        },
+      const createCall = (mockYnabAPI.transactions.createTransaction as any).mock.calls[0];
+      expect(createCall[0]).toBe('budget-123');
+      const payload = createCall[1];
+      expect(payload.transaction).toMatchObject({
+        account_id: 'account-456',
+        amount: -50000,
+        date: '2024-01-01',
+        payee_name: 'Test Payee',
+        payee_id: 'payee-789',
+        category_id: 'category-101',
+        memo: 'Test memo',
+        cleared: 'cleared',
+        approved: true,
+        flag_color: 'red',
       });
+      expect(payload.transaction).not.toHaveProperty('subtransactions');
 
       const response = JSON.parse(result.content[0].text);
       expect(response.transaction.id).toBe('new-transaction-123');
+    });
+
+    it('should create split transaction with subtransactions', async () => {
+      const mockSplitTransaction = {
+        ...mockCreatedTransaction,
+        amount: -75000,
+        subtransactions: [
+          {
+            id: 'sub-1',
+            transaction_id: 'new-transaction-123',
+            amount: -25000,
+            memo: 'Groceries',
+            payee_id: null,
+            payee_name: 'Corner Store',
+            category_id: 'category-groceries',
+            category_name: 'Groceries',
+            transfer_account_id: null,
+            transfer_transaction_id: null,
+            deleted: false,
+          },
+          {
+            id: 'sub-2',
+            transaction_id: 'new-transaction-123',
+            amount: -50000,
+            memo: 'Rent',
+            payee_id: 'payee-landlord',
+            payee_name: null,
+            category_id: 'category-rent',
+            category_name: 'Rent',
+            transfer_account_id: null,
+            transfer_transaction_id: null,
+            deleted: false,
+          },
+        ],
+      };
+
+      const mockResponse = {
+        data: {
+          transaction: mockSplitTransaction,
+        },
+      };
+
+      const mockAccountResponse = {
+        data: {
+          account: {
+            id: 'account-456',
+            balance: 250000,
+            cleared_balance: 225000,
+          },
+        },
+      };
+
+      (mockYnabAPI.transactions.createTransaction as any).mockResolvedValue(mockResponse);
+      (mockYnabAPI.accounts.getAccountById as any).mockResolvedValue(mockAccountResponse);
+
+      const params = {
+        budget_id: 'budget-123',
+        account_id: 'account-456',
+        amount: -75000,
+        date: '2024-01-01',
+        subtransactions: [
+          {
+            amount: -25000,
+            memo: 'Groceries',
+            payee_name: 'Corner Store',
+            category_id: 'category-groceries',
+          },
+          {
+            amount: -50000,
+            memo: 'Rent',
+            payee_id: 'payee-landlord',
+            category_id: 'category-rent',
+          },
+        ],
+      };
+
+      const result = await handleCreateTransaction(mockYnabAPI, params);
+
+      const createCall = (mockYnabAPI.transactions.createTransaction as any).mock.calls[0];
+      expect(createCall[0]).toBe('budget-123');
+      const payload = createCall[1];
+      expect(payload.transaction).toMatchObject({
+        account_id: 'account-456',
+        amount: -75000,
+        date: '2024-01-01',
+        subtransactions: [
+          {
+            amount: -25000,
+            memo: 'Groceries',
+            payee_name: 'Corner Store',
+            category_id: 'category-groceries',
+          },
+          {
+            amount: -50000,
+            memo: 'Rent',
+            payee_id: 'payee-landlord',
+            category_id: 'category-rent',
+          },
+        ],
+      });
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.transaction.amount).toBe(-75);
+      expect(response.transaction.account_balance).toBe(250000);
+      expect(response.transaction.account_cleared_balance).toBe(225000);
+      expect(response.transaction.subtransactions).toEqual([
+        {
+          id: 'sub-1',
+          transaction_id: 'new-transaction-123',
+          amount: -25,
+          memo: 'Groceries',
+          payee_id: null,
+          payee_name: 'Corner Store',
+          category_id: 'category-groceries',
+          category_name: 'Groceries',
+          transfer_account_id: null,
+          transfer_transaction_id: null,
+          deleted: false,
+        },
+        {
+          id: 'sub-2',
+          transaction_id: 'new-transaction-123',
+          amount: -50,
+          memo: 'Rent',
+          payee_id: 'payee-landlord',
+          payee_name: null,
+          category_id: 'category-rent',
+          category_name: 'Rent',
+          transfer_account_id: null,
+          transfer_transaction_id: null,
+          deleted: false,
+        },
+      ]);
     });
 
     it('should handle 404 not found errors', async () => {

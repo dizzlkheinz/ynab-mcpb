@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2025-10-02
+
+### Added
+
+- Support for creating split transactions via the `create_transaction` tool, including schema validation and response formatting for subtransactions.
+
+### Changed
+
+- Updated transaction creation responses to include detailed subtransaction data alongside refreshed account balances.
+- Refreshed documentation and tests to cover split transaction workflows.
+
 ## [0.8.0] - 2025-09-28
 
 ### Fixed

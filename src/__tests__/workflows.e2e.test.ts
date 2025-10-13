@@ -483,7 +483,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
     });
   });
 
-  describe('v0.8.0 Architecture Integration Tests', () => {
+  describe('v0.8.x Architecture Integration Tests', () => {
     describe('Cache System Verification', () => {
       it('should demonstrate cache warming after default budget set', async () => {
         if (testConfig.skipE2ETests) return;
@@ -692,7 +692,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         expect(Array.isArray(toolsResult.tools)).toBe(true);
         expect(toolsResult.tools.length).toBeGreaterThan(20);
 
-        // Verify key v0.8.0 tools are present (tools are registered without ynab: prefix)
+        // Verify key v0.8.x tools are present (tools are registered without ynab: prefix)
         const toolNames = toolsResult.tools.map((tool: any) => tool.name);
         expect(toolNames, 'Should contain list_budgets tool').toContain('list_budgets');
         expect(toolNames, 'Should contain financial_overview tool').toContain('financial_overview');

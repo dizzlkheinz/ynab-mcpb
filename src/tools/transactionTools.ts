@@ -1,6 +1,7 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
 import { SaveTransaction } from 'ynab/dist/models/SaveTransaction.js';
+import { SaveSubTransaction } from 'ynab/dist/models/SaveSubTransaction.js';
 import { z } from 'zod/v4';
 import { withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
@@ -64,8 +65,34 @@ export const CreateTransactionSchema = z
     approved: z.boolean().optional(),
     flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional(),
     dry_run: z.boolean().optional(),
+    subtransactions: z
+      .array(
+        z
+          .object({
+            amount: z.number().int('Subtransaction amount must be an integer in milliunits'),
+            payee_name: z.string().optional(),
+            payee_id: z.string().optional(),
+            category_id: z.string().optional(),
+            memo: z.string().optional(),
+          })
+          .strict(),
+      )
+      .min(1, 'At least one subtransaction is required when provided')
+      .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.subtransactions && data.subtransactions.length > 0) {
+      const total = data.subtransactions.reduce((sum, sub) => sum + sub.amount, 0);
+      if (total !== data.amount) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Amount must equal the sum of subtransaction amounts',
+          path: ['amount'],
+        });
+      }
+    }
+  });
 
 export type CreateTransactionParams = z.infer<typeof CreateTransactionSchema>;
 
@@ -355,6 +382,24 @@ export async function handleCreateTransaction(
     if (params.category_id !== undefined) transactionData.category_id = params.category_id;
     if (params.memo !== undefined) transactionData.memo = params.memo;
     if (params.approved !== undefined) transactionData.approved = params.approved;
+    if (params.subtransactions && params.subtransactions.length > 0) {
+      const subtransactions: SaveSubTransaction[] = params.subtransactions.map((subtransaction) => {
+        const mapped: SaveSubTransaction = {
+          amount: subtransaction.amount,
+        };
+
+        if (subtransaction.payee_name !== undefined) mapped.payee_name = subtransaction.payee_name;
+        if (subtransaction.payee_id !== undefined) mapped.payee_id = subtransaction.payee_id;
+        if (subtransaction.category_id !== undefined) {
+          mapped.category_id = subtransaction.category_id;
+        }
+        if (subtransaction.memo !== undefined) mapped.memo = subtransaction.memo;
+
+        return mapped;
+      });
+
+      transactionData.subtransactions = subtransactions;
+    }
 
     const response = await ynabAPI.transactions.createTransaction(params.budget_id, {
       transaction: transactionData,
@@ -423,6 +468,19 @@ export async function handleCreateTransaction(
               // New fields for account balance
               account_balance: account.balance,
               account_cleared_balance: account.cleared_balance,
+              subtransactions: transaction.subtransactions?.map((subtransaction) => ({
+                id: subtransaction.id,
+                transaction_id: subtransaction.transaction_id,
+                amount: milliunitsToAmount(subtransaction.amount),
+                memo: subtransaction.memo,
+                payee_id: subtransaction.payee_id,
+                payee_name: subtransaction.payee_name,
+                category_id: subtransaction.category_id,
+                category_name: subtransaction.category_name,
+                transfer_account_id: subtransaction.transfer_account_id,
+                transfer_transaction_id: subtransaction.transfer_transaction_id,
+                deleted: subtransaction.deleted,
+              })),
             },
           }),
         },

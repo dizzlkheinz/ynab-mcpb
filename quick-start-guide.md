@@ -234,4 +234,4 @@ You'll know the testing is successful when:
 **Prerequisites Time**: 5 minutes if environment is already set up
 **Success Rate**: High when following this guide step by step
 
-The YNAB MCP server v0.8.0 includes enhanced caching, improved performance, and comprehensive financial analysis tools. This quick start gets you testing immediately while the detailed documentation provides comprehensive validation.
+The YNAB MCP server v0.8.1 includes split-transaction support, enhanced caching, improved performance, and comprehensive financial analysis tools. This quick start gets you testing immediately while the detailed documentation provides comprehensive validation.
