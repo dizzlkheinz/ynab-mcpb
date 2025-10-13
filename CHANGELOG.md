@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.8] - 2025-10-13
+
+### Changed
+
+- Renamed the package to `@dizzlkheinz/ynab-mcp-server` to match the published npm scope.
+
 ## [0.8.7] - 2025-10-13
 
 ### Changed
@@ -33,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Added CLI launchers so `npx @frogstein/ynab-mcp-server` starts the server immediately.
+- Added CLI launchers so `npx @dizzlkheinz/ynab-mcp-server` starts the server immediately.
 - Introduced a GitHub Actions workflow to publish releases to npm with provenance metadata.
 
 ## [0.8.2] - 2025-10-13

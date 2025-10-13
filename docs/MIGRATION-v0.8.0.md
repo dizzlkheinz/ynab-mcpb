@@ -39,11 +39,11 @@ YNAB MCP Server v0.8.0 introduces a major architectural refactor with enhanced c
 
 ```bash
 # Update to v0.8.0
-npm update @frogstein/ynab-mcp-server
+  npm update @dizzlkheinz/ynab-mcp-server
 
 # Or reinstall globally
-npm uninstall -g @frogstein/ynab-mcp-server
-npm install -g @frogstein/ynab-mcp-server@0.8.0
+  npm uninstall -g @dizzlkheinz/ynab-mcp-server
+  npm install -g @dizzlkheinz/ynab-mcp-server@0.8.0
 ```
 
 ### Step 2: Verify Installation
@@ -54,7 +54,7 @@ ynab-mcp-server --version
 # Should show: 0.8.0
 
 # Test basic functionality
-npx @frogstein/ynab-mcp-server
+  npx @dizzlkheinz/ynab-mcp-server
 ```
 
 ### Step 3: Update Configuration (Optional)
@@ -205,7 +205,7 @@ ps aux | grep ynab-mcp-server
 ```bash
 # Refresh npm cache and reinstall
 npm cache clean --force
-npm install -g @frogstein/ynab-mcp-server@0.8.0
+  npm install -g @dizzlkheinz/ynab-mcp-server@0.8.0
 ```
 
 #### Issue: Performance seems slower than v0.7.x
@@ -316,12 +316,12 @@ If you need to rollback to v0.7.x:
 
 ### Step 1: Uninstall v0.8.0
 ```bash
-npm uninstall -g @frogstein/ynab-mcp-server
+  npm uninstall -g @dizzlkheinz/ynab-mcp-server
 ```
 
 ### Step 2: Install v0.7.x
 ```bash
-npm install -g @frogstein/ynab-mcp-server@0.7.12
+  npm install -g @dizzlkheinz/ynab-mcp-server@0.7.12
 ```
 
 ### Step 3: Restore Configuration
