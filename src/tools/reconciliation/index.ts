@@ -6,6 +6,7 @@
 import { z } from 'zod/v4';
 import type * as ynab from 'ynab';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { withToolErrorHandling } from '../../types/index.js';
 import { analyzeReconciliation } from './analyzer.js';
 import type { MatchingConfig } from './types.js';
 import { responseFormatter } from '../../server/responseFormatter.js';
@@ -64,47 +65,53 @@ export async function handleReconcileAccountV2(
   ynabAPI: ynab.API,
   params: ReconcileAccountV2Request
 ): Promise<CallToolResult> {
-  // Build matching configuration from parameters
-  const config: MatchingConfig = {
-    dateToleranceDays: params.date_tolerance_days,
-    amountToleranceCents: params.amount_tolerance_cents,
-    descriptionSimilarityThreshold: 0.8, // Fixed for Phase 1
-    autoMatchThreshold: params.auto_match_threshold,
-    suggestionThreshold: params.suggestion_threshold,
-  };
+  return await withToolErrorHandling(
+    async () => {
+      // Build matching configuration from parameters
+      const config: MatchingConfig = {
+        dateToleranceDays: params.date_tolerance_days,
+        amountToleranceCents: params.amount_tolerance_cents,
+        descriptionSimilarityThreshold: 0.8, // Fixed for Phase 1
+        autoMatchThreshold: params.auto_match_threshold,
+        suggestionThreshold: params.suggestion_threshold,
+      };
 
-  // Fetch YNAB transactions for the account
-  // Use date range if provided, otherwise get recent transactions
-  const sinceDate = params.statement_start_date
-    ? new Date(params.statement_start_date)
-    : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 days ago
+      // Fetch YNAB transactions for the account
+      // Use date range if provided, otherwise get recent transactions
+      const sinceDate = params.statement_start_date
+        ? new Date(params.statement_start_date)
+        : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 days ago
 
-  const transactionsResponse = await ynabAPI.transactions.getTransactionsByAccount(
-    params.budget_id,
-    params.account_id,
-    sinceDate.toISOString().split('T')[0]
+      const transactionsResponse = await ynabAPI.transactions.getTransactionsByAccount(
+        params.budget_id,
+        params.account_id,
+        sinceDate.toISOString().split('T')[0]
+      );
+
+      const ynabTransactions = transactionsResponse.data.transactions;
+
+      // Perform analysis
+      const analysis = analyzeReconciliation(
+        params.csv_data || params.csv_file_path || '',
+        params.csv_file_path,
+        ynabTransactions,
+        params.statement_balance,
+        config
+      );
+
+      // Format response
+      const responseText = responseFormatter.format(analysis);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: responseText,
+          },
+        ],
+      };
+    },
+    'ynab:reconcile_account_v2',
+    'analyzing account reconciliation'
   );
-
-  const ynabTransactions = transactionsResponse.data.transactions;
-
-  // Perform analysis
-  const analysis = analyzeReconciliation(
-    params.csv_data || params.csv_file_path || '',
-    params.csv_file_path,
-    ynabTransactions,
-    params.statement_balance,
-    config
-  );
-
-  // Format response
-  const responseText = responseFormatter.format(analysis);
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: responseText,
-      },
-    ],
-  };
 }

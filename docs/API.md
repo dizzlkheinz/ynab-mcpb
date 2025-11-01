@@ -462,6 +462,79 @@ Performs comprehensive account reconciliation with bank statement data, includin
 }
 ```
 
+### reconcile_account_v2
+
+**NEW in v0.9.0** - Enhanced reconciliation with analysis-first approach and intelligent insights.
+
+Performs analysis-only reconciliation (Phase 1) that matches bank transactions with YNAB transactions and provides actionable insights. Unlike `reconcile_account`, this tool focuses on understanding discrepancies before making changes.
+
+**Parameters:**
+- `budget_id` (string, required): The ID of the budget to reconcile
+- `account_id` (string, required): The ID of the account to reconcile
+- `csv_file_path` (string, optional): Path to CSV file containing bank transactions
+- `csv_data` (string, optional): CSV data as string (alternative to csv_file_path)
+- `statement_balance` (number, required): Expected cleared balance from bank statement in dollars
+- `date_tolerance_days` (number, optional): Date difference tolerance in days (default: 2)
+- `amount_tolerance_cents` (number, optional): Amount difference tolerance in cents (default: 1)
+- `auto_match_threshold` (number, optional): Confidence threshold for auto-matching (default: 90)
+- `suggestion_threshold` (number, optional): Confidence threshold for suggestions (default: 60)
+
+**Key Features:**
+- **Intelligent Insights**: Detects patterns like exact discrepancy matches, repeated amounts, and near-matches
+- **High-Confidence Auto-Matching**: Transactions ≥90% confidence are marked for automatic clearing
+- **Suggested Matches**: Medium confidence (60-89%) matches with alternatives to review
+- **Pattern Detection**: Identifies repeated amounts, large unmatched transactions, and balance anomalies
+- **Analysis-Only**: Phase 1 provides comprehensive analysis without making changes
+
+**Example Request:**
+```json
+{
+  "name": "reconcile_account_v2",
+  "arguments": {
+    "budget_id": "12345678-1234-1234-1234-123456789012",
+    "account_id": "87654321-4321-4321-4321-210987654321",
+    "csv_data": "Date,Description,Amount\n2025-10-20,Amazon,-23.47\n2025-10-22,Coffee Shop,-4.50\n2025-10-23,Grocery Store,-67.89",
+    "statement_balance": -560.38,
+    "date_tolerance_days": 2,
+    "amount_tolerance_cents": 1
+  }
+}
+```
+
+**Example Response:**
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"phase\": \"analysis\",\n  \"summary\": {\n    \"statement_date_range\": \"2025-10-20 to 2025-10-30\",\n    \"bank_transactions_count\": 7,\n    \"ynab_transactions_count\": 529,\n    \"auto_matched\": 5,\n    \"suggested_matches\": 1,\n    \"unmatched_bank\": 1,\n    \"unmatched_ynab\": 523,\n    \"current_cleared_balance\": 1745.40,\n    \"target_statement_balance\": -560.38,\n    \"discrepancy\": 2305.78,\n    \"discrepancy_explanation\": \"Need to clear 5 transactions, add 1 missing\"\n  },\n  \"auto_matches\": [...],\n  \"suggested_matches\": [...],\n  \"unmatched_bank\": [...],\n  \"balance_info\": {\n    \"current_cleared\": 1745.40,\n    \"current_uncleared\": -234.56,\n    \"current_total\": 1510.84,\n    \"target_statement\": -560.38,\n    \"discrepancy\": 2305.78,\n    \"on_track\": false\n  },\n  \"insights\": [\n    {\n      \"id\": \"balance-gap\",\n      \"type\": \"anomaly\",\n      \"severity\": \"critical\",\n      \"title\": \"Cleared balance off by $2,305.78\",\n      \"description\": \"YNAB cleared balance is $1,745.40 but the statement expects -$560.38. Focus on closing this gap.\",\n      \"evidence\": {\n        \"cleared_balance\": 1745.40,\n        \"statement_balance\": -560.38,\n        \"discrepancy\": 2305.78\n      }\n    },\n    {\n      \"id\": \"repeat-22.22\",\n      \"type\": \"repeat_amount\",\n      \"severity\": \"warning\",\n      \"title\": \"2 unmatched transactions at $22.22\",\n      \"description\": \"The bank statement shows 2 unmatched transaction(s) at $22.22. Repeated amounts are usually the quickest wins — reconcile these first.\",\n      \"evidence\": {\n        \"amount\": 22.22,\n        \"occurrences\": 2,\n        \"dates\": [\"2025-10-23\", \"2025-10-30\"]\n      }\n    }\n  ],\n  \"next_steps\": [\n    \"Review 5 auto-matched transactions for approval\",\n    \"Review 1 suggested matches and choose best match\",\n    \"Decide whether to add 1 missing bank transactions to YNAB\"\n  ]\n}"
+    }
+  ]
+}
+```
+
+**Response Fields:**
+- `success`: Always true for successful analysis
+- `phase`: Always "analysis" for Phase 1
+- `summary`: High-level statistics about the reconciliation
+- `auto_matches`: High-confidence matches (≥90%) ready for automatic clearing
+- `suggested_matches`: Medium-confidence matches (60-89%) that need review
+- `unmatched_bank`: Bank transactions not found in YNAB
+- `unmatched_ynab`: YNAB transactions not found in bank statement
+- `balance_info`: Current and target balance information
+- **`insights`**: Intelligent pattern detection and recommendations
+  - `type`: "repeat_amount", "near_match", or "anomaly"
+  - `severity`: "info", "warning", or "critical"
+  - `title`: Short summary of the insight
+  - `description`: Detailed explanation with actionable guidance
+  - `evidence`: Supporting data for the insight
+- `next_steps`: Ordered list of actions to complete reconciliation
+
+**Insight Types:**
+- **repeat_amount**: Multiple unmatched transactions with identical amounts (quick wins)
+- **near_match**: Transactions that nearly matched but fell below threshold
+- **anomaly**: Balance discrepancies, bulk unmatched transactions, or other anomalies
+
 ### get_transaction
 
 Gets detailed information for a specific transaction.

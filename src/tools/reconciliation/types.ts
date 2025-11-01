@@ -104,6 +104,28 @@ export interface ReconciliationSummary {
 }
 
 /**
+ * Insight severity levels
+ */
+export type InsightSeverity = 'info' | 'warning' | 'critical';
+
+/**
+ * Insight types for reconciliation analysis
+ */
+export type InsightKind = 'repeat_amount' | 'near_match' | 'anomaly';
+
+/**
+ * Reconciliation insight - highlights important findings that help explain discrepancies
+ */
+export interface ReconciliationInsight {
+  id: string;
+  type: InsightKind;
+  severity: InsightSeverity;
+  title: string;
+  description: string;
+  evidence?: Record<string, unknown>;
+}
+
+/**
  * Analysis phase result
  */
 export interface ReconciliationAnalysis {
@@ -116,6 +138,7 @@ export interface ReconciliationAnalysis {
   unmatched_ynab: YNABTransaction[];
   balance_info: BalanceInfo;
   next_steps: string[];
+  insights: ReconciliationInsight[];
 }
 
 /**

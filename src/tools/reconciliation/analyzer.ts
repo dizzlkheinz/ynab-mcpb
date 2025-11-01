@@ -19,6 +19,7 @@ import type {
   MatchingConfig,
   BalanceInfo,
   ReconciliationSummary,
+  ReconciliationInsight,
 } from './types.js';
 
 /**
@@ -224,6 +225,184 @@ function generateNextSteps(summary: ReconciliationSummary): string[] {
   return steps;
 }
 
+function formatCurrency(amount: number): string {
+  const formatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return formatter.format(amount);
+}
+
+function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationInsight[] {
+  const insights: ReconciliationInsight[] = [];
+  if (unmatchedBank.length === 0) {
+    return insights;
+  }
+
+  const frequency = new Map<string, { amount: number; txns: BankTransaction[] }>();
+
+  for (const txn of unmatchedBank) {
+    const key = txn.amount.toFixed(2);
+    const entry = frequency.get(key) ?? { amount: txn.amount, txns: [] };
+    entry.txns.push(txn);
+    frequency.set(key, entry);
+  }
+
+  const repeated = Array.from(frequency.values())
+    .filter((entry) => entry.txns.length >= 2)
+    .sort((a, b) => b.txns.length - a.txns.length);
+
+  if (repeated.length === 0) {
+    return insights;
+  }
+
+  const top = repeated[0]!;
+  insights.push({
+    id: `repeat-${top.amount.toFixed(2)}`,
+    type: 'repeat_amount',
+    severity: top.txns.length >= 4 ? 'critical' : 'warning',
+    title: `${top.txns.length} unmatched transactions at ${formatCurrency(top.amount)}`,
+    description:
+      `The bank statement shows ${top.txns.length} unmatched transaction(s) at ${formatCurrency(top.amount)}. ` +
+      'Repeated amounts are usually the quickest wins — reconcile these first.',
+    evidence: {
+      amount: top.amount,
+      occurrences: top.txns.length,
+      dates: top.txns.map((txn) => txn.date),
+      csv_rows: top.txns.map((txn) => txn.original_csv_row),
+    },
+  });
+
+  return insights;
+}
+
+function nearMatchInsights(
+  matches: TransactionMatch[],
+  config: MatchingConfig
+): ReconciliationInsight[] {
+  const insights: ReconciliationInsight[] = [];
+
+  for (const match of matches) {
+    if (!match.candidates || match.candidates.length === 0) continue;
+    if (match.confidence === 'high') continue;
+
+    const topCandidate = match.candidates[0]!;
+    const score = topCandidate.confidence;
+    const highSignal =
+      (match.confidence === 'medium' && score >= config.autoMatchThreshold - 5) ||
+      (match.confidence === 'low' && score >= config.suggestionThreshold) ||
+      (match.confidence === 'none' && score >= config.suggestionThreshold);
+
+    if (!highSignal) continue;
+
+    const bankTxn = match.bank_transaction;
+    const ynabTxn = topCandidate.ynab_transaction;
+
+    insights.push({
+      id: `near-${bankTxn.id}`,
+      type: 'near_match',
+      severity: score >= config.autoMatchThreshold ? 'warning' : 'info',
+      title: `${formatCurrency(bankTxn.amount)} nearly matches ${formatCurrency(ynabTxn.amount / 1000)}`,
+      description:
+        `Bank transaction on ${bankTxn.date} (${formatCurrency(bankTxn.amount)}) nearly matches ` +
+        `${ynabTxn.payee_name ?? 'unknown payee'} on ${ynabTxn.date}. Confidence ${score}% — review and confirm.`,
+      evidence: {
+        bank_transaction: {
+          id: bankTxn.id,
+          date: bankTxn.date,
+          amount: bankTxn.amount,
+          payee: bankTxn.payee,
+        },
+        candidate: {
+          id: ynabTxn.id,
+          date: ynabTxn.date,
+          amount_milliunits: ynabTxn.amount,
+          payee_name: ynabTxn.payee_name,
+          confidence: score,
+          reasons: topCandidate.match_reason,
+        },
+      },
+    });
+  }
+
+  return insights.slice(0, 3);
+}
+
+function anomalyInsights(
+  summary: ReconciliationSummary,
+  balances: BalanceInfo
+): ReconciliationInsight[] {
+  const insights: ReconciliationInsight[] = [];
+  const discrepancyAbs = Math.abs(balances.discrepancy);
+
+  if (discrepancyAbs >= 1) {
+    insights.push({
+      id: 'balance-gap',
+      type: 'anomaly',
+      severity: discrepancyAbs >= 100 ? 'critical' : 'warning',
+      title: `Cleared balance off by ${formatCurrency(balances.discrepancy)}`,
+      description:
+        `YNAB cleared balance is ${formatCurrency(balances.current_cleared)} but the statement expects ` +
+        `${formatCurrency(balances.target_statement)}. Focus on closing this gap.`,
+      evidence: {
+        cleared_balance: balances.current_cleared,
+        statement_balance: balances.target_statement,
+        discrepancy: balances.discrepancy,
+      },
+    });
+  }
+
+  if (summary.unmatched_bank >= 5) {
+    insights.push({
+      id: 'bulk-missing-bank',
+      type: 'anomaly',
+      severity: summary.unmatched_bank >= 10 ? 'critical' : 'warning',
+      title: `${summary.unmatched_bank} bank transactions still unmatched`,
+      description:
+        `There are ${summary.unmatched_bank} bank transactions without a match. ` +
+        'Consider bulk importing or reviewing by date sequence.',
+      evidence: {
+        unmatched_bank: summary.unmatched_bank,
+      },
+    });
+  }
+
+  return insights;
+}
+
+function detectInsights(
+  matches: TransactionMatch[],
+  unmatchedBank: BankTransaction[],
+  summary: ReconciliationSummary,
+  balances: BalanceInfo,
+  config: MatchingConfig
+): ReconciliationInsight[] {
+  const insights: ReconciliationInsight[] = [];
+  const seen = new Set<string>();
+
+  const addUnique = (insight: ReconciliationInsight) => {
+    if (seen.has(insight.id)) return;
+    seen.add(insight.id);
+    insights.push(insight);
+  };
+
+  for (const insight of repeatAmountInsights(unmatchedBank)) {
+    addUnique(insight);
+  }
+
+  for (const insight of nearMatchInsights(matches, config)) {
+    addUnique(insight);
+  }
+
+  for (const insight of anomalyInsights(summary, balances)) {
+    addUnique(insight);
+  }
+
+  return insights.slice(0, 5);
+}
+
 /**
  * Perform reconciliation analysis
  *
@@ -272,6 +451,9 @@ export function analyzeReconciliation(
   // Step 8: Generate next steps
   const nextSteps = generateNextSteps(summary);
 
+  // Step 9: Detect insights and patterns
+  const insights = detectInsights(matches, unmatchedBank, summary, balances, config);
+
   return {
     success: true,
     phase: 'analysis',
@@ -282,5 +464,6 @@ export function analyzeReconciliation(
     unmatched_ynab: unmatchedYNAB,
     balance_info: balances,
     next_steps: nextSteps,
+    insights,
   };
 }
