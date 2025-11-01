@@ -54,6 +54,10 @@ import {
 } from '../tools/compareTransactions/index.js';
 import { handleReconcileAccount, ReconcileAccountSchema } from '../tools/reconcileAccount.js';
 import {
+  handleReconcileAccountV2,
+  ReconcileAccountV2Schema,
+} from '../tools/reconciliation/index.js';
+import {
   handleListCategories,
   handleGetCategory,
   handleUpdateCategory,
@@ -502,6 +506,15 @@ export class YNABMCPServer {
       inputSchema: ReconcileAccountSchema,
       handler: adapt(handleReconcileAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
+    });
+
+    register({
+      name: 'reconcile_account_v2',
+      description:
+        '[BETA] Analysis-only reconciliation with guided matching workflow. Returns categorized transaction matches (auto-match, suggested, unmatched) for user review. Phase 1: Read-only analysis, no YNAB modifications.',
+      inputSchema: ReconcileAccountV2Schema,
+      handler: adapt(handleReconcileAccountV2),
+      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountV2Schema>>(),
     });
 
     register({
