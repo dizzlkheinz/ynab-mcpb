@@ -152,6 +152,9 @@ ynab-mcp-dxt-updated/
 # Claude Code specific
 .claude/
 
+# Git worktrees (development)
+.worktrees/
+
 # MCP configuration (local development)
 .mcp.json
 
