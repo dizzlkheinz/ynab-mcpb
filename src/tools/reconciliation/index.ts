@@ -20,82 +20,76 @@ import {
 export type * from './types.js';
 export { analyzeReconciliation } from './analyzer.js';
 export { findMatches, findBestMatch } from './matcher.js';
-export {
-  normalizePayee,
-  normalizedMatch,
-  fuzzyMatch,
-  payeeSimilarity,
-} from './payeeNormalizer.js';
+export { normalizePayee, normalizedMatch, fuzzyMatch, payeeSimilarity } from './payeeNormalizer.js';
 
 /**
  * Schema for reconcile_account_v2 tool (Phase 1: Analysis Only)
  */
-export const ReconcileAccountV2Schema = z.object({
-  budget_id: z.string().min(1, 'Budget ID is required'),
-  account_id: z.string().min(1, 'Account ID is required'),
+export const ReconcileAccountV2Schema = z
+  .object({
+    budget_id: z.string().min(1, 'Budget ID is required'),
+    account_id: z.string().min(1, 'Account ID is required'),
 
-  // CSV input (one required)
-  csv_file_path: z.string().optional(),
-  csv_data: z.string().optional(),
+    // CSV input (one required)
+    csv_file_path: z.string().optional(),
+    csv_data: z.string().optional(),
 
-  csv_format: z
-    .object({
-      date_column: z.union([z.string(), z.number()]).optional().default('Date'),
-      amount_column: z.union([z.string(), z.number()]).optional(),
-      debit_column: z.union([z.string(), z.number()]).optional(),
-      credit_column: z.union([z.string(), z.number()]).optional(),
-      description_column: z.union([z.string(), z.number()]).optional().default('Description'),
-      date_format: z.string().optional().default('MM/DD/YYYY'),
-      has_header: z.boolean().optional().default(true),
-      delimiter: z.string().optional().default(','),
-    })
-    .strict()
-    .optional()
-    .default(() => ({
-      date_column: 'Date',
-      amount_column: 'Amount',
-      description_column: 'Description',
-      date_format: 'MM/DD/YYYY',
-      has_header: true,
-      delimiter: ',',
-    })),
+    csv_format: z
+      .object({
+        date_column: z.union([z.string(), z.number()]).optional().default('Date'),
+        amount_column: z.union([z.string(), z.number()]).optional(),
+        debit_column: z.union([z.string(), z.number()]).optional(),
+        credit_column: z.union([z.string(), z.number()]).optional(),
+        description_column: z.union([z.string(), z.number()]).optional().default('Description'),
+        date_format: z.string().optional().default('MM/DD/YYYY'),
+        has_header: z.boolean().optional().default(true),
+        delimiter: z.string().optional().default(','),
+      })
+      .strict()
+      .optional()
+      .default(() => ({
+        date_column: 'Date',
+        amount_column: 'Amount',
+        description_column: 'Description',
+        date_format: 'MM/DD/YYYY',
+        has_header: true,
+        delimiter: ',',
+      })),
 
-  // Statement information
-  statement_balance: z.number({
-    message: 'Statement balance is required and must be a number',
-  }),
-  statement_start_date: z.string().optional(),
-  statement_end_date: z.string().optional(),
-  statement_date: z.string().optional(),
-  expected_bank_balance: z.number().optional(),
-  as_of_timezone: z.string().optional(),
+    // Statement information
+    statement_balance: z.number({
+      message: 'Statement balance is required and must be a number',
+    }),
+    statement_start_date: z.string().optional(),
+    statement_end_date: z.string().optional(),
+    statement_date: z.string().optional(),
+    expected_bank_balance: z.number().optional(),
+    as_of_timezone: z.string().optional(),
 
-  // Matching configuration (optional)
-  date_tolerance_days: z.number().min(0).max(7).optional().default(2),
-  amount_tolerance_cents: z.number().min(0).max(100).optional().default(1),
-  auto_match_threshold: z.number().min(0).max(100).optional().default(90),
-  suggestion_threshold: z.number().min(0).max(100).optional().default(60),
-  amount_tolerance: z.number().min(0).max(1).optional(),
+    // Matching configuration (optional)
+    date_tolerance_days: z.number().min(0).max(7).optional().default(2),
+    amount_tolerance_cents: z.number().min(0).max(100).optional().default(1),
+    auto_match_threshold: z.number().min(0).max(100).optional().default(90),
+    suggestion_threshold: z.number().min(0).max(100).optional().default(60),
+    amount_tolerance: z.number().min(0).max(1).optional(),
 
-  auto_create_transactions: z.boolean().optional().default(false),
-  auto_update_cleared_status: z.boolean().optional().default(false),
-  auto_unclear_missing: z.boolean().optional().default(true),
-  auto_adjust_dates: z.boolean().optional().default(false),
-  dry_run: z.boolean().optional().default(true),
-  balance_verification_mode: z
-    .enum(['ANALYSIS_ONLY', 'GUIDED_RESOLUTION', 'AUTO_RESOLVE'])
-    .optional()
-    .default('ANALYSIS_ONLY'),
-  require_exact_match: z.boolean().optional().default(true),
-  confidence_threshold: z.number().min(0).max(1).optional().default(0.8),
-  max_resolution_attempts: z.number().int().min(1).max(10).optional().default(5),
-}).refine(
-  (data) => data.csv_file_path || data.csv_data,
-  {
+    auto_create_transactions: z.boolean().optional().default(false),
+    auto_update_cleared_status: z.boolean().optional().default(false),
+    auto_unclear_missing: z.boolean().optional().default(true),
+    auto_adjust_dates: z.boolean().optional().default(false),
+    dry_run: z.boolean().optional().default(true),
+    balance_verification_mode: z
+      .enum(['ANALYSIS_ONLY', 'GUIDED_RESOLUTION', 'AUTO_RESOLVE'])
+      .optional()
+      .default('ANALYSIS_ONLY'),
+    require_exact_match: z.boolean().optional().default(true),
+    confidence_threshold: z.number().min(0).max(1).optional().default(0.8),
+    max_resolution_attempts: z.number().int().min(1).max(10).optional().default(5),
+  })
+  .refine((data) => data.csv_file_path || data.csv_data, {
     message: 'Either csv_file_path or csv_data must be provided',
     path: ['csv_data'],
-  }
-);
+  });
 
 export type ReconcileAccountV2Request = z.infer<typeof ReconcileAccountV2Schema>;
 
@@ -107,7 +101,7 @@ export type ReconcileAccountV2Request = z.infer<typeof ReconcileAccountV2Schema>
  */
 export async function handleReconcileAccountV2(
   ynabAPI: ynab.API,
-  params: ReconcileAccountV2Request
+  params: ReconcileAccountV2Request,
 ): Promise<CallToolResult> {
   return await withToolErrorHandling(
     async () => {
@@ -130,9 +124,7 @@ export async function handleReconcileAccountV2(
       const accountName = accountData?.name;
 
       const budgetResponse = await ynabAPI.budgets.getBudgetById(params.budget_id);
-      const currencyCode =
-        budgetResponse.data.budget?.currency_format?.currency_code ??
-        'USD';
+      const currencyCode = budgetResponse.data.budget?.currency_format?.iso_code ?? 'USD';
 
       // Fetch YNAB transactions for the account
       // Use date range if provided, otherwise get recent transactions
@@ -143,7 +135,7 @@ export async function handleReconcileAccountV2(
       const transactionsResponse = await ynabAPI.transactions.getTransactionsByAccount(
         params.budget_id,
         params.account_id,
-        sinceDate.toISOString().split('T')[0]
+        sinceDate.toISOString().split('T')[0],
       );
 
       const ynabTransactions = transactionsResponse.data.transactions;
@@ -155,7 +147,7 @@ export async function handleReconcileAccountV2(
         ynabTransactions,
         params.statement_balance,
         config,
-        currencyCode
+        currencyCode,
       );
 
       const initialAccount: AccountSnapshot = {
@@ -188,16 +180,16 @@ export async function handleReconcileAccountV2(
 
       const csvFormatForPayload = mapCsvFormatForPayload(params.csv_format);
 
-      const payload = buildReconciliationV2Payload(
-        analysis,
-        {
-          accountName,
-          accountId: params.account_id,
-          currencyCode,
-          csvFormat: csvFormatForPayload,
-        },
-        executionData,
-      );
+      const adapterOptions: Parameters<typeof buildReconciliationV2Payload>[1] = {
+        accountName,
+        accountId: params.account_id,
+        currencyCode,
+      };
+      if (csvFormatForPayload !== undefined) {
+        adapterOptions.csvFormat = csvFormatForPayload;
+      }
+
+      const payload = buildReconciliationV2Payload(analysis, adapterOptions, executionData);
 
       return {
         content: [
@@ -213,13 +205,11 @@ export async function handleReconcileAccountV2(
       };
     },
     'ynab:reconcile_account_v2',
-    'analyzing account reconciliation'
+    'analyzing account reconciliation',
   );
 }
 
-function mapCsvFormatForPayload(
-  format: ReconcileAccountV2Request['csv_format'] | undefined,
-):
+function mapCsvFormatForPayload(format: ReconcileAccountV2Request['csv_format'] | undefined):
   | {
       delimiter: string;
       decimal_separator: string;
@@ -243,18 +233,18 @@ function mapCsvFormatForPayload(
   };
 
   const delimiter = coerceString(format.delimiter, ',');
-  const decimalSeparator = coerceString(format.decimal_separator, '.');
-  const thousandsSeparator = coerceString(format.thousands_separator ?? null, null);
+  const decimalSeparator = '.'; // Default decimal separator
+  const thousandsSeparator = ','; // Default thousands separator
   const dateFormat = coerceString(format.date_format, 'MM/DD/YYYY');
 
   return {
     delimiter: delimiter ?? ',',
-    decimal_separator: decimalSeparator ?? '.',
+    decimal_separator: decimalSeparator,
     thousands_separator: thousandsSeparator,
     date_format: dateFormat ?? 'MM/DD/YYYY',
     header_row: format.has_header ?? true,
-    date_column: coerceString(format.date_column ?? null, null),
-    amount_column: coerceString(format.amount_column ?? null, null),
-    payee_column: coerceString(format.description_column ?? null, null),
+    date_column: coerceString(format.date_column, '') ?? null,
+    amount_column: coerceString(format.amount_column, '') ?? null,
+    payee_column: coerceString(format.description_column, '') ?? null,
   };
 }
