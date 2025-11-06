@@ -141,6 +141,7 @@ export interface ReconciliationAnalysis {
   balance_info: BalanceInfo;
   next_steps: string[];
   insights: ReconciliationInsight[];
+  recommendations?: ActionableRecommendation[];
 }
 
 /**

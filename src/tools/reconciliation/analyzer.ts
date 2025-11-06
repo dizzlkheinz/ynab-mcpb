@@ -20,6 +20,7 @@ import type {
   ReconciliationInsight,
 } from './types.js';
 import { toMoneyValueFromDecimal } from '../../utils/money.js';
+import { generateRecommendations } from './recommendationEngine.js';
 
 /**
  * Convert YNAB API transaction to simplified format
@@ -721,6 +722,9 @@ function mergeInsights(
  * @param ynabTransactions - YNAB transactions from API
  * @param statementBalance - Expected cleared balance from statement
  * @param config - Matching configuration
+ * @param currency - Currency code (default: USD)
+ * @param accountId - Account ID for recommendation context
+ * @param budgetId - Budget ID for recommendation context
  */
 export function analyzeReconciliation(
   csvContent: string,
@@ -729,6 +733,8 @@ export function analyzeReconciliation(
   statementBalance: number,
   config: MatchingConfig = DEFAULT_MATCHING_CONFIG as MatchingConfig,
   currency: string = 'USD',
+  accountId?: string,
+  budgetId?: string,
 ): ReconciliationAnalysis {
   // Step 1: Parse bank CSV
   const bankTransactions = parseBankStatement(csvContent, csvFilePath);
@@ -777,7 +783,8 @@ export function analyzeReconciliation(
   const baseInsights = detectInsights(matches, unmatchedBank, summary, balances, config);
   const insights = mergeInsights(baseInsights, combinationInsights);
 
-  return {
+  // Step 10: Build the analysis result
+  const analysis: ReconciliationAnalysis = {
     success: true,
     phase: 'analysis',
     summary,
@@ -789,4 +796,17 @@ export function analyzeReconciliation(
     next_steps: nextSteps,
     insights,
   };
+
+  // Step 11: Generate recommendations (if account and budget IDs are provided)
+  if (accountId && budgetId) {
+    const recommendations = generateRecommendations({
+      account_id: accountId,
+      budget_id: budgetId,
+      analysis,
+      matching_config: config,
+    });
+    analysis.recommendations = recommendations;
+  }
+
+  return analysis;
 }
