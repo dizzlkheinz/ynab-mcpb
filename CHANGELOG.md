@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2025-11-03
+
+### Added
+
+- Reconciliation v2 now plumbs currency through analyzer/executor and emits MoneyValue objects.
+- Schema `docs/schemas/reconciliation-v2.json` exposes `csv_format` and SCHEMA_URL examples point to master.
+- Analyzer suggests and highlights 2–3 leg combination matches with new insights/tests.
+- Handler prefers `accounts.getAccount` with fallback and includes `csv_format` metadata in payloads.
+- Updated docs and targeted tests (schema URL, scenarios, apply-mode, registry mapping).
+
 ## [0.8.8] - 2025-10-13
 
 ### Changed

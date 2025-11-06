@@ -5,8 +5,8 @@
 
 import { randomUUID } from 'crypto';
 import type * as ynab from 'ynab';
-import { parseBankCSV, autoDetectCSVFormat } from '../compareTransactions/parser.js';
-import { readFileSync } from 'fs';
+import * as bankParser from '../compareTransactions/parser.js';
+import type { CSVFormat as ParserCSVFormat } from '../compareTransactions/types.js';
 import { findMatches } from './matcher.js';
 import {
   DEFAULT_MATCHING_CONFIG,
@@ -41,25 +41,315 @@ function convertYNABTransaction(apiTxn: ynab.TransactionDetail): YNABTransaction
 /**
  * Parse CSV bank statement and generate unique IDs for tracking
  */
-function parseBankStatement(csvContent: string, csvFilePath?: string): BankTransaction[] {
-  // Read file if path provided
-  const content = csvFilePath ? readFileSync(csvFilePath, 'utf-8') : csvContent;
+const FALLBACK_CSV_FORMAT: ParserCSVFormat = {
+  date_column: 'Date',
+  amount_column: 'Amount',
+  description_column: 'Description',
+  date_format: 'MM/DD/YYYY',
+  has_header: true,
+  delimiter: ',',
+};
 
-  // Auto-detect CSV format
-  const format = autoDetectCSVFormat(content);
+const ENABLE_COMBINATION_MATCHING = true;
 
-  // Parse bank transactions
-  const transactions = parseBankCSV(content, format);
+const DAYS_IN_MS = 24 * 60 * 60 * 1000;
 
-  // Generate UUIDs for bank transactions and map fields
-  return transactions.map((txn, index) => ({
+function toDollars(milliunits: number): number {
+  return milliunits / 1000;
+}
+
+function amountTolerance(config: MatchingConfig): number {
+  const toleranceCents =
+    config.amountToleranceCents ?? DEFAULT_MATCHING_CONFIG.amountToleranceCents ?? 1;
+  return Math.max(0, toleranceCents) / 100;
+}
+
+function dateTolerance(config: MatchingConfig): number {
+  return config.dateToleranceDays ?? DEFAULT_MATCHING_CONFIG.dateToleranceDays ?? 2;
+}
+
+function daysBetween(dateA: string, dateB: string): number {
+  const a = new Date(`${dateA}T00:00:00Z`).getTime();
+  const b = new Date(`${dateB}T00:00:00Z`).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return Number.POSITIVE_INFINITY;
+  return Math.abs(a - b) / DAYS_IN_MS;
+}
+
+function withinDateTolerance(
+  bankDate: string,
+  ynabTxns: YNABTransaction[],
+  toleranceDays: number
+): boolean {
+  return ynabTxns.every((txn) => daysBetween(bankDate, txn.date) <= toleranceDays);
+}
+
+function hasMatchingSign(bankAmount: number, ynabTxns: YNABTransaction[]): boolean {
+  const bankSign = Math.sign(bankAmount);
+  const sumSign = Math.sign(
+    ynabTxns.reduce((sum, txn) => sum + toDollars(txn.amount), 0)
+  );
+  return bankSign === sumSign || Math.abs(bankAmount) === 0;
+}
+
+function computeCombinationConfidence(
+  diff: number,
+  tolerance: number,
+  legCount: number
+): number {
+  const safeTolerance = tolerance > 0 ? tolerance : 0.01;
+  const ratio = diff / safeTolerance;
+  let base = legCount === 2 ? 75 : 70;
+  if (ratio <= 0.25) {
+    base += 5;
+  } else if (ratio <= 0.5) {
+    base += 3;
+  } else if (ratio >= 0.9) {
+    base -= 5;
+  }
+  return Math.max(65, Math.min(80, Math.round(base)));
+}
+
+function formatDifference(diff: number): string {
+  return formatCurrency(diff); // diff already absolute; formatCurrency handles sign
+}
+
+interface CombinationResult {
+  matches: TransactionMatch[];
+  insights: ReconciliationInsight[];
+}
+
+function findCombinationMatches(
+  unmatchedBank: BankTransaction[],
+  unmatchedYNAB: YNABTransaction[],
+  config: MatchingConfig
+): CombinationResult {
+  if (!ENABLE_COMBINATION_MATCHING || unmatchedBank.length === 0 || unmatchedYNAB.length === 0) {
+    return { matches: [], insights: [] };
+  }
+
+  const tolerance = amountTolerance(config);
+  const toleranceDays = dateTolerance(config);
+
+  const matches: TransactionMatch[] = [];
+  const insights: ReconciliationInsight[] = [];
+  const seenCombinations = new Set<string>();
+
+  for (const bankTxn of unmatchedBank) {
+    const viableYnab = unmatchedYNAB.filter((txn) => hasMatchingSign(bankTxn.amount, [txn]));
+    if (viableYnab.length < 2) continue;
+
+    const evaluated: { txns: YNABTransaction[]; diff: number; sum: number }[] = [];
+
+    const addIfValid = (combo: YNABTransaction[]) => {
+      const sum = combo.reduce((acc, txn) => acc + toDollars(txn.amount), 0);
+      const diff = Math.abs(sum - bankTxn.amount);
+      if (diff > tolerance) return;
+      if (!withinDateTolerance(bankTxn.date, combo, toleranceDays)) return;
+      if (!hasMatchingSign(bankTxn.amount, combo)) return;
+      evaluated.push({ txns: combo, diff, sum });
+    };
+
+    const n = viableYnab.length;
+    for (let i = 0; i < n - 1; i++) {
+      for (let j = i + 1; j < n; j++) {
+        addIfValid([viableYnab[i]!, viableYnab[j]!]);
+      }
+    }
+
+    if (n >= 3) {
+      for (let i = 0; i < n - 2; i++) {
+        for (let j = i + 1; j < n - 1; j++) {
+          for (let k = j + 1; k < n; k++) {
+            addIfValid([viableYnab[i]!, viableYnab[j]!, viableYnab[k]!]);
+          }
+        }
+      }
+    }
+
+    if (evaluated.length === 0) continue;
+
+    evaluated.sort((a, b) => a.diff - b.diff);
+    const recordedSizes = new Set<number>();
+
+    for (const combo of evaluated) {
+      if (recordedSizes.has(combo.txns.length)) continue; // surface best per size
+      const comboIds = combo.txns.map((txn) => txn.id).sort();
+      const key = `${bankTxn.id}|${comboIds.join('+')}`;
+      if (seenCombinations.has(key)) continue;
+      seenCombinations.add(key);
+      recordedSizes.add(combo.txns.length);
+
+      const score = computeCombinationConfidence(combo.diff, tolerance, combo.txns.length);
+      const candidateConfidence = Math.max(60, score - 5);
+      const descriptionTotal = formatCurrency(combo.sum);
+      const diffLabel = formatDifference(combo.diff);
+
+      matches.push({
+        bank_transaction: bankTxn,
+        confidence: 'medium',
+        confidence_score: score,
+        match_reason: 'combination_match',
+        top_confidence: score,
+        candidates: combo.txns.map((txn) => ({
+          ynab_transaction: txn,
+          confidence: candidateConfidence,
+          match_reason: 'combination_component',
+          explanation: `Part of combination totaling ${descriptionTotal} (difference ${diffLabel}).`,
+        })),
+        action_hint: 'review_combination',
+        recommendation:
+          `Combination of ${combo.txns.length} YNAB transactions totals ${descriptionTotal} versus ` +
+          `${formatCurrency(bankTxn.amount)} on the bank statement.`,
+      });
+
+      const insightId = `combination-${bankTxn.id}-${comboIds.join('+')}`;
+      insights.push({
+        id: insightId,
+        type: 'combination_match' as unknown as ReconciliationInsight['type'],
+        severity: 'info',
+        title: `Combination of ${combo.txns.length} transactions matches ${formatCurrency(
+          bankTxn.amount
+        )}`,
+        description:
+          `${combo.txns.length} YNAB transactions totaling ${descriptionTotal} align with ` +
+          `${formatCurrency(bankTxn.amount)} from ${bankTxn.payee}. Difference ${diffLabel}.`,
+        evidence: {
+          bank_transaction_id: bankTxn.id,
+          bank_amount: bankTxn.amount,
+          ynab_transaction_ids: comboIds,
+          ynab_amounts_milliunits: combo.txns.map((txn) => txn.amount),
+          combination_size: combo.txns.length,
+          difference: combo.diff,
+        },
+      });
+    }
+  }
+
+  return { matches, insights };
+}
+
+type ParserResult =
+  | {
+      transactions: unknown[];
+      format_detected?: string;
+      delimiter?: string;
+      total_rows?: number;
+      valid_rows?: number;
+      errors?: string[];
+    }
+  | unknown[];
+
+function isParsedCSVData(result: ParserResult): result is Extract<ParserResult, { transactions: unknown[] }> {
+  return typeof result === 'object' && result !== null && !Array.isArray(result) && 'transactions' in result;
+}
+
+function normalizeDate(value: unknown): string {
+  if (value instanceof Date) {
+    return value.toISOString().split('T')[0]!;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return trimmed;
+
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0]!;
+    }
+
+    return trimmed;
+  }
+
+  return new Date().toISOString().split('T')[0]!;
+}
+
+function normalizeAmount(record: Record<string, unknown>): number {
+  const raw = record['amount'];
+
+  if (typeof raw === 'number') {
+    if (record['date'] instanceof Date || 'raw_amount' in record || 'raw_date' in record) {
+      return Math.round(raw) / 1000;
+    }
+    return raw;
+  }
+
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/[$,\s]/g, '');
+    const parsed = Number.parseFloat(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+function normalizePayee(record: Record<string, unknown>): string {
+  const candidates = [record['payee'], record['description'], record['memo']];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return 'Unknown Payee';
+}
+
+function determineRow(record: Record<string, unknown>, index: number): number {
+  if (typeof record['original_csv_row'] === 'number') {
+    return record['original_csv_row'];
+  }
+  if (typeof record['row_number'] === 'number') {
+    return record['row_number'];
+  }
+  return index + 1;
+}
+
+function convertParserRecord(record: unknown, index: number): BankTransaction {
+  const data = typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : {};
+
+  const dateValue = normalizeDate(data['date']);
+  const amountValue = normalizeAmount(data);
+  const payeeValue = normalizePayee(data);
+  const memoValue = typeof data['memo'] === 'string' && data['memo'].trim() ? data['memo'].trim() : undefined;
+  const originalRow = determineRow(data, index);
+
+  const transaction: BankTransaction = {
     id: randomUUID(),
-    date: txn.date.toISOString().split('T')[0]!, // Convert Date to YYYY-MM-DD
-    amount: txn.amount,
-    payee: txn.description, // Map description to payee
-    memo: '',
-    original_csv_row: index + 2, // +2 for header and 0-indexed
-  }));
+    date: dateValue,
+    amount: amountValue,
+    payee: payeeValue,
+    original_csv_row: originalRow,
+  };
+
+  if (memoValue !== undefined) {
+    transaction.memo = memoValue;
+  }
+
+  return transaction;
+}
+
+function parseBankStatement(csvContent: string, csvFilePath?: string): BankTransaction[] {
+  const content = csvFilePath ? bankParser.readCSVFile(csvFilePath) : csvContent;
+
+  let format: ParserCSVFormat = FALLBACK_CSV_FORMAT;
+  let autoDetect: ((content: string) => ParserCSVFormat) | undefined;
+  try {
+    autoDetect = (bankParser as { autoDetectCSVFormat?: (content: string) => ParserCSVFormat })
+      .autoDetectCSVFormat;
+  } catch {
+    autoDetect = undefined;
+  }
+
+  if (typeof autoDetect === 'function') {
+    try {
+      format = autoDetect(content);
+    } catch {
+      format = FALLBACK_CSV_FORMAT;
+    }
+  }
+
+  const rawResult = bankParser.parseBankCSV(content, format) as unknown as ParserResult;
+  const records = isParsedCSVData(rawResult) ? rawResult.transactions : rawResult;
+
+  return records.map(convertParserRecord);
 }
 
 /**
@@ -403,6 +693,26 @@ function detectInsights(
   return insights.slice(0, 5);
 }
 
+function mergeInsights(
+  base: ReconciliationInsight[],
+  additional: ReconciliationInsight[]
+): ReconciliationInsight[] {
+  if (additional.length === 0) {
+    return base;
+  }
+
+  const seen = new Set(base.map((insight) => insight.id));
+  const merged = [...base];
+
+  for (const insight of additional) {
+    if (seen.has(insight.id)) continue;
+    seen.add(insight.id);
+    merged.push(insight);
+  }
+
+  return merged.slice(0, 5);
+}
+
 /**
  * Perform reconciliation analysis
  *
@@ -434,6 +744,17 @@ export function analyzeReconciliation(
   // Step 5: Find unmatched YNAB transactions
   const unmatchedYNAB = findUnmatchedYNAB(convertedYNABTxns, matches);
 
+  let combinationMatches: TransactionMatch[] = [];
+  let combinationInsights: ReconciliationInsight[] = [];
+
+  if (ENABLE_COMBINATION_MATCHING) {
+    const combinationResult = findCombinationMatches(unmatchedBank, unmatchedYNAB, config);
+    combinationMatches = combinationResult.matches;
+    combinationInsights = combinationResult.insights;
+  }
+
+  const enrichedSuggestedMatches = [...suggestedMatches, ...combinationMatches];
+
   // Step 6: Calculate balances
   const balances = calculateBalances(convertedYNABTxns, statementBalance);
 
@@ -442,7 +763,7 @@ export function analyzeReconciliation(
     bankTransactions,
     convertedYNABTxns,
     autoMatches,
-    suggestedMatches,
+    enrichedSuggestedMatches,
     unmatchedBank,
     unmatchedYNAB,
     balances
@@ -452,14 +773,15 @@ export function analyzeReconciliation(
   const nextSteps = generateNextSteps(summary);
 
   // Step 9: Detect insights and patterns
-  const insights = detectInsights(matches, unmatchedBank, summary, balances, config);
+  const baseInsights = detectInsights(matches, unmatchedBank, summary, balances, config);
+  const insights = mergeInsights(baseInsights, combinationInsights);
 
   return {
     success: true,
     phase: 'analysis',
     summary,
     auto_matches: autoMatches,
-    suggested_matches: suggestedMatches,
+    suggested_matches: enrichedSuggestedMatches,
     unmatched_bank: unmatchedBank,
     unmatched_ynab: unmatchedYNAB,
     balance_info: balances,

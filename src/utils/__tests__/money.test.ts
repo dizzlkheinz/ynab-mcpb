@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { toMilli, fromMilli, assertMilli, addMilli, inWindow } from '../money.js';
+import {
+  toMilli,
+  fromMilli,
+  assertMilli,
+  addMilli,
+  inWindow,
+  moneyDirection,
+  formatMoney,
+  toMoneyValue,
+  toMoneyValueFromDecimal,
+} from '../money.js';
 
 describe('money utilities', () => {
   describe('toMilli', () => {
@@ -60,6 +70,33 @@ describe('money utilities', () => {
       expect(inWindow('2024-01-15', undefined, '2024-01-31')).toBe(true);
       expect(inWindow('2024-01-15', '2024-01-01', undefined)).toBe(true);
       expect(inWindow('2024-01-15', undefined, undefined)).toBe(true);
+    });
+  });
+
+  describe('moneyValue helpers', () => {
+    it('derives direction correctly', () => {
+      expect(moneyDirection(0)).toBe('balanced');
+      expect(moneyDirection(1500)).toBe('credit');
+      expect(moneyDirection(-2500)).toBe('debit');
+    });
+
+    it('formats milliunits into currency strings', () => {
+      expect(formatMoney(1234)).toBe('$1.23');
+      expect(formatMoney(-9870)).toBe('-$9.87');
+    });
+
+    it('creates money values from milliunits', () => {
+      const value = toMoneyValue(22220);
+      expect(value.value).toBe(22.22);
+      expect(value.value_display).toBe('$22.22');
+      expect(value.direction).toBe('credit');
+    });
+
+    it('creates money values from decimal amounts', () => {
+      const value = toMoneyValueFromDecimal(-45.67);
+      expect(value.value_milliunits).toBe(-45670);
+      expect(value.value_display).toBe('-$45.67');
+      expect(value.direction).toBe('debit');
     });
   });
 });

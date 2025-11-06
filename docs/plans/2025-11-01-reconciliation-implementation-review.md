@@ -1,9 +1,9 @@
 # Reconciliation Tool Implementation Review
 
-**Date:** 2025-11-01
-**Branch:** `feature/reconciliation-redesign` (in `.worktrees/reconciliation-redesign`)
+**Date:** 2025-11-01 (updated Nov 2, 2025)
+**Branch:** `master` (merged via 8e0e058 on 2025-11-01)
 **Reviewer:** Claude
-**Status:** ✅ Ready for Testing & Integration
+**Status:** ✅ Shipped in v0.9.0, follow-ups in progress
 
 ---
 
@@ -15,7 +15,13 @@ The reconciliation tool has been reimplemented in the worktree following the Pha
 2. ✅ **Discrepancy direction is calculable** - Balance info includes all necessary context
 3. ✅ **Missing transactions are identified** - Unmatched bank transactions are explicitly listed
 
-**Assessment:** The implementation follows good software engineering practices and should significantly improve the reconciliation UX when used by AI assistants.
+**Assessment:** The implementation follows good software engineering practices and significantly improves the reconciliation UX when used by AI assistants.
+
+### Current Status (Nov 2, 2025)
+
+- Phase 1 (`reconcile_account_v2`) is live in v0.9.0 with intelligent insight detection and the guided analysis workflow.
+- Documentation, API examples, and release notes have been updated to reflect the new tool.
+- Remaining scope is focused on richer output formatting (MoneyValue standard, dual-channel narrative) and end-to-end validation ahead of enabling execution phases.
 
 ---
 
@@ -221,35 +227,25 @@ This would make it **impossible** for Claude to miss the connection.
 ### Areas for Improvement ⚠️
 
 1. **Money Representation**
-   - Uses raw numbers for dollars
-   - No explicit unit labels in the data structure
-   - **Recommendation:** Implement `MoneyValue` type from plan:
-     ```typescript
-     interface MoneyValue {
-       value_milliunits: number;
-       value_display: string;   // "$22.22"
-       currency: string;         // "USD"
-       direction?: "owed" | "credit";
-     }
-     ```
+   - Outputs still expose raw numbers without currency metadata
+   - `MoneyValue` helper is planned but not yet wired into either reconciliation tool
+   - Next step: promote the structured money helper from the plan and update API responses/tests accordingly
 
-2. **Missing Insight Layer**
-   - Doesn't detect obvious patterns (exact discrepancy matches)
-   - No callouts/highlights for critical findings
-   - **Recommendation:** Add `insights` or `callouts` array
+2. **Dual-Channel Output**
+   - Handler returns a single minified JSON blob
+   - The narrative + structured payload pattern is drafted in `reconcileV2Adapter.ts` but not used
+   - Next step: integrate the adapter (or similar helper) so assistants always get a human-readable summary first
 
-3. **Output Format**
-   - Still returns single JSON blob
-   - Not implementing the "dual-channel" approach (human + machine)
-   - **Recommendation:** Consider adding human-readable summary section
+3. **Narrative Formatting & Insights Surfacing**
+   - Insights exist, yet the response lacks a curated callouts section for immediate actioning
+   - Human narrative should highlight discrepancy direction, top insights, and recommended actions to reduce misinterpretation
 
-4. **Balance Calculation**
-   - Good, but uses `txn.amount / 1000` inline
-   - **Recommendation:** Use money utility functions consistently
+4. **Balance Utilities**
+   - Inline `txn.amount / 1000` conversions persist across analyzer and legacy handler
+   - Consolidating around `src/utils/money.ts` will reduce drift once MoneyValue lands
 
-5. **Error Handling**
-   - Good use of `withToolErrorHandling`
-   - Could benefit from more specific error messages
+5. **End-to-End Coverage**
+   - Unit coverage is strong, but we still lack real-data E2E verification (e.g., EvoCarShare scenario) and documentation tying outputs back to migration guidance
 
 ---
 
@@ -282,83 +278,22 @@ This would make it **impossible** for Claude to miss the connection.
 
 ## Recommendations
 
-### High Priority (Before Merge)
+### Completed Since Initial Draft
 
-1. **Add Insight Detection**
-   ```typescript
-   // In analyzer.ts, after matching:
-   const insights = detectInsights(
-     unmatchedBank,
-     balanceInfo.discrepancy
-   );
+- Insight detection launched: repeat-amount, near-match, and anomaly signals now surface automatically in analysis responses.
+- API docs, test harness, and release notes updated alongside the v0.9.0 merge.
 
-   function detectInsights(
-     unmatched: BankTransaction[],
-     discrepancy: number
-   ): Insight[] {
-     const insights: Insight[] = [];
+### Remaining Follow-Ups (Priority Order)
 
-     // Check for exact discrepancy match
-     for (const txn of unmatched) {
-       if (Math.abs(txn.amount - Math.abs(discrepancy)) < 0.01) {
-         insights.push({
-           severity: "critical",
-           type: "exact_discrepancy_match",
-           message: `Transaction '${txn.payee}' for $${txn.amount.toFixed(2)} exactly matches your discrepancy`,
-           transaction_id: txn.id,
-           suggested_action: "create_and_clear"
-         });
-       }
-     }
+1. **Structured Money Output** – Introduce the shared `MoneyValue` shape, update both reconciliation handlers, and add unit coverage for formatter helpers.
+2. **Dual-Channel Response** – Wire the `reconcileV2Adapter` (or equivalent) so every call returns a human-readable narrative plus the structured JSON payload.
+3. **Discrepancy Direction & Narrative Enhancements** – Add an explicit `discrepancy_info` block and ensure top insights/callouts are highlighted in the narrative to guide assistants.
+4. **End-to-End + Performance Validation** – Record a real-data scenario (e.g., Oct 30 EvoCarShare), add automated assertions, and profile large-statement runs to confirm analyzer scaling.
 
-     return insights;
-   }
-   ```
+### Later Phases
 
-2. **Improve Discrepancy Explanation**
-   ```typescript
-   // Make direction explicit
-   discrepancy_info: {
-     amount: Math.abs(discrepancy),
-     direction: discrepancy > 0 ? "ynab_shows_less_owed" : "bank_shows_less_owed",
-     explanation: generateDiscrepancyExplanation(discrepancy, accountType)
-   }
-   ```
-
-3. **Add E2E Test**
-   - Test with real YNAB data
-   - Verify the Oct 30 EvoCarShare scenario works correctly
-
-### Medium Priority (Phase 1.5)
-
-1. **Implement MoneyValue Type**
-   - Replace all `number` amounts with structured type
-   - Add display formatting
-   - Explicit units
-
-2. **Add Human-Readable Summary**
-   - Optional narrative format
-   - Prepend to JSON output
-   - Make Claude's job easier
-
-3. **Performance Testing**
-   - Test with 100+ transaction statements
-   - Measure matching algorithm performance
-
-### Low Priority (Future Phases)
-
-1. **Dual-Channel Output**
-   - Human narrative + machine JSON
-   - As per original plan
-
-2. **Phase 2 Implementation**
-   - Execution capabilities
-   - Transaction creation
-   - Clearing status updates
-
-3. **Historical Tracking**
-   - Store reconciliation history
-   - Trend analysis
+- Phase 2 execution capabilities (apply approved actions with dry-run toggle).
+- Historical reconciliation tracking and richer observability once execution enters beta.
 
 ---
 

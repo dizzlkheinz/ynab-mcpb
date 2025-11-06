@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod/v4';
+import type * as ynab from 'ynab';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   ToolRegistry,
@@ -7,6 +8,10 @@ import {
   ToolRegistryDependencies,
   ToolExecutionPayload,
 } from '../toolRegistry.js';
+import {
+  handleReconcileAccountV2,
+  ReconcileAccountV2Schema,
+} from '../../tools/reconciliation/index.js';
 
 function createResult(label: string): CallToolResult {
   return {
@@ -211,6 +216,67 @@ describe('ToolRegistry', () => {
       accessToken: 'token-123',
       params: { id: 'abc' },
     });
+  });
+
+  it('routes reconcile_account tools to the v2 handler emitting dual-channel output', async () => {
+    const mockYnabAPI = {
+      accounts: {
+        getAccount: vi.fn().mockResolvedValue({
+          data: {
+            account: {
+              name: 'Checking',
+              balance: 0,
+              cleared_balance: 0,
+              uncleared_balance: 0,
+            },
+          },
+        }),
+      },
+      budgets: {
+        getBudgetById: vi.fn().mockResolvedValue({
+          data: { budget: { currency_format: { currency_code: 'USD' } } },
+        }),
+      },
+      transactions: {
+        getTransactionsByAccount: vi.fn().mockResolvedValue({ data: { transactions: [] } }),
+      },
+    } as unknown as ynab.API;
+
+    const adapt = <TInput extends Record<string, unknown>>(
+      handler: (api: ynab.API, params: TInput) => Promise<CallToolResult>,
+    ) => async ({ input }: ToolExecutionPayload<TInput>) => handler(mockYnabAPI, input);
+
+    registry.register({
+      name: 'reconcile_account',
+      description: 'Guided reconciliation workflow (v2)',
+      inputSchema: ReconcileAccountV2Schema,
+      handler: adapt(handleReconcileAccountV2),
+    });
+
+    registry.register({
+      name: 'reconcile_account_v2',
+      description: 'Alias for reconcile_account',
+      inputSchema: ReconcileAccountV2Schema,
+      handler: adapt(handleReconcileAccountV2),
+    });
+
+    const result = await registry.executeTool({
+      name: 'reconcile_account',
+      accessToken: 'token-xyz',
+      arguments: {
+        budget_id: 'budget-1',
+        account_id: 'account-1',
+        csv_data: 'Date,Description,Amount\n2025-10-01,Sample,-1.23',
+        statement_balance: -1.23,
+      },
+    });
+
+    expect(result.content).toHaveLength(2);
+    expect(result.content.every((entry) => entry.type === 'text')).toBe(true);
+    expect(mockYnabAPI.accounts.getAccount).toHaveBeenCalled();
+
+    const toolNames = registry.listTools().map((tool) => tool.name);
+    expect(toolNames).toEqual(expect.arrayContaining(['reconcile_account', 'reconcile_account_v2']));
   });
 
   it('merges default arguments before validation', async () => {

@@ -254,6 +254,7 @@ The server provides 25 core tools for budgets, accounts, transactions, categorie
 
 - **[API Reference](docs/API.md)** - Complete tool documentation with examples
 - **[Developer Guide](docs/DEVELOPER.md)** - Best practices and common patterns
+- **[CSV Parser Guide](docs/CSV_PARSER.md)** - CSV parsing, amount handling, and format detection
 - **[Usage Examples](docs/EXAMPLES.md)** - Practical usage examples
 - **[Testing Guide](docs/TESTING.md)** - Comprehensive testing information
 - **[Build Guide](docs/BUILD.md)** - Build and development workflow

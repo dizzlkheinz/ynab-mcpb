@@ -502,19 +502,28 @@ export class YNABMCPServer {
     register({
       name: 'reconcile_account',
       description:
-        'Perform comprehensive account reconciliation with bank statement data, including automatic transaction creation and status updates',
-      inputSchema: ReconcileAccountSchema,
-      handler: adapt(handleReconcileAccount),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
+        'Guided reconciliation workflow with human narrative + structured JSON output, insight detection, and optional execution (create/update/unclear).',
+      inputSchema: ReconcileAccountV2Schema,
+      handler: adapt(handleReconcileAccountV2),
+      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountV2Schema>>(),
     });
 
     register({
       name: 'reconcile_account_v2',
       description:
-        '[BETA] Analysis-only reconciliation with guided matching workflow. Returns categorized transaction matches (auto-match, suggested, unmatched) for user review. Phase 1: Read-only analysis, no YNAB modifications.',
+        '[Alias] Same as reconcile_account. Provided for backward compatibility with beta clients.',
       inputSchema: ReconcileAccountV2Schema,
       handler: adapt(handleReconcileAccountV2),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountV2Schema>>(),
+    });
+
+    register({
+      name: 'reconcile_account_legacy',
+      description:
+        '[LEGACY] Original reconciliation implementation with minified JSON output. Deprecated in favor of reconcile_account.',
+      inputSchema: ReconcileAccountSchema,
+      handler: adapt(handleReconcileAccount),
+      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
     });
 
     register({

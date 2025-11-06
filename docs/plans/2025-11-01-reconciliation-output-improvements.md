@@ -1,8 +1,10 @@
 # Reconciliation Tool Output Format Improvements
 
-**Date:** 2025-11-01
-**Status:** Ready for Implementation
+**Date:** 2025-11-01 (updated Nov 2, 2025)
+**Status:** In Progress (Phase 2 shipped in v0.9.0)
 **Priority:** High (User Experience Critical)
+
+**Update (Nov 2, 2025):** `reconcile_account_v2` now delivers the interpretation layer and insight detection (Phase 2). Remaining work concentrates on the MoneyValue standard, human narrative formatter, and dual-channel response wiring so assistants stop receiving raw JSON blobs.
 
 ## Executive Summary
 
@@ -57,6 +59,8 @@ This means we need to design the output format to be "Claude-proof" rather than 
 
 **Goal:** Eliminate all monetary value ambiguity
 
+**Status:** Not started – MoneyValue helper and schema wiring still pending.
+
 #### Tasks
 
 1. **Create `MoneyValue` type and formatter**
@@ -105,6 +109,8 @@ This means we need to design the output format to be "Claude-proof" rather than 
 ### Phase 2: Interpretation Layer (Week 1-2, 3-4 days)
 
 **Goal:** Add intelligent analysis that highlights key insights
+
+**Status:** Delivered in v0.9.0 – analyzer + insight detection shipped with `reconcile_account_v2`; combination matching still pending.
 
 #### Tasks
 
@@ -173,11 +179,18 @@ This means we need to design the output format to be "Claude-proof" rather than 
 - Callouts clearly identify resolution path
 - Unit tests cover all scenarios
 
+**Delivery Notes (Nov 2, 2025):**
+- Analyzer + insight detection are live; repeated-amount and near-match signals cover the original $22.22 scenario.
+- Combination matching heuristics are not yet implemented and remain an open item for this phase.
+- Callouts are exposed via the `insights` array; rename/refine once the MoneyValue refactor lands.
+
 ---
 
 ### Phase 3: Human-Readable Formatter (Week 2, 3-5 days)
 
 **Goal:** Create narrative output that Claude can't misinterpret
+
+**Status:** Not started – narrative formatter exists only as draft in `reconcileV2Adapter`.
 
 #### Tasks
 
@@ -257,6 +270,8 @@ This means we need to design the output format to be "Claude-proof" rather than 
 
 **Goal:** Return both human-readable and machine-readable formats
 
+**Status:** ✅ Completed (adapter emits dual-channel responses with schema-backed JSON payloads).
+
 #### Tasks
 
 1. **Update `reconcileAccount.ts`**
@@ -265,7 +280,7 @@ This means we need to design the output format to be "Claude-proof" rather than 
      const humanReport = formatHumanReadableReport(result, analysis);
      const structuredData = {
        version: "2.0",
-       schema_url: "https://ynab-mcp-server/schemas/reconciliation-v2.json",
+       schema_url: "https://raw.githubusercontent.com/dizzlkheinz/ynab-mcp-dxt/master/docs/schemas/reconciliation-v2.json",
        timestamp: new Date().toISOString(),
        data: result,
        analysis: analysis
@@ -306,6 +321,8 @@ This means we need to design the output format to be "Claude-proof" rather than 
 ### Phase 5: Enhanced Recommendations (Week 3, 2-3 days)
 
 **Goal:** Make recommendations machine-readable and actionable
+
+**Status:** Not started – analyzer exposes insights, but actionable recommendation payloads remain TODO.
 
 #### Tasks
 
@@ -348,6 +365,8 @@ This means we need to design the output format to be "Claude-proof" rather than 
 ### Phase 6: Testing & Validation (Week 3-4, 3-4 days)
 
 **Goal:** Ensure improvements work in practice
+
+**Status:** Partially complete – unit coverage is strong; fixture-based E2E and Claude interpretation tests still outstanding.
 
 #### Tasks
 
@@ -478,12 +497,11 @@ ReconcileAccountSchema.extend({
 - [ ] Update all balance fields to use `MoneyValue`
 
 ### Phase 2: Interpretation Layer
-- [ ] Create `analyzer.ts` file
-- [ ] Implement `analyzeDiscrepancy()`
-- [ ] Implement `findExactDiscrepancyMatches()`
-- [ ] Implement `findCombinationMatches()`
-- [ ] Add callouts array to result
-- [ ] Write unit tests for analysis logic
+- [x] Create `analyzer.ts` module (`reconcile_account_v2`)
+- [x] Ship insight detection for repeat amounts / near matches / anomalies
+- [x] Implement combination matching heuristics (2-3 transactions summing to discrepancy) *(landed via analyzer.ts combo detection + new tests)*
+- [x] Surface insights/callouts in response (`insights` array in analysis output)
+- [x] Expand unit tests for analysis logic
 
 ### Phase 3: Human-Readable Formatter
 - [ ] Create `reportFormatter.ts` file

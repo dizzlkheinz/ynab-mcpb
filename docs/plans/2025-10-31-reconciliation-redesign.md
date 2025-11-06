@@ -1,8 +1,10 @@
 # YNAB Reconciliation Tool - Complete Redesign
 
 **Date**: 2025-10-31
-**Status**: Design Phase
+**Status**: Phase 1 shipped in v0.9.0; Phases 2-3 pending
 **Problem**: Current reconciliation tool produces incorrect matches due to date tolerance issues and overly aggressive automatic matching.
+
+**Update (Nov 2, 2025):** Phase 1 analysis workflow is live as `reconcile_account_v2` (v0.9.0). The remaining work tracks execution capabilities, dual-channel formatting, and historical tracking per the phased roadmap below.
 
 ## Executive Summary
 
@@ -518,6 +520,8 @@ interface BalanceInfo {
 - No execution capabilities yet
 - Validate matching quality with real data
 
+**Status (Nov 2, 2025):** Complete – delivered via `reconcile_account_v2` in v0.9.0 (insight enhancements tracked separately in the output improvements plan).
+
 **Tasks**:
 1. Create new `src/tools/reconciliation/` directory
 2. Implement `matcher.ts` - matching algorithm
@@ -537,6 +541,8 @@ interface BalanceInfo {
 - Add execution phase with dry-run default
 - Implement rollback tracking
 - Full audit logging
+
+**Status (Nov 2, 2025):** Not started – design remains valid; scheduling will follow completion of MoneyValue + dual-channel work.
 
 **Tasks**:
 1. Implement `executor.ts` - execution phase logic
@@ -558,6 +564,8 @@ interface BalanceInfo {
 - Tune based on user feedback
 - Add advanced features
 - Performance optimization
+
+**Status (Nov 2, 2025):** Not started – dependent on successful rollout of Phase 2 execution.
 
 **Tasks**:
 1. Implement idempotency checks

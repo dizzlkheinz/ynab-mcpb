@@ -1,0 +1,338 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "YNAB MCP Reconciliation v2 Payload",
+  "type": "object",
+  "properties": {
+    "version": { "const": "2.0" },
+    "schema_url": { "type": "string", "format": "uri" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "account": {
+      "type": "object",
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "name": { "type": ["string", "null"] }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "summary": { "$ref": "#/definitions/summary" },
+    "balance": { "$ref": "#/definitions/balance" },
+    "insights": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/insight" }
+    },
+    "next_steps": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "csv_format": { "$ref": "#/definitions/csvFormat" },
+    "matches": {
+      "type": "object",
+      "properties": {
+        "auto": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/match" }
+        },
+        "suggested": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/match" }
+        }
+      },
+      "required": ["auto", "suggested"],
+      "additionalProperties": false
+    },
+    "unmatched": {
+      "type": "object",
+      "properties": {
+        "bank": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/bankTransaction" }
+        },
+        "ynab": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ynabTransaction" }
+        }
+      },
+      "required": ["bank", "ynab"],
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": ["object", "null"],
+      "properties": {
+        "summary": { "$ref": "#/definitions/executionSummary" },
+        "account_balance": {
+          "type": "object",
+          "properties": {
+            "before": { "$ref": "#/definitions/accountSnapshot" },
+            "after": { "$ref": "#/definitions/accountSnapshot" }
+          },
+          "required": ["before", "after"],
+          "additionalProperties": false
+        },
+        "actions_taken": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "transaction": { "type": ["object", "null"] },
+              "reason": { "type": "string" }
+            },
+            "required": ["type", "reason"],
+            "additionalProperties": true
+          }
+        },
+        "recommendations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "balance_reconciliation": {
+          "type": ["object", "null"],
+          "properties": {
+            "status": { "type": "string" },
+            "precision_calculations": {
+              "type": ["object", "null"],
+              "properties": {
+                "bank_statement_balance": { "$ref": "#/definitions/moneyValue" },
+                "ynab_calculated_balance": { "$ref": "#/definitions/moneyValue" },
+                "discrepancy": { "$ref": "#/definitions/moneyValue" },
+                "discrepancy_decimal": { "$ref": "#/definitions/moneyValue" }
+              },
+              "additionalProperties": false
+            },
+            "discrepancy_analysis": { "$ref": "#/definitions/discrepancyAnalysis" },
+            "final_verification": {
+              "type": "object",
+              "properties": {
+                "balance_matches_exactly": { "type": "boolean" },
+                "all_transactions_accounted": { "type": "boolean" },
+                "audit_trail_complete": { "type": "boolean" },
+                "reconciliation_complete": { "type": "boolean" }
+              },
+              "required": [
+                "balance_matches_exactly",
+                "all_transactions_accounted",
+                "audit_trail_complete",
+                "reconciliation_complete"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["version", "generated_at", "summary", "balance", "matches", "unmatched"],
+  "additionalProperties": false,
+  "definitions": {
+    "moneyValue": {
+      "type": "object",
+      "properties": {
+        "value_milliunits": { "type": "number" },
+        "value": { "type": "number" },
+        "value_display": { "type": "string" },
+        "currency": { "type": "string" },
+        "direction": { "type": "string", "enum": ["credit", "debit", "balanced"] }
+      },
+      "required": ["value_milliunits", "value_display", "currency", "direction"],
+      "additionalProperties": false
+    },
+    "csvFormat": {
+      "type": "object",
+      "properties": {
+        "delimiter": { "type": "string" },
+        "decimal_separator": { "type": "string" },
+        "thousands_separator": { "type": ["string", "null"] },
+        "date_format": { "type": "string" },
+        "header_row": { "type": "boolean" },
+        "date_column": { "type": ["string", "null"] },
+        "amount_column": { "type": ["string", "null"] },
+        "payee_column": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "statement_date_range": { "type": "string" },
+        "bank_transactions_count": { "type": "number" },
+        "ynab_transactions_count": { "type": "number" },
+        "auto_matched": { "type": "number" },
+        "suggested_matches": { "type": "number" },
+        "unmatched_bank": { "type": "number" },
+        "unmatched_ynab": { "type": "number" },
+        "current_cleared_balance": { "$ref": "#/definitions/moneyValue" },
+        "target_statement_balance": { "$ref": "#/definitions/moneyValue" },
+        "discrepancy": { "$ref": "#/definitions/moneyValue" },
+        "discrepancy_explanation": { "type": "string" }
+      },
+      "required": [
+        "statement_date_range",
+        "bank_transactions_count",
+        "ynab_transactions_count",
+        "auto_matched",
+        "suggested_matches",
+        "unmatched_bank",
+        "unmatched_ynab",
+        "current_cleared_balance",
+        "target_statement_balance",
+        "discrepancy"
+      ],
+      "additionalProperties": false
+    },
+    "balance": {
+      "type": "object",
+      "properties": {
+        "current_cleared": { "$ref": "#/definitions/moneyValue" },
+        "current_uncleared": { "$ref": "#/definitions/moneyValue" },
+        "current_total": { "$ref": "#/definitions/moneyValue" },
+        "target_statement": { "$ref": "#/definitions/moneyValue" },
+        "discrepancy": { "$ref": "#/definitions/moneyValue" },
+        "discrepancy_direction": {
+          "type": "string",
+          "enum": ["bank_higher", "ynab_higher", "balanced"]
+        },
+        "on_track": { "type": "boolean" }
+      },
+      "required": [
+        "current_cleared",
+        "current_uncleared",
+        "current_total",
+        "target_statement",
+        "discrepancy",
+        "discrepancy_direction"
+      ],
+      "additionalProperties": false
+    },
+    "insight": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "evidence": { "type": "object" }
+      },
+      "required": ["id", "type", "severity", "title"],
+      "additionalProperties": false
+    },
+    "match": {
+      "type": "object",
+      "properties": {
+        "bank_transaction": { "$ref": "#/definitions/bankTransaction" },
+        "ynab_transaction": { "$ref": "#/definitions/ynabTransaction" },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ynab_transaction": { "$ref": "#/definitions/ynabTransaction" },
+              "confidence": { "type": "number" },
+              "match_reason": { "type": "string" },
+              "explanation": { "type": "string" }
+            },
+            "required": ["ynab_transaction", "confidence"],
+            "additionalProperties": true
+          }
+        },
+        "confidence": { "type": "string" },
+        "confidence_score": { "type": "number" },
+        "match_reason": { "type": "string" }
+      },
+      "required": ["bank_transaction", "confidence"],
+      "additionalProperties": true
+    },
+    "bankTransaction": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "amount": { "type": "number" },
+        "payee": { "type": ["string", "null"] },
+        "memo": { "type": ["string", "null"] },
+        "original_csv_row": { "type": "integer" },
+        "amount_money": { "$ref": "#/definitions/moneyValue" }
+      },
+      "required": ["id", "date", "amount"],
+      "additionalProperties": true
+    },
+    "ynabTransaction": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "amount": { "type": "number" },
+        "payee_name": { "type": ["string", "null"] },
+        "category_name": { "type": ["string", "null"] },
+        "cleared": { "type": "string" },
+        "approved": { "type": "boolean" },
+        "memo": { "type": ["string", "null"] },
+        "amount_money": { "$ref": "#/definitions/moneyValue" }
+      },
+      "required": ["id", "date", "amount", "cleared"],
+      "additionalProperties": true
+    },
+    "accountSnapshot": {
+      "type": "object",
+      "properties": {
+        "balance": { "$ref": "#/definitions/moneyValue" },
+        "cleared_balance": { "$ref": "#/definitions/moneyValue" },
+        "uncleared_balance": { "$ref": "#/definitions/moneyValue" }
+      },
+      "required": ["balance", "cleared_balance", "uncleared_balance"],
+      "additionalProperties": false
+    },
+    "executionSummary": {
+      "type": "object",
+      "properties": {
+        "bank_transactions_count": { "type": "number" },
+        "ynab_transactions_count": { "type": "number" },
+        "matches_found": { "type": "number" },
+        "missing_in_ynab": { "type": "number" },
+        "missing_in_bank": { "type": "number" },
+        "transactions_created": { "type": "number" },
+        "transactions_updated": { "type": "number" },
+        "dates_adjusted": { "type": "number" },
+        "dry_run": { "type": "boolean" }
+      },
+      "required": [
+        "bank_transactions_count",
+        "ynab_transactions_count",
+        "matches_found",
+        "missing_in_ynab",
+        "missing_in_bank",
+        "transactions_created",
+        "transactions_updated",
+        "dry_run"
+      ],
+      "additionalProperties": false
+    },
+    "discrepancyAnalysis": {
+      "type": "object",
+      "properties": {
+        "confidence_level": { "type": "number" },
+        "risk_assessment": { "type": "string" },
+        "likely_causes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "description": { "type": "string" },
+              "confidence": { "type": "number" },
+              "suggested_action": { "type": "string" },
+              "amount": { "$ref": "#/definitions/moneyValue" },
+              "evidence": { "type": "array" }
+            },
+            "required": ["type", "description", "amount"],
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

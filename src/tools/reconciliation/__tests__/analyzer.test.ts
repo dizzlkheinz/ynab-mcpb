@@ -201,6 +201,66 @@ describe('analyzer', () => {
       expect(result.unmatched_ynab[0].payee_name).toBe('Restaurant');
     });
 
+    it('should surface combination suggestions and insights when totals align', () => {
+      vi.mocked(parser.parseBankCSV).mockReturnValue({
+        transactions: [
+          {
+            date: '2025-10-20',
+            amount: -30.0,
+            payee: 'Evening Out',
+            memo: '',
+          },
+        ],
+        format_detected: 'standard',
+        delimiter: ',',
+        total_rows: 1,
+        valid_rows: 1,
+        errors: [],
+      });
+
+      const ynabTxns: YNABAPITransaction[] = [
+        {
+          id: 'y-combo-1',
+          date: '2025-10-19',
+          amount: -20000,
+          payee_name: 'Dinner',
+          category_name: 'Dining',
+          cleared: 'uncleared' as const,
+          approved: true,
+        } as YNABAPITransaction,
+        {
+          id: 'y-combo-2',
+          date: '2025-10-20',
+          amount: -10000,
+          payee_name: 'Drinks',
+          category_name: 'Dining',
+          cleared: 'uncleared' as const,
+          approved: true,
+        } as YNABAPITransaction,
+        {
+          id: 'y-extra',
+          date: '2025-10-22',
+          amount: -5000,
+          payee_name: 'Snacks',
+          category_name: 'Dining',
+          cleared: 'uncleared' as const,
+          approved: true,
+        } as YNABAPITransaction,
+      ];
+
+      const result = analyzeReconciliation('csv', undefined, ynabTxns, -30.0);
+
+      const comboMatch = result.suggested_matches.find(
+        (match) => match.match_reason === 'combination_match'
+      );
+      expect(comboMatch).toBeDefined();
+      expect(comboMatch?.candidates?.length).toBeGreaterThanOrEqual(2);
+
+      const comboInsight = result.insights.find((insight) => insight.id.startsWith('combination-'));
+      expect(comboInsight).toBeDefined();
+      expect(comboInsight?.severity).toBe('info');
+    });
+
     it('should calculate balance information correctly', () => {
       vi.mocked(parser.parseBankCSV).mockReturnValue({
         transactions: [],
