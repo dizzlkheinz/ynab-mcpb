@@ -16,14 +16,16 @@ describe('scenario: repeat amount collisions', () => {
   it('prioritizes repeat-amount insight when multiple bank rows share totals', () => {
     vi.mocked(parser.parseBankCSV).mockReturnValue({
       transactions: [
+        // Three -22.22 transactions: one will match YNAB, two will remain unmatched
         { date: '2025-10-20', amount: -22.22, payee: 'RideShare', memo: '' },
         { date: '2025-10-21', amount: -22.22, payee: 'RideShare', memo: '' },
+        { date: '2025-10-25', amount: -22.22, payee: 'RideShare', memo: '' },
         { date: '2025-10-23', amount: -15.0, payee: 'Cafe', memo: '' },
       ],
       format_detected: 'standard',
       delimiter: ',',
-      total_rows: 3,
-      valid_rows: 3,
+      total_rows: 4,
+      valid_rows: 4,
       errors: [],
     });
 
@@ -48,9 +50,10 @@ describe('scenario: repeat amount collisions', () => {
       } as TransactionDetail,
     ];
 
-    const result = analyzeReconciliation('csv', undefined, ynabTxns, -59.44);
+    // Statement balance now accounts for 3 x -22.22 + 1 x -15.00 = -81.66
+    const result = analyzeReconciliation('csv', undefined, ynabTxns, -81.66);
 
-    const repeatInsight = result.insights.find((insight) => insight.id.startsWith('repeat-22.22'));
+    const repeatInsight = result.insights.find((insight) => insight.id.startsWith('repeat--22.22')); // Note: double dash for negative
     expect(repeatInsight).toBeDefined();
     expect(repeatInsight?.severity).toBe('warning');
     expect(result.summary.unmatched_bank).toBeGreaterThan(0);
