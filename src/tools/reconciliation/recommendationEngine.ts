@@ -16,6 +16,18 @@ import { toMoneyValueFromDecimal } from '../../utils/money.js';
 const RECOMMENDATION_VERSION = '1.0';
 
 /**
+ * Confidence scores for different recommendation types
+ */
+const CONFIDENCE = {
+  CREATE_EXACT_MATCH: 0.95,
+  NEAR_MATCH_REVIEW: 0.7,
+  REPEAT_AMOUNT: 0.75,
+  ANOMALY_REVIEW: 0.5,
+  UNMATCHED_BANK: 0.8,
+  UPDATE_CLEARED: 0.6,
+} as const;
+
+/**
  * Generate actionable recommendations from reconciliation analysis
  */
 export function generateRecommendations(
@@ -74,7 +86,7 @@ function createSuggestedMatchRecommendation(
       id: randomUUID(),
       action_type: 'review_duplicate',
       priority: 'high',
-      confidence: match.confidence_score / 100,
+      confidence: Math.max(0, Math.min(1, match.confidence_score / 100)),
       message: `Review possible match: ${bankTxn.payee}`,
       reason: match.match_reason,
       estimated_impact: toMoneyValueFromDecimal(
@@ -98,7 +110,7 @@ function createSuggestedMatchRecommendation(
   const parameters: CreateTransactionRecommendation['parameters'] = {
     account_id: context.account_id,
     date: bankTxn.date,
-    amount: Math.abs(bankTxn.amount),
+    amount: bankTxn.amount,
     payee_name: bankTxn.payee,
     cleared: 'cleared',
     approved: true,
@@ -112,7 +124,7 @@ function createSuggestedMatchRecommendation(
     id: randomUUID(),
     action_type: 'create_transaction',
     priority: 'high',
-    confidence: 0.95,
+    confidence: CONFIDENCE.CREATE_EXACT_MATCH,
     message: `Create transaction for ${bankTxn.payee}`,
     reason: `This transaction exactly matches your discrepancy`,
     estimated_impact: toMoneyValueFromDecimal(
@@ -139,7 +151,7 @@ function createNearMatchRecommendation(
     id: randomUUID(),
     action_type: 'manual_review',
     priority: 'medium',
-    confidence: 0.7,
+    confidence: CONFIDENCE.NEAR_MATCH_REVIEW,
     message: `Review: ${insight.title}`,
     reason: insight.description,
     estimated_impact: toMoneyValueFromDecimal(
@@ -171,7 +183,7 @@ function createRepeatAmountRecommendations(
       id: randomUUID(),
       action_type: 'manual_review',
       priority: 'medium',
-      confidence: 0.75,
+      confidence: CONFIDENCE.REPEAT_AMOUNT,
       message: `Review recurring pattern: ${insight.title}`,
       reason: insight.description,
       estimated_impact: toMoneyValueFromDecimal(
@@ -202,7 +214,7 @@ function createManualReviewRecommendation(
     id: randomUUID(),
     action_type: 'manual_review',
     priority: 'low',
-    confidence: 0.5,
+    confidence: CONFIDENCE.ANOMALY_REVIEW,
     message: `Review: ${insight.title}`,
     reason: insight.description,
     estimated_impact: toMoneyValueFromDecimal(
@@ -256,7 +268,7 @@ function createUnmatchedBankRecommendation(
   const parameters: CreateTransactionRecommendation['parameters'] = {
     account_id: context.account_id,
     date: txn.date,
-    amount: Math.abs(txn.amount),
+    amount: txn.amount,
     payee_name: txn.payee,
     cleared: 'cleared',
     approved: true,
@@ -270,7 +282,7 @@ function createUnmatchedBankRecommendation(
     id: randomUUID(),
     action_type: 'create_transaction',
     priority: 'medium',
-    confidence: 0.8,
+    confidence: CONFIDENCE.UNMATCHED_BANK,
     message: `Create missing transaction: ${txn.payee}`,
     reason: 'Transaction appears on bank statement but not in YNAB',
     estimated_impact: toMoneyValueFromDecimal(
@@ -294,7 +306,7 @@ function createUpdateClearedRecommendation(
     id: randomUUID(),
     action_type: 'update_cleared',
     priority: 'low',
-    confidence: 0.6,
+    confidence: CONFIDENCE.UPDATE_CLEARED,
     message: `Mark transaction as cleared: ${txn.payee_name || 'Unknown'}`,
     reason: 'Transaction exists in YNAB but not yet cleared',
     estimated_impact: toMoneyValueFromDecimal(
