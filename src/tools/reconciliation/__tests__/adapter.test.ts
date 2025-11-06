@@ -2,6 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { buildReconciliationV2Payload, type LegacyReconciliationResult } from '../../reconcileV2Adapter.js';
 import type { ReconciliationAnalysis } from '../types.js';
 
+const makeMoney = (value: number, currency = 'USD') => ({
+  value_milliunits: Math.round(value * 1000),
+  value,
+  value_display: value < 0 ? `-$${Math.abs(value).toFixed(2)}` : `$${value.toFixed(2)}`,
+  currency,
+  direction: (value === 0 ? 'balanced' : value > 0 ? 'credit' : 'debit') as 'balanced' | 'credit' | 'debit',
+});
+
 const buildAnalysis = (): ReconciliationAnalysis => ({
   success: true,
   phase: 'analysis',
@@ -13,9 +21,9 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
     suggested_matches: 1,
     unmatched_bank: 1,
     unmatched_ynab: 1,
-    current_cleared_balance: -899.02,
-    target_statement_balance: -921.24,
-    discrepancy: 22.22,
+    current_cleared_balance: makeMoney(-899.02),
+    target_statement_balance: makeMoney(-921.24),
+    discrepancy: makeMoney(22.22),
     discrepancy_explanation: 'Need to add 1 missing transaction',
   },
   auto_matches: [
@@ -96,11 +104,11 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
     },
   ],
   balance_info: {
-    current_cleared: -899.02,
-    current_uncleared: -45.23,
-    current_total: -944.25,
-    target_statement: -921.24,
-    discrepancy: 22.22,
+    current_cleared: makeMoney(-899.02),
+    current_uncleared: makeMoney(-45.23),
+    current_total: makeMoney(-944.25),
+    target_statement: makeMoney(-921.24),
+    discrepancy: makeMoney(22.22),
     on_track: false,
   },
   next_steps: ['Review 2 auto-matched transactions', 'Add missing bank transaction'],

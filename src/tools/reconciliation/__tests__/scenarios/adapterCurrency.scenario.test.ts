@@ -5,7 +5,7 @@ import { buildReconciliationV2Payload } from '../../../reconcileV2Adapter.js';
 const makeMoney = (value: number, currency = 'USD') => ({
   value_milliunits: Math.round(value * 1000),
   value: value,
-  value_display: `$${value.toFixed(2)}`,
+  value_display: value < 0 ? `-$${Math.abs(value).toFixed(2)}` : `$${value.toFixed(2)}`,
   currency,
   direction: value === 0 ? 'balanced' : value > 0 ? 'credit' : 'debit',
 });

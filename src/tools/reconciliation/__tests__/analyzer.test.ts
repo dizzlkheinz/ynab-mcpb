@@ -294,11 +294,11 @@ describe('analyzer', () => {
 
       const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.00);
 
-      expect(result.balance_info.current_cleared).toBe(-50.00);
-      expect(result.balance_info.current_uncleared).toBe(-30.00);
-      expect(result.balance_info.current_total).toBe(-80.00);
-      expect(result.balance_info.target_statement).toBe(-50.00);
-      expect(result.balance_info.discrepancy).toBe(0);
+      expect(result.balance_info.current_cleared.value).toBe(-50.00);
+      expect(result.balance_info.current_uncleared.value).toBe(-30.00);
+      expect(result.balance_info.current_total.value).toBe(-80.00);
+      expect(result.balance_info.target_statement.value).toBe(-50.00);
+      expect(result.balance_info.discrepancy.value).toBe(0);
       expect(result.balance_info.on_track).toBe(true);
     });
 

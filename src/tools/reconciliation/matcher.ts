@@ -29,7 +29,8 @@ function amountsMatch(
   // Convert YNAB milliunits to dollars
   const ynabDollars = ynabAmount / 1000;
 
-  const difference = Math.abs(bankAmount - ynabDollars);
+  // Round to avoid floating point precision issues
+  const difference = Math.round(Math.abs(bankAmount - ynabDollars) * 100) / 100;
   const toleranceDollars = toleranceCents / 100;
 
   return difference <= toleranceDollars;
@@ -101,14 +102,14 @@ function calculateMatchScore(
   if (normalizedMatch(bankTxn.payee, ynabTxn.payee_name)) {
     score += 20;
     reasons.push('Payee exact match');
-  } else if (payeeScore >= 80) {
-    score += 18;
-    reasons.push(`Payee highly similar (${Math.round(payeeScore)}%)`);
-  } else if (payeeScore >= 70) {
+  } else if (payeeScore >= 95) {
     score += 15;
+    reasons.push(`Payee highly similar (${Math.round(payeeScore)}%)`);
+  } else if (payeeScore >= 80) {
+    score += 10;
     reasons.push(`Payee similar (${Math.round(payeeScore)}%)`);
   } else if (payeeScore >= 60) {
-    score += 10;
+    score += 6;
     reasons.push(`Payee somewhat similar (${Math.round(payeeScore)}%)`);
   }
 
