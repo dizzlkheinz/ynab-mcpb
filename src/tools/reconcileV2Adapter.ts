@@ -261,6 +261,11 @@ export const buildReconciliationV2Payload = (
     },
   };
 
+  // Include recommendations if available
+  if (analysis.recommendations && analysis.recommendations.length > 0) {
+    structured['recommendations'] = analysis.recommendations;
+  }
+
   if (options.csvFormat) {
     structured['csv_format'] = options.csvFormat;
   }
