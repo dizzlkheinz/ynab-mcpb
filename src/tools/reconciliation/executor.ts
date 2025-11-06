@@ -45,7 +45,7 @@ export interface ExecutionResult {
   };
   actions_taken: ExecutionActionRecord[];
   recommendations: string[];
-  balance_reconciliation?: ReturnType<typeof buildBalanceReconciliation>;
+  balance_reconciliation?: Awaited<ReturnType<typeof buildBalanceReconciliation>>;
 }
 
 interface UpdateFlags {
@@ -107,7 +107,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
       summary.transactions_created += 1;
       actions_taken.push({
         type: 'create_transaction',
-        transaction: createdTransaction,
+        transaction: createdTransaction as unknown as Record<string, unknown> | null,
         reason: `Created missing transaction: ${bankTxn.payee ?? 'Unknown'} (${formatDisplay(bankTxn.amount, currencyCode)})`,
       });
       accountSnapshotDirty = true;
@@ -135,26 +135,29 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     }
 
     if (!match.ynab_transaction) continue;
-    const updatePayload: ynab.SaveTransaction = {
-      account_id: match.ynab_transaction.account_id ?? accountId,
+    const updatePayload: Record<string, unknown> = {
+      account_id: accountId,
       amount: match.ynab_transaction.amount,
       date: flags.needsDateUpdate ? match.bank_transaction.date : match.ynab_transaction.date,
       cleared: flags.needsClearedUpdate ? 'cleared' : match.ynab_transaction.cleared,
-      payee_id: match.ynab_transaction.payee_id ?? undefined,
       payee_name: match.ynab_transaction.payee_name ?? undefined,
       memo: match.ynab_transaction.memo ?? undefined,
       approved: match.ynab_transaction.approved,
-    } as ynab.SaveTransaction;
+    };
 
-    const response = await ynabAPI.transactions.updateTransaction(budgetId, match.ynab_transaction.id, {
-      transaction: updatePayload,
-    });
+    const response = await ynabAPI.transactions.updateTransaction(
+      budgetId,
+      match.ynab_transaction.id,
+      {
+        transaction: updatePayload as ynab.ExistingTransaction,
+      },
+    );
     const updatedTransaction = response.data.transaction ?? null;
     summary.transactions_updated += 1;
     if (flags.needsDateUpdate) summary.dates_adjusted += 1;
     actions_taken.push({
       type: 'update_transaction',
-      transaction: updatedTransaction,
+      transaction: updatedTransaction as unknown as Record<string, unknown> | null,
       reason: `Updated transaction: ${updateReason(match, flags, currencyCode)}`,
     });
     accountSnapshotDirty = true;
@@ -170,7 +173,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
         actions_taken.push({
           type: 'update_transaction',
           transaction: { transaction_id: ynabTxn.id, cleared: 'uncleared' },
-        reason: `Would mark transaction ${ynabTxn.id} as uncleared - not present on statement`,
+          reason: `Would mark transaction ${ynabTxn.id} as uncleared - not present on statement`,
         });
         continue;
       }
@@ -184,7 +187,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
       summary.transactions_updated += 1;
       actions_taken.push({
         type: 'update_transaction',
-        transaction: updatedTransaction,
+        transaction: updatedTransaction as unknown as Record<string, unknown> | null,
         reason: `Marked transaction ${ynabTxn.id} as uncleared - not found on statement`,
       });
       accountSnapshotDirty = true;
@@ -209,9 +212,8 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     afterAccount = await refreshAccountSnapshot(ynabAPI, budgetId, accountId);
   }
 
-  const balanceChangeMilli = params.dry_run || !accountSnapshotDirty
-    ? 0
-    : afterAccount.balance - initialAccount.balance;
+  const balanceChangeMilli =
+    params.dry_run || !accountSnapshotDirty ? 0 : afterAccount.balance - initialAccount.balance;
 
   const recommendations = buildRecommendations({
     summary,
@@ -221,7 +223,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     currencyCode,
   });
 
-  return {
+  const result: ExecutionResult = {
     summary,
     account_balance: {
       before: initialAccount,
@@ -229,26 +231,36 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     },
     actions_taken,
     recommendations,
-    balance_reconciliation,
   };
+
+  if (balance_reconciliation !== undefined) {
+    result.balance_reconciliation = balance_reconciliation;
+  }
+
+  return result;
 }
 
 function formatDisplay(amount: number, currency: string): string {
   return toMoneyValueFromDecimal(amount, currency).value_display;
 }
 
-function computeUpdateFlags(match: TransactionMatch, params: ReconcileAccountV2Request): UpdateFlags {
+function computeUpdateFlags(
+  match: TransactionMatch,
+  params: ReconcileAccountV2Request,
+): UpdateFlags {
   const ynabTxn = match.ynab_transaction;
   const bankTxn = match.bank_transaction;
   if (!ynabTxn) {
     return { needsClearedUpdate: false, needsDateUpdate: false };
   }
-  const needsClearedUpdate = Boolean(params.auto_update_cleared_status && ynabTxn.cleared !== 'cleared');
+  const needsClearedUpdate = Boolean(
+    params.auto_update_cleared_status && ynabTxn.cleared !== 'cleared',
+  );
   const needsDateUpdate = Boolean(params.auto_adjust_dates && ynabTxn.date !== bankTxn.date);
   return { needsClearedUpdate, needsDateUpdate };
 }
 
-function updateReason(match: TransactionMatch, flags: UpdateFlags, currency: string): string {
+function updateReason(match: TransactionMatch, flags: UpdateFlags, _currency: string): string {
   const parts: string[] = [];
   if (flags.needsClearedUpdate) {
     parts.push('marked as cleared');
@@ -282,10 +294,19 @@ async function buildBalanceReconciliation(args: {
 
   const discrepancy_analysis = discrepancy === 0 ? undefined : buildLikelyCauses(discrepancy);
 
-  return {
+  const result: {
+    status: string;
+    precision_calculations: typeof precision_calculations;
+    discrepancy_analysis?: ReturnType<typeof buildLikelyCauses>;
+    final_verification: {
+      balance_matches_exactly: boolean;
+      all_transactions_accounted: boolean;
+      audit_trail_complete: boolean;
+      reconciliation_complete: boolean;
+    };
+  } = {
     status,
     precision_calculations,
-    discrepancy_analysis,
     final_verification: {
       balance_matches_exactly: discrepancy === 0,
       all_transactions_accounted: discrepancy === 0,
@@ -293,6 +314,12 @@ async function buildBalanceReconciliation(args: {
       reconciliation_complete: discrepancy === 0,
     },
   };
+
+  if (discrepancy_analysis !== undefined) {
+    result.discrepancy_analysis = discrepancy_analysis;
+  }
+
+  return result;
 }
 
 async function clearedBalanceAsOf(
@@ -331,7 +358,7 @@ async function refreshAccountSnapshot(
 
 function buildLikelyCauses(discrepancyMilli: number) {
   const causes = [] as {
-    type: string;
+    cause_type: string;
     description: string;
     confidence: number;
     amount_milliunits: number;
@@ -342,12 +369,14 @@ function buildLikelyCauses(discrepancyMilli: number) {
   const abs = Math.abs(discrepancyMilli);
   if (abs % 1000 === 0 || abs % 500 === 0) {
     causes.push({
-      type: 'bank_fee',
+      cause_type: 'bank_fee',
       description: 'Round amount suggests a bank fee or interest adjustment.',
       confidence: 0.8,
       amount_milliunits: discrepancyMilli,
       suggested_resolution:
-        discrepancyMilli < 0 ? 'Create bank fee transaction and mark cleared' : 'Record interest income',
+        discrepancyMilli < 0
+          ? 'Create bank fee transaction and mark cleared'
+          : 'Record interest income',
       evidence: [],
     });
   }
@@ -384,7 +413,9 @@ function buildRecommendations(args: {
   }
 
   if (!params.auto_adjust_dates && analysis.auto_matches.length > 0) {
-    recommendations.push('Consider enabling auto_adjust_dates to align YNAB dates with bank statement dates');
+    recommendations.push(
+      'Consider enabling auto_adjust_dates to align YNAB dates with bank statement dates',
+    );
   }
 
   if (analysis.summary.unmatched_ynab > 0) {

@@ -7,9 +7,14 @@ import type {
   ReconciliationInsight,
 } from './reconciliation/types.js';
 import type { LegacyReconciliationResult, AccountSnapshot } from './reconciliation/executor.js';
+import {
+  formatHumanReadableReport,
+  type ReportFormatterOptions,
+} from './reconciliation/reportFormatter.js';
 
 const OUTPUT_VERSION = '2.0';
-const SCHEMA_URL = 'https://raw.githubusercontent.com/dizzlkheinz/ynab-mcp-dxt/master/docs/schemas/reconciliation-v2.json';
+const SCHEMA_URL =
+  'https://raw.githubusercontent.com/dizzlkheinz/ynab-mcp-dxt/master/docs/schemas/reconciliation-v2.json';
 
 interface AdapterOptions {
   accountName?: string;
@@ -53,11 +58,13 @@ interface LegacyLikelyCause {
 interface LegacyBalanceReconciliation {
   status: string;
   precision_calculations?: LegacyPrecisionCalculations;
-  discrepancy_analysis?: {
-    confidence_level: number;
-    likely_causes: LegacyLikelyCause[];
-    risk_assessment: string;
-  };
+  discrepancy_analysis?:
+    | {
+        confidence_level: number;
+        likely_causes: LegacyLikelyCause[];
+        risk_assessment: string;
+      }
+    | undefined;
   final_verification?: {
     balance_matches_exactly: boolean;
     all_transactions_accounted: boolean;
@@ -75,17 +82,6 @@ const toYNABTransactionView = (txn: YNABTransaction, currency: string) => ({
   ...txn,
   amount_money: toMoneyValue(txn.amount, currency),
 });
-
-const mapCauseType = (causeType: string): string => {
-  switch (causeType) {
-    case 'BANK_FEE':
-      return 'bank_fee';
-    case 'MISSING_TRANSACTION':
-      return 'missing_transaction';
-    default:
-      return (causeType ?? '').toLowerCase();
-  }
-};
 
 const convertMatch = (match: TransactionMatch, currency: string) => ({
   ...match,
@@ -145,48 +141,57 @@ const convertAccountSnapshot = (snapshot: AccountSnapshot, currency: string) => 
 });
 
 const convertPrecisionCalculations = (
-  precision: LegacyPrecisionCalculations | undefined,
+  precision: LegacyPrecisionCalculations,
   currency: string,
-) => {
-  if (!precision) return undefined;
-  return {
-    bank_statement_balance: toMoneyValue(precision.bank_statement_balance_milliunits, currency),
-    ynab_calculated_balance: toMoneyValue(precision.ynab_calculated_balance_milliunits, currency),
-    discrepancy: toMoneyValue(precision.discrepancy_milliunits, currency),
-    discrepancy_decimal: toMoneyValueFromDecimal(precision.discrepancy_dollars, currency),
-  };
-};
+) => ({
+  bank_statement_balance: toMoneyValue(precision.bank_statement_balance_milliunits, currency),
+  ynab_calculated_balance: toMoneyValue(precision.ynab_calculated_balance_milliunits, currency),
+  discrepancy: toMoneyValue(precision.discrepancy_milliunits, currency),
+  discrepancy_decimal: toMoneyValueFromDecimal(precision.discrepancy_dollars, currency),
+});
 
 const convertLikelyCausesLegacy = (
-  analysis: LegacyBalanceReconciliation['discrepancy_analysis'] | undefined,
+  analysis: NonNullable<LegacyBalanceReconciliation['discrepancy_analysis']>,
   currency: string,
-) => {
-  if (!analysis) return undefined;
-  return {
-    confidence_level: analysis.confidence_level ?? 0,
-    risk_assessment: analysis.risk_assessment,
-    likely_causes: (analysis.likely_causes ?? []).map((cause) => ({
-      type: mapCauseType(cause.cause_type),
-      description: cause.description,
-      confidence: cause.confidence,
-      suggested_action: cause.suggested_resolution,
-      amount: toMoneyValue(cause.amount_milliunits ?? 0, currency),
-      evidence: Array.isArray(cause.evidence) ? cause.evidence : [],
-    })),
-  };
-};
+) => ({
+  confidence_level: analysis.confidence_level,
+  risk_assessment: analysis.risk_assessment,
+  likely_causes: analysis.likely_causes.map((cause) => ({
+    type: cause.cause_type.toLowerCase(),
+    description: cause.description,
+    confidence: cause.confidence,
+    suggested_action: cause.suggested_resolution,
+    amount: toMoneyValue(cause.amount_milliunits, currency),
+    evidence: cause.evidence,
+  })),
+});
 
 const convertBalanceReconciliationLegacy = (
   balance: LegacyBalanceReconciliation | undefined,
   currency: string,
 ) => {
   if (!balance) return undefined;
-  return {
+
+  const result: any = {
     status: balance.status,
-    precision_calculations: convertPrecisionCalculations(balance.precision_calculations, currency),
-    discrepancy_analysis: convertLikelyCausesLegacy(balance.discrepancy_analysis, currency),
-    final_verification: balance.final_verification,
   };
+
+  if (balance.precision_calculations) {
+    result.precision_calculations = convertPrecisionCalculations(
+      balance.precision_calculations,
+      currency,
+    );
+  }
+
+  if (balance.discrepancy_analysis) {
+    result.discrepancy_analysis = convertLikelyCausesLegacy(balance.discrepancy_analysis, currency);
+  }
+
+  if (balance.final_verification) {
+    result.final_verification = balance.final_verification;
+  }
+
+  return result;
 };
 
 const convertExecution = (execution: LegacyReconciliationResult, currency: string) => ({
@@ -197,92 +202,33 @@ const convertExecution = (execution: LegacyReconciliationResult, currency: strin
   },
   actions_taken: execution.actions_taken,
   recommendations: execution.recommendations,
-  balance_reconciliation: convertBalanceReconciliationLegacy(execution.balance_reconciliation, currency),
+  balance_reconciliation: convertBalanceReconciliationLegacy(
+    execution.balance_reconciliation,
+    currency,
+  ),
 });
 
-const selectTopInsights = (insights: ReconciliationInsight[], limit = 3) =>
-  insights.slice(0, limit).map((insight) => convertInsight(insight));
+// Helper functions for converting data structures (kept for structured output)
 
-const formatDiscrepancyLine = (balance: ReturnType<typeof convertBalanceInfo>) => {
-  if (balance.discrepancy.value_milliunits === 0) {
-    return '✅ Balances match the statement.';
-  }
-
-  const directionLabel =
-    balance.discrepancy_direction === 'ynab_higher'
-      ? 'YNAB cleared balance exceeds statement'
-      : 'Statement shows more owed than YNAB';
-
-  return `❌ Discrepancy: ${balance.discrepancy.value_display} (${directionLabel})`;
-};
-
+/**
+ * Build human-readable narrative using the comprehensive report formatter
+ * @deprecated This function is kept for backward compatibility but now delegates to formatHumanReadableReport
+ */
 const buildHumanNarrative = (
   analysis: ReconciliationAnalysis,
   options: AdapterOptions,
   execution?: LegacyReconciliationResult,
 ): string => {
-  const accountLabel = options.accountName ?? 'Account';
-  const currency = options.currencyCode ?? 'USD';
-  const balance = convertBalanceInfo(analysis);
-  const summary = convertSummary(analysis);
-  const topInsights = selectTopInsights(analysis.insights);
+  const formatterOptions: ReportFormatterOptions = {
+    accountName: options.accountName,
+    accountId: options.accountId,
+    currencyCode: options.currencyCode,
+    includeDetailedMatches: false,
+    maxUnmatchedToShow: 5,
+    maxInsightsToShow: 3,
+  };
 
-  const lines: string[] = [];
-  lines.push(`📊 ${accountLabel} Reconciliation Report`);
-  lines.push(`Statement Range: ${summary.statement_date_range}`);
-  lines.push('');
-  lines.push(`• YNAB Cleared Balance: ${summary.current_cleared_balance.value_display}`);
-  lines.push(`• Statement Balance: ${summary.target_statement_balance.value_display}`);
-  lines.push(formatDiscrepancyLine(balance));
-  lines.push('');
-  lines.push(
-    `Matches: ${summary.auto_matched} auto, ${summary.suggested_matches} suggested, ` +
-      `${summary.unmatched_bank} unmatched bank, ${summary.unmatched_ynab} unmatched YNAB`,
-  );
-
-  if (topInsights.length > 0) {
-    lines.push('', 'Insights:');
-    for (const insight of topInsights) {
-      lines.push(`• [${insight.severity.toUpperCase()}] ${insight.title}`);
-    }
-  }
-
-  if (analysis.next_steps.length > 0) {
-    lines.push('', 'Next Steps:');
-    for (const step of analysis.next_steps) {
-      lines.push(`• ${step}`);
-    }
-  }
-
-  if (execution) {
-    lines.push('', 'Execution Summary:');
-    lines.push(
-      `• Transactions created: ${execution.summary.transactions_created}`,
-    );
-    lines.push(`• Transactions updated: ${execution.summary.transactions_updated}`);
-    lines.push(`• Date adjustments: ${execution.summary.dates_adjusted}`);
-
-    if (execution.recommendations.length > 0) {
-      lines.push('', 'Recommendations:');
-      for (const recommendation of execution.recommendations.slice(0, 3)) {
-      lines.push(`• ${recommendation}`);
-      }
-      if (execution.recommendations.length > 3) {
-        lines.push(`( +${execution.recommendations.length - 3} more recommendations )`);
-      }
-    }
-
-    lines.push(
-      '',
-      execution.summary.dry_run
-        ? 'Dry run only — no YNAB changes were applied.'
-        : '✅ Changes applied to YNAB. Review structured output for action details.',
-    );
-  } else {
-    lines.push('', 'Analysis only — no YNAB changes were applied.');
-  }
-
-  return lines.join('\n');
+  return formatHumanReadableReport(analysis, formatterOptions, execution);
 };
 
 export const buildReconciliationV2Payload = (
@@ -316,11 +262,11 @@ export const buildReconciliationV2Payload = (
   };
 
   if (options.csvFormat) {
-    structured.csv_format = options.csvFormat;
+    structured['csv_format'] = options.csvFormat;
   }
 
   if (executionView) {
-    structured.execution = executionView;
+    structured['execution'] = executionView;
   }
 
   return {
