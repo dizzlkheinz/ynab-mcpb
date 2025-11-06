@@ -21,7 +21,9 @@ async function testReconciliation() {
   const statementBalance = parseFloat(process.argv[5] || '0');
 
   if (!csvFile || !accountId) {
-    console.error('Usage: node test-reconcile-tool.js <csv-file> <budget-id> <account-id> <statement-balance>');
+    console.error(
+      'Usage: node test-reconcile-tool.js <csv-file> <budget-id> <account-id> <statement-balance>',
+    );
     console.error('Example: node test-reconcile-tool.js test.csv last-used checking -1500.00');
     process.exit(1);
   }
@@ -79,7 +81,9 @@ async function testReconciliation() {
     if (analysis.auto_matches.length > 0) {
       console.log('\n✨ Auto-Matched Transactions:');
       analysis.auto_matches.slice(0, 5).forEach((match, i) => {
-        console.log(`  ${i + 1}. ${match.bank_transaction.payee} - $${match.bank_transaction.amount.toFixed(2)}`);
+        console.log(
+          `  ${i + 1}. ${match.bank_transaction.payee} - $${match.bank_transaction.amount.toFixed(2)}`,
+        );
         console.log(`     → Matched to YNAB: ${match.ynab_transaction.payee_name}`);
         console.log(`     Confidence: ${match.confidence_score}%`);
       });
@@ -91,9 +95,13 @@ async function testReconciliation() {
     if (analysis.suggested_matches.length > 0) {
       console.log('\n💡 Suggested Matches (need review):');
       analysis.suggested_matches.slice(0, 3).forEach((match, i) => {
-        console.log(`  ${i + 1}. ${match.bank_transaction.payee} - $${match.bank_transaction.amount.toFixed(2)}`);
+        console.log(
+          `  ${i + 1}. ${match.bank_transaction.payee} - $${match.bank_transaction.amount.toFixed(2)}`,
+        );
         if (match.candidates && match.candidates.length > 0) {
-          console.log(`     Top candidate: ${match.candidates[0].ynab_transaction.payee_name} (${match.candidates[0].confidence}%)`);
+          console.log(
+            `     Top candidate: ${match.candidates[0].ynab_transaction.payee_name} (${match.candidates[0].confidence}%)`,
+          );
         }
       });
       if (analysis.suggested_matches.length > 3) {
@@ -114,7 +122,8 @@ async function testReconciliation() {
     if (analysis.insights && analysis.insights.length > 0) {
       console.log('\n💡 Insights:');
       analysis.insights.forEach((insight) => {
-        const icon = insight.severity === 'critical' ? '🔴' : insight.severity === 'warning' ? '⚠️' : 'ℹ️';
+        const icon =
+          insight.severity === 'critical' ? '🔴' : insight.severity === 'warning' ? '⚠️' : 'ℹ️';
         console.log(`  ${icon} ${insight.title}`);
         console.log(`     ${insight.description}`);
       });
@@ -131,9 +140,8 @@ async function testReconciliation() {
     // Save full results
     require('fs').writeFileSync(
       'reconcile-analysis-result.json',
-      JSON.stringify(analysis, null, 2)
+      JSON.stringify(analysis, null, 2),
     );
-
   } catch (error) {
     console.error('❌ Error:', error.message);
     console.error(error);

@@ -511,9 +511,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
           const finalCacheStats = finalStats.data?.cache;
 
           // Verify cache warming occurred
-          expect(finalCacheStats?.entries).toBeGreaterThan(
-            initialCacheStats?.entries || 0,
-          );
+          expect(finalCacheStats?.entries).toBeGreaterThan(initialCacheStats?.entries || 0);
           expect(finalCacheStats?.hits).toBeGreaterThanOrEqual(0);
         } finally {
           // Restore original NODE_ENV
@@ -656,7 +654,10 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         // The financial overview data is in the root of data, not under financial_overview
         expect(overview.data.overview, 'Should contain overview data').toBeDefined();
         expect(overview.data.summary, 'Should contain summary data').toBeDefined();
-        expect(overview.data.account_overview, 'Should contain account_overview data').toBeDefined();
+        expect(
+          overview.data.account_overview,
+          'Should contain account_overview data',
+        ).toBeDefined();
         expect(overview.data.spending_trends, 'Should contain spending_trends data').toBeDefined();
 
         // Test spending analysis tool
@@ -697,8 +698,12 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         expect(toolNames, 'Should contain list_budgets tool').toContain('list_budgets');
         expect(toolNames, 'Should contain financial_overview tool').toContain('financial_overview');
         expect(toolNames, 'Should contain spending_analysis tool').toContain('spending_analysis');
-        expect(toolNames, 'Should contain budget_health_check tool').toContain('budget_health_check');
-        expect(toolNames, 'Should contain compare_transactions tool').toContain('compare_transactions');
+        expect(toolNames, 'Should contain budget_health_check tool').toContain(
+          'budget_health_check',
+        );
+        expect(toolNames, 'Should contain compare_transactions tool').toContain(
+          'compare_transactions',
+        );
         expect(toolNames, 'Should contain diagnostic_info tool').toContain('diagnostic_info');
 
         // Test that each tool has proper schema validation

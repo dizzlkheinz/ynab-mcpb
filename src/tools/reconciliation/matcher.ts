@@ -3,13 +3,8 @@
  * Implements confidence-based matching with auto-match and suggestion tiers
  */
 
-import {
-  normalizedMatch,
-  payeeSimilarity,
-} from './payeeNormalizer.js';
-import {
-  DEFAULT_MATCHING_CONFIG,
-} from './types.js';
+import { normalizedMatch, payeeSimilarity } from './payeeNormalizer.js';
+import { DEFAULT_MATCHING_CONFIG } from './types.js';
 import type {
   BankTransaction,
   YNABTransaction,
@@ -21,11 +16,7 @@ import type {
 /**
  * Check if two amounts match within tolerance
  */
-function amountsMatch(
-  bankAmount: number,
-  ynabAmount: number,
-  toleranceCents: number
-): boolean {
+function amountsMatch(bankAmount: number, ynabAmount: number, toleranceCents: number): boolean {
   // Convert YNAB milliunits to dollars
   const ynabDollars = ynabAmount / 1000;
 
@@ -39,11 +30,7 @@ function amountsMatch(
 /**
  * Check if two dates match within tolerance
  */
-function datesMatch(
-  date1: string,
-  date2: string,
-  toleranceDays: number
-): boolean {
+function datesMatch(date1: string, date2: string, toleranceDays: number): boolean {
   const d1 = new Date(date1);
   const d2 = new Date(date2);
 
@@ -60,17 +47,13 @@ function datesMatch(
 function calculateMatchScore(
   bankTxn: BankTransaction,
   ynabTxn: YNABTransaction,
-  config: MatchingConfig
+  config: MatchingConfig,
 ): { score: number; reasons: string[] } {
   const reasons: string[] = [];
   let score = 0;
 
   // Amount match (40% weight) - REQUIRED
-  const amountMatch = amountsMatch(
-    bankTxn.amount,
-    ynabTxn.amount,
-    config.amountToleranceCents
-  );
+  const amountMatch = amountsMatch(bankTxn.amount, ynabTxn.amount, config.amountToleranceCents);
   if (!amountMatch) {
     return { score: 0, reasons: ['Amount does not match'] };
   }
@@ -78,16 +61,11 @@ function calculateMatchScore(
   reasons.push('Amount matches');
 
   // Date match (40% weight)
-  const dateWithinTolerance = datesMatch(
-    bankTxn.date,
-    ynabTxn.date,
-    config.dateToleranceDays
-  );
+  const dateWithinTolerance = datesMatch(bankTxn.date, ynabTxn.date, config.dateToleranceDays);
   if (dateWithinTolerance) {
     score += 40;
     const daysDiff = Math.abs(
-      (new Date(bankTxn.date).getTime() - new Date(ynabTxn.date).getTime()) /
-        (1000 * 60 * 60 * 24)
+      (new Date(bankTxn.date).getTime() - new Date(ynabTxn.date).getTime()) / (1000 * 60 * 60 * 24),
     );
     if (daysDiff === 0) {
       reasons.push('Exact date match');
@@ -135,7 +113,7 @@ function findMatchCandidates(
   bankTxn: BankTransaction,
   ynabTransactions: YNABTransaction[],
   usedIds: Set<string>,
-  config: MatchingConfig
+  config: MatchingConfig,
 ): MatchCandidate[] {
   const candidates: MatchCandidate[] = [];
 
@@ -144,7 +122,7 @@ function findMatchCandidates(
     if (usedIds.has(ynabTxn.id)) continue;
 
     // Skip opposite-signed transactions (refunds vs purchases)
-    if ((bankTxn.amount > 0) !== (ynabTxn.amount > 0)) continue;
+    if (bankTxn.amount > 0 !== ynabTxn.amount > 0) continue;
 
     // Calculate match score
     const { score, reasons } = calculateMatchScore(bankTxn, ynabTxn, config);
@@ -170,10 +148,10 @@ function findMatchCandidates(
 
     // Date proximity as tiebreaker
     const dateProximityA = Math.abs(
-      new Date(bankTxn.date).getTime() - new Date(a.ynab_transaction.date).getTime()
+      new Date(bankTxn.date).getTime() - new Date(a.ynab_transaction.date).getTime(),
     );
     const dateProximityB = Math.abs(
-      new Date(bankTxn.date).getTime() - new Date(b.ynab_transaction.date).getTime()
+      new Date(bankTxn.date).getTime() - new Date(b.ynab_transaction.date).getTime(),
     );
     return dateProximityA - dateProximityB;
   });
@@ -188,7 +166,7 @@ function buildExplanation(
   _bankTxn: BankTransaction,
   ynabTxn: YNABTransaction,
   score: number,
-  reasons: string[]
+  reasons: string[],
 ): string {
   const parts: string[] = [];
 
@@ -209,7 +187,7 @@ export function findBestMatch(
   bankTxn: BankTransaction,
   ynabTransactions: YNABTransaction[],
   usedIds: Set<string>,
-  config: MatchingConfig
+  config: MatchingConfig,
 ): TransactionMatch {
   const candidates = findMatchCandidates(bankTxn, ynabTransactions, usedIds, config);
 
@@ -272,7 +250,7 @@ export function findBestMatch(
 export function findMatches(
   bankTransactions: BankTransaction[],
   ynabTransactions: YNABTransaction[],
-  config: MatchingConfig = DEFAULT_MATCHING_CONFIG as MatchingConfig
+  config: MatchingConfig = DEFAULT_MATCHING_CONFIG as MatchingConfig,
 ): TransactionMatch[] {
   const matches: TransactionMatch[] = [];
   const usedIds = new Set<string>();

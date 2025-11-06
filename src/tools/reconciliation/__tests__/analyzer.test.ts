@@ -27,7 +27,7 @@ describe('analyzer', () => {
           },
           {
             date: '2025-10-16',
-            amount: -100.00,
+            amount: -100.0,
             payee: 'Netflix',
             memo: '',
           },
@@ -64,7 +64,7 @@ describe('analyzer', () => {
         'csv content',
         undefined,
         ynabTxns,
-        -145.23 // Target balance
+        -145.23, // Target balance
       );
 
       expect(result.success).toBe(true);
@@ -83,7 +83,7 @@ describe('analyzer', () => {
         transactions: [
           {
             date: '2025-10-15',
-            amount: -50.00,
+            amount: -50.0,
             payee: 'Coffee Shop',
             memo: '',
           },
@@ -107,7 +107,7 @@ describe('analyzer', () => {
         } as YNABAPITransaction,
       ];
 
-      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.00);
+      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.0);
 
       expect(result.auto_matches.length).toBeGreaterThan(0);
       expect(result.auto_matches[0].confidence).toBe('high');
@@ -118,7 +118,7 @@ describe('analyzer', () => {
         transactions: [
           {
             date: '2025-10-15',
-            amount: -50.00,
+            amount: -50.0,
             payee: 'Amazon',
             memo: '',
           },
@@ -142,7 +142,7 @@ describe('analyzer', () => {
         } as YNABAPITransaction,
       ];
 
-      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.00);
+      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.0);
 
       // Might be medium or low depending on exact scoring
       expect(result.suggested_matches.length + result.unmatched_bank.length).toBeGreaterThan(0);
@@ -251,7 +251,7 @@ describe('analyzer', () => {
       const result = analyzeReconciliation('csv', undefined, ynabTxns, -30.0);
 
       const comboMatch = result.suggested_matches.find(
-        (match) => match.match_reason === 'combination_match'
+        (match) => match.match_reason === 'combination_match',
       );
       expect(comboMatch).toBeDefined();
       expect(comboMatch?.candidates?.length).toBeGreaterThanOrEqual(2);
@@ -292,12 +292,12 @@ describe('analyzer', () => {
         } as YNABAPITransaction,
       ];
 
-      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.00);
+      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.0);
 
-      expect(result.balance_info.current_cleared.value).toBe(-50.00);
-      expect(result.balance_info.current_uncleared.value).toBe(-30.00);
-      expect(result.balance_info.current_total.value).toBe(-80.00);
-      expect(result.balance_info.target_statement.value).toBe(-50.00);
+      expect(result.balance_info.current_cleared.value).toBe(-50.0);
+      expect(result.balance_info.current_uncleared.value).toBe(-30.0);
+      expect(result.balance_info.current_total.value).toBe(-80.0);
+      expect(result.balance_info.target_statement.value).toBe(-50.0);
       expect(result.balance_info.discrepancy.value).toBe(0);
       expect(result.balance_info.on_track).toBe(true);
     });
@@ -305,8 +305,8 @@ describe('analyzer', () => {
     it('should generate appropriate summary', () => {
       vi.mocked(parser.parseBankCSV).mockReturnValue({
         transactions: [
-          { date: '2025-10-15', amount: -50.00, payee: 'Store', memo: '' },
-          { date: '2025-10-20', amount: -30.00, payee: 'Restaurant', memo: '' },
+          { date: '2025-10-15', amount: -50.0, payee: 'Store', memo: '' },
+          { date: '2025-10-20', amount: -30.0, payee: 'Restaurant', memo: '' },
         ],
         format_detected: 'standard',
         delimiter: ',',
@@ -327,7 +327,7 @@ describe('analyzer', () => {
         } as YNABAPITransaction,
       ];
 
-      const result = analyzeReconciliation('csv', undefined, ynabTxns, -80.00);
+      const result = analyzeReconciliation('csv', undefined, ynabTxns, -80.0);
 
       expect(result.summary.bank_transactions_count).toBe(2);
       expect(result.summary.ynab_transactions_count).toBe(1);
@@ -337,9 +337,7 @@ describe('analyzer', () => {
 
     it('should generate next steps based on analysis', () => {
       vi.mocked(parser.parseBankCSV).mockReturnValue({
-        transactions: [
-          { date: '2025-10-15', amount: -50.00, payee: 'Store', memo: '' },
-        ],
+        transactions: [{ date: '2025-10-15', amount: -50.0, payee: 'Store', memo: '' }],
         format_detected: 'standard',
         delimiter: ',',
         total_rows: 1,
@@ -359,7 +357,7 @@ describe('analyzer', () => {
         } as YNABAPITransaction,
       ];
 
-      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.00);
+      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.0);
 
       expect(result.next_steps).toBeDefined();
       expect(Array.isArray(result.next_steps)).toBe(true);
@@ -368,9 +366,7 @@ describe('analyzer', () => {
 
     it('should use file path when provided', () => {
       vi.mocked(parser.readCSVFile).mockReturnValue({
-        transactions: [
-          { date: '2025-10-15', amount: -50.00, payee: 'Store', memo: '' },
-        ],
+        transactions: [{ date: '2025-10-15', amount: -50.0, payee: 'Store', memo: '' }],
         format_detected: 'standard',
         delimiter: ',',
         total_rows: 1,
@@ -380,12 +376,7 @@ describe('analyzer', () => {
 
       const ynabTxns: YNABAPITransaction[] = [];
 
-      const result = analyzeReconciliation(
-        '',
-        '/path/to/file.csv',
-        ynabTxns,
-        0
-      );
+      const result = analyzeReconciliation('', '/path/to/file.csv', ynabTxns, 0);
 
       expect(vi.mocked(parser.readCSVFile)).toHaveBeenCalledWith('/path/to/file.csv');
       expect(result.success).toBe(true);
@@ -394,8 +385,8 @@ describe('analyzer', () => {
     it('should assign unique IDs to bank transactions', () => {
       vi.mocked(parser.parseBankCSV).mockReturnValue({
         transactions: [
-          { date: '2025-10-15', amount: -50.00, payee: 'Store1', memo: '' },
-          { date: '2025-10-16', amount: -30.00, payee: 'Store2', memo: '' },
+          { date: '2025-10-15', amount: -50.0, payee: 'Store1', memo: '' },
+          { date: '2025-10-16', amount: -30.0, payee: 'Store2', memo: '' },
         ],
         format_detected: 'standard',
         delimiter: ',',

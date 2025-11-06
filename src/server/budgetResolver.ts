@@ -56,8 +56,8 @@ export class BudgetResolver {
             'Use a specific budget ID (UUID format)',
             'Set a default budget using the set_default_budget tool',
             'Use the "default" keyword after setting a default budget',
-            'Run the list_budgets tool to see available budget IDs'
-          ]
+            'Run the list_budgets tool to see available budget IDs',
+          ],
         );
       }
 

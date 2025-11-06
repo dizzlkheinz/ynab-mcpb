@@ -115,18 +115,21 @@ A comprehensive testing checklist for validating the YNAB MCP server with Claude
 ## Specific Test Scenarios
 
 ### Budget Management
+
 - [ ] List budgets works with multiple budgets
 - [ ] Set default budget triggers cache warming
 - [ ] Default budget persists across server restarts
 - [ ] Budget resolution works across all tools
 
 ### Account Operations
+
 - [ ] List accounts shows all account types correctly
 - [ ] Get specific account details works
 - [ ] Account balance information is accurate
 - [ ] Account caching improves performance
 
 ### Transaction Operations
+
 - [ ] List transactions with date filters
 - [ ] List transactions with account filters
 - [ ] List transactions with category filters
@@ -135,6 +138,7 @@ A comprehensive testing checklist for validating the YNAB MCP server with Claude
 - [ ] Delete test transaction
 
 ### CSV Comparison Testing
+
 - [ ] CSV parsing works with test-csv-sample.csv
 - [ ] Transaction matching algorithms function correctly
 - [ ] Unmatched transactions are identified properly
@@ -142,12 +146,14 @@ A comprehensive testing checklist for validating the YNAB MCP server with Claude
 - [ ] Amount tolerance matching works (±$0.01)
 
 ### Export Functionality
+
 - [ ] Export creates files in test-exports directory
 - [ ] Export file format is correct and readable
 - [ ] Export includes all requested transaction data
 - [ ] Export handles large transaction sets
 
 ### Cache Testing
+
 - [ ] Cache warming pre-loads accounts, categories, payees
 - [ ] Cache hit rates improve with repeated requests
 - [ ] Cache eviction works with 100-entry limit
@@ -216,6 +222,7 @@ The YNAB MCP server testing is considered successful when:
 ## Notes Section
 
 Use this space to record:
+
 - Performance measurements
 - Issues encountered and resolutions
 - User experience observations
@@ -224,8 +231,8 @@ Use this space to record:
 
 ---
 
-**Testing Date**: ________________
-**Tester**: ________________
-**Claude Desktop Version**: ________________
+**Testing Date**: **\*\***\_\_\_\_**\*\***
+**Tester**: **\*\***\_\_\_\_**\*\***
+**Claude Desktop Version**: **\*\***\_\_\_\_**\*\***
 **Server Version**: v0.8.2
 **Overall Result**: [ ] PASS [ ] FAIL [ ] NEEDS REVIEW

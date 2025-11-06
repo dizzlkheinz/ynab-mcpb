@@ -154,10 +154,7 @@ export async function handleGetAccount(
 
       if (!useCache) {
         // Bypass cache in test environment
-        const response = await ynabAPI.accounts.getAccountById(
-          params.budget_id,
-          params.account_id,
-        );
+        const response = await ynabAPI.accounts.getAccountById(params.budget_id, params.account_id);
         const account = response.data.account;
 
         return {

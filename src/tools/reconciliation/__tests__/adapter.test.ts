@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { buildReconciliationV2Payload, type LegacyReconciliationResult } from '../../reconcileV2Adapter.js';
+import {
+  buildReconciliationV2Payload,
+  type LegacyReconciliationResult,
+} from '../../reconcileV2Adapter.js';
 import type { ReconciliationAnalysis } from '../types.js';
 
 const makeMoney = (value: number, currency = 'USD') => ({
@@ -7,7 +10,10 @@ const makeMoney = (value: number, currency = 'USD') => ({
   value,
   value_display: value < 0 ? `-$${Math.abs(value).toFixed(2)}` : `$${value.toFixed(2)}`,
   currency,
-  direction: (value === 0 ? 'balanced' : value > 0 ? 'credit' : 'debit') as 'balanced' | 'credit' | 'debit',
+  direction: (value === 0 ? 'balanced' : value > 0 ? 'credit' : 'debit') as
+    | 'balanced'
+    | 'credit'
+    | 'debit',
 });
 
 const buildAnalysis = (): ReconciliationAnalysis => ({
@@ -133,7 +139,7 @@ describe('buildReconciliationV2Payload', () => {
     });
 
     expect(payload.human).toContain('K TD FCT VISA Reconciliation Report');
-    expect(payload.human).toContain('Discrepancy');
+    expect(payload.human.toUpperCase()).toContain('DISCREPANCY');
 
     const structured = payload.structured as Record<string, any>;
     expect(structured.version).toBe('2.0');
@@ -215,12 +221,14 @@ describe('buildReconciliationV2Payload', () => {
     const structured = payload.structured as Record<string, any>;
     expect(structured.execution).toBeDefined();
     expect(structured.execution.summary.transactions_created).toBe(1);
-    expect(structured.execution.account_balance.after.cleared_balance.value_milliunits).toBe(-921240);
+    expect(structured.execution.account_balance.after.cleared_balance.value_milliunits).toBe(
+      -921240,
+    );
     expect(structured.execution.account_balance.after.cleared_balance.currency).toBe('CAD');
     expect(
-      structured.execution.balance_reconciliation?.precision_calculations?.discrepancy.value_display,
+      structured.execution.balance_reconciliation?.precision_calculations?.discrepancy
+        .value_display,
     ).toBe('-CA$22.22');
     expect(payload.human).toContain('Changes applied to YNAB');
   });
-
 });

@@ -16,11 +16,13 @@ This document consolidates all unimplemented features, pending tasks, and roadma
 
 **Status**: Phase 1 shipped in v0.9.0, Phase 2 partially complete in v0.10.0
 **Documents**:
+
 - `docs/plans/2025-10-31-reconciliation-redesign.md`
 - `docs/plans/2025-11-01-reconciliation-implementation-review.md`
 - `docs/plans/2025-11-01-reconciliation-output-improvements.md`
 
 #### Completed:
+
 - ✅ Phase 1: Analysis-only mode (`reconcile_account_v2`)
 - ✅ Intelligent insight detection (repeat amounts, near matches, anomalies)
 - ✅ Matcher with two-tier matching strategy
@@ -31,6 +33,7 @@ This document consolidates all unimplemented features, pending tasks, and roadma
 #### Still Pending:
 
 **Phase 2: Execution Capability** (2-3 weeks)
+
 - [ ] Implement `executor.ts` - execution phase logic
 - [ ] Add dry-run preview functionality
 - [ ] Implement rollback info generation
@@ -39,6 +42,7 @@ This document consolidates all unimplemented features, pending tasks, and roadma
 - [ ] E2E tests with real YNAB account
 
 **Phase 3: Refinement** (2-3 weeks)
+
 - [ ] Implement idempotency checks
 - [ ] Add reconciliation history tracking
 - [ ] Performance profiling and optimization
@@ -49,12 +53,14 @@ This document consolidates all unimplemented features, pending tasks, and roadma
 #### Output Format Improvements (High Priority)
 
 **Phase 1: Money Object Standard** (2-3 days)
+
 - [ ] Create `MoneyValue` type and formatter in `src/utils/money.ts`
 - [ ] Update `ReconciliationResult` interface to use `MoneyValue`
 - [ ] Replace all raw milliunits/dollars with `MoneyValue`
 - [ ] Write comprehensive unit tests
 
 **Phase 2: Interpretation Layer** (3-4 days)
+
 - [x] Create reconciliation analyzer (DONE in v0.9.0)
 - [x] Implement exact-match detection (DONE)
 - [x] Add insights/callouts array (DONE)
@@ -62,24 +68,28 @@ This document consolidates all unimplemented features, pending tasks, and roadma
 - [ ] Refine confidence scoring for combo matches
 
 **Phase 3: Human-Readable Formatter** (3-5 days)
+
 - [ ] Create `src/tools/reconciliation/reportFormatter.ts`
 - [ ] Implement `formatHumanReadableReport()` function
 - [ ] Add section formatting helpers
 - [ ] Handle edge cases (no discrepancy, large discrepancies, etc.)
 
 **Phase 4: Dual-Channel Output** (2 days)
+
 - [ ] Wire `reconcileV2Adapter` or equivalent to emit dual-channel responses
 - [ ] Update `reconcileAccount.ts` return statement
 - [ ] Add format version tracking
 - [ ] Update `docs/API.md` with new format
 
 **Phase 5: Enhanced Recommendations** (2-3 days)
+
 - [ ] Create `recommendationEngine.ts`
 - [ ] Implement actionable recommendation generation
 - [ ] Link recommendations to executable tool parameters
 - [ ] Test recommendation scenarios
 
 **Phase 6: Testing & Validation** (3-4 days)
+
 - [ ] Create test scenario files (exact-match, multi-transaction, complex, etc.)
 - [ ] Write integration tests for full reconciliation flow
 - [ ] Test with real bank statements (including Oct 30 EvoCarShare scenario)
@@ -208,6 +218,7 @@ This document consolidates all unimplemented features, pending tasks, and roadma
 **Impact**: Low-Medium - long-term maintainability
 
 Existing ADRs:
+
 - ✅ `docs/ADR/tool-registry-architecture.md`
 - ✅ `docs/ADR/enhanced-caching.md`
 - ✅ `docs/ADR/modular-architecture.md`
@@ -216,6 +227,7 @@ Existing ADRs:
 - ✅ `docs/ADR/tool-module-decomposition.md`
 
 Missing ADRs:
+
 - [ ] Response Formatting (Minified by default)
 - [ ] Security Middleware Pattern
 - [ ] Error Handling Strategy
@@ -255,12 +267,14 @@ Missing ADRs:
 ## Testing & Validation Checklist Status
 
 **Documents**:
+
 - `testing-checklist.md`
 - `test-scenarios.md`
 
 ### Current Test Status
 
 **Build & Development**:
+
 - ✅ TypeScript compilation successful
 - ⚠️ Some test failures (5 failures in reconciliation matcher tests)
 - ✅ Development server starts
@@ -268,9 +282,11 @@ Missing ADRs:
 - ❓ DXT package generation not recently tested
 
 **Claude Desktop Integration**:
+
 - ❓ Not recently validated (needs testing post-cleanup)
 
 **Functional Testing Checklist** (from `testing-checklist.md`):
+
 - [ ] Pre-Testing Setup (7 items)
 - [ ] Build and Development Testing (6 items)
 - [ ] Claude Desktop Integration (5 items)
@@ -295,6 +311,7 @@ Missing ADRs:
 ## Documentation Status
 
 ### Completed Documentation:
+
 - ✅ `CLAUDE.md` - Development guide
 - ✅ `docs/API.md` - API reference (updated for v0.10.0)
 - ✅ `docs/DEVELOPER.md` - Developer guide
@@ -307,6 +324,7 @@ Missing ADRs:
 - ✅ `CLEANUP_SUMMARY.md` - Repository cleanup summary (just created)
 
 ### Documentation Gaps:
+
 - [ ] Migration guide from v0.9.0 to v0.10.0
 - [ ] Complete reconciliation v2 user guide (once execution phase is done)
 - [ ] Tool catalog with example prompts
@@ -364,6 +382,7 @@ Missing ADRs:
 ## Success Metrics
 
 ### Phase 1 (Reconciliation v2 Completion):
+
 - ✅ All monetary values use `MoneyValue` type
 - ✅ Dual-channel output implemented
 - ✅ Human-readable reports are Claude-proof
@@ -373,6 +392,7 @@ Missing ADRs:
 - ✅ All existing tests pass + new tests achieve 90%+ coverage
 
 ### Phase 2 (High-Impact Features):
+
 - ✅ Performance instrumentation provides actionable data
 - ✅ `ynab-mcp doctor` CLI solves 90%+ setup issues
 - ✅ Request coalescing reduces API calls by 30%
@@ -380,6 +400,7 @@ Missing ADRs:
 - ✅ Cache hit rate >70% (currently ~60%)
 
 ### Phase 3 (Quality & Maintenance):
+
 - ✅ Fixture-based tests enable reliable CI/CD
 - ✅ Mutation testing catches edge case bugs
 - ✅ Tool catalog improves discoverability
@@ -390,18 +411,21 @@ Missing ADRs:
 ## Estimated Timelines
 
 ### Reconciliation v2 Completion:
+
 - **MoneyValue + Dual-Channel**: 1 week
 - **Execution Phase**: 2-3 weeks
 - **Testing & Validation**: 1 week
 - **Total**: 4-6 weeks
 
 ### High-Impact Features (Project Improvements):
+
 - **Phase 1** (Instrumentation + CLI): 4-6 weeks
 - **Phase 2** (User Features): 6-10 weeks
 - **Phase 3** (Quality/DX): 4-6 weeks
 - **Total**: 14-22 weeks (3.5-5.5 months)
 
 ### Full Roadmap Completion:
+
 - **All Priority 1-3 Items**: 6-9 months
 - **With Testing & Documentation**: 9-12 months
 
@@ -410,18 +434,21 @@ Missing ADRs:
 ## Risk Assessment
 
 ### High Risk Items:
+
 1. **Breaking Changes**: MoneyValue could break existing consumers
    - **Mitigation**: Version flag, gradual rollout
 2. **Execution Phase Bugs**: Data modification is risky
    - **Mitigation**: Extensive testing, dry-run default, rollback capability
 
 ### Medium Risk Items:
+
 1. **Performance Regression**: New features could slow things down
    - **Mitigation**: Performance instrumentation first, profile continuously
 2. **Test Coverage Gaps**: E2E scenarios not fully tested
    - **Mitigation**: Fixture-based tests, real-world validation
 
 ### Low Risk Items:
+
 1. **Documentation Drift**: Docs may not match implementation
    - **Mitigation**: Update docs with each feature release
 
@@ -430,22 +457,26 @@ Missing ADRs:
 ## Recommendations
 
 ### Immediate Actions (This Week):
+
 1. ✅ Fix 5 failing tests in reconciliation matcher
 2. ✅ Validate v0.10.0 works correctly with real YNAB data
 3. ✅ Run full testing checklist to identify any regressions
 
 ### Short-Term (Next Month):
+
 1. Complete MoneyValue + Dual-Channel output improvements
 2. Finish reconciliation v2 execution phase
 3. Validate with real-world reconciliation scenarios
 
 ### Medium-Term (Next Quarter):
+
 1. Implement performance instrumentation
 2. Build `ynab-mcp doctor` CLI
 3. Add auto-categorization rules
 4. Complete fixture-based test suite
 
 ### Long-Term (6-12 Months):
+
 1. Implement all high-impact features
 2. Build comprehensive tool catalog
 3. Add reconciliation health metrics

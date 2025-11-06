@@ -94,18 +94,22 @@ const execution: LegacyReconciliationResult = {
 
 describe('buildReconciliationV2Payload discrepancy causes mapping', () => {
   it('maps legacy causes to MoneyValue entries with CAD currency', () => {
-    const payload = buildReconciliationV2Payload(baseAnalysis, {
-      accountId: 'acct-123',
-      accountName: 'CAD Checking',
-      currencyCode: 'CAD',
-    }, execution);
+    const payload = buildReconciliationV2Payload(
+      baseAnalysis,
+      {
+        accountId: 'acct-123',
+        accountName: 'CAD Checking',
+        currencyCode: 'CAD',
+      },
+      execution,
+    );
 
     const structured = payload.structured as Record<string, any>;
     const discrepancyAnalysis = structured.execution?.balance_reconciliation?.discrepancy_analysis;
     expect(discrepancyAnalysis).toBeDefined();
     expect(discrepancyAnalysis.likely_causes).toHaveLength(2);
 
-    for (const cause of discrepancyAnalysis.likely_causes as Array<Record<string, any>>) {
+    for (const cause of discrepancyAnalysis.likely_causes as Record<string, any>[]) {
       expect(cause.amount).toMatchObject({ currency: 'CAD' });
       expect(typeof cause.suggested_action).toBe('string');
     }

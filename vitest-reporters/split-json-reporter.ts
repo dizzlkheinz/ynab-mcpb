@@ -46,14 +46,14 @@ export default class SplitJsonReporter implements Reporter {
       // Update summary
       summary.numTotalTestSuites++;
       const allTasks = this.getAllTasks(file);
-      const failedTasks = allTasks.filter(t => t.result?.state === 'fail');
+      const failedTasks = allTasks.filter((t) => t.result?.state === 'fail');
 
       if (failedTasks.length > 0) {
         summary.numFailedTestSuites++;
         summary.success = false;
 
         // Collect failed test details
-        failedTasks.forEach(task => {
+        failedTasks.forEach((task) => {
           failedTests.push({
             project: projectName,
             file: file.filepath,
@@ -68,7 +68,7 @@ export default class SplitJsonReporter implements Reporter {
       }
 
       summary.numTotalTests += allTasks.length;
-      summary.numPassedTests += allTasks.filter(t => t.result?.state === 'pass').length;
+      summary.numPassedTests += allTasks.filter((t) => t.result?.state === 'pass').length;
       summary.numFailedTests += failedTasks.length;
     }
 
@@ -77,23 +77,23 @@ export default class SplitJsonReporter implements Reporter {
       const projectData = {
         project: projectName,
         numTestSuites: projectFiles.length,
-        numPassedTestSuites: projectFiles.filter(f => {
+        numPassedTestSuites: projectFiles.filter((f) => {
           const tasks = this.getAllTasks(f);
-          return tasks.every(t => t.result?.state === 'pass');
+          return tasks.every((t) => t.result?.state === 'pass');
         }).length,
-        numFailedTestSuites: projectFiles.filter(f => {
+        numFailedTestSuites: projectFiles.filter((f) => {
           const tasks = this.getAllTasks(f);
-          return tasks.some(t => t.result?.state === 'fail');
+          return tasks.some((t) => t.result?.state === 'fail');
         }).length,
-        testSuites: projectFiles.map(file => ({
+        testSuites: projectFiles.map((file) => ({
           name: file.filepath,
           status: this.getFileStatus(file),
           duration: file.result?.duration || 0,
-          tests: this.getAllTasks(file).map(task => ({
+          tests: this.getAllTasks(file).map((task) => ({
             name: task.name,
             status: task.result?.state || 'unknown',
             duration: task.result?.duration || 0,
-            errors: task.result?.errors?.map(e => ({
+            errors: task.result?.errors?.map((e) => ({
               message: e.message,
               stack: e.stack,
             })),
@@ -111,23 +111,19 @@ export default class SplitJsonReporter implements Reporter {
       await writeFile(
         join(outputDir, `${projectName}-tests.json`),
         JSON.stringify(projectData, null, 2),
-        'utf-8'
+        'utf-8',
       );
     }
 
     // Write summary file
-    await writeFile(
-      join(outputDir, 'summary.json'),
-      JSON.stringify(summary, null, 2),
-      'utf-8'
-    );
+    await writeFile(join(outputDir, 'summary.json'), JSON.stringify(summary, null, 2), 'utf-8');
 
     // Write failed tests file (only if there are failures)
     if (failedTests.length > 0) {
       await writeFile(
         join(outputDir, 'failed-tests.json'),
         JSON.stringify({ numFailedTests: failedTests.length, failures: failedTests }, null, 2),
-        'utf-8'
+        'utf-8',
       );
     }
 
@@ -144,35 +140,36 @@ export default class SplitJsonReporter implements Reporter {
     await writeFile(
       join(outputDir, 'passed-tests-summary.json'),
       JSON.stringify(passedSummary, null, 2),
-      'utf-8'
+      'utf-8',
     );
 
     // Write pointer file at test-results.json location
     const pointerContent = {
-      message: "Test results have been split into multiple files for better performance and readability.",
-      location: "./test-results/",
+      message:
+        'Test results have been split into multiple files for better performance and readability.',
+      location: './test-results/',
       files: {
-        "summary.json": "High-level overview with totals and project breakdowns",
-        "unit-tests.json": "All unit test results",
-        "integration-tests.json": "All integration test results",
-        "e2e-tests.json": "All end-to-end test results",
-        "failed-tests.json": "Detailed failure information (only present if tests failed)",
-        "passed-tests-summary.json": "Summary of passed tests",
-        "index.html": "Interactive HTML report (open in browser)"
+        'summary.json': 'High-level overview with totals and project breakdowns',
+        'unit-tests.json': 'All unit test results',
+        'integration-tests.json': 'All integration test results',
+        'e2e-tests.json': 'All end-to-end test results',
+        'failed-tests.json': 'Detailed failure information (only present if tests failed)',
+        'passed-tests-summary.json': 'Summary of passed tests',
+        'index.html': 'Interactive HTML report (open in browser)',
       },
       quickStats: {
         total: summary.numTotalTests,
         passed: summary.numPassedTests,
         failed: summary.numFailedTests,
-        success: summary.success
+        success: summary.success,
       },
-      note: "For detailed results, see the files in the test-results/ directory."
+      note: 'For detailed results, see the files in the test-results/ directory.',
     };
 
     await writeFile(
       join(process.cwd(), 'test-results.json'),
       JSON.stringify(pointerContent, null, 2),
-      'utf-8'
+      'utf-8',
     );
 
     console.log('\n📊 Test results written to test-results/');
@@ -207,8 +204,8 @@ export default class SplitJsonReporter implements Reporter {
 
   private getFileStatus(file: File): string {
     const tasks = this.getAllTasks(file);
-    if (tasks.some(t => t.result?.state === 'fail')) return 'failed';
-    if (tasks.every(t => t.result?.state === 'pass')) return 'passed';
+    if (tasks.some((t) => t.result?.state === 'fail')) return 'failed';
+    if (tasks.every((t) => t.result?.state === 'pass')) return 'passed';
     return 'unknown';
   }
 }

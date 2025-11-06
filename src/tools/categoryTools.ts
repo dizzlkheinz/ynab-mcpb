@@ -104,16 +104,13 @@ export async function handleListCategories(
       // Use enhanced CacheManager wrap method
       const cacheKey = CacheManager.generateKey('categories', 'list', params.budget_id);
       const wasCached = cacheManager.has(cacheKey);
-      const categoryGroups = await cacheManager.wrap<ynab.CategoryGroupWithCategories[]>(
-        cacheKey,
-        {
-          ttl: CACHE_TTLS.CATEGORIES,
-          loader: async () => {
-            const response = await ynabAPI.categories.getCategories(params.budget_id);
-            return response.data.category_groups;
-          },
+      const categoryGroups = await cacheManager.wrap<ynab.CategoryGroupWithCategories[]>(cacheKey, {
+        ttl: CACHE_TTLS.CATEGORIES,
+        loader: async () => {
+          const response = await ynabAPI.categories.getCategories(params.budget_id);
+          return response.data.category_groups;
         },
-      );
+      });
 
       // Flatten categories from all category groups
       const allCategories = categoryGroups.flatMap((group) =>

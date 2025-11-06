@@ -137,12 +137,7 @@ export async function handleGetPayee(
       }
 
       // Use enhanced CacheManager wrap method
-      const cacheKey = CacheManager.generateKey(
-        'payee',
-        'get',
-        params.budget_id,
-        params.payee_id,
-      );
+      const cacheKey = CacheManager.generateKey('payee', 'get', params.budget_id, params.payee_id);
       const wasCached = cacheManager.has(cacheKey);
       const payee = await cacheManager.wrap<ynab.Payee>(cacheKey, {
         ttl: CACHE_TTLS.PAYEES,

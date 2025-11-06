@@ -1,6 +1,7 @@
 # Codex Consultation: YNAB Reconciliation UX Improvement
 
 ## Context
+
 We have a YNAB MCP server with a reconciliation tool that compares bank statement data with YNAB transactions. The tool works, but the user experience was "miserable" due to:
 
 1. Claude (AI assistant) misread the cleared balance from the tool output
@@ -8,37 +9,46 @@ We have a YNAB MCP server with a reconciliation tool that compares bank statemen
 3. Claude didn't notice an obvious missing transaction (Oct 30 EvoCarShare $22.22) that exactly matched the discrepancy
 
 ## Current Architecture
+
 - **reconcileAccount.ts** - Main reconciliation orchestrator
 - **compareTransactions/** - Transaction matching logic (amount + date priority, payee as tiebreaker)
 - Tool returns detailed JSON with matches, unmatched transactions, balance analysis
 
 ## The Problem
+
 The tool returns correct data, but when Claude interprets the JSON:
+
 - Balance values can be misread (milliunits vs dollars confusion)
 - Discrepancy direction gets confused (positive vs negative)
 - Missing transactions aren't highlighted as likely causes of balance discrepancies
 
 ## Proposed Solution
+
 Make the tool output more "Claude-proof" by:
+
 1. Using clear, human-readable text format instead of raw JSON
 2. Explicitly highlighting when an unmatched transaction amount matches the balance discrepancy
 3. Providing clear next-step recommendations
 
 ## Design Question
+
 Should we:
 
 **Option A:** Keep JSON output but improve Claude's interpretation
+
 - Add better prompts/instructions for Claude to follow
 - Provide examples of correct interpretation
 - Rely on Claude getting better at parsing the data
 
 **Option B:** Change tool output to be human-first
+
 - Return formatted text with clear labels
 - Highlight key insights (e.g., "This $22.22 transaction matches your $22.22 discrepancy!")
 - Include explicit recommendations
 - Make it hard to misinterpret
 
 **Option C:** Hybrid approach
+
 - Return both machine-readable JSON AND human-readable summary
 - Let Claude use whichever makes more sense
 - Summary helps Claude understand the data structure
@@ -68,12 +78,15 @@ Should we:
 4. **Best practices:** Are there examples of tools that work well with AI assistants? What makes them successful?
 
 ## User's Ideal Experience
+
 User provides:
+
 - Bank statement CSV data
 - Statement ending balance
 - Account to reconcile
 
 Tool should:
+
 - Automatically match transactions (amount + date, ignore payee name differences)
 - Identify any discrepancies
 - Highlight missing transactions

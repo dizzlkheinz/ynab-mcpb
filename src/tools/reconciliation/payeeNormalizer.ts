@@ -16,9 +16,7 @@
 export function normalizePayee(payee: string | null | undefined): string {
   if (!payee) return '';
 
-  return payee
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, ''); // Remove all non-alphanumeric
+  return payee.toLowerCase().replace(/[^a-z0-9]/g, ''); // Remove all non-alphanumeric
 }
 
 /**
@@ -27,7 +25,10 @@ export function normalizePayee(payee: string | null | undefined): string {
  *
  * This catches 80%+ of matches quickly
  */
-export function normalizedMatch(payee1: string | null | undefined, payee2: string | null | undefined): boolean {
+export function normalizedMatch(
+  payee1: string | null | undefined,
+  payee2: string | null | undefined,
+): boolean {
   const norm1 = normalizePayee(payee1);
   const norm2 = normalizePayee(payee2);
 
@@ -58,9 +59,9 @@ function levenshteinDistance(str1: string, str2: string): number {
     for (let j = 1; j <= len2; j++) {
       const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
       matrix[i]![j] = Math.min(
-        matrix[i - 1]![j]! + 1,      // deletion
-        matrix[i]![j - 1]! + 1,      // insertion
-        matrix[i - 1]![j - 1]! + cost // substitution
+        matrix[i - 1]![j]! + 1, // deletion
+        matrix[i]![j - 1]! + 1, // insertion
+        matrix[i - 1]![j - 1]! + cost, // substitution
       );
     }
   }
@@ -74,7 +75,10 @@ function levenshteinDistance(str1: string, str2: string): number {
  *
  * Only used when Tier 1 (normalized matching) fails
  */
-export function fuzzyMatch(payee1: string | null | undefined, payee2: string | null | undefined): number {
+export function fuzzyMatch(
+  payee1: string | null | undefined,
+  payee2: string | null | undefined,
+): number {
   const norm1 = normalizePayee(payee1);
   const norm2 = normalizePayee(payee2);
 
@@ -98,7 +102,10 @@ export function fuzzyMatch(payee1: string | null | undefined, payee2: string | n
  * @example
  * "amazon prime video" vs "prime amazon" => higher similarity
  */
-export function tokenBasedSimilarity(payee1: string | null | undefined, payee2: string | null | undefined): number {
+export function tokenBasedSimilarity(
+  payee1: string | null | undefined,
+  payee2: string | null | undefined,
+): number {
   const norm1 = normalizePayee(payee1);
   const norm2 = normalizePayee(payee2);
 
@@ -131,7 +138,10 @@ export function tokenBasedSimilarity(payee1: string | null | undefined, payee2: 
  * - Fuzzy match (Levenshtein distance)
  * - Token-based match
  */
-export function payeeSimilarity(payee1: string | null | undefined, payee2: string | null | undefined): number {
+export function payeeSimilarity(
+  payee1: string | null | undefined,
+  payee2: string | null | undefined,
+): number {
   // Tier 1: Normalized exact match
   if (normalizedMatch(payee1, payee2)) return 100;
 

@@ -15,6 +15,7 @@ This guide provides the fastest path to test the YNAB MCP server with Claude Des
 2. Create or update a `.env` file with useful testing values:
    - `LOG_LEVEL=debug` (surface detailed logs while validating)
    - `YNAB_EXPORT_PATH=./test-exports` (keep test exports in a disposable folder)
+
 ## Step 2: Build and Test
 
 ```bash
@@ -30,6 +31,7 @@ npm run start
 ```
 
 **Expected Results**:
+
 - Build completes without TypeScript errors
 - All tests pass
 - Server starts without connection errors
@@ -69,7 +71,9 @@ npm run package:dxt
 ## Step 4: Basic Testing (2 minutes)
 
 ### 4.1 Verify Connection
+
 **Ask Claude**:
+
 ```
 Can you run the diagnostic_info tool for the YNAB MCP server?
 ```
@@ -77,7 +81,9 @@ Can you run the diagnostic_info tool for the YNAB MCP server?
 **Expected**: Should return server status, cache configuration, and authentication details.
 
 ### 4.2 Test Budget Access
+
 **Ask Claude**:
+
 ```
 Can you list my YNAB budgets using the list_budgets tool?
 ```
@@ -85,7 +91,9 @@ Can you list my YNAB budgets using the list_budgets tool?
 **Expected**: Should return your budget(s) with names and IDs.
 
 ### 4.3 Set Default Budget
+
 **Ask Claude**:
+
 ```
 Set my default budget to [your_budget_name] using the set_default_budget tool.
 ```
@@ -93,11 +101,15 @@ Set my default budget to [your_budget_name] using the set_default_budget tool.
 **Expected**: Should confirm success and mention cache warming.
 
 ### 4.4 Test Cache Performance
+
 **Ask Claude**:
+
 ```
 List my accounts using the list_accounts tool.
 ```
+
 Then immediately ask again:
+
 ```
 List my accounts again.
 ```
@@ -107,7 +119,9 @@ List my accounts again.
 ## Step 5: Advanced Testing (5 minutes)
 
 ### 5.1 Financial Analysis
+
 **Ask Claude**:
+
 ```
 Give me a financial overview for the last 3 months using the financial_overview tool.
 ```
@@ -115,7 +129,9 @@ Give me a financial overview for the last 3 months using the financial_overview 
 **Expected**: Comprehensive analysis with trends, insights, and spending patterns.
 
 ### 5.2 Transaction Management
+
 **Ask Claude**:
+
 ```
 Show me my recent transactions using the list_transactions tool.
 ```
@@ -123,7 +139,9 @@ Show me my recent transactions using the list_transactions tool.
 **Expected**: List of recent transactions with details.
 
 ### 5.3 Export Testing
+
 **Ask Claude**:
+
 ```
 Export my transactions to a file using the export_transactions tool.
 ```
@@ -131,16 +149,21 @@ Export my transactions to a file using the export_transactions tool.
 **Expected**: Creates a file in the test-exports directory.
 
 ### 5.4 Receipt Split Workflow
+
 **Ask Claude**:
+
 ```
 Create a receipt split transaction with these categorized items…
 ```
+
 Provide the categorized items and tax totals you gathered.
 
 **Expected**: Claude reviews the categorization, optionally returns a dry-run preview, and creates the split with proportional tax allocation using `create_receipt_split_transaction`.
 
 ### 5.5 CSV Comparison Testing
+
 **Ask Claude**:
+
 ```
 Compare the CSV file test-csv-sample.csv with my YNAB transactions using the compare_transactions tool.
 ```
@@ -150,7 +173,9 @@ Compare the CSV file test-csv-sample.csv with my YNAB transactions using the com
 ## Step 6: Performance Verification
 
 ### 6.1 Cache Testing
+
 **Ask Claude**:
+
 ```
 Run diagnostic_info again and show me the cache metrics.
 ```
@@ -158,7 +183,9 @@ Run diagnostic_info again and show me the cache metrics.
 **Expected**: Should show cache hits, entries, and performance metrics.
 
 ### 6.2 Repeat Operations
+
 Run the same commands from Step 4 again and notice:
+
 - Faster response times
 - Improved cache hit ratios
 - Consistent data accuracy
@@ -166,25 +193,33 @@ Run the same commands from Step 4 again and notice:
 ## Step 7: Troubleshooting Common Issues
 
 ### Issue: "Invalid or expired token"
+
 **Solution**:
+
 1. Check YNAB_ACCESS_TOKEN in .env file
 2. Generate new token at [YNAB developer settings](https://app.youneedabudget.com/settings/developer)
 3. Restart Claude Desktop after updating token
 
 ### Issue: "No default budget set"
+
 **Solution**:
+
 1. Use `set_default_budget` tool first
 2. Or provide budget_id parameter to tools that need it
 
 ### Issue: Connection errors
+
 **Solution**:
+
 1. Verify Node.js version: `node --version` (should be 18+)
 2. Verify build completed: check that `dist/index.js` exists
 3. Check Claude Desktop logs for detailed error messages
 4. Restart Claude Desktop completely
 
 ### Issue: Tools not available
+
 **Solution**:
+
 1. Verify server appears as "connected" in Claude Desktop
 2. Check MCP server configuration in Claude Desktop settings
 3. Ensure working directory path is correct

@@ -824,7 +824,9 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
 
       const secondParsed = parseToolResult(secondResult);
       expect(secondParsed.data.cached).toBe(true);
-      expect(secondParsed.data.cache_info).toBe('Data retrieved from cache for improved performance');
+      expect(secondParsed.data.cache_info).toBe(
+        'Data retrieved from cache for improved performance',
+      );
 
       // API should only have been called once
       expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledTimes(1);

@@ -154,7 +154,6 @@ vi.mock('../../financialOverview/insightGenerator.js', () => ({
   generateHealthRecommendations: vi.fn(() => ['Test recommendation']),
 }));
 
-
 // Mock YNAB API
 function createMockYnabAPI(): ynab.API {
   return {
@@ -538,8 +537,11 @@ describe('Handler Integration Tests', () => {
 
   describe('Module Orchestration', () => {
     test('should call sub-modules in correct sequence for financial overview', async () => {
-      const { calculateAccountBalances, analyzeCategoryPerformance, buildFinancialOverviewResponse } =
-        await import('../../financialOverview/formatter.js');
+      const {
+        calculateAccountBalances,
+        analyzeCategoryPerformance,
+        buildFinancialOverviewResponse,
+      } = await import('../../financialOverview/formatter.js');
       const { generateFinancialInsights } = await import(
         '../../financialOverview/insightGenerator.js'
       );

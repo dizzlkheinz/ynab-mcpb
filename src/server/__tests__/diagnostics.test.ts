@@ -257,7 +257,10 @@ describe('diagnostics module', () => {
                   token_present: true,
                   token_length: 18,
                   token_preview: 'test...3456',
-                  ynab_env_keys_present: expect.arrayContaining(['YNAB_ACCESS_TOKEN', 'YNAB_MCP_DEBUG']),
+                  ynab_env_keys_present: expect.arrayContaining([
+                    'YNAB_ACCESS_TOKEN',
+                    'YNAB_MCP_DEBUG',
+                  ]),
                   working_directory: '/test/directory',
                 }),
               }),

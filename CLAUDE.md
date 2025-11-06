@@ -9,6 +9,7 @@ This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integ
 ## Essential Commands
 
 ### Build & Development
+
 ```bash
 npm run build              # Clean, compile TypeScript, and bundle
 npm run build:no-lint      # Build without running linter
@@ -18,6 +19,7 @@ npm run type-check         # Run TypeScript type checking without emitting files
 ```
 
 ### Testing
+
 ```bash
 npm test                   # Run all unit tests + filter results
 npm run test:unit          # Unit tests only (fast, mocked dependencies)
@@ -29,6 +31,7 @@ npm run test:watch         # Watch mode for test development
 ```
 
 ### Code Quality
+
 ```bash
 npm run lint               # Run ESLint on TypeScript files
 npm run lint:fix           # Auto-fix ESLint issues
@@ -37,6 +40,7 @@ npm run format:check       # Check formatting without modifying files
 ```
 
 ### Packaging & Distribution
+
 ```bash
 npm run package:dxt        # Build production DXT package for Claude Desktop
 npm run generate:dxt       # Generate DXT file from built bundle
@@ -49,6 +53,7 @@ npm run bundle:prod        # Bundle with minification (production)
 The v0.8.x architecture is modular and service-oriented:
 
 ### Core Server Components (`src/server/`)
+
 - **YNABMCPServer.ts** - Main orchestration server, coordinates all services
 - **toolRegistry.ts** - Centralized tool metadata, validation, and execution
 - **cacheManager.ts** - Enhanced caching with LRU eviction, observability, and stale-while-revalidate
@@ -78,13 +83,16 @@ Tools are organized by domain with some using modular sub-directories:
 - **reconcileAccount.ts** - Comprehensive account reconciliation
 
 **Modular Tool Directories:**
+
 - **compareTransactions/** - CSV comparison tools split into parser, matcher, formatter
 - **financialOverview/** - Financial analysis split into schemas, handlers, insights, trends, formatter
 
 ### Type Definitions (`src/types/`)
+
 - **index.ts** - Shared types, error classes, server configuration
 
 ### Utilities (`src/utils/`)
+
 - **money.ts** - Amount conversion (dollars ↔ milliunits)
 - **dateUtils.ts** - Date formatting and validation
 - **amountUtils.ts** - Amount validation and utilities
@@ -92,30 +100,33 @@ Tools are organized by domain with some using modular sub-directories:
 ## Key Architecture Patterns
 
 ### Tool Registry Pattern
+
 All tools register through the centralized `ToolRegistry` for consistent validation, security, and error handling:
 
 ```typescript
 registry.register({
   name: 'my_tool',
   description: 'Tool description',
-  inputSchema: MyToolSchema,        // Zod schema
-  handler: adapt(handleMyTool),     // Handler function
-  defaultArgumentResolver: resolveBudgetId()  // Optional auto-resolution
+  inputSchema: MyToolSchema, // Zod schema
+  handler: adapt(handleMyTool), // Handler function
+  defaultArgumentResolver: resolveBudgetId(), // Optional auto-resolution
 });
 ```
 
 ### Enhanced Caching (v0.8.x)
+
 Use `cacheManager.wrap()` for automatic caching with observability:
 
 ```typescript
 return cacheManager.wrap('cache_key', {
-  ttl: CACHE_TTLS.ACCOUNTS,           // Predefined TTL constants
-  staleWhileRevalidate: 120000,       // Optional background refresh
-  loader: () => expensiveOperation()
+  ttl: CACHE_TTLS.ACCOUNTS, // Predefined TTL constants
+  staleWhileRevalidate: 120000, // Optional background refresh
+  loader: () => expensiveOperation(),
 });
 ```
 
 Cache TTL constants are defined in `cacheManager.ts`:
+
 - `CACHE_TTLS.BUDGETS` - 1 hour (rarely changes)
 - `CACHE_TTLS.ACCOUNTS` - 30 minutes
 - `CACHE_TTLS.CATEGORIES` - 30 minutes
@@ -123,28 +134,30 @@ Cache TTL constants are defined in `cacheManager.ts`:
 - `CACHE_TTLS.LONG` - 1 hour
 
 ### Budget Resolution Pattern
+
 Use `BudgetResolver` for consistent budget ID handling:
 
 ```typescript
 const resolved = BudgetResolver.resolveBudgetId(providedId, defaultId);
 if (typeof resolved !== 'string') {
-  return resolved;  // Returns formatted error response
+  return resolved; // Returns formatted error response
 }
 // Use resolved budget ID
 ```
 
 ### Error Handling Pattern
+
 Use centralized `ErrorHandler` for consistent error responses:
 
 ```typescript
-return ErrorHandler.createErrorResponse(
-  'OPERATION_FAILED',
-  'Detailed error message',
-  { operation: 'tool_name', additionalContext }
-);
+return ErrorHandler.createErrorResponse('OPERATION_FAILED', 'Detailed error message', {
+  operation: 'tool_name',
+  additionalContext,
+});
 ```
 
 ### Dependency Injection
+
 Services use explicit dependency injection for testability:
 
 ```typescript
@@ -163,12 +176,12 @@ YNAB uses **milliunits** internally (1 dollar = 1000 milliunits):
 // Converting amounts
 import { milliunitsToAmount, amountToMilliunits } from './utils/money.js';
 
-const dollars = milliunitsToAmount(25500);  // 25.50
-const milliunits = amountToMilliunits(25.50); // 25500
+const dollars = milliunitsToAmount(25500); // 25.50
+const milliunits = amountToMilliunits(25.5); // 25500
 
 // ALL API calls require milliunits
 await createTransaction({
-  amount: amountToMilliunits(userInputDollars),  // Convert first!
+  amount: amountToMilliunits(userInputDollars), // Convert first!
   // ...
 });
 ```
@@ -176,19 +189,23 @@ await createTransaction({
 ## Testing Guidelines
 
 ### Test File Naming
+
 - `*.test.ts` - Unit tests
 - `*.integration.test.ts` - Integration tests with mocked API
 - `*.e2e.test.ts` - End-to-end tests with real API (requires YNAB token)
 
 ### Test Organization
+
 - Tests live in `__tests__/` directories next to source files
 - Use `src/__tests__/testUtils.ts` for shared test utilities
 - Use `src/__tests__/setup.ts` for global test setup
 
 ### Coverage Requirements
+
 Minimum 80% coverage for all metrics (branches, functions, lines, statements)
 
 ### Running Specific Tests
+
 ```bash
 vitest run src/tools/__tests__/budgetTools.test.ts     # Run single test file
 vitest run --project unit                              # Run only unit tests
@@ -198,21 +215,26 @@ vitest run --project integration                       # Run only integration te
 ## Environment Variables
 
 Required:
+
 - `YNAB_ACCESS_TOKEN` - YNAB Personal Access Token
 
 Optional (Caching):
+
 - `YNAB_MCP_CACHE_MAX_ENTRIES` (default: 1000)
 - `YNAB_MCP_CACHE_DEFAULT_TTL_MS` (default: 1800000 / 30 min)
 - `YNAB_MCP_CACHE_STALE_MS` (default: 120000 / 2 min)
 
 Optional (Output):
+
 - `YNAB_MCP_MINIFY_OUTPUT` (default: true) - Minify JSON responses
 - `YNAB_MCP_PRETTY_SPACES` (default: 2) - Spaces for pretty-print when not minified
 
 Optional (Export):
+
 - `YNAB_EXPORT_PATH` - Directory for exported files (default: ~/Downloads or ~/Documents)
 
 Optional (Testing):
+
 - `TEST_BUDGET_ID` - Specific budget for E2E tests
 - `TEST_ACCOUNT_ID` - Specific account for E2E tests
 - `SKIP_E2E_TESTS` - Skip E2E tests if set
@@ -220,6 +242,7 @@ Optional (Testing):
 ## TypeScript Configuration
 
 Strict mode enabled with extensive safety checks:
+
 - `strict: true` - All strict mode flags enabled
 - `noImplicitAny`, `noImplicitReturns`, `noImplicitThis` - Prevent implicit any usage
 - `noUnusedLocals`, `noUnusedParameters` - Prevent unused variables
@@ -252,6 +275,7 @@ Cache configuration is in `src/server/cacheManager.ts`. Adjust TTLs in the `CACH
 ### Adding Service Modules
 
 Service modules (like diagnostics, resources, prompts) follow a pattern:
+
 1. Create module in `src/server/`
 2. Implement with dependency injection pattern
 3. Register in `YNABMCPServer` constructor
@@ -268,6 +292,7 @@ npm run package:dxt
 Output: `dist/ynab-mcp-server-<version>.dxt`
 
 The DXT includes:
+
 - Bundled Node.js code (single file, no node_modules)
 - Manifest with extension metadata
 - Environment variable configuration schema

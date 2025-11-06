@@ -9,7 +9,10 @@ if (process.env['SKIP_DXT'] === '1') {
 
 const commands = [];
 if (process.platform === 'win32') {
-  commands.push(['powershell', ['-ExecutionPolicy', 'Bypass', '-File', 'scripts/generate-dxt.ps1']]);
+  commands.push([
+    'powershell',
+    ['-ExecutionPolicy', 'Bypass', '-File', 'scripts/generate-dxt.ps1'],
+  ]);
   commands.push(['pwsh', ['-File', 'scripts/generate-dxt.ps1']]);
 } else {
   commands.push(['pwsh', ['-File', 'scripts/generate-dxt.ps1']]);

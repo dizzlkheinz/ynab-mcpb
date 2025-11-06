@@ -39,17 +39,21 @@ function makeTestDeps() {
 
   const errorHandler = {
     createValidationError: vi.fn((message: string, details?: string) => ({
-      content: [{
-        type: 'text',
-        text: `validation:${message}${details ? `:${details}` : ''}`
-      }]
+      content: [
+        {
+          type: 'text',
+          text: `validation:${message}${details ? `:${details}` : ''}`,
+        },
+      ],
     })),
     handleError: vi.fn((error: unknown, context: string) => ({
-      content: [{
-        type: 'text',
-        text: `handled:${context}:${error instanceof Error ? error.message : String(error)}`
-      }]
-    }))
+      content: [
+        {
+          type: 'text',
+          text: `handled:${context}:${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+    })),
   };
 
   const withSecurityWrapper = vi.fn(
@@ -242,9 +246,12 @@ describe('ToolRegistry', () => {
       },
     } as unknown as ynab.API;
 
-    const adapt = <TInput extends Record<string, unknown>>(
-      handler: (api: ynab.API, params: TInput) => Promise<CallToolResult>,
-    ) => async ({ input }: ToolExecutionPayload<TInput>) => handler(mockYnabAPI, input);
+    const adapt =
+      <TInput extends Record<string, unknown>>(
+        handler: (api: ynab.API, params: TInput) => Promise<CallToolResult>,
+      ) =>
+      async ({ input }: ToolExecutionPayload<TInput>) =>
+        handler(mockYnabAPI, input);
 
     registry.register({
       name: 'reconcile_account',
@@ -276,7 +283,9 @@ describe('ToolRegistry', () => {
     expect(mockYnabAPI.accounts.getAccount).toHaveBeenCalled();
 
     const toolNames = registry.listTools().map((tool) => tool.name);
-    expect(toolNames).toEqual(expect.arrayContaining(['reconcile_account', 'reconcile_account_v2']));
+    expect(toolNames).toEqual(
+      expect.arrayContaining(['reconcile_account', 'reconcile_account_v2']),
+    );
   });
 
   it('merges default arguments before validation', async () => {

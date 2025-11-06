@@ -7,16 +7,19 @@ If your `reconcile_account` tool is failing with a "connectivity issue" or simil
 ## Root Causes Identified & Fixed
 
 ### Issue #1: Silent Error Suppression ✅ FIXED
+
 **Problem**: When the CSV comparison fails internally, the actual error is hidden behind generic messages.
 
 **Fix Applied**: Added explicit error catching and reporting with actionable suggestions.
 
 ### Issue #2: CSV Format Mismatch ✅ FIXED
+
 **Problem**: If your bank's CSV format doesn't match the default format expectations, the tool fails silently.
 
 **Fix Applied**: Enabled automatic CSV format detection by default when format isn't explicitly provided.
 
 ### Issue #3: Type-Safety Issues ✅ FIXED
+
 **Problem**: The tool assumed specific data structures from the comparison result, causing crashes if structure was different.
 
 **Fix Applied**: Added proper type casting and null-safe access to all comparison data.
@@ -26,7 +29,9 @@ If your `reconcile_account` tool is failing with a "connectivity issue" or simil
 ## How to Use Reconciliation Now
 
 ### Step 1: Prepare Your Bank CSV
+
 Export your bank statement as CSV from TD Canada Trust. Your CSV should have columns like:
+
 - Date
 - Description/Merchant
 - Amount OR Debit/Credit columns
@@ -34,6 +39,7 @@ Export your bank statement as CSV from TD Canada Trust. Your CSV should have col
 ### Step 2: Run Reconciliation with Proper Settings
 
 #### **Option A: Automatic Format Detection (Recommended)**
+
 ```
 Ask Claude:
 "Reconcile my [ACCOUNT_NAME] account with this bank statement CSV.
@@ -47,6 +53,7 @@ Then provide:
 ```
 
 The tool will now:
+
 1. Auto-detect your CSV format
 2. Parse transactions correctly
 3. Compare with YNAB data
@@ -84,6 +91,7 @@ The tool will now:
 **Cause**: CSV format doesn't match expectations.
 
 **Fix**:
+
 1. Check your CSV has a header row
 2. Verify column names match your bank's format
 3. Try with `auto_detect_format: true` (now default)
@@ -94,6 +102,7 @@ The tool will now:
 **Cause**: CSV parsing failed or columns are named differently.
 
 **Fix**:
+
 ```
 Ask Claude:
 "Can you analyze this CSV file and tell me:
@@ -110,6 +119,7 @@ Then Claude can tell you the exact format to use.
 
 **Fix**:
 This is rare now with the fixes. If it occurs:
+
 1. Make sure your CSV has at least one valid transaction
 2. Try a smaller CSV first (just 5-10 transactions)
 3. Report the full error message
@@ -120,12 +130,14 @@ This is rare now with the fixes. If it occurs:
 
 **Fix**:
 The tool now provides:
+
 - Exact discrepancy amount
 - Likely causes (bank fees, pending transactions, etc.)
 - Suggested resolutions
 - Dual-channel responses (first entry is a human-friendly report, second is structured JSON that includes `csv_format` details and a `schema_url` pointing to the master-branch schema)
 
 Example output:
+
 ```
 Balance Discrepancy Found:
   Bank balance: -$899.02
@@ -140,6 +152,7 @@ Likely Cause: Round amount suggests bank fee or interest
 ## Enhanced Debugging Steps
 
 ### Step 1: Verify Your Setup
+
 ```bash
 # In Claude Desktop, ask:
 "Can you list my budgets and accounts?"
@@ -148,6 +161,7 @@ Likely Cause: Round amount suggests bank fee or interest
 This confirms your token and data access work.
 
 ### Step 2: Analyze CSV First
+
 ```bash
 # Before running full reconciliation, ask:
 "Analyze this CSV file - what are the columns and format?"
@@ -156,13 +170,16 @@ This confirms your token and data access work.
 Claude will tell you the exact structure.
 
 ### Step 3: Run in Dry-Run Mode
+
 ```bash
 # Always start with dry_run: true (default)
 # This shows what WOULD happen without making changes
 ```
 
 ### Step 4: Check Discrepancies
+
 The reconciliation report now shows:
+
 - ✅ Transactions that match perfectly
 - ❌ Missing in YNAB (from bank statement)
 - ❌ Missing in Bank (in YNAB but not on statement)
@@ -170,7 +187,9 @@ The reconciliation report now shows:
 - 💰 Balance verification status
 
 ### Step 5: Review Recommendations
+
 The tool provides actionable recommendations:
+
 - "Consider setting auto_create_transactions=true to create X missing transactions"
 - "Consider setting auto_adjust_dates=true to align Y dates"
 - "X transactions exist in YNAB but not in bank statement"
@@ -180,6 +199,7 @@ The tool provides actionable recommendations:
 ## Your TD Visa Reconciliation Case
 
 ### Your Setup:
+
 - **Budget**: 2025
 - **Account**: K TD FCT VISA
 - **Current YNAB Balance**: -$2,937.51
@@ -187,11 +207,13 @@ The tool provides actionable recommendations:
 - **Discrepancy**: $2,038.49
 
 ### Why It Was Failing:
+
 1. CSV format auto-detection was disabled
 2. Error messages were hidden
 3. The tool had type-safety issues
 
 ### How to Fix It Now:
+
 ```
 "I want to reconcile my K TD FCT VISA account with my October bank statement.
 
@@ -202,6 +224,7 @@ Here's the CSV data..."
 ```
 
 Claude will now:
+
 1. Auto-detect your CSV format
 2. Compare your 80 YNAB transactions with the bank CSV
 3. Show you exactly which transactions don't match
@@ -212,6 +235,7 @@ Claude will now:
 ## CSV Format Examples
 
 ### TD Canada Trust Example (Debit/Credit Columns):
+
 ```
 Date,Description,Debit,Credit
 2025-10-01,GROCERIES,50.00,
@@ -220,6 +244,7 @@ Date,Description,Debit,Credit
 ```
 
 ### Alternative Format (Single Amount Column):
+
 ```
 Transaction Date,Merchant,Amount
 2025-10-01,GROCERIES,-50.00
@@ -228,6 +253,7 @@ Transaction Date,Merchant,Amount
 ```
 
 ### With Negative Amounts (Credit Card Format):
+
 ```
 Date,Description,Amount
 2025-10-01,GROCERIES,-50.00
@@ -240,22 +266,26 @@ Date,Description,Amount
 ## Advanced Usage
 
 ### Auto-Create Missing Transactions:
+
 ```
 After dry-run review, ask:
 "Now actually create the missing transactions using auto_create_transactions: true"
 ```
 
 ### Auto-Update Cleared Status:
+
 ```
 "Update the cleared status for matched transactions using auto_update_cleared_status: true"
 ```
 
 ### Adjust Transaction Dates:
+
 ```
 "Adjust transaction dates to match the bank statement using auto_adjust_dates: true"
 ```
 
 ### All-In-One Reconciliation:
+
 ```
 "Perform full reconciliation with:
 - auto_create_transactions: true
@@ -292,6 +322,7 @@ If reconciliation fails:
 ## What's Different Now
 
 ### Before (What Was Breaking):
+
 ```
 User → reconcile_account
     ↓
@@ -301,6 +332,7 @@ User → reconcile_account
 ```
 
 ### After (What Works Now):
+
 ```
 User → reconcile_account (with CSV)
     ↓

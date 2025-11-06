@@ -1,10 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { findBestMatch, findMatches } from '../matcher.js';
-import type {
-  BankTransaction,
-  YNABTransaction,
-  MatchingConfig,
-} from '../types.js';
+import type { BankTransaction, YNABTransaction, MatchingConfig } from '../types.js';
 
 describe('matcher', () => {
   let config: MatchingConfig;
@@ -53,7 +49,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -100.00,
+          amount: -100.0,
           payee: 'NETFLIX.COM',
           original_csv_row: 2,
         };
@@ -80,7 +76,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.00,
+          amount: -50.0,
           payee: 'Restaurant',
           original_csv_row: 2,
         };
@@ -139,7 +135,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.00,
+          amount: -50.0,
           payee: 'Restaurant',
           original_csv_row: 2,
         };
@@ -206,7 +202,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: 50.00, // Positive (refund)
+          amount: 50.0, // Positive (refund)
           payee: 'Amazon',
           original_csv_row: 2,
         };
@@ -235,7 +231,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.00,
+          amount: -50.0,
           payee: 'Coffee Shop',
           original_csv_row: 2,
         };
@@ -271,7 +267,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.00,
+          amount: -50.0,
           payee: 'Store',
           original_csv_row: 2,
         };
@@ -338,7 +334,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -45.00,
+          amount: -45.0,
           payee: 'Shell',
           original_csv_row: 2,
         };
@@ -366,7 +362,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.00,
+          amount: -50.0,
           payee: 'Store',
           original_csv_row: 2,
         };
@@ -405,7 +401,7 @@ describe('matcher', () => {
         {
           id: 'b2',
           date: '2025-10-16',
-          amount: -100.00,
+          amount: -100.0,
           payee: 'Netflix',
           original_csv_row: 3,
         },
@@ -444,14 +440,14 @@ describe('matcher', () => {
         {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.00,
+          amount: -50.0,
           payee: 'Store',
           original_csv_row: 2,
         },
         {
           id: 'b2',
           date: '2025-10-15',
-          amount: -50.00,
+          amount: -50.0,
           payee: 'Store',
           original_csv_row: 3,
         },
@@ -532,7 +528,7 @@ describe('matcher', () => {
         {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.00,
+          amount: -50.0,
           payee: 'Store',
           original_csv_row: 2,
         },
@@ -561,7 +557,7 @@ describe('matcher', () => {
       const bankTxn: BankTransaction = {
         id: 'b1',
         date: '2025-10-15',
-        amount: -50.00,
+        amount: -50.0,
         payee: 'Store',
         original_csv_row: 2,
       };
@@ -576,7 +572,7 @@ describe('matcher', () => {
       const bankTxn: BankTransaction = {
         id: 'b1',
         date: '2025-10-15',
-        amount: -50.00,
+        amount: -50.0,
         payee: 'Store',
         original_csv_row: 2,
       };
@@ -629,7 +625,7 @@ describe('matcher', () => {
       const bankTxn: BankTransaction = {
         id: 'b1',
         date: '2025-10-15',
-        amount: -10000.00,
+        amount: -10000.0,
         payee: 'Large Purchase',
         original_csv_row: 2,
       };

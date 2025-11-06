@@ -8,9 +8,7 @@ import type * as ynab from 'ynab';
 import * as bankParser from '../compareTransactions/parser.js';
 import type { CSVFormat as ParserCSVFormat } from '../compareTransactions/types.js';
 import { findMatches } from './matcher.js';
-import {
-  DEFAULT_MATCHING_CONFIG,
-} from './types.js';
+import { DEFAULT_MATCHING_CONFIG } from './types.js';
 import type {
   BankTransaction,
   YNABTransaction,
@@ -79,24 +77,18 @@ function daysBetween(dateA: string, dateB: string): number {
 function withinDateTolerance(
   bankDate: string,
   ynabTxns: YNABTransaction[],
-  toleranceDays: number
+  toleranceDays: number,
 ): boolean {
   return ynabTxns.every((txn) => daysBetween(bankDate, txn.date) <= toleranceDays);
 }
 
 function hasMatchingSign(bankAmount: number, ynabTxns: YNABTransaction[]): boolean {
   const bankSign = Math.sign(bankAmount);
-  const sumSign = Math.sign(
-    ynabTxns.reduce((sum, txn) => sum + toDollars(txn.amount), 0)
-  );
+  const sumSign = Math.sign(ynabTxns.reduce((sum, txn) => sum + toDollars(txn.amount), 0));
   return bankSign === sumSign || Math.abs(bankAmount) === 0;
 }
 
-function computeCombinationConfidence(
-  diff: number,
-  tolerance: number,
-  legCount: number
-): number {
+function computeCombinationConfidence(diff: number, tolerance: number, legCount: number): number {
   const safeTolerance = tolerance > 0 ? tolerance : 0.01;
   const ratio = diff / safeTolerance;
   let base = legCount === 2 ? 75 : 70;
@@ -122,7 +114,7 @@ interface CombinationResult {
 function findCombinationMatches(
   unmatchedBank: BankTransaction[],
   unmatchedYNAB: YNABTransaction[],
-  config: MatchingConfig
+  config: MatchingConfig,
 ): CombinationResult {
   if (!ENABLE_COMBINATION_MATCHING || unmatchedBank.length === 0 || unmatchedYNAB.length === 0) {
     return { matches: [], insights: [] };
@@ -209,7 +201,7 @@ function findCombinationMatches(
         type: 'combination_match' as unknown as ReconciliationInsight['type'],
         severity: 'info',
         title: `Combination of ${combo.txns.length} transactions matches ${formatCurrency(
-          bankTxn.amount
+          bankTxn.amount,
         )}`,
         description:
           `${combo.txns.length} YNAB transactions totaling ${descriptionTotal} align with ` +
@@ -240,8 +232,15 @@ type ParserResult =
     }
   | unknown[];
 
-function isParsedCSVData(result: ParserResult): result is Extract<ParserResult, { transactions: unknown[] }> {
-  return typeof result === 'object' && result !== null && !Array.isArray(result) && 'transactions' in result;
+function isParsedCSVData(
+  result: ParserResult,
+): result is Extract<ParserResult, { transactions: unknown[] }> {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    !Array.isArray(result) &&
+    'transactions' in result
+  );
 }
 
 function normalizeDate(value: unknown): string {
@@ -304,12 +303,14 @@ function determineRow(record: Record<string, unknown>, index: number): number {
 }
 
 function convertParserRecord(record: unknown, index: number): BankTransaction {
-  const data = typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : {};
+  const data =
+    typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : {};
 
   const dateValue = normalizeDate(data['date']);
   const amountValue = normalizeAmount(data);
   const payeeValue = normalizePayee(data);
-  const memoValue = typeof data['memo'] === 'string' && data['memo'].trim() ? data['memo'].trim() : undefined;
+  const memoValue =
+    typeof data['memo'] === 'string' && data['memo'].trim() ? data['memo'].trim() : undefined;
   const originalRow = determineRow(data, index);
 
   const transaction: BankTransaction = {
@@ -385,7 +386,7 @@ function categorizeMatches(matches: TransactionMatch[]): {
  */
 function findUnmatchedYNAB(
   ynabTransactions: YNABTransaction[],
-  matches: TransactionMatch[]
+  matches: TransactionMatch[],
 ): YNABTransaction[] {
   const matchedIds = new Set<string>();
 
@@ -404,7 +405,7 @@ function findUnmatchedYNAB(
 function calculateBalances(
   ynabTransactions: YNABTransaction[],
   statementBalance: number,
-  currency: string
+  currency: string,
 ): BalanceInfo {
   let clearedBalance = 0;
   let unclearedBalance = 0;
@@ -442,12 +443,11 @@ function generateSummary(
   suggestedMatches: TransactionMatch[],
   unmatchedBank: BankTransaction[],
   unmatchedYNAB: YNABTransaction[],
-  balances: BalanceInfo
+  balances: BalanceInfo,
 ): ReconciliationSummary {
   // Determine date range from bank transactions
   const dates = bankTransactions.map((t) => t.date).sort();
-  const dateRange =
-    dates.length > 0 ? `${dates[0]} to ${dates[dates.length - 1]}` : 'Unknown';
+  const dateRange = dates.length > 0 ? `${dates[0]} to ${dates[dates.length - 1]}` : 'Unknown';
 
   // Build discrepancy explanation
   let discrepancyExplanation = '';
@@ -466,9 +466,7 @@ function generateSummary(
     }
 
     discrepancyExplanation =
-      actionsNeeded.length > 0
-        ? `Need to ${actionsNeeded.join(', ')}`
-        : 'Manual review required';
+      actionsNeeded.length > 0 ? `Need to ${actionsNeeded.join(', ')}` : 'Manual review required';
   }
 
   return {
@@ -506,7 +504,7 @@ function generateNextSteps(summary: ReconciliationSummary): string[] {
 
   if (summary.unmatched_ynab > 0) {
     steps.push(
-      `Decide what to do with ${summary.unmatched_ynab} unmatched YNAB transactions (unclear/delete/ignore)`
+      `Decide what to do with ${summary.unmatched_ynab} unmatched YNAB transactions (unclear/delete/ignore)`,
     );
   }
 
@@ -572,7 +570,7 @@ function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationI
 
 function nearMatchInsights(
   matches: TransactionMatch[],
-  config: MatchingConfig
+  config: MatchingConfig,
 ): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
 
@@ -624,7 +622,7 @@ function nearMatchInsights(
 
 function anomalyInsights(
   summary: ReconciliationSummary,
-  balances: BalanceInfo
+  balances: BalanceInfo,
 ): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
   const discrepancyAbs = Math.abs(balances.discrepancy.value);
@@ -669,7 +667,7 @@ function detectInsights(
   unmatchedBank: BankTransaction[],
   summary: ReconciliationSummary,
   balances: BalanceInfo,
-  config: MatchingConfig
+  config: MatchingConfig,
 ): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
   const seen = new Set<string>();
@@ -697,7 +695,7 @@ function detectInsights(
 
 function mergeInsights(
   base: ReconciliationInsight[],
-  additional: ReconciliationInsight[]
+  additional: ReconciliationInsight[],
 ): ReconciliationInsight[] {
   if (additional.length === 0) {
     return base;
@@ -730,7 +728,7 @@ export function analyzeReconciliation(
   ynabTransactions: ynab.TransactionDetail[],
   statementBalance: number,
   config: MatchingConfig = DEFAULT_MATCHING_CONFIG as MatchingConfig,
-  currency: string = 'USD'
+  currency: string = 'USD',
 ): ReconciliationAnalysis {
   // Step 1: Parse bank CSV
   const bankTransactions = parseBankStatement(csvContent, csvFilePath);
@@ -769,7 +767,7 @@ export function analyzeReconciliation(
     enrichedSuggestedMatches,
     unmatchedBank,
     unmatchedYNAB,
-    balances
+    balances,
   );
 
   // Step 8: Generate next steps

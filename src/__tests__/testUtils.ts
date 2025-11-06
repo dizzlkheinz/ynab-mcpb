@@ -140,13 +140,7 @@ export function getErrorMessage(result: CallToolResult): string {
       return error;
     }
     if (error && typeof error === 'object') {
-      const {
-        message,
-        userMessage,
-        details,
-        suggestions,
-        name,
-      } = error as Record<string, unknown>;
+      const { message, userMessage, details, suggestions, name } = error as Record<string, unknown>;
 
       let errorMessage = '';
       if (typeof message === 'string' && message.length > 0) {
@@ -435,7 +429,7 @@ export function isRateLimitError(error: any): boolean {
  */
 export async function skipOnRateLimit<T>(
   testFn: () => Promise<T>,
-  context?: { skip: () => void }
+  context?: { skip: () => void },
 ): Promise<T | undefined> {
   try {
     return await testFn();

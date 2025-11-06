@@ -11,10 +11,12 @@ I worked through a comprehensive brainstorming session to redesign the reconcili
 ## Deliverables
 
 ### 1. Reconciliation Tool Complete Redesign
+
 **Document**: `docs/plans/2025-10-31-reconciliation-redesign.md`
 **Commit**: `d1240a2`
 
 **Key Design Decisions**:
+
 - ✅ **Guided workflow** over automatic matching (validated with Codex)
 - ✅ **Three-phase approach**: Analysis → User Review → Execution
 - ✅ **Conservative auto-matching** only for high-confidence (90%+)
@@ -23,6 +25,7 @@ I worked through a comprehensive brainstorming session to redesign the reconcili
 - ✅ **Hybrid response format** - structured data + human-readable summaries
 
 **Matching Algorithm**:
+
 - Two-tier strategy: normalized strings first, fuzzy matching second
 - Amount tolerance: ±$0.01
 - Date tolerance: ±2 days (high), ±5 days (medium)
@@ -30,11 +33,13 @@ I worked through a comprehensive brainstorming session to redesign the reconcili
 - Uncleared YNAB transactions prioritized
 
 **Implementation Plan**:
+
 - Phase 1 (Weeks 1-2): Analysis-only mode
 - Phase 2 (Weeks 3-4): Execution capability
 - Phase 3 (Weeks 5-6): Refinement and tuning
 
 **What This Solves**:
+
 - ❌ No more incorrect date matches
 - ❌ No more false positive matches
 - ✅ User controls all decisions
@@ -44,6 +49,7 @@ I worked through a comprehensive brainstorming session to redesign the reconcili
 ---
 
 ### 2. Project Improvements Roadmap
+
 **Document**: `docs/plans/2025-10-31-project-improvements.md`
 **Commit**: `a7ce48c`
 
@@ -76,6 +82,7 @@ I worked through a comprehensive brainstorming session to redesign the reconcili
    - Proactive problem detection
 
 **Medium-Priority Items**:
+
 - Fixture-based integration tests
 - Mutation testing for math utilities
 - Tool catalog documentation
@@ -91,23 +98,27 @@ I worked through a comprehensive brainstorming session to redesign the reconcili
 All major design decisions were validated with Codex AI:
 
 ### Session 1: Matching Algorithm
+
 ✅ Normalized comparison before fuzzy matching
 ✅ Uncleared transaction priority
 ✅ Opposite-sign refunds as distinct
 ✅ Multiple candidates ranking strategy
 
 ### Session 2: Response Format
+
 ✅ Hybrid approach (structured + summaries)
 ✅ Flexibility for Claude to adapt presentation
 ✅ Forward compatibility
 
 ### Session 3: Execution Approach
+
 ✅ Single execution call (Approach 1)
 ✅ Dry-run preview with same payload
 ✅ Atomic operations for rollback
 ✅ Per-action feedback structure
 
 ### Session 4: Project Improvements
+
 ✅ Performance instrumentation priority
 ✅ Developer CLI value
 ✅ Request coalescing benefits
@@ -119,11 +130,13 @@ All major design decisions were validated with Codex AI:
 ## File Changes
 
 **New Files**:
+
 - `docs/plans/2025-10-31-reconciliation-redesign.md` (729 lines)
 - `docs/plans/2025-10-31-project-improvements.md` (527 lines)
 - `DESIGN_SESSION_SUMMARY.md` (this file)
 
 **Git Commits**:
+
 ```
 d1240a2 - docs: add reconciliation tool redesign specification
 a7ce48c - docs: add comprehensive project improvements roadmap
@@ -134,6 +147,7 @@ a7ce48c - docs: add comprehensive project improvements roadmap
 ## Next Steps (For You to Decide)
 
 ### Immediate (This Week)
+
 1. **Review design documents**
    - Does the reconciliation approach match your workflow?
    - Any concerns or missing requirements?
@@ -144,6 +158,7 @@ a7ce48c - docs: add comprehensive project improvements roadmap
    - Project improvements priority correct?
 
 ### Near-Term (Next 1-2 Weeks)
+
 3. **Start reconciliation Phase 1**
    - Create git worktree for isolated development
    - Implement analysis-only mode
@@ -154,6 +169,7 @@ a7ce48c - docs: add comprehensive project improvements roadmap
    - Enables all future optimization work
 
 ### Medium-Term (Next 1-3 Months)
+
 5. **Execute reconciliation Phases 2-3**
    - Add execution capability
    - Tune based on real usage
@@ -198,6 +214,7 @@ Throughout this session, I prioritized:
 ## What I Learned About Your Use Case
 
 From our conversation, I learned that you:
+
 - Need to match YNAB cleared balance to bank statement balance
 - Have date mismatches between when you enter and when bank posts
 - Want to clear pending transactions when they appear on statement
