@@ -523,6 +523,103 @@ When execution flags are enabled and `dry_run` is `false`, the structured payloa
 - `next_steps` – ordered suggestions for assistants to surface
 - `matches`, `unmatched` – detailed transaction lists with MoneyValue fields for amounts
 - `execution` (optional) – action totals, recommendations, and balance reconciliation metrics (MoneyValue)
+- `recommendations` (optional) – actionable suggestions with complete parameters for executing YNAB tool calls
+
+### Recommendations Field
+
+The `reconcile_account_v2` tool now includes an optional `recommendations` array with actionable suggestions for resolving discrepancies.
+
+#### Recommendation Types
+
+**Create Transaction**
+```json
+{
+  "id": "rec-123",
+  "action_type": "create_transaction",
+  "priority": "high",
+  "confidence": 0.95,
+  "message": "Create transaction for EvoCarShare",
+  "reason": "This transaction exactly matches your $22.22 discrepancy",
+  "estimated_impact": {
+    "value": 22.22,
+    "value_display": "$22.22",
+    "currency": "USD"
+  },
+  "account_id": "abc123",
+  "parameters": {
+    "account_id": "abc123",
+    "date": "2024-01-15",
+    "amount": 22.22,
+    "payee_name": "EvoCarShare",
+    "memo": "Car rental",
+    "cleared": "cleared",
+    "approved": true
+  }
+}
+```
+
+**Update Cleared Status**
+```json
+{
+  "id": "rec-456",
+  "action_type": "update_cleared",
+  "priority": "low",
+  "confidence": 0.6,
+  "message": "Mark transaction as cleared",
+  "parameters": {
+    "transaction_id": "ynab-txn-789",
+    "cleared": "cleared"
+  }
+}
+```
+
+**Review Duplicate**
+```json
+{
+  "id": "rec-789",
+  "action_type": "review_duplicate",
+  "priority": "medium",
+  "confidence": 0.7,
+  "message": "Review possible duplicate",
+  "parameters": {
+    "candidate_ids": ["ynab-1", "ynab-2"],
+    "suggested_match_id": "ynab-1"
+  }
+}
+```
+
+#### Executing Recommendations
+
+Recommendations include complete parameters for YNAB MCP tool calls:
+
+```typescript
+// For create_transaction recommendations:
+const rec = recommendations.find(r => r.action_type === 'create_transaction');
+if (rec) {
+  await create_transaction({
+    budget_id: 'your-budget-id',
+    ...rec.parameters
+  });
+}
+
+// For update_cleared recommendations:
+const updateRec = recommendations.find(r => r.action_type === 'update_cleared');
+if (updateRec) {
+  await update_transaction({
+    budget_id: 'your-budget-id',
+    transaction_id: updateRec.parameters.transaction_id,
+    transaction: {
+      cleared: updateRec.parameters.cleared
+    }
+  });
+}
+```
+
+#### Recommendation Priority
+
+- **High**: Exact matches with 90%+ confidence, resolve immediately
+- **Medium**: Likely matches with 60-89% confidence, review before executing
+- **Low**: Suggestions requiring manual review, investigate further
 
 ### reconcile_account_legacy
 
