@@ -1,4 +1,4 @@
-import { toMoneyValue, toMoneyValueFromDecimal, toMilli } from '../utils/money.js';
+import { toMoneyValue, toMoneyValueFromDecimal } from '../utils/money.js';
 import type {
   ReconciliationAnalysis,
   TransactionMatch,
@@ -108,7 +108,7 @@ const convertInsight = (insight: ReconciliationInsight) => ({
   evidence: insight.evidence ?? {},
 });
 
-const convertSummary = (analysis: ReconciliationAnalysis, currency: string) => ({
+const convertSummary = (analysis: ReconciliationAnalysis) => ({
   statement_date_range: analysis.summary.statement_date_range,
   bank_transactions_count: analysis.summary.bank_transactions_count,
   ynab_transactions_count: analysis.summary.ynab_transactions_count,
@@ -116,28 +116,23 @@ const convertSummary = (analysis: ReconciliationAnalysis, currency: string) => (
   suggested_matches: analysis.summary.suggested_matches,
   unmatched_bank: analysis.summary.unmatched_bank,
   unmatched_ynab: analysis.summary.unmatched_ynab,
-  current_cleared_balance: toMoneyValueFromDecimal(analysis.summary.current_cleared_balance, currency),
-  target_statement_balance: toMoneyValueFromDecimal(analysis.summary.target_statement_balance, currency),
-  discrepancy: toMoneyValueFromDecimal(analysis.summary.discrepancy, currency),
+  current_cleared_balance: analysis.summary.current_cleared_balance,
+  target_statement_balance: analysis.summary.target_statement_balance,
+  discrepancy: analysis.summary.discrepancy,
   discrepancy_explanation: analysis.summary.discrepancy_explanation,
 });
 
-const convertBalanceInfo = (analysis: ReconciliationAnalysis, currency: string) => {
-  const cleared = toMoneyValueFromDecimal(analysis.balance_info.current_cleared, currency);
-  const uncleared = toMoneyValueFromDecimal(analysis.balance_info.current_uncleared, currency);
-  const total = toMoneyValueFromDecimal(analysis.balance_info.current_total, currency);
-  const target = toMoneyValueFromDecimal(analysis.balance_info.target_statement, currency);
-  const discrepancyMoney = toMoneyValueFromDecimal(analysis.balance_info.discrepancy, currency);
-  const discrepancyMilli = toMilli(analysis.balance_info.discrepancy);
+const convertBalanceInfo = (analysis: ReconciliationAnalysis) => {
+  const discrepancyMilli = analysis.balance_info.discrepancy.value_milliunits;
   const direction =
     discrepancyMilli === 0 ? 'balanced' : discrepancyMilli > 0 ? 'ynab_higher' : 'bank_higher';
 
   return {
-    current_cleared: cleared,
-    current_uncleared: uncleared,
-    current_total: total,
-    target_statement: target,
-    discrepancy: discrepancyMoney,
+    current_cleared: analysis.balance_info.current_cleared,
+    current_uncleared: analysis.balance_info.current_uncleared,
+    current_total: analysis.balance_info.current_total,
+    target_statement: analysis.balance_info.target_statement,
+    discrepancy: analysis.balance_info.discrepancy,
     discrepancy_direction: direction,
     on_track: analysis.balance_info.on_track,
   };
@@ -228,8 +223,8 @@ const buildHumanNarrative = (
 ): string => {
   const accountLabel = options.accountName ?? 'Account';
   const currency = options.currencyCode ?? 'USD';
-  const balance = convertBalanceInfo(analysis, currency);
-  const summary = convertSummary(analysis, currency);
+  const balance = convertBalanceInfo(analysis);
+  const summary = convertSummary(analysis);
   const topInsights = selectTopInsights(analysis.insights);
 
   const lines: string[] = [];
@@ -306,8 +301,8 @@ export const buildReconciliationV2Payload = (
       id: options.accountId,
       name: options.accountName,
     },
-    summary: convertSummary(analysis, currency),
-    balance: convertBalanceInfo(analysis, currency),
+    summary: convertSummary(analysis),
+    balance: convertBalanceInfo(analysis),
     insights: analysis.insights.map(convertInsight),
     next_steps: analysis.next_steps,
     matches: {

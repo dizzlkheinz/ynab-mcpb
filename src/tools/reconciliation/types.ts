@@ -3,6 +3,8 @@
  * Based on the 2025-10-31 reconciliation redesign specification
  */
 
+import type { MoneyValue } from '../../utils/money.js';
+
 /**
  * Matching confidence levels
  */
@@ -75,19 +77,19 @@ export interface TransactionMatch {
 }
 
 /**
- * Balance information
+ * Balance information with structured monetary values
  */
 export interface BalanceInfo {
-  current_cleared: number;
-  current_uncleared: number;
-  current_total: number;
-  target_statement: number;
-  discrepancy: number;
+  current_cleared: MoneyValue;
+  current_uncleared: MoneyValue;
+  current_total: MoneyValue;
+  target_statement: MoneyValue;
+  discrepancy: MoneyValue;
   on_track: boolean;
 }
 
 /**
- * Reconciliation summary statistics
+ * Reconciliation summary statistics with structured monetary values
  */
 export interface ReconciliationSummary {
   statement_date_range: string;
@@ -97,9 +99,9 @@ export interface ReconciliationSummary {
   suggested_matches: number;
   unmatched_bank: number;
   unmatched_ynab: number;
-  current_cleared_balance: number;
-  target_statement_balance: number;
-  discrepancy: number;
+  current_cleared_balance: MoneyValue;
+  target_statement_balance: MoneyValue;
+  discrepancy: MoneyValue;
   discrepancy_explanation: string;
 }
 

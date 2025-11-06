@@ -2,15 +2,15 @@ import { describe, it, expect } from 'vitest';
 import type { ReconciliationAnalysis, TransactionMatch } from '../../types.js';
 import { buildReconciliationV2Payload } from '../../../reconcileV2Adapter.js';
 
-const makeMoney = (value: number) => ({
+const makeMoney = (value: number, currency = 'USD') => ({
   value_milliunits: Math.round(value * 1000),
   value: value,
   value_display: `$${value.toFixed(2)}`,
-  currency: 'USD',
+  currency,
   direction: value === 0 ? 'balanced' : value > 0 ? 'credit' : 'debit',
 });
 
-const buildAnalysis = (): ReconciliationAnalysis => ({
+const buildAnalysis = (currency = 'USD'): ReconciliationAnalysis => ({
   success: true,
   phase: 'analysis',
   summary: {
@@ -21,9 +21,9 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
     suggested_matches: 1,
     unmatched_bank: 0,
     unmatched_ynab: 0,
-    current_cleared_balance: -899.02,
-    target_statement_balance: -899.02,
-    discrepancy: 0,
+    current_cleared_balance: makeMoney(-899.02, currency),
+    target_statement_balance: makeMoney(-899.02, currency),
+    discrepancy: makeMoney(0, currency),
     discrepancy_explanation: 'Balanced',
   },
   auto_matches: [] as TransactionMatch[],
@@ -31,11 +31,11 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
   unmatched_bank: [],
   unmatched_ynab: [],
   balance_info: {
-    current_cleared: -899.02,
-    current_uncleared: 0,
-    current_total: -899.02,
-    target_statement: -899.02,
-    discrepancy: 0,
+    current_cleared: makeMoney(-899.02, currency),
+    current_uncleared: makeMoney(0, currency),
+    current_total: makeMoney(-899.02, currency),
+    target_statement: makeMoney(-899.02, currency),
+    discrepancy: makeMoney(0, currency),
     on_track: true,
   },
   next_steps: ['Nothing to do'],
@@ -44,7 +44,7 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
 
 describe('scenario: non-USD formatting in adapter payload', () => {
   it('emits CAD currency values and csv_format metadata when provided', () => {
-    const payload = buildReconciliationV2Payload(buildAnalysis(), {
+    const payload = buildReconciliationV2Payload(buildAnalysis('CAD'), {
       accountName: 'CAD VISA',
       accountId: 'acct-123',
       currencyCode: 'CAD',

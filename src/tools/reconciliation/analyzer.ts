@@ -21,6 +21,7 @@ import type {
   ReconciliationSummary,
   ReconciliationInsight,
 } from './types.js';
+import { toMoneyValueFromDecimal } from '../../utils/money.js';
 
 /**
  * Convert YNAB API transaction to simplified format
@@ -402,7 +403,8 @@ function findUnmatchedYNAB(
  */
 function calculateBalances(
   ynabTransactions: YNABTransaction[],
-  statementBalance: number
+  statementBalance: number,
+  currency: string
 ): BalanceInfo {
   let clearedBalance = 0;
   let unclearedBalance = 0;
@@ -421,11 +423,11 @@ function calculateBalances(
   const discrepancy = clearedBalance - statementBalance;
 
   return {
-    current_cleared: clearedBalance,
-    current_uncleared: unclearedBalance,
-    current_total: totalBalance,
-    target_statement: statementBalance,
-    discrepancy: discrepancy,
+    current_cleared: toMoneyValueFromDecimal(clearedBalance, currency),
+    current_uncleared: toMoneyValueFromDecimal(unclearedBalance, currency),
+    current_total: toMoneyValueFromDecimal(totalBalance, currency),
+    target_statement: toMoneyValueFromDecimal(statementBalance, currency),
+    discrepancy: toMoneyValueFromDecimal(discrepancy, currency),
     on_track: Math.abs(discrepancy) < 0.01, // Within 1 cent
   };
 }
@@ -625,17 +627,17 @@ function anomalyInsights(
   balances: BalanceInfo
 ): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
-  const discrepancyAbs = Math.abs(balances.discrepancy);
+  const discrepancyAbs = Math.abs(balances.discrepancy.value);
 
   if (discrepancyAbs >= 1) {
     insights.push({
       id: 'balance-gap',
       type: 'anomaly',
       severity: discrepancyAbs >= 100 ? 'critical' : 'warning',
-      title: `Cleared balance off by ${formatCurrency(balances.discrepancy)}`,
+      title: `Cleared balance off by ${balances.discrepancy.value_display}`,
       description:
-        `YNAB cleared balance is ${formatCurrency(balances.current_cleared)} but the statement expects ` +
-        `${formatCurrency(balances.target_statement)}. Focus on closing this gap.`,
+        `YNAB cleared balance is ${balances.current_cleared.value_display} but the statement expects ` +
+        `${balances.target_statement.value_display}. Focus on closing this gap.`,
       evidence: {
         cleared_balance: balances.current_cleared,
         statement_balance: balances.target_statement,
@@ -727,7 +729,8 @@ export function analyzeReconciliation(
   csvFilePath: string | undefined,
   ynabTransactions: ynab.TransactionDetail[],
   statementBalance: number,
-  config: MatchingConfig = DEFAULT_MATCHING_CONFIG as MatchingConfig
+  config: MatchingConfig = DEFAULT_MATCHING_CONFIG as MatchingConfig,
+  currency: string = 'USD'
 ): ReconciliationAnalysis {
   // Step 1: Parse bank CSV
   const bankTransactions = parseBankStatement(csvContent, csvFilePath);
@@ -756,7 +759,7 @@ export function analyzeReconciliation(
   const enrichedSuggestedMatches = [...suggestedMatches, ...combinationMatches];
 
   // Step 6: Calculate balances
-  const balances = calculateBalances(convertedYNABTxns, statementBalance);
+  const balances = calculateBalances(convertedYNABTxns, statementBalance, currency);
 
   // Step 7: Generate summary
   const summary = generateSummary(

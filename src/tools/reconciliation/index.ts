@@ -154,7 +154,8 @@ export async function handleReconcileAccountV2(
         params.csv_file_path,
         ynabTransactions,
         params.statement_balance,
-        config
+        config,
+        currencyCode
       );
 
       const initialAccount: AccountSnapshot = {
