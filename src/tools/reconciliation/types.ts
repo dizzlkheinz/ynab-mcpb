@@ -199,3 +199,95 @@ export interface ParsedCSVData {
   valid_rows: number;
   errors: string[];
 }
+
+/**
+ * Base recommendation interface
+ */
+export interface BaseRecommendation {
+  id: string;
+  priority: 'high' | 'medium' | 'low';
+  confidence: number; // 0-1
+  message: string;
+  reason: string;
+  estimated_impact: MoneyValue;
+  account_id: string;
+  source_insight_id?: string;
+  metadata: {
+    version: string; // "1.0"
+    created_at: string; // ISO timestamp
+  };
+}
+
+/**
+ * Create transaction action
+ */
+export interface CreateTransactionRecommendation extends BaseRecommendation {
+  action_type: 'create_transaction';
+  parameters: {
+    account_id: string;
+    date: string; // YYYY-MM-DD
+    amount: number; // dollars (will be converted to milliunits)
+    payee_name: string;
+    memo?: string;
+    cleared: 'cleared' | 'uncleared';
+    approved: boolean;
+    category_id?: string;
+  };
+}
+
+/**
+ * Update cleared status action
+ */
+export interface UpdateClearedRecommendation extends BaseRecommendation {
+  action_type: 'update_cleared';
+  parameters: {
+    transaction_id: string;
+    cleared: 'cleared' | 'reconciled';
+  };
+}
+
+/**
+ * Review duplicate action
+ */
+export interface ReviewDuplicateRecommendation extends BaseRecommendation {
+  action_type: 'review_duplicate';
+  parameters: {
+    candidate_ids: string[]; // YNAB transaction IDs
+    bank_transaction: BankTransaction;
+    suggested_match_id?: string; // Best guess
+  };
+}
+
+/**
+ * Manual review action (fallback)
+ */
+export interface ManualReviewRecommendation extends BaseRecommendation {
+  action_type: 'manual_review';
+  parameters: {
+    issue_type: 'complex_match' | 'large_discrepancy' | 'data_quality' | 'unknown';
+    related_transactions?: Array<{
+      source: 'bank' | 'ynab';
+      id: string;
+      description: string;
+    }>;
+  };
+}
+
+/**
+ * Discriminated union of all recommendation types
+ */
+export type ActionableRecommendation =
+  | CreateTransactionRecommendation
+  | UpdateClearedRecommendation
+  | ReviewDuplicateRecommendation
+  | ManualReviewRecommendation;
+
+/**
+ * Recommendation generation context
+ */
+export interface RecommendationContext {
+  account_id: string;
+  budget_id: string;
+  analysis: ReconciliationAnalysis;
+  matching_config: MatchingConfig;
+}
