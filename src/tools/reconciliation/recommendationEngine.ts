@@ -11,7 +11,7 @@ import type {
   BankTransaction,
   YNABTransaction,
 } from './types.js';
-import { toMoneyValueFromDecimal } from '../../utils/money.js';
+import { toMoneyValueFromDecimal, fromMilli } from '../../utils/money.js';
 
 const RECOMMENDATION_VERSION = '1.0';
 
@@ -214,9 +214,9 @@ function createCombinationReviewRecommendation(
   const bankTxn = match.bank_transaction;
   const candidateIds = match.candidates?.map((candidate) => candidate.ynab_transaction.id) ?? [];
 
-  // Calculate total amount from candidates for context
+  // Calculate total amount from candidates for context (convert from milliunits to decimal)
   const candidateTotalAmount = match.candidates?.reduce(
-    (sum, candidate) => sum + candidate.ynab_transaction.amount,
+    (sum, candidate) => sum + fromMilli(candidate.ynab_transaction.amount),
     0
   ) ?? 0;
 
