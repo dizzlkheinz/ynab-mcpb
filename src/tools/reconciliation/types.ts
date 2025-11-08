@@ -200,3 +200,115 @@ export interface ParsedCSVData {
   valid_rows: number;
   errors: string[];
 }
+
+/**
+ * Priority levels for actionable recommendations
+ */
+export type RecommendationPriority = 'high' | 'medium' | 'low';
+
+/**
+ * Base fields common to all recommendation types
+ */
+export interface BaseRecommendation {
+  /** Unique identifier for this recommendation */
+  id: string;
+  /** Priority level for execution */
+  priority: RecommendationPriority;
+  /** Confidence score 0-1 (higher = more confident) */
+  confidence: number;
+  /** Human-readable message describing the recommendation */
+  message: string;
+  /** Explanation of why this recommendation was generated */
+  reason: string;
+  /** Estimated impact on reconciliation balance */
+  estimated_impact: MoneyValue;
+  /** YNAB account ID this recommendation applies to */
+  account_id: string;
+  /** Optional link to the insight that generated this recommendation */
+  source_insight_id?: string;
+  /** Additional metadata (version, timestamps, etc.) */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Recommendation to create a new YNAB transaction
+ */
+export interface CreateTransactionRecommendation extends BaseRecommendation {
+  action_type: 'create_transaction';
+  parameters: {
+    account_id: string;
+    date: string;
+    amount: number;
+    payee_name: string;
+    memo?: string;
+    cleared: 'cleared' | 'uncleared';
+    approved: boolean;
+    category_id?: string;
+  };
+}
+
+/**
+ * Recommendation to update a transaction's cleared status
+ */
+export interface UpdateClearedRecommendation extends BaseRecommendation {
+  action_type: 'update_cleared';
+  parameters: {
+    transaction_id: string;
+    cleared: 'cleared' | 'uncleared' | 'reconciled';
+  };
+}
+
+/**
+ * Recommendation to review potential duplicate transactions
+ */
+export interface ReviewDuplicateRecommendation extends BaseRecommendation {
+  action_type: 'review_duplicate';
+  parameters: {
+    candidate_ids: string[];
+    bank_transaction?: BankTransaction;
+    suggested_match_id?: string;
+  };
+}
+
+/**
+ * Related transaction reference for manual review
+ */
+export interface RelatedTransaction {
+  source: 'bank' | 'ynab';
+  id: string;
+  description: string;
+}
+
+/**
+ * Recommendation requiring manual investigation
+ */
+export interface ManualReviewRecommendation extends BaseRecommendation {
+  action_type: 'manual_review';
+  parameters: {
+    issue_type: 'complex_match' | 'large_discrepancy' | 'unknown';
+    related_transactions?: RelatedTransaction[];
+  };
+}
+
+/**
+ * Union type of all possible recommendation types (discriminated by action_type)
+ */
+export type ActionableRecommendation =
+  | CreateTransactionRecommendation
+  | UpdateClearedRecommendation
+  | ReviewDuplicateRecommendation
+  | ManualReviewRecommendation;
+
+/**
+ * Context passed to recommendation engine for generating recommendations
+ */
+export interface RecommendationContext {
+  /** Account ID for the recommendations */
+  account_id: string;
+  /** Budget ID (reserved for future category suggestions) */
+  budget_id: string;
+  /** The reconciliation analysis results */
+  analysis: ReconciliationAnalysis;
+  /** Matching configuration used during analysis */
+  matching_config: MatchingConfig;
+}
