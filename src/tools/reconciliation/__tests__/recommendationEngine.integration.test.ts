@@ -81,7 +81,7 @@ describe('Recommendation Engine Integration', () => {
 
       if (rec.action_type === 'create_transaction') {
         expect(rec.parameters.payee_name).toContain('Coffee Shop');
-        expect(rec.parameters.amount).toBe(22.22);
+        expect(rec.parameters.amount).toBe(22220); // In milliunits
         expect(rec.parameters.date).toBe('2024-01-15');
         expect(rec.parameters.cleared).toBe('cleared');
       }
@@ -130,7 +130,7 @@ describe('Recommendation Engine Integration', () => {
       ) as Extract<ActionableRecommendation, { action_type: 'create_transaction' }> | undefined;
 
       expect(evoCarShareRec).toBeDefined();
-      expect(evoCarShareRec!.parameters.amount).toBe(22.22);
+      expect(evoCarShareRec!.parameters.amount).toBe(22220); // In milliunits
       expect(evoCarShareRec!.parameters.date).toBe('2024-01-15');
       expect(evoCarShareRec!.priority).toMatch(/^(high|medium)$/); // Should be high or medium priority
       expect(evoCarShareRec!.confidence).toBeGreaterThan(0.5); // Reasonable confidence
@@ -502,7 +502,7 @@ describe('Recommendation Engine Integration', () => {
 
       // Large amounts should have high or medium priority
       for (const rec of createRecs) {
-        if (rec.action_type === 'create_transaction' && Math.abs(rec.parameters.amount) >= 500) {
+        if (rec.action_type === 'create_transaction' && Math.abs(rec.parameters.amount) >= 500000) { // 500 dollars in milliunits
           expect(rec.priority).toMatch(/^(high|medium)$/);
         }
       }
@@ -593,7 +593,7 @@ describe('Recommendation Engine Integration', () => {
       expect(createRec).toBeDefined();
       expect(createRec!.parameters.account_id).toBe('test-account-id');
       expect(createRec!.parameters.date).toBe('2024-01-15');
-      expect(createRec!.parameters.amount).toBe(25.5);
+      expect(createRec!.parameters.amount).toBe(25500); // In milliunits
       expect(createRec!.parameters.payee_name).toBe('Test Store');
       expect(createRec!.parameters.cleared).toMatch(/^(cleared|uncleared)$/);
       expect(typeof createRec!.parameters.approved).toBe('boolean');

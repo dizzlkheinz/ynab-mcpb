@@ -594,11 +594,12 @@ Recommendations include complete parameters for YNAB MCP tool calls:
 
 ```typescript
 // For create_transaction recommendations:
+// Note: Recommendation amounts are already in milliunits, ready to use directly
 const rec = recommendations.find(r => r.action_type === 'create_transaction');
 if (rec) {
   await create_transaction({
     budget_id: 'your-budget-id',
-    ...rec.parameters
+    ...rec.parameters // Parameters already contain amounts in milliunits
   });
 }
 

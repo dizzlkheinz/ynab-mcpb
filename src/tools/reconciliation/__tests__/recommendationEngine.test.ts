@@ -258,7 +258,7 @@ describe('recommendationEngine', () => {
         expect(rec.confidence).toBe(0.8); // CONFIDENCE.UNMATCHED_BANK
         expect(rec.parameters.account_id).toBe('test-account-id');
         expect(rec.parameters.date).toBe('2024-01-20');
-        expect(rec.parameters.amount).toBe(-75.5);
+        expect(rec.parameters.amount).toBe(-75500); // In milliunits
         expect(rec.parameters.payee_name).toBe('Coffee Shop');
         expect(rec.parameters.cleared).toBe('cleared');
         expect(rec.parameters.approved).toBe(true);
@@ -456,7 +456,7 @@ describe('recommendationEngine', () => {
         expect(rec.action_type).toBe('create_transaction');
         expect(rec.priority).toBe('high');
         expect(rec.confidence).toBe(0.95); // CONFIDENCE.CREATE_EXACT_MATCH
-        expect(rec.parameters.amount).toBe(-45.0);
+        expect(rec.parameters.amount).toBe(-45000); // In milliunits
       });
 
       it('should create manual_review for combination match with multiple candidates', () => {
@@ -538,9 +538,9 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(-123.45);
+        expect(rec.parameters.amount).toBe(-123450); // In milliunits
         expect(rec.parameters.amount).toBeLessThan(0);
-        expect(rec.estimated_impact.value).toBe(-123.45);
+        expect(rec.estimated_impact.value).toBe(-123.45); // Estimated impact stays in dollars
       });
 
       it('should preserve positive amounts for income in create_transaction', () => {
@@ -559,9 +559,9 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(500.0);
+        expect(rec.parameters.amount).toBe(500000); // In milliunits
         expect(rec.parameters.amount).toBeGreaterThan(0);
-        expect(rec.estimated_impact.value).toBe(500.0);
+        expect(rec.estimated_impact.value).toBe(500.0); // Estimated impact stays in dollars
       });
 
       it('should preserve negative amounts in suggested match create_transaction', () => {
@@ -584,7 +584,7 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(-99.99);
+        expect(rec.parameters.amount).toBe(-99990); // In milliunits
       });
 
       it('should handle zero amounts correctly', () => {
@@ -600,7 +600,7 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(0);
+        expect(rec.parameters.amount).toBe(0); // Zero in milliunits is still zero
       });
     });
 
@@ -909,7 +909,7 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(-0.01);
+        expect(rec.parameters.amount).toBe(-10); // In milliunits (0.01 * 1000)
       });
 
       it('should handle transactions with very large amounts', () => {
@@ -925,7 +925,7 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(-999999.99);
+        expect(rec.parameters.amount).toBe(-999999990); // In milliunits
       });
     });
 

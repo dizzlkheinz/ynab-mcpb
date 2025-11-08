@@ -11,7 +11,7 @@ import type {
   BankTransaction,
   YNABTransaction,
 } from './types.js';
-import { toMoneyValueFromDecimal, fromMilli } from '../../utils/money.js';
+import { toMoneyValueFromDecimal, fromMilli, toMilli } from '../../utils/money.js';
 
 const RECOMMENDATION_VERSION = '1.0';
 
@@ -174,7 +174,7 @@ function createSuggestedMatchRecommendation(
   const parameters: CreateTransactionRecommendation['parameters'] = {
     account_id: context.account_id,
     date: bankTxn.date,
-    amount: bankTxn.amount,
+    amount: toMilli(bankTxn.amount), // Convert dollars to milliunits for create_transaction
     payee_name: bankTxn.payee,
     cleared: 'cleared',
     approved: true,
@@ -410,7 +410,7 @@ function createUnmatchedBankRecommendation(
   const parameters: CreateTransactionRecommendation['parameters'] = {
     account_id: context.account_id,
     date: txn.date,
-    amount: txn.amount,
+    amount: toMilli(txn.amount), // Convert dollars to milliunits for create_transaction
     payee_name: txn.payee,
     cleared: 'cleared',
     approved: true,
