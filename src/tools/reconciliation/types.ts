@@ -202,32 +202,43 @@ export interface ParsedCSVData {
 }
 
 /**
- * Base recommendation interface
+ * Priority levels for actionable recommendations
+ */
+export type RecommendationPriority = 'high' | 'medium' | 'low';
+
+/**
+ * Base fields common to all recommendation types
  */
 export interface BaseRecommendation {
+  /** Unique identifier for this recommendation */
   id: string;
-  priority: 'high' | 'medium' | 'low';
-  confidence: number; // 0-1
+  /** Priority level for execution */
+  priority: RecommendationPriority;
+  /** Confidence score 0-1 (higher = more confident) */
+  confidence: number;
+  /** Human-readable message describing the recommendation */
   message: string;
+  /** Explanation of why this recommendation was generated */
   reason: string;
+  /** Estimated impact on reconciliation balance */
   estimated_impact: MoneyValue;
+  /** YNAB account ID this recommendation applies to */
   account_id: string;
+  /** Optional link to the insight that generated this recommendation */
   source_insight_id?: string;
-  metadata: {
-    version: string; // "1.0"
-    created_at: string; // ISO timestamp
-  };
+  /** Additional metadata (version, timestamps, etc.) */
+  metadata?: Record<string, unknown>;
 }
 
 /**
- * Create transaction action
+ * Recommendation to create a new YNAB transaction
  */
 export interface CreateTransactionRecommendation extends BaseRecommendation {
   action_type: 'create_transaction';
   parameters: {
     account_id: string;
-    date: string; // YYYY-MM-DD
-    amount: number; // dollars (will be converted to milliunits)
+    date: string;
+    amount: number;
     payee_name: string;
     memo?: string;
     cleared: 'cleared' | 'uncleared';
@@ -237,45 +248,50 @@ export interface CreateTransactionRecommendation extends BaseRecommendation {
 }
 
 /**
- * Update cleared status action
+ * Recommendation to update a transaction's cleared status
  */
 export interface UpdateClearedRecommendation extends BaseRecommendation {
   action_type: 'update_cleared';
   parameters: {
     transaction_id: string;
-    cleared: 'cleared' | 'reconciled';
+    cleared: 'cleared' | 'uncleared' | 'reconciled';
   };
 }
 
 /**
- * Review duplicate action
+ * Recommendation to review potential duplicate transactions
  */
 export interface ReviewDuplicateRecommendation extends BaseRecommendation {
   action_type: 'review_duplicate';
   parameters: {
-    candidate_ids: string[]; // YNAB transaction IDs
-    bank_transaction: BankTransaction;
-    suggested_match_id?: string; // Best guess
+    candidate_ids: string[];
+    bank_transaction?: BankTransaction;
+    suggested_match_id?: string;
   };
 }
 
 /**
- * Manual review action (fallback)
+ * Related transaction reference for manual review
+ */
+export interface RelatedTransaction {
+  source: 'bank' | 'ynab';
+  id: string;
+  description: string;
+}
+
+/**
+ * Recommendation requiring manual investigation
  */
 export interface ManualReviewRecommendation extends BaseRecommendation {
   action_type: 'manual_review';
   parameters: {
-    issue_type: 'complex_match' | 'large_discrepancy' | 'data_quality' | 'unknown';
-    related_transactions?: Array<{
-      source: 'bank' | 'ynab';
-      id: string;
-      description: string;
-    }>;
+    issue_type: 'complex_match' | 'large_discrepancy' | 'unknown';
+    related_transactions?: RelatedTransaction[];
   };
 }
 
 /**
- * Discriminated union of all recommendation types
+ * Union type of all possible recommendation types (discriminated by action_type)
  */
 export type ActionableRecommendation =
   | CreateTransactionRecommendation
@@ -284,11 +300,15 @@ export type ActionableRecommendation =
   | ManualReviewRecommendation;
 
 /**
- * Recommendation generation context
+ * Context passed to recommendation engine for generating recommendations
  */
 export interface RecommendationContext {
+  /** Account ID for the recommendations */
   account_id: string;
+  /** Budget ID (reserved for future category suggestions) */
   budget_id: string;
+  /** The reconciliation analysis results */
   analysis: ReconciliationAnalysis;
+  /** Matching configuration used during analysis */
   matching_config: MatchingConfig;
 }

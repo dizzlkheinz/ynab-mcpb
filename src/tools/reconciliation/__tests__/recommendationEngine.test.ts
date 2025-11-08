@@ -258,7 +258,7 @@ describe('recommendationEngine', () => {
         expect(rec.confidence).toBe(0.8); // CONFIDENCE.UNMATCHED_BANK
         expect(rec.parameters.account_id).toBe('test-account-id');
         expect(rec.parameters.date).toBe('2024-01-20');
-        expect(rec.parameters.amount).toBe(-75.5);
+        expect(rec.parameters.amount).toBe(-75500); // In milliunits
         expect(rec.parameters.payee_name).toBe('Coffee Shop');
         expect(rec.parameters.cleared).toBe('cleared');
         expect(rec.parameters.approved).toBe(true);
@@ -456,7 +456,68 @@ describe('recommendationEngine', () => {
         expect(rec.action_type).toBe('create_transaction');
         expect(rec.priority).toBe('high');
         expect(rec.confidence).toBe(0.95); // CONFIDENCE.CREATE_EXACT_MATCH
-        expect(rec.parameters.amount).toBe(-45.0);
+        expect(rec.parameters.amount).toBe(-45000); // In milliunits
+      });
+
+      it('should create manual_review for combination match with multiple candidates', () => {
+        const bankTxn = createBankTransaction({ amount: -100.0, payee: 'Split Payment' });
+        const ynabTxn1 = createYNABTransaction({ id: 'y1', amount: -50000, payee_name: 'Vendor A' });
+        const ynabTxn2 = createYNABTransaction({ id: 'y2', amount: -50000, payee_name: 'Vendor B' });
+
+        const suggestedMatch: TransactionMatch = {
+          bank_transaction: bankTxn,
+          candidates: [
+            {
+              ynab_transaction: ynabTxn1,
+              confidence: 60,
+              match_reason: 'Partial amount match',
+              explanation: 'Amount matches half of bank transaction',
+            },
+            {
+              ynab_transaction: ynabTxn2,
+              confidence: 60,
+              match_reason: 'Partial amount match',
+              explanation: 'Amount matches half of bank transaction',
+            },
+          ],
+          confidence: 'medium',
+          confidence_score: 60,
+          match_reason: 'combination_match',
+        };
+
+        const context = createMockContext({
+          analysis: {
+            ...createMockContext().analysis,
+            suggested_matches: [suggestedMatch],
+          },
+        });
+
+        const recommendations = generateRecommendations(context);
+
+        expect(recommendations).toHaveLength(1);
+        const rec = recommendations[0] as ManualReviewRecommendation;
+        expect(rec.action_type).toBe('manual_review');
+        expect(rec.priority).toBe('medium');
+        expect(rec.confidence).toBe(0.7); // CONFIDENCE.NEAR_MATCH_REVIEW
+        expect(rec.parameters.issue_type).toBe('complex_match');
+        expect(rec.parameters.related_transactions).toHaveLength(3); // 1 bank + 2 YNAB
+
+        // Verify related transactions structure
+        const relatedTxns = rec.parameters.related_transactions!;
+        expect(relatedTxns[0]?.source).toBe('bank');
+        expect(relatedTxns[0]?.id).toBe(bankTxn.id);
+        expect(relatedTxns[0]?.description).toBe('Split Payment');
+        expect(relatedTxns[1]?.source).toBe('ynab');
+        expect(relatedTxns[1]?.id).toBe('y1');
+        expect(relatedTxns[2]?.source).toBe('ynab');
+        expect(relatedTxns[2]?.id).toBe('y2');
+
+        // Verify enhanced metadata
+        expect(rec.metadata?.bank_transaction_amount).toBeDefined();
+        expect(rec.metadata?.bank_transaction_amount.value).toBe(-100.0);
+        expect(rec.metadata?.candidate_total_amount).toBeDefined();
+        expect(rec.metadata?.candidate_total_amount.value).toBe(-100.0); // -50 + -50
+        expect(rec.metadata?.candidate_count).toBe(2);
       });
     });
 
@@ -477,9 +538,9 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(-123.45);
+        expect(rec.parameters.amount).toBe(-123450); // In milliunits
         expect(rec.parameters.amount).toBeLessThan(0);
-        expect(rec.estimated_impact.value).toBe(-123.45);
+        expect(rec.estimated_impact.value).toBe(-123.45); // Estimated impact stays in dollars
       });
 
       it('should preserve positive amounts for income in create_transaction', () => {
@@ -498,9 +559,9 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(500.0);
+        expect(rec.parameters.amount).toBe(500000); // In milliunits
         expect(rec.parameters.amount).toBeGreaterThan(0);
-        expect(rec.estimated_impact.value).toBe(500.0);
+        expect(rec.estimated_impact.value).toBe(500.0); // Estimated impact stays in dollars
       });
 
       it('should preserve negative amounts in suggested match create_transaction', () => {
@@ -523,7 +584,7 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(-99.99);
+        expect(rec.parameters.amount).toBe(-99990); // In milliunits
       });
 
       it('should handle zero amounts correctly', () => {
@@ -539,7 +600,7 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(0);
+        expect(rec.parameters.amount).toBe(0); // Zero in milliunits is still zero
       });
     });
 
@@ -686,6 +747,70 @@ describe('recommendationEngine', () => {
         const rec = recommendations[0];
         expect(rec.estimated_impact.currency).toBe('EUR');
       });
+
+      it('should include enhanced metadata in insight-based manual review recommendations', () => {
+        const insight = createInsight('near_match', 'critical');
+        const context = createMockContext({
+          analysis: {
+            ...createMockContext().analysis,
+            insights: [insight],
+            balance_info: {
+              ...createMockContext().analysis.balance_info,
+              discrepancy: makeMoney(-100, 'USD'),
+            },
+          },
+        });
+
+        const recommendations = generateRecommendations(context);
+
+        expect(recommendations).toHaveLength(1);
+        const rec = recommendations[0] as ManualReviewRecommendation;
+        expect(rec.action_type).toBe('manual_review');
+
+        // Verify enhanced metadata fields
+        expect(rec.metadata?.current_discrepancy).toBeDefined();
+        expect(rec.metadata?.current_discrepancy.value).toBe(-100);
+        expect(rec.metadata?.current_discrepancy.currency).toBe('USD');
+        expect(rec.metadata?.insight_severity).toBe('critical');
+      });
+
+      it('should include enhanced metadata for all insight-based recommendation types', () => {
+        const nearMatchInsight = createInsight('near_match', 'warning');
+        const repeatAmountInsight = createInsight('repeat_amount', 'info');
+        const anomalyInsight = createInsight('anomaly', 'critical');
+
+        const context = createMockContext({
+          analysis: {
+            ...createMockContext().analysis,
+            insights: [nearMatchInsight, repeatAmountInsight, anomalyInsight],
+            balance_info: {
+              ...createMockContext().analysis.balance_info,
+              discrepancy: makeMoney(-250.75, 'CAD'),
+            },
+          },
+        });
+
+        const recommendations = generateRecommendations(context);
+
+        expect(recommendations).toHaveLength(3);
+
+        // All insight-based recommendations should have enhanced metadata
+        for (const rec of recommendations) {
+          expect(rec.action_type).toBe('manual_review');
+          const manualRec = rec as ManualReviewRecommendation;
+
+          expect(manualRec.metadata?.current_discrepancy).toBeDefined();
+          expect(manualRec.metadata?.current_discrepancy.value).toBe(-250.75);
+          expect(manualRec.metadata?.current_discrepancy.currency).toBe('CAD');
+          expect(manualRec.metadata?.insight_severity).toMatch(/^(info|warning|critical)$/);
+        }
+
+        // Verify specific severities
+        const severities = recommendations.map(r => (r as ManualReviewRecommendation).metadata?.insight_severity);
+        expect(severities).toContain('warning');
+        expect(severities).toContain('info');
+        expect(severities).toContain('critical');
+      });
     });
 
     describe('edge cases', () => {
@@ -784,7 +909,7 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(-0.01);
+        expect(rec.parameters.amount).toBe(-10); // In milliunits (0.01 * 1000)
       });
 
       it('should handle transactions with very large amounts', () => {
@@ -800,7 +925,7 @@ describe('recommendationEngine', () => {
         const recommendations = generateRecommendations(context);
 
         const rec = recommendations[0] as CreateTransactionRecommendation;
-        expect(rec.parameters.amount).toBe(-999999.99);
+        expect(rec.parameters.amount).toBe(-999999990); // In milliunits
       });
     });
 

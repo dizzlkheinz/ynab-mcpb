@@ -594,11 +594,12 @@ Recommendations include complete parameters for YNAB MCP tool calls:
 
 ```typescript
 // For create_transaction recommendations:
+// Note: Recommendation amounts are already in milliunits, ready to use directly
 const rec = recommendations.find(r => r.action_type === 'create_transaction');
 if (rec) {
   await create_transaction({
     budget_id: 'your-budget-id',
-    ...rec.parameters
+    ...rec.parameters // Parameters already contain amounts in milliunits
   });
 }
 
@@ -620,6 +621,150 @@ if (updateRec) {
 - **High**: Exact matches with 90%+ confidence, resolve immediately
 - **Medium**: Likely matches with 60-89% confidence, review before executing
 - **Low**: Suggestions requiring manual review, investigate further
+
+#### Best Practices for Executing Recommendations
+
+**Execution Order**
+
+Process recommendations in the order they're returned (already sorted by priority and confidence):
+
+```typescript
+for (const rec of recommendations) {
+  // High confidence (>0.9) can often be auto-executed
+  if (rec.confidence > 0.9 && rec.action_type === 'create_transaction') {
+    await executeRecommendation(rec);
+  } else {
+    // Lower confidence should be reviewed
+    await reviewAndExecute(rec);
+  }
+}
+```
+
+**Batch Execution**
+
+For multiple recommendations, execute in batches with review checkpoints:
+
+```typescript
+// Group by action type
+const groups = {
+  create: recommendations.filter(r => r.action_type === 'create_transaction'),
+  update: recommendations.filter(r => r.action_type === 'update_cleared'),
+  review: recommendations.filter(r => r.action_type === 'manual_review'),
+};
+
+// Execute high-confidence creates first
+for (const rec of groups.create.filter(r => r.confidence > 0.9)) {
+  await create_transaction({
+    budget_id: budgetId,
+    ...rec.parameters
+  });
+}
+
+// Review checkpoint: verify balance improvement
+const updatedAnalysis = await reconcile_account_v2({ ... });
+console.log('Balance after creates:', updatedAnalysis.balance_info.discrepancy);
+```
+
+**Error Handling and Rollback**
+
+Track executed recommendations for potential rollback:
+
+```typescript
+const executionLog = [];
+
+try {
+  for (const rec of recommendations) {
+    if (rec.action_type === 'create_transaction') {
+      const result = await create_transaction({
+        budget_id: budgetId,
+        ...rec.parameters
+      });
+
+      executionLog.push({
+        recommendation_id: rec.id,
+        transaction_id: result.transaction.id,
+        action: 'create_transaction'
+      });
+    }
+  }
+} catch (error) {
+  // Rollback: delete created transactions
+  for (const log of executionLog.reverse()) {
+    if (log.action === 'create_transaction') {
+      await delete_transaction({
+        budget_id: budgetId,
+        transaction_id: log.transaction_id
+      });
+    }
+  }
+  throw error;
+}
+```
+
+**Verification After Execution**
+
+Always re-run reconciliation after executing recommendations to verify balance improvement:
+
+```typescript
+// Execute recommendations
+await executeRecommendations(recommendations);
+
+// Verify discrepancy resolved
+const verifyAnalysis = await reconcile_account_v2({
+  budget_id: budgetId,
+  account_id: accountId,
+  csv_data: csvData,
+  statement_balance: statementBalance,
+  statement_date: statementDate
+});
+
+const beforeDiscrepancy = originalAnalysis.balance_info.discrepancy.value;
+const afterDiscrepancy = verifyAnalysis.balance_info.discrepancy.value;
+
+if (Math.abs(afterDiscrepancy) >= Math.abs(beforeDiscrepancy)) {
+  console.warn('Discrepancy not improved - review executed recommendations');
+}
+```
+
+**Handling Manual Review Recommendations**
+
+Manual review recommendations require investigation before action:
+
+```typescript
+for (const rec of recommendations.filter(r => r.action_type === 'manual_review')) {
+  console.log(`\n=== ${rec.message} ===`);
+  console.log(`Reason: ${rec.reason}`);
+  console.log(`Issue type: ${rec.parameters.issue_type}`);
+
+  if (rec.parameters.related_transactions) {
+    console.log('\nRelated transactions:');
+    for (const txn of rec.parameters.related_transactions) {
+      console.log(`  - [${txn.source}] ${txn.description} (ID: ${txn.id})`);
+    }
+  }
+
+  // Fetch full details for investigation
+  for (const txn of rec.parameters.related_transactions || []) {
+    if (txn.source === 'ynab') {
+      const details = await get_transaction({
+        budget_id: budgetId,
+        transaction_id: txn.id
+      });
+      console.log(`    Details:`, JSON.stringify(details, null, 2));
+    }
+  }
+}
+```
+
+**Progressive Execution Strategy**
+
+For large discrepancies with many recommendations:
+
+1. **Execute high-confidence creates** (confidence > 0.9, action_type = create_transaction)
+2. **Re-run reconciliation** to verify progress
+3. **Review remaining discrepancy** and adjust strategy
+4. **Process medium-confidence items** with manual review
+5. **Final verification** before marking account as reconciled
 
 ### reconcile_account_legacy
 
