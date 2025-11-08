@@ -4,6 +4,7 @@
  */
 
 import { analyzeReconciliation } from '../src/tools/reconciliation/analyzer.js';
+import { DEFAULT_MATCHING_CONFIG } from '../src/tools/reconciliation/types.js';
 
 // Test data from user's scenario
 const csvContent = `Date,Description,Amount
@@ -16,7 +17,7 @@ const analysis = analyzeReconciliation(
   undefined,
   ynabTransactions,
   122.22, // Statement balance
-  {}, // Default config
+  DEFAULT_MATCHING_CONFIG,
   'USD',
   'test-account',
   'test-budget',

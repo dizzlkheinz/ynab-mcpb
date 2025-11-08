@@ -555,7 +555,7 @@ describe('Recommendation Engine Integration', () => {
         expect(rec.metadata).toBeDefined();
         expect(rec.metadata.version).toBe('1.0');
         expect(rec.metadata.created_at).toBeDefined();
-        expect(() => new Date(rec.metadata.created_at)).not.toThrow();
+        expect(Date.parse(rec.metadata.created_at)).not.toBeNaN();
 
         // Action-specific fields
         expect(rec.action_type).toMatch(

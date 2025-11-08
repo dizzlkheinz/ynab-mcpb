@@ -77,7 +77,7 @@ function processInsight(
 function createSuggestedMatchRecommendation(
   match: TransactionMatch,
   context: RecommendationContext,
-): CreateTransactionRecommendation | ReviewDuplicateRecommendation {
+): CreateTransactionRecommendation | ReviewDuplicateRecommendation | ManualReviewRecommendation {
   const bankTxn = match.bank_transaction;
 
   // If there's a suggested YNAB transaction, review as possible duplicate
@@ -104,6 +104,14 @@ function createSuggestedMatchRecommendation(
         suggested_match_id: match.ynab_transaction.id,
       },
     };
+  }
+
+  // Check for combination matches (multiple YNAB transactions that together match the bank transaction)
+  const isCombinationMatch =
+    match.match_reason === 'combination_match' || (match.candidates?.length ?? 0) > 1;
+
+  if (isCombinationMatch) {
+    return createCombinationReviewRecommendation(match, context);
   }
 
   // Otherwise suggest creating new transaction
@@ -137,6 +145,52 @@ function createSuggestedMatchRecommendation(
       created_at: new Date().toISOString(),
     },
     parameters,
+  };
+}
+
+/**
+ * Create recommendation for combination match (multiple YNAB transactions matching one bank transaction)
+ */
+function createCombinationReviewRecommendation(
+  match: TransactionMatch,
+  context: RecommendationContext,
+): ManualReviewRecommendation {
+  const bankTxn = match.bank_transaction;
+  const candidateIds = match.candidates?.map((candidate) => candidate.ynab_transaction.id) ?? [];
+
+  return {
+    id: randomUUID(),
+    action_type: 'manual_review',
+    priority: 'medium',
+    confidence: CONFIDENCE.NEAR_MATCH_REVIEW,
+    message: `Review combination match: ${bankTxn.payee}`,
+    reason:
+      match.recommendation ??
+      'Multiple YNAB transactions appear to match this bank transaction. Review before creating anything new.',
+    estimated_impact: toMoneyValueFromDecimal(
+      0,
+      context.analysis.balance_info.current_cleared.currency,
+    ),
+    account_id: context.account_id,
+    metadata: {
+      version: RECOMMENDATION_VERSION,
+      created_at: new Date().toISOString(),
+    },
+    parameters: {
+      issue_type: 'complex_match',
+      related_transactions: [
+        {
+          source: 'bank',
+          id: bankTxn.id,
+          description: bankTxn.payee,
+        },
+        ...candidateIds.map((id) => ({
+          source: 'ynab' as const,
+          id,
+          description: match.candidates?.find((c) => c.ynab_transaction.id === id)?.ynab_transaction.payee_name ?? 'Unknown',
+        })),
+      ],
+    },
   };
 }
 
