@@ -28,6 +28,11 @@ const CONFIDENCE = {
 } as const;
 
 /**
+ * Priority order for sorting recommendations
+ */
+const PRIORITY_ORDER = { high: 3, medium: 2, low: 1 } as const;
+
+/**
  * Generate actionable recommendations from reconciliation analysis.
  *
  * This function processes reconciliation analysis results and generates specific,
@@ -216,7 +221,14 @@ function createCombinationReviewRecommendation(
 
   // Calculate total amount from candidates for context (convert from milliunits to decimal)
   const candidateTotalAmount = match.candidates?.reduce(
-    (sum, candidate) => sum + fromMilli(candidate.ynab_transaction.amount),
+    (sum, candidate) => {
+      const amount = candidate.ynab_transaction.amount;
+      if (!Number.isFinite(amount)) {
+        console.warn(`Invalid candidate amount: ${amount}`);
+        return sum;
+      }
+      return sum + fromMilli(amount);
+    },
     0
   ) ?? 0;
 
@@ -483,11 +495,9 @@ function createUpdateClearedRecommendation(
  * Sort recommendations by priority and confidence
  */
 function sortRecommendations(recommendations: ActionableRecommendation[]): ActionableRecommendation[] {
-  const priorityOrder = { high: 3, medium: 2, low: 1 };
-
   return recommendations.sort((a, b) => {
     // Sort by priority first
-    const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+    const priorityDiff = PRIORITY_ORDER[b.priority] - PRIORITY_ORDER[a.priority];
     if (priorityDiff !== 0) return priorityDiff;
 
     // Then by confidence
