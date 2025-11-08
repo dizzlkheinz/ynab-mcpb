@@ -592,6 +592,8 @@ The `reconcile_account_v2` tool now includes an optional `recommendations` array
 
 Recommendations include complete parameters for YNAB MCP tool calls:
 
+**CRITICAL**: Recommendation `parameters.amount` values are in **milliunits** (YNAB's internal format where 1 dollar = 1000 milliunits). These values are ready to pass directly to `create_transaction` without conversion. However, `estimated_impact.value` remains in decimal dollars for human readability.
+
 ```typescript
 // For create_transaction recommendations:
 // Note: Recommendation amounts are already in milliunits, ready to use directly

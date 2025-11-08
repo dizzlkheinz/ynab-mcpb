@@ -39,7 +39,7 @@ if (analysis.recommendations && analysis.recommendations.length > 0) {
     if (rec.action_type === 'create_transaction') {
       console.log(`  Parameters:`);
       console.log(`    - Date: ${rec.parameters.date}`);
-      console.log(`    - Amount: $${rec.parameters.amount}`);
+      console.log(`    - Amount: $${(rec.parameters.amount / 1000).toFixed(2)}`);
       console.log(`    - Payee: ${rec.parameters.payee_name}`);
       console.log(`    - Cleared: ${rec.parameters.cleared}`);
     }
