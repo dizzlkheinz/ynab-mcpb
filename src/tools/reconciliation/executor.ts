@@ -1,7 +1,7 @@
 import type * as ynab from 'ynab';
 import { toMilli, toMoneyValue, toMoneyValueFromDecimal, addMilli } from '../../utils/money.js';
 import type { ReconciliationAnalysis, TransactionMatch } from './types.js';
-import type { ReconcileAccountV2Request } from './index.js';
+import type { ReconcileAccountRequest } from './index.js';
 
 export interface AccountSnapshot {
   balance: number; // milliunits
@@ -12,7 +12,7 @@ export interface AccountSnapshot {
 export interface ExecutionOptions {
   ynabAPI: ynab.API;
   analysis: ReconciliationAnalysis;
-  params: ReconcileAccountV2Request;
+  params: ReconcileAccountRequest;
   budgetId: string;
   accountId: string;
   initialAccount: AccountSnapshot;
@@ -246,7 +246,7 @@ function formatDisplay(amount: number, currency: string): string {
 
 function computeUpdateFlags(
   match: TransactionMatch,
-  params: ReconcileAccountV2Request,
+  params: ReconcileAccountRequest,
 ): UpdateFlags {
   const ynabTxn = match.ynab_transaction;
   const bankTxn = match.bank_transaction;
@@ -392,7 +392,7 @@ function buildLikelyCauses(discrepancyMilli: number) {
 
 function buildRecommendations(args: {
   summary: ExecutionSummary;
-  params: ReconcileAccountV2Request;
+  params: ReconcileAccountRequest;
   analysis: ReconciliationAnalysis;
   balanceChangeMilli: number;
   currencyCode: string;

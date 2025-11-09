@@ -9,8 +9,8 @@ import {
   ToolExecutionPayload,
 } from '../toolRegistry.js';
 import {
-  handleReconcileAccountV2,
-  ReconcileAccountV2Schema,
+  handleReconcileAccount,
+  ReconcileAccountSchema,
 } from '../../tools/reconciliation/index.js';
 
 function createResult(label: string): CallToolResult {
@@ -222,7 +222,7 @@ describe('ToolRegistry', () => {
     });
   });
 
-  it('routes reconcile_account tools to the v2 handler emitting dual-channel output', async () => {
+  it('routes reconcile_account tool to handler emitting dual-channel output', async () => {
     const mockYnabAPI = {
       accounts: {
         getAccount: vi.fn().mockResolvedValue({
@@ -255,16 +255,9 @@ describe('ToolRegistry', () => {
 
     registry.register({
       name: 'reconcile_account',
-      description: 'Guided reconciliation workflow (v2)',
-      inputSchema: ReconcileAccountV2Schema,
-      handler: adapt(handleReconcileAccountV2),
-    });
-
-    registry.register({
-      name: 'reconcile_account_v2',
-      description: 'Alias for reconcile_account',
-      inputSchema: ReconcileAccountV2Schema,
-      handler: adapt(handleReconcileAccountV2),
+      description: 'Guided reconciliation workflow with dual-channel output',
+      inputSchema: ReconcileAccountSchema,
+      handler: adapt(handleReconcileAccount),
     });
 
     const result = await registry.executeTool({
@@ -283,9 +276,7 @@ describe('ToolRegistry', () => {
     expect(mockYnabAPI.accounts.getAccount).toHaveBeenCalled();
 
     const toolNames = registry.listTools().map((tool) => tool.name);
-    expect(toolNames).toEqual(
-      expect.arrayContaining(['reconcile_account', 'reconcile_account_v2']),
-    );
+    expect(toolNames).toEqual(expect.arrayContaining(['reconcile_account']));
   });
 
   it('merges default arguments before validation', async () => {

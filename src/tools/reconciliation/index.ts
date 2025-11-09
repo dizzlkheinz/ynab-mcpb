@@ -9,7 +9,7 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { withToolErrorHandling } from '../../types/index.js';
 import { analyzeReconciliation } from './analyzer.js';
 import type { MatchingConfig } from './types.js';
-import { buildReconciliationV2Payload } from '../reconcileV2Adapter.js';
+import { buildReconciliationPayload } from '../reconcileAdapter.js';
 import {
   executeReconciliation,
   type AccountSnapshot,
@@ -23,9 +23,9 @@ export { findMatches, findBestMatch } from './matcher.js';
 export { normalizePayee, normalizedMatch, fuzzyMatch, payeeSimilarity } from './payeeNormalizer.js';
 
 /**
- * Schema for reconcile_account_v2 tool (Phase 1: Analysis Only)
+ * Schema for reconcile_account tool
  */
-export const ReconcileAccountV2Schema = z
+export const ReconcileAccountSchema = z
   .object({
     budget_id: z.string().min(1, 'Budget ID is required'),
     account_id: z.string().min(1, 'Account ID is required'),
@@ -91,17 +91,18 @@ export const ReconcileAccountV2Schema = z
     path: ['csv_data'],
   });
 
-export type ReconcileAccountV2Request = z.infer<typeof ReconcileAccountV2Schema>;
+export type ReconcileAccountRequest = z.infer<typeof ReconcileAccountSchema>;
 
 /**
- * Handle reconciliation analysis (Phase 1: Read-only analysis)
+ * Handle reconciliation analysis and optional execution
  *
- * This is the analysis-only implementation. No YNAB modifications are made.
- * Returns categorized matches for user review.
+ * Provides intelligent transaction matching, insight detection, and optional
+ * execution of reconciliation actions. Returns human-readable narrative and
+ * structured JSON data.
  */
-export async function handleReconcileAccountV2(
+export async function handleReconcileAccount(
   ynabAPI: ynab.API,
-  params: ReconcileAccountV2Request,
+  params: ReconcileAccountRequest,
 ): Promise<CallToolResult> {
   return await withToolErrorHandling(
     async () => {
@@ -182,7 +183,7 @@ export async function handleReconcileAccountV2(
 
       const csvFormatForPayload = mapCsvFormatForPayload(params.csv_format);
 
-      const adapterOptions: Parameters<typeof buildReconciliationV2Payload>[1] = {
+      const adapterOptions: Parameters<typeof buildReconciliationPayload>[1] = {
         accountName,
         accountId: params.account_id,
         currencyCode,
@@ -191,7 +192,7 @@ export async function handleReconcileAccountV2(
         adapterOptions.csvFormat = csvFormatForPayload;
       }
 
-      const payload = buildReconciliationV2Payload(analysis, adapterOptions, executionData);
+      const payload = buildReconciliationPayload(analysis, adapterOptions, executionData);
 
       return {
         content: [
@@ -206,12 +207,12 @@ export async function handleReconcileAccountV2(
         ],
       };
     },
-    'ynab:reconcile_account_v2',
+    'ynab:reconcile_account',
     'analyzing account reconciliation',
   );
 }
 
-function mapCsvFormatForPayload(format: ReconcileAccountV2Request['csv_format'] | undefined):
+function mapCsvFormatForPayload(format: ReconcileAccountRequest['csv_format'] | undefined):
   | {
       delimiter: string;
       decimal_separator: string;

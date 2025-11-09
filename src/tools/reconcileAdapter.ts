@@ -12,9 +12,9 @@ import {
   type ReportFormatterOptions,
 } from './reconciliation/reportFormatter.js';
 
-const OUTPUT_VERSION = '2.0';
+const OUTPUT_VERSION = '1.0';
 const SCHEMA_URL =
-  'https://raw.githubusercontent.com/dizzlkheinz/ynab-mcp-dxt/master/docs/schemas/reconciliation-v2.json';
+  'https://raw.githubusercontent.com/dizzlkheinz/ynab-mcp-dxt/master/docs/schemas/reconciliation.json';
 
 interface AdapterOptions {
   accountName?: string;
@@ -212,7 +212,6 @@ const convertExecution = (execution: LegacyReconciliationResult, currency: strin
 
 /**
  * Build human-readable narrative using the comprehensive report formatter
- * @deprecated This function is kept for backward compatibility but now delegates to formatHumanReadableReport
  */
 const buildHumanNarrative = (
   analysis: ReconciliationAnalysis,
@@ -231,7 +230,7 @@ const buildHumanNarrative = (
   return formatHumanReadableReport(analysis, formatterOptions, execution);
 };
 
-export const buildReconciliationV2Payload = (
+export const buildReconciliationPayload = (
   analysis: ReconciliationAnalysis,
   options: AdapterOptions = {},
   execution?: LegacyReconciliationResult,

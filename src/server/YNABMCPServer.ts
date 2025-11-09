@@ -53,8 +53,8 @@ import {
   CompareTransactionsSchema,
 } from '../tools/compareTransactions/index.js';
 import {
-  handleReconcileAccountV2,
-  ReconcileAccountV2Schema,
+  handleReconcileAccount,
+  ReconcileAccountSchema,
 } from '../tools/reconciliation/index.js';
 import {
   handleListCategories,
@@ -502,18 +502,9 @@ export class YNABMCPServer {
       name: 'reconcile_account',
       description:
         'Guided reconciliation workflow with human narrative + structured JSON output, insight detection, and optional execution (create/update/unclear).',
-      inputSchema: ReconcileAccountV2Schema,
-      handler: adapt(handleReconcileAccountV2),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountV2Schema>>(),
-    });
-
-    register({
-      name: 'reconcile_account_v2',
-      description:
-        '[Alias] Same as reconcile_account. Provided for backward compatibility with beta clients.',
-      inputSchema: ReconcileAccountV2Schema,
-      handler: adapt(handleReconcileAccountV2),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountV2Schema>>(),
+      inputSchema: ReconcileAccountSchema,
+      handler: adapt(handleReconcileAccount),
+      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
     });
 
     register({
