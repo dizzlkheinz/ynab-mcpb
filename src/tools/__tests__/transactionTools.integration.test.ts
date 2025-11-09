@@ -40,10 +40,13 @@ describeIntegration('Transaction Tools Integration', () => {
     const result = await handleListTransactions(ynabAPI, params);
     const response = JSON.parse(result.content[0].text);
 
-    expect(response.transactions).toBeDefined();
-    expect(Array.isArray(response.transactions)).toBe(true);
+    // Handle large response case (preview_transactions instead of transactions)
+    const transactions = response.transactions || response.preview_transactions;
+    expect(transactions).toBeDefined();
+    expect(Array.isArray(transactions)).toBe(true);
 
-    console.warn(`✅ Successfully listed ${response.transactions.length} transactions`);
+    const count = response.total_count || transactions.length;
+    console.warn(`✅ Successfully listed ${count} transactions`);
   });
 
   it('should successfully list transactions with account filter', async () => {
@@ -75,12 +78,13 @@ describeIntegration('Transaction Tools Integration', () => {
     const result = await handleListTransactions(ynabAPI, params);
     const response = JSON.parse(result.content[0].text);
 
-    expect(response.transactions).toBeDefined();
-    expect(Array.isArray(response.transactions)).toBe(true);
+    // Handle large response case (preview_transactions instead of transactions)
+    const transactions = response.transactions || response.preview_transactions;
+    expect(transactions).toBeDefined();
+    expect(Array.isArray(transactions)).toBe(true);
 
-    console.warn(
-      `✅ Successfully listed ${response.transactions.length} transactions since 2024-01-01`,
-    );
+    const count = response.total_count || transactions.length;
+    console.warn(`✅ Successfully listed ${count} transactions since 2024-01-01`);
   });
 
   it('should get transaction details if transactions exist', async () => {
