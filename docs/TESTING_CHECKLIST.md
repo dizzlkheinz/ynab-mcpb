@@ -162,7 +162,7 @@ A comprehensive testing checklist for validating the YNAB MCP server with Claude
 ## Final Validation
 
 - [ ] **Complete workflow tests** pass (budget → accounts → transactions → analysis)
-- [ ] **All test scenarios** from test-scenarios.md completed successfully
+- [ ] **All test scenarios** from TEST_SCENARIOS.md completed successfully
 - [ ] **No critical issues** identified during testing
 - [ ] **Performance meets** or exceeds v0.7.x benchmarks
 - [ ] **Ready for production** use with real YNAB data

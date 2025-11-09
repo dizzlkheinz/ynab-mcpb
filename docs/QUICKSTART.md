@@ -262,8 +262,8 @@ You'll know the testing is successful when:
 
 ## Getting Help
 
-- **Test Scenarios**: See `test-scenarios.md` for detailed test cases
-- **Comprehensive Testing**: Use `testing-checklist.md` for systematic validation
+- **Test Scenarios**: See `docs/TEST_SCENARIOS.md` for detailed test cases
+- **Comprehensive Testing**: Use `docs/TESTING_CHECKLIST.md` for systematic validation
 - **Issues**: Check Claude Desktop logs and diagnostic_info output
 - **Performance**: Monitor cache metrics in diagnostic_info
 

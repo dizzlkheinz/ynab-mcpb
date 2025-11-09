@@ -268,8 +268,8 @@ Missing ADRs:
 
 **Documents**:
 
-- `testing-checklist.md`
-- `test-scenarios.md`
+- `docs/TESTING_CHECKLIST.md`
+- `docs/TEST_SCENARIOS.md`
 
 ### Current Test Status
 
@@ -285,7 +285,7 @@ Missing ADRs:
 
 - ❓ Not recently validated (needs testing post-cleanup)
 
-**Functional Testing Checklist** (from `testing-checklist.md`):
+**Functional Testing Checklist** (from `docs/TESTING_CHECKLIST.md`):
 
 - [ ] Pre-Testing Setup (7 items)
 - [ ] Build and Development Testing (6 items)
@@ -319,9 +319,8 @@ Missing ADRs:
 - ✅ `docs/BUILD.md` - Build instructions
 - ✅ `docs/DEPLOYMENT.md` - Deployment guide
 - ✅ `docs/CACHE.md` - Caching documentation
-- ✅ `RECONCILIATION_TROUBLESHOOTING.md` - User troubleshooting guide
+- ✅ `docs/RECONCILIATION.md` - User troubleshooting guide
 - ✅ `docs/CSV_PARSER.md` - CSV parsing documentation
-- ✅ `CLEANUP_SUMMARY.md` - Repository cleanup summary (just created)
 
 ### Documentation Gaps:
 
