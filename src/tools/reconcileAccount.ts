@@ -10,7 +10,7 @@ import {
 import { handleCreateTransaction, CreateTransactionParams } from './transactionTools.js';
 import { handleUpdateTransaction, UpdateTransactionParams } from './transactionTools.js';
 import { handleGetAccount } from './accountTools.js';
-// Import money helpers will be added when they are used
+import type { MoneyValue } from '../utils/money.js';
 
 // In-memory session lock to prevent parallel reconciliation runs
 const locks = new Set<string>();
@@ -117,14 +117,14 @@ interface ReconciliationResult {
   };
   account_balance: {
     before: {
-      balance: number;
-      cleared_balance: number;
-      uncleared_balance: number;
+      balance: MoneyValue;
+      cleared_balance: MoneyValue;
+      uncleared_balance: MoneyValue;
     };
     after: {
-      balance: number;
-      cleared_balance: number;
-      uncleared_balance: number;
+      balance: MoneyValue;
+      cleared_balance: MoneyValue;
+      uncleared_balance: MoneyValue;
     };
   };
   actions_taken: {
@@ -139,10 +139,9 @@ interface ReconciliationResult {
   balance_reconciliation?: {
     status: string;
     precision_calculations?: {
-      bank_statement_balance_milliunits: number;
-      ynab_calculated_balance_milliunits: number;
-      discrepancy_milliunits: number;
-      discrepancy_dollars: number;
+      bank_statement_balance: MoneyValue;
+      ynab_calculated_balance: MoneyValue;
+      discrepancy: MoneyValue;
     };
     discrepancy_analysis?: {
       confidence_level: number;
@@ -150,7 +149,7 @@ interface ReconciliationResult {
         cause_type: string;
         description: string;
         confidence: number;
-        amount_milliunits: number;
+        amount: MoneyValue;
         suggested_resolution: string;
         evidence: unknown[];
       }[];
@@ -196,6 +195,7 @@ export async function handleReconcileAccount(
 ): Promise<CallToolResult> {
   return await withToolErrorHandling(
     async () => {
+      const { toMoneyValue, toMilli, fromMilli } = await import('../utils/money.js');
       const parsed = ReconcileAccountSchema.parse(params);
 
       const lockKey = `${parsed.budget_id}:${parsed.account_id}`;
@@ -279,14 +279,14 @@ export async function handleReconcileAccount(
           },
           account_balance: {
             before: {
-              balance: initialAccount.balance,
-              cleared_balance: initialAccount.cleared_balance,
-              uncleared_balance: initialAccount.uncleared_balance,
+              balance: toMoneyValue(initialAccount.balance),
+              cleared_balance: toMoneyValue(initialAccount.cleared_balance),
+              uncleared_balance: toMoneyValue(initialAccount.uncleared_balance),
             },
             after: {
-              balance: initialAccount.balance,
-              cleared_balance: initialAccount.cleared_balance,
-              uncleared_balance: initialAccount.uncleared_balance,
+              balance: toMoneyValue(initialAccount.balance),
+              cleared_balance: toMoneyValue(initialAccount.cleared_balance),
+              uncleared_balance: toMoneyValue(initialAccount.uncleared_balance),
             },
           },
           actions_taken: [],
@@ -300,8 +300,6 @@ export async function handleReconcileAccount(
         let balance_reconciliation: ReconciliationResult['balance_reconciliation'];
 
         if (parsed.bank_statement_balance != null && parsed.statement_date) {
-          const { toMilli, fromMilli } = await import('../utils/money.js');
-
           const bankMilli = toMilli(parsed.bank_statement_balance);
           const ynabMilli = await clearedBalanceAsOf(
             ynabAPI,
@@ -316,10 +314,9 @@ export async function handleReconcileAccount(
             balance_reconciliation = {
               status: 'PERFECTLY_RECONCILED',
               precision_calculations: {
-                bank_statement_balance_milliunits: bankMilli,
-                ynab_calculated_balance_milliunits: ynabMilli,
-                discrepancy_milliunits: 0,
-                discrepancy_dollars: 0,
+                bank_statement_balance: toMoneyValue(bankMilli),
+                ynab_calculated_balance: toMoneyValue(ynabMilli),
+                discrepancy: toMoneyValue(0),
               },
               discrepancy_analysis: {
                 confidence_level: 1,
@@ -344,7 +341,7 @@ export async function handleReconcileAccount(
                 cause_type: 'BANK_FEE',
                 description: 'Round amount suggests bank fee or interest',
                 confidence: 0.82,
-                amount_milliunits: discrepancy,
+                amount: toMoneyValue(discrepancy),
                 suggested_resolution:
                   discrepancy < 0
                     ? 'Create Bank Fee transaction (cleared)'
@@ -352,14 +349,12 @@ export async function handleReconcileAccount(
                 evidence: [],
               });
             }
-
             balance_reconciliation = {
               status: 'DISCREPANCY_FOUND',
               precision_calculations: {
-                bank_statement_balance_milliunits: bankMilli,
-                ynab_calculated_balance_milliunits: ynabMilli,
-                discrepancy_milliunits: discrepancy,
-                discrepancy_dollars: fromMilli(discrepancy),
+                bank_statement_balance: toMoneyValue(bankMilli),
+                ynab_calculated_balance: toMoneyValue(ynabMilli),
+                discrepancy: toMoneyValue(discrepancy),
               },
               discrepancy_analysis: {
                 confidence_level: Math.max(0, ...likely.map((l) => l.confidence)),
@@ -409,11 +404,15 @@ export async function handleReconcileAccount(
 
               // Update final account balance from the last transaction creation
               if (createdTransaction.account_balance !== undefined) {
-                result.account_balance.after.balance = createdTransaction.account_balance;
-                result.account_balance.after.cleared_balance =
-                  createdTransaction.account_cleared_balance;
-                result.account_balance.after.uncleared_balance =
-                  createdTransaction.account_balance - createdTransaction.account_cleared_balance;
+                result.account_balance.after.balance = toMoneyValue(
+                  createdTransaction.account_balance,
+                );
+                result.account_balance.after.cleared_balance = toMoneyValue(
+                  createdTransaction.account_cleared_balance,
+                );
+                result.account_balance.after.uncleared_balance = toMoneyValue(
+                  createdTransaction.account_balance - createdTransaction.account_cleared_balance,
+                );
               }
             } catch (error) {
               result.recommendations.push(
@@ -472,12 +471,16 @@ export async function handleReconcileAccount(
 
                   // Update final account balance from the last transaction update
                   if (updatedTransaction.updated_balance !== undefined) {
-                    result.account_balance.after.balance = updatedTransaction.updated_balance;
-                    result.account_balance.after.cleared_balance =
-                      updatedTransaction.updated_cleared_balance;
-                    result.account_balance.after.uncleared_balance =
+                    result.account_balance.after.balance = toMoneyValue(
+                      updatedTransaction.updated_balance,
+                    );
+                    result.account_balance.after.cleared_balance = toMoneyValue(
+                      updatedTransaction.updated_cleared_balance,
+                    );
+                    result.account_balance.after.uncleared_balance = toMoneyValue(
                       updatedTransaction.updated_balance -
-                      updatedTransaction.updated_cleared_balance;
+                        updatedTransaction.updated_cleared_balance,
+                    );
                   }
                 } catch (error) {
                   result.recommendations.push(
@@ -555,7 +558,8 @@ export async function handleReconcileAccount(
         }
 
         const balanceChange =
-          result.account_balance.after.balance - result.account_balance.before.balance;
+          result.account_balance.after.balance.value_milliunits -
+          result.account_balance.before.balance.value_milliunits;
         if (Math.abs(balanceChange) > 100) {
           // More than $0.10 change
           result.recommendations.push(
