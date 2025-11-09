@@ -234,12 +234,6 @@ The server provides 25 core tools for budgets, accounts, transactions, categorie
 - `get_month` - Get monthly budget data
 - `list_months` - List all months summary
 
-### Financial Analysis & Insights (work in progress)
-
-- `financial_overview` - Comprehensive multi-month financial analysis with trends and AI insights
-- `spending_analysis` - Detailed spending analysis with category breakdowns and trends
-- `budget_health_check` - Budget health assessment with scoring and actionable recommendations
-
 ### Utilities
 
 - `get_user` - Get authenticated user information

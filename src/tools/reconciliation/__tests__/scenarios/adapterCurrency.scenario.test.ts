@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ReconciliationAnalysis, TransactionMatch } from '../../types.js';
-import { buildReconciliationV2Payload } from '../../../reconcileV2Adapter.js';
+import { buildReconciliationPayload } from '../../../reconcileAdapter.js';
 
 const makeMoney = (value: number, currency = 'USD') => ({
   value_milliunits: Math.round(value * 1000),
@@ -44,7 +44,7 @@ const buildAnalysis = (currency = 'USD'): ReconciliationAnalysis => ({
 
 describe('scenario: non-USD formatting in adapter payload', () => {
   it('emits CAD currency values and csv_format metadata when provided', () => {
-    const payload = buildReconciliationV2Payload(buildAnalysis('CAD'), {
+    const payload = buildReconciliationPayload(buildAnalysis('CAD'), {
       accountName: 'CAD VISA',
       accountId: 'acct-123',
       currencyCode: 'CAD',

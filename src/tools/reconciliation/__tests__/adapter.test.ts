@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildReconciliationV2Payload,
+  buildReconciliationPayload,
   type LegacyReconciliationResult,
-} from '../../reconcileV2Adapter.js';
+} from '../../reconcileAdapter.js';
 import type { ReconciliationAnalysis } from '../types.js';
 
 const makeMoney = (value: number, currency = 'USD') => ({
@@ -130,9 +130,9 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
   ],
 });
 
-describe('buildReconciliationV2Payload', () => {
+describe('buildReconciliationPayload', () => {
   it('returns human narrative and structured payload with MoneyValue fields', () => {
-    const payload = buildReconciliationV2Payload(buildAnalysis(), {
+    const payload = buildReconciliationPayload(buildAnalysis(), {
       accountName: 'K TD FCT VISA',
       accountId: 'account-123',
       currencyCode: 'USD',
@@ -208,7 +208,7 @@ describe('buildReconciliationV2Payload', () => {
       },
     };
 
-    const payload = buildReconciliationV2Payload(
+    const payload = buildReconciliationPayload(
       buildAnalysis(),
       {
         accountName: 'K TD FCT VISA',

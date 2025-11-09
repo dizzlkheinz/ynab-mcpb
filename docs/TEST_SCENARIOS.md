@@ -199,7 +199,7 @@ This document provides comprehensive test scenarios for manually testing the YNA
    - Budget management (list_budgets, set_default_budget)
    - Account management (list_accounts, get_account)
    - Transaction management (list_transactions, create_transaction)
-   - Financial analysis (financial_overview, spending_analysis)
+   - Monthly data analysis (get_month, list_months)
    - Utility tools (diagnostic_info, convert_amount)
 
 **Expected Results**:

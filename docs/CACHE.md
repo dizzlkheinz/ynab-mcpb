@@ -282,8 +282,7 @@ export function invalidateBudgetRelatedCaches(budgetId: string) {
     `accounts_${budgetId}`,
     `categories_${budgetId}`,
     `payees_${budgetId}`,
-    `budget_${budgetId}`,
-    `financial_overview_${budgetId}`
+    `budget_${budgetId}`
   ];
 
   keysToInvalidate.forEach(key => cacheManager.delete(key));
@@ -467,8 +466,7 @@ export async function createAccount(params: CreateAccountRequest) {
 const goodKeys = [
   `accounts_${budgetId}`,
   `categories_${budgetId}`,
-  `transactions_${budgetId}_since_${date}`,
-  `financial_overview_${budgetId}_${month}`
+  `transactions_${budgetId}_since_${date}`
 ];
 
 // Avoid: Generic or collision-prone keys

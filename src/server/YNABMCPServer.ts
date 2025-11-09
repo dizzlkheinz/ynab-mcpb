@@ -77,14 +77,6 @@ import {
   ListMonthsSchema,
 } from '../tools/monthTools.js';
 import { handleGetUser, handleConvertAmount, ConvertAmountSchema } from '../tools/utilityTools.js';
-import {
-  handleFinancialOverview,
-  handleSpendingAnalysis,
-  handleBudgetHealthCheck,
-  FinancialOverviewSchema,
-  SpendingAnalysisSchema,
-  BudgetHealthSchema,
-} from '../tools/financialOverview/index.js';
 import { cacheManager, CacheManager, CACHE_TTLS } from './cacheManager.js';
 import { responseFormatter } from './responseFormatter.js';
 import {
@@ -616,36 +608,6 @@ export class YNABMCPServer {
       description: 'Convert between dollars and milliunits with integer arithmetic for precision',
       inputSchema: ConvertAmountSchema,
       handler: async ({ input }) => handleConvertAmount(input),
-    });
-
-    register({
-      name: 'financial_overview',
-      description: 'Get comprehensive financial overview with insights, trends, and analysis',
-      inputSchema: FinancialOverviewSchema,
-      handler: async ({ input }) => {
-        return handleFinancialOverview(this.ynabAPI, { ...input, budget_id: input.budget_id! });
-      },
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof FinancialOverviewSchema>>(),
-    });
-
-    register({
-      name: 'spending_analysis',
-      description: 'Detailed spending analysis with category breakdowns and trends',
-      inputSchema: SpendingAnalysisSchema,
-      handler: async ({ input }) => {
-        return handleSpendingAnalysis(this.ynabAPI, { ...input, budget_id: input.budget_id! });
-      },
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof SpendingAnalysisSchema>>(),
-    });
-
-    register({
-      name: 'budget_health_check',
-      description: 'Comprehensive budget health assessment with recommendations',
-      inputSchema: BudgetHealthSchema,
-      handler: async ({ input }) => {
-        return handleBudgetHealthCheck(this.ynabAPI, { ...input, budget_id: input.budget_id! });
-      },
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof BudgetHealthSchema>>(),
     });
 
     register({

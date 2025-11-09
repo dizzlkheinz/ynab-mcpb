@@ -65,10 +65,9 @@ A comprehensive testing checklist for validating the YNAB MCP server with Claude
 
 ## Financial Analysis Tools
 
-- [ ] **financial_overview** provides comprehensive analysis with trends and insights
-- [ ] **spending_analysis** shows detailed category breakdowns and trends
-- [ ] **budget_health_check** provides health scores and actionable recommendations
-- [ ] **Trend analysis** works correctly with historical data
+- [ ] **list_transactions** provides comprehensive transaction history
+- [ ] **get_month** shows detailed monthly budget data
+- [ ] **list_months** provides historical month summaries
 - [ ] **Insights generation** provides actionable and relevant recommendations
 
 ## Transaction Management

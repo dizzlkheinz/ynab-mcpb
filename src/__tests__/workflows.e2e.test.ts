@@ -639,47 +639,29 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       });
     });
 
-    describe('Financial Analysis Integration', () => {
-      it('should execute decomposed financial overview tools', async () => {
+    describe('Month Data Integration', () => {
+      it('should execute month data tools', async () => {
         if (testConfig.skipE2ETests) return;
 
-        // Test financial overview tool
-        const overviewResult = await executeToolCall(server, 'ynab:financial_overview', {
+        // Test get_month tool
+        const currentMonth = new Date().toISOString().substring(0, 8) + '01';
+        const monthResult = await executeToolCall(server, 'ynab:get_month', {
+          budget_id: testBudgetId,
+          month: currentMonth,
+        });
+        const monthData = parseToolResult(monthResult);
+
+        expect(monthData.data, 'Month data should return data object').toBeDefined();
+        expect(monthData.data.month || monthData.data, 'Should contain month info').toBeDefined();
+
+        // Test list_months tool
+        const monthsResult = await executeToolCall(server, 'ynab:list_months', {
           budget_id: testBudgetId,
         });
-        const overview = parseToolResult(overviewResult);
+        const monthsData = parseToolResult(monthsResult);
 
-        expect(overview.data, 'Financial overview should return data object').toBeDefined();
-
-        // The financial overview data is in the root of data, not under financial_overview
-        expect(overview.data.overview, 'Should contain overview data').toBeDefined();
-        expect(overview.data.summary, 'Should contain summary data').toBeDefined();
-        expect(
-          overview.data.account_overview,
-          'Should contain account_overview data',
-        ).toBeDefined();
-        expect(overview.data.spending_trends, 'Should contain spending_trends data').toBeDefined();
-
-        // Test spending analysis tool
-        const spendingResult = await executeToolCall(server, 'ynab:spending_analysis', {
-          budget_id: testBudgetId,
-          period_months: 6,
-        });
-        const spending = parseToolResult(spendingResult);
-
-        expect(spending.data).toBeDefined();
-        expect(spending.data.analysis_period).toBeDefined();
-        expect(spending.data.category_analysis).toBeDefined();
-
-        // Test budget health check tool
-        const healthResult = await executeToolCall(server, 'ynab:budget_health_check', {
-          budget_id: testBudgetId,
-        });
-        const health = parseToolResult(healthResult);
-
-        expect(health.data).toBeDefined();
-        expect(health.data.health_score).toBeDefined();
-        expect(health.data.sub_scores).toBeDefined();
+        expect(monthsData.data).toBeDefined();
+        expect(Array.isArray(monthsData.data.months), 'Should return months array').toBe(true);
       });
     });
 
@@ -696,11 +678,8 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         // Verify key v0.8.x tools are present (tools are registered without ynab: prefix)
         const toolNames = toolsResult.tools.map((tool: any) => tool.name);
         expect(toolNames, 'Should contain list_budgets tool').toContain('list_budgets');
-        expect(toolNames, 'Should contain financial_overview tool').toContain('financial_overview');
-        expect(toolNames, 'Should contain spending_analysis tool').toContain('spending_analysis');
-        expect(toolNames, 'Should contain budget_health_check tool').toContain(
-          'budget_health_check',
-        );
+        expect(toolNames, 'Should contain get_month tool').toContain('get_month');
+        expect(toolNames, 'Should contain list_months tool').toContain('list_months');
         expect(toolNames, 'Should contain compare_transactions tool').toContain(
           'compare_transactions',
         );

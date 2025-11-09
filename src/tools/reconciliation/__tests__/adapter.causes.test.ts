@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ReconciliationAnalysis } from '../types.js';
-import { buildReconciliationV2Payload } from '../../reconcileV2Adapter.js';
+import { buildReconciliationPayload } from '../../reconcileAdapter.js';
 import type { LegacyReconciliationResult } from '../executor.js';
 
 const baseAnalysis: ReconciliationAnalysis = {
@@ -92,9 +92,9 @@ const execution: LegacyReconciliationResult = {
   },
 };
 
-describe('buildReconciliationV2Payload discrepancy causes mapping', () => {
+describe('buildReconciliationPayload discrepancy causes mapping', () => {
   it('maps legacy causes to MoneyValue entries with CAD currency', () => {
-    const payload = buildReconciliationV2Payload(
+    const payload = buildReconciliationPayload(
       baseAnalysis,
       {
         accountId: 'acct-123',

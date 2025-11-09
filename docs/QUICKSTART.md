@@ -123,7 +123,7 @@ List my accounts again.
 **Ask Claude**:
 
 ```
-Give me a financial overview for the last 3 months using the financial_overview tool.
+Show me all transactions for the last month.
 ```
 
 **Expected**: Comprehensive analysis with trends, insights, and spending patterns.
@@ -254,7 +254,7 @@ You'll know the testing is successful when:
 
 ## Next Steps After Basic Testing
 
-1. **Explore Financial Analysis**: Test spending_analysis and budget_health_check tools
+1. **Explore Transaction History**: Test list_transactions with date filters
 2. **Transaction Management**: Try creating, updating, and deleting test transactions
 3. **Advanced Features**: Test reconcile_account with bank statement data
 4. **Performance Testing**: Run multiple concurrent requests

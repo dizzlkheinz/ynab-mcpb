@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ReconciliationAnalysis } from '../types.js';
-import { buildReconciliationV2Payload } from '../../reconcileV2Adapter.js';
+import { buildReconciliationPayload } from '../../reconcileAdapter.js';
 
 const minimalAnalysis: ReconciliationAnalysis = {
   success: true,
@@ -34,9 +34,9 @@ const minimalAnalysis: ReconciliationAnalysis = {
   insights: [],
 };
 
-describe('buildReconciliationV2Payload schema reference', () => {
+describe('buildReconciliationPayload schema reference', () => {
   it('points to the master branch schema file on raw.githubusercontent.com', () => {
-    const { structured } = buildReconciliationV2Payload(minimalAnalysis, {
+    const { structured } = buildReconciliationPayload(minimalAnalysis, {
       accountId: 'acct-id',
       accountName: 'Checking',
       currencyCode: 'USD',

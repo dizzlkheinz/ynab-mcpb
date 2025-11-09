@@ -382,8 +382,7 @@ export async function handleCreateAccount(params: CreateAccountRequest) {
 export function invalidateAccountCaches(budgetId: string) {
   const keysToInvalidate = [
     `accounts_${budgetId}`,
-    `budget_${budgetId}`,
-    `financial_overview_${budgetId}`
+    `budget_${budgetId}`
   ];
 
   keysToInvalidate.forEach(key => cacheManager.delete(key));
