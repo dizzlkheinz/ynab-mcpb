@@ -52,7 +52,6 @@ import {
   handleCompareTransactions,
   CompareTransactionsSchema,
 } from '../tools/compareTransactions/index.js';
-import { handleReconcileAccount, ReconcileAccountSchema } from '../tools/reconcileAccount.js';
 import {
   handleReconcileAccountV2,
   ReconcileAccountV2Schema,
@@ -515,15 +514,6 @@ export class YNABMCPServer {
       inputSchema: ReconcileAccountV2Schema,
       handler: adapt(handleReconcileAccountV2),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountV2Schema>>(),
-    });
-
-    register({
-      name: 'reconcile_account_legacy',
-      description:
-        '[LEGACY] Original reconciliation implementation with minified JSON output. Deprecated in favor of reconcile_account.',
-      inputSchema: ReconcileAccountSchema,
-      handler: adapt(handleReconcileAccount),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
     });
 
     register({
