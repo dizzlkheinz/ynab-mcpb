@@ -192,7 +192,7 @@ YNAB_EXPORT_PATH=/home/user/exports
 
 ## Available Tools
 
-The server provides 25 core tools for budgets, accounts, transactions, categories, payees, months, and financial analysis, plus 2 streamlined diagnostic tools (27 total). All tools are managed through the centralized Tool Registry for consistent validation, security, and error handling:
+The server provides 25 core tools for budgets, accounts, transactions, categories, payees, months, and financial analysis, plus 3 utility tools for diagnostics and configuration (28 total). All tools are managed through the centralized Tool Registry for consistent validation, security, and error handling:
 
 ### Budget Management
 
@@ -215,6 +215,7 @@ The server provides 25 core tools for budgets, accounts, transactions, categorie
 - `reconcile_account` - Comprehensive account reconciliation with smart duplicate matching, automatic date adjustment, exact balance matching, and detailed reporting
 - `get_transaction` - Get specific transaction details
 - `create_transaction` - Create new transaction
+- `create_receipt_split_transaction` - Create split transaction from receipt items with proportional tax allocation and optional dry-run preview
 - `update_transaction` - Update existing transaction
 - `delete_transaction` - Delete transaction
 
@@ -239,10 +240,11 @@ The server provides 25 core tools for budgets, accounts, transactions, categorie
 - `get_user` - Get authenticated user information
 - `convert_amount` - Convert between dollars and milliunits
 
-### Diagnostics
+### Diagnostics & Configuration
 
 - `diagnostic_info` - Comprehensive server diagnostic information (memory, environment, server info, security stats, cache stats)
 - `clear_cache` - Clear the in-memory cache
+- `set_output_format` - Configure default JSON output formatting (minify or pretty-print with configurable spaces)
 
 ## Documentation
 
