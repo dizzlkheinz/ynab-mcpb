@@ -395,10 +395,19 @@ export function parseBankCSV(
         if (format.amount_column) {
           rawAmount = recordObj[format.amount_column as string] || '';
         } else if (format.debit_column !== undefined && format.credit_column !== undefined) {
-          const debitVal = recordObj[format.debit_column as string] || '0';
-          const creditVal = recordObj[format.credit_column as string] || '0';
+          const debitVal = recordObj[format.debit_column as string] || '';
+          const creditVal = recordObj[format.credit_column as string] || '';
           // Convert: debits negative, credits positive
-          rawAmount = parseFloat(debitVal) !== 0 ? `-${debitVal}` : creditVal;
+          // Check if debit has a value and is non-zero
+          const debitNum = parseFloat(debitVal.replace(/[^\d.-]/g, ''));
+          const creditNum = parseFloat(creditVal.replace(/[^\d.-]/g, ''));
+          if (!isNaN(debitNum) && debitNum !== 0) {
+            rawAmount = `-${debitVal}`;
+          } else if (!isNaN(creditNum) && creditNum !== 0) {
+            rawAmount = creditVal;
+          } else {
+            rawAmount = '0';
+          }
         } else {
           throw new Error('No amount column configuration found');
         }
@@ -439,12 +448,20 @@ export function parseBankCSV(
               ? format.credit_column
               : parseInt(format.credit_column, 10);
 
-          const debitVal = recordArray[debitIndex] || '0';
-          const creditVal = recordArray[creditIndex] || '0';
+          const debitVal = recordArray[debitIndex] || '';
+          const creditVal = recordArray[creditIndex] || '';
 
           // Convert: debits negative, credits positive
-          rawAmount =
-            parseFloat(debitVal.replace(/[^\d.-]/g, '')) !== 0 ? `-${debitVal}` : creditVal;
+          // Check if debit has a value and is non-zero
+          const debitNum = parseFloat(debitVal.replace(/[^\d.-]/g, ''));
+          const creditNum = parseFloat(creditVal.replace(/[^\d.-]/g, ''));
+          if (!isNaN(debitNum) && debitNum !== 0) {
+            rawAmount = `-${debitVal}`;
+          } else if (!isNaN(creditNum) && creditNum !== 0) {
+            rawAmount = creditVal;
+          } else {
+            rawAmount = '0';
+          }
         } else {
           throw new Error('No amount column configuration found');
         }

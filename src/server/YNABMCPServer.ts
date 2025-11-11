@@ -493,7 +493,7 @@ export class YNABMCPServer {
     register({
       name: 'reconcile_account',
       description:
-        'Guided reconciliation workflow with human narrative + structured JSON output, insight detection, and optional execution (create/update/unclear).',
+        'Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).',
       inputSchema: ReconcileAccountSchema,
       handler: adapt(handleReconcileAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),

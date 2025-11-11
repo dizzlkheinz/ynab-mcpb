@@ -15,6 +15,7 @@ import {
   type AccountSnapshot,
   type LegacyReconciliationResult,
 } from './executor.js';
+import { responseFormatter } from '../../server/responseFormatter.js';
 
 // Re-export types for external use
 export type * from './types.js';
@@ -85,6 +86,9 @@ export const ReconcileAccountSchema = z
     require_exact_match: z.boolean().optional().default(true),
     confidence_threshold: z.number().min(0).max(1).optional().default(0.8),
     max_resolution_attempts: z.number().int().min(1).max(10).optional().default(5),
+
+    // Response options
+    include_structured_data: z.boolean().optional().default(false),
   })
   .refine((data) => data.csv_file_path || data.csv_data, {
     message: 'Either csv_file_path or csv_data must be provided',
@@ -123,6 +127,25 @@ export async function handleReconcileAccount(
         : await accountsApi.getAccountById(params.budget_id, params.account_id);
       const accountData = accountResponse.data.account;
       const accountName = accountData?.name;
+      const accountType = accountData?.type;
+
+      // For liability accounts (credit cards, loans, debts), statement balance should be negative
+      // A positive balance on a credit card statement means you OWE that amount
+      const isLiabilityAccount =
+        accountType === 'creditCard' ||
+        accountType === 'lineOfCredit' ||
+        accountType === 'mortgage' ||
+        accountType === 'autoLoan' ||
+        accountType === 'studentLoan' ||
+        accountType === 'personalLoan' ||
+        accountType === 'medicalDebt' ||
+        accountType === 'otherDebt' ||
+        accountType === 'otherLiability';
+
+      // Negate statement balance for liability accounts
+      const adjustedStatementBalance = isLiabilityAccount
+        ? -Math.abs(params.statement_balance)
+        : params.statement_balance;
 
       const budgetResponse = await ynabAPI.budgets.getBudgetById(params.budget_id);
       const currencyCode = budgetResponse.data.budget?.currency_format?.iso_code ?? 'USD';
@@ -146,7 +169,7 @@ export async function handleReconcileAccount(
         params.csv_data || params.csv_file_path || '',
         params.csv_file_path,
         ynabTransactions,
-        params.statement_balance,
+        adjustedStatementBalance,
         config,
         currencyCode,
         params.account_id,
@@ -194,18 +217,23 @@ export async function handleReconcileAccount(
 
       const payload = buildReconciliationPayload(analysis, adapterOptions, executionData);
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: payload.human,
-          },
-          {
-            type: 'text',
-            text: JSON.stringify(payload.structured, null, 2),
-          },
-        ],
-      };
+      // Build response content - always include human narrative
+      const content: Array<{ type: 'text'; text: string }> = [
+        {
+          type: 'text',
+          text: payload.human,
+        },
+      ];
+
+      // Only include structured data if requested (can be very large)
+      if (params.include_structured_data) {
+        content.push({
+          type: 'text',
+          text: responseFormatter.format(payload.structured),
+        });
+      }
+
+      return { content };
     },
     'ynab:reconcile_account',
     'analyzing account reconciliation',

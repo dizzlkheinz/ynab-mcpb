@@ -88,6 +88,16 @@ describe('ErrorHandler', () => {
       expect(parsed.error.message).toContain('An error occurred while testing');
     });
 
+    it('should preserve original error message in details field for unknown errors', () => {
+      const error = new Error('Specific diagnostic error message');
+      const result = ErrorHandler.handleError(error, 'testing operation');
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.error.code).toBe('UNKNOWN_ERROR');
+      expect(parsed.error.details).toBe('Specific diagnostic error message');
+      expect(parsed.error.message).toContain('An error occurred while testing operation');
+    });
+
     it('should handle non-Error objects', () => {
       const error = 'String error';
       const result = ErrorHandler.handleError(error, 'testing');

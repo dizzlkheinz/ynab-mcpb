@@ -268,6 +268,7 @@ describe('ToolRegistry', () => {
         account_id: 'account-1',
         csv_data: 'Date,Description,Amount\n2025-10-01,Sample,-1.23',
         statement_balance: -1.23,
+        include_structured_data: true, // Request both human + structured output
       },
     });
 

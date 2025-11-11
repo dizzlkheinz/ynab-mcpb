@@ -215,6 +215,10 @@ export class ErrorHandler {
     }
 
     // Fallback for unknown errors
+    // Preserve the original error message for debugging while sanitizing sensitive data
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const sanitizedDetails = this.sanitizeErrorDetails(errorMessage);
+
     return {
       error: {
         code: SecurityErrorCode.UNKNOWN_ERROR,
@@ -225,6 +229,7 @@ export class ErrorHandler {
           'Check your internet connection',
           'Contact support if the issue persists',
         ],
+        ...(sanitizedDetails && { details: sanitizedDetails }),
       },
     };
   }
