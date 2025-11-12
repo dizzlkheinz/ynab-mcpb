@@ -248,14 +248,32 @@ The server provides 25 core tools for budgets, accounts, transactions, categorie
 
 ## Documentation
 
-- **[API Reference](docs/API.md)** - Complete tool documentation with examples
-- **[Developer Guide](docs/DEVELOPER.md)** - Best practices and common patterns
-- **[CSV Parser Guide](docs/CSV_PARSER.md)** - CSV parsing, amount handling, and format detection
-- **[Usage Examples](docs/EXAMPLES.md)** - Practical usage examples
-- **[Testing Guide](docs/TESTING.md)** - Comprehensive testing information
-- **[Build Guide](docs/BUILD.md)** - Build and development workflow
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment instructions
-- **[Environment Guide](docs/ENVIRONMENT.md)** - Environment configuration details
+### 📚 Complete Documentation Index
+Explore the [Documentation Hub](docs/README.md) for organized access to all guides and references.
+
+### Quick Links
+
+**Getting Started**:
+- **[Quick Start](docs/getting-started/QUICKSTART.md)** - Fast path to testing with Claude Desktop
+- **[Installation](docs/getting-started/INSTALLATION.md)** - Detailed installation instructions
+- **[Configuration](docs/getting-started/CONFIGURATION.md)** - Environment variables and settings
+
+**Guides**:
+- **[Architecture](docs/guides/ARCHITECTURE.md)** - v0.8.x modular architecture and patterns
+- **[Development](docs/guides/DEVELOPMENT.md)** - Common patterns and best practices
+- **[Testing](docs/guides/TESTING.md)** - Automated and manual testing strategies
+- **[Deployment](docs/guides/DEPLOYMENT.md)** - Production deployment instructions
+
+**Features**:
+- **[Caching](docs/features/CACHING.md)** - Enhanced caching with LRU eviction
+- **[Reconciliation](docs/features/RECONCILIATION.md)** - Smart account reconciliation
+- **[CSV Parser](docs/features/CSV_PARSER.md)** - CSV parsing and format detection
+
+**Reference**:
+- **[API Reference](docs/reference/API.md)** - Complete tool documentation with examples
+- **[Tools Quick Reference](docs/reference/TOOLS.md)** - Quick tool catalog
+- **[Usage Examples](docs/reference/EXAMPLES.md)** - Practical usage examples
+- **[Troubleshooting](docs/reference/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ## Project Structure
 
@@ -293,7 +311,13 @@ ynab-mcp-server/
 │   └── __tests__/        # Global test utilities and E2E tests
 ├── dist/                 # Built JavaScript output
 ├── docs/                 # Complete documentation
-│   └── ADR/              # Architecture Decision Records (v0.8.x)
+│   ├── getting-started/  # Installation and quick start guides
+│   ├── guides/           # Architecture, development, testing guides
+│   ├── features/         # Feature-specific documentation
+│   ├── reference/        # API reference, tools, examples, troubleshooting
+│   ├── development/      # Build, testing, PR automation, versioning
+│   ├── architecture/     # Architecture decision records (ADRs)
+│   └── assets/           # Examples, schemas, and other assets
 ├── scripts/              # Build and utility scripts
 └── README.md            # This file
 ```

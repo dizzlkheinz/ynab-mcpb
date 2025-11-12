@@ -18,6 +18,8 @@ npm run dev                # TypeScript watch mode for development
 npm run type-check         # Run TypeScript type checking without emitting files
 ```
 
+See [docs/development/BUILD.md](docs/development/BUILD.md) for detailed build information.
+
 ### Testing
 
 ```bash
@@ -29,6 +31,8 @@ npm run test:performance   # Performance and load tests
 npm run test:coverage      # Generate coverage report (requires 80% coverage)
 npm run test:watch         # Watch mode for test development
 ```
+
+See [docs/guides/TESTING.md](docs/guides/TESTING.md) for comprehensive testing documentation.
 
 ### Code Quality
 
@@ -47,6 +51,8 @@ npm run generate:dxt       # Generate DXT file from built bundle
 npm run bundle             # Bundle with esbuild (development)
 npm run bundle:prod        # Bundle with minification (production)
 ```
+
+See [docs/guides/DEPLOYMENT.md](docs/guides/DEPLOYMENT.md) for deployment instructions.
 
 ## Architecture Overview
 
