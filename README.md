@@ -10,29 +10,11 @@
 [![lint: eslint](https://img.shields.io/badge/lint-eslint-green.svg)](https://eslint.org)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-brightgreen.svg)](#)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6.svg)](https://www.typescriptlang.org)
-[![SemVer](https://img.shields.io/badge/SemVer-0.y.z-yellow.svg)](docs/VERSIONING.md)
+[![SemVer](https://img.shields.io/badge/SemVer-0.y.z-yellow.svg)](https://semver.org/)
 [![Issues](https://img.shields.io/github/issues/dizzlkheinz/mcp-for-ynab)](https://github.com/dizzlkheinz/mcp-for-ynab/issues)
 [![PRs](https://img.shields.io/github/issues-pr/dizzlkheinz/mcp-for-ynab)](https://github.com/dizzlkheinz/mcp-for-ynab/pulls)
 
 A Model Context Protocol (MCP) server that provides AI assistants with secure access to You Need A Budget (YNAB) data and functionality. This server enables AI applications to help users manage their personal finances by interacting with YNAB budgets, accounts, transactions, and categories through a comprehensive set of tools.
-
-## 🎉 What's New in v0.8.2
-
-- **🧾 Receipt Split Tool**: `create_receipt_split_transaction` converts confirmed receipt breakdowns into multi-line splits with proportional tax allocation and optional dry-run previews.
-- **🔸 Split Transaction Support**: `create_transaction` accepts subtransactions out of the box, enabling granular category assignments without manual math.
-- **🧪 Strengthened Validation**: Schema safeguards ensure parent transaction totals match their split lines, preventing malformed requests.
-- **📘 Documentation Refresh**: API guides, quick start, and testing checklists highlight the receipt workflow and split best practices.
-
-### Highlights from the v0.8.x Series
-
-- **🏗️ Modular Architecture**: Redesigned server architecture with composable services (Config, Resources, Prompts, Diagnostics) for improved maintainability and testability
-- **🎯 Centralized Tool Registry**: Unified tool registration system with consistent validation, security, and error handling across all tools
-- **⚡ Enhanced Caching**: Advanced caching with LRU eviction, hit/miss tracking, stale-while-revalidate, and cache warming for improved performance
-- **🔧 Improved Error Handling**: Dependency injection pattern with consistent, actionable error messages across all tools
-- **📦 Decomposed Tool Modules**: Large tool files broken into focused sub-modules for better code organization and reusability
-- **⏱️ Cache Warming**: Automatic cache warming after budget selection for faster subsequent operations
-- **📊 Enhanced Observability**: Comprehensive cache metrics and diagnostics for better system monitoring
-- **🔄 100% Backward Compatibility**: All v0.7.x functionality preserved with identical API behavior
 
 ## Features
 
@@ -391,8 +373,12 @@ This server follows security best practices:
 
 Notes:
 
-- PRs use an auto-applied template and a public API checklist (see docs/VERSIONING.md)
-- For release planning, use the “Release Checklist” issue template
+- PRs use an auto-applied template and a public API checklist
+- For release planning, use the "Release Checklist" issue template
+
+## Versioning
+
+This project follows [Semantic Versioning](https://semver.org/). Currently in 0.x (pre-1.0), the API may change between minor versions. Once 1.0 is reached, breaking changes will only occur in major versions.
 
 ## License
 

@@ -16,6 +16,7 @@ import {
   type LegacyReconciliationResult,
 } from './executor.js';
 import { responseFormatter } from '../../server/responseFormatter.js';
+import { extractDateRangeFromCSV, autoDetectCSVFormat } from '../compareTransactions/parser.js';
 
 // Re-export types for external use
 export type * from './types.js';
@@ -151,10 +152,41 @@ export async function handleReconcileAccount(
       const currencyCode = budgetResponse.data.budget?.currency_format?.iso_code ?? 'USD';
 
       // Fetch YNAB transactions for the account
-      // Use date range if provided, otherwise get recent transactions
-      const sinceDate = params.statement_start_date
-        ? new Date(params.statement_start_date)
-        : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 days ago
+      // Auto-detect date range from CSV if not explicitly provided
+      let sinceDate: Date;
+
+      if (params.statement_start_date) {
+        // User provided explicit start date
+        sinceDate = new Date(params.statement_start_date);
+      } else {
+        // Auto-detect from CSV content
+        try {
+          const csvContent = params.csv_data || params.csv_file_path || '';
+          const csvFormat = params.csv_format || autoDetectCSVFormat(csvContent);
+
+          // Convert schema format to parser format
+          const parserFormat = {
+            date_column: csvFormat.date_column || 'Date',
+            amount_column: csvFormat.amount_column,
+            debit_column: csvFormat.debit_column,
+            credit_column: csvFormat.credit_column,
+            description_column: csvFormat.description_column || 'Description',
+            date_format: csvFormat.date_format || 'MM/DD/YYYY',
+            has_header: csvFormat.has_header ?? true,
+            delimiter: csvFormat.delimiter || ',',
+          };
+
+          const { minDate } = extractDateRangeFromCSV(csvContent, parserFormat);
+
+          // Add 7-day buffer before min date for pending transactions
+          const minDateObj = new Date(minDate);
+          minDateObj.setDate(minDateObj.getDate() - 7);
+          sinceDate = minDateObj;
+        } catch (error) {
+          // Fallback to 90 days if CSV parsing fails
+          sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        }
+      }
 
       const transactionsResponse = await ynabAPI.transactions.getTransactionsByAccount(
         params.budget_id,

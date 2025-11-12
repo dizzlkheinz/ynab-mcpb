@@ -13,15 +13,13 @@ This document provides comprehensive documentation for all tools available in th
 - [Category Management Tools](#category-management-tools)
 - [Payee Management Tools](#payee-management-tools)
 - [Monthly Data Tools](#monthly-data-tools)
-- [Financial Analysis Tools](#financial-analysis-tools)
-- [Natural Language & AI Tools](#natural-language--ai-tools)
 - [Utility Tools](#utility-tools)
 - [Diagnostic Tools](#diagnostic-tools)
 - [Error Handling](#error-handling)
 
 ## Overview
 
-The YNAB MCP Server provides 27 tools that enable AI assistants to interact with YNAB data. All tools follow consistent patterns for parameters, responses, and error handling.
+The YNAB MCP Server provides 28 tools that enable AI assistants to interact with YNAB data. All tools follow consistent patterns for parameters, responses, and error handling.
 
 ### Tool Naming Convention
 
@@ -408,63 +406,7 @@ Compares bank transactions from CSV files with YNAB transactions to identify mis
 
 ### reconcile_account
 
-Performs comprehensive account reconciliation with bank statement data, including automatic transaction creation, smart duplicate matching, automatic date adjustment, and exact balance matching.
-
-**Parameters:**
-- `budget_id` (string, required): The ID of the budget to reconcile
-- `account_id` (string, required): The ID of the account to reconcile
-- `csv_file_path` (string, optional): Path to CSV file containing bank transactions
-- `csv_data` (string, optional): CSV data as string (alternative to csv_file_path)
-- `expected_bank_balance` (number, optional): Current bank account balance in dollars for verification
-- `auto_create_transactions` (boolean, optional): Automatically create missing transactions in YNAB (default: false)
-- `auto_update_cleared_status` (boolean, optional): Automatically mark matched transactions as cleared (default: false)
-- `auto_unclear_missing` (boolean, optional): Automatically unmark cleared transactions missing from bank (default: true)
-- `auto_adjust_dates` (boolean, optional): Automatically adjust YNAB dates to match bank processing dates (default: false)
-- `start_date` (string, optional): Start date for reconciliation period (YYYY-MM-DD)
-- `end_date` (string, optional): End date for reconciliation period (YYYY-MM-DD)
-- `amount_tolerance` (number, optional): Amount difference tolerance as decimal (default: 0.01)
-- `date_tolerance_days` (number, optional): Date difference tolerance in days (default: 5)
-- `dry_run` (boolean, optional): Preview changes without applying them (default: true)
-- `csv_format` (object, optional): CSV format configuration (same as compare_transactions)
-
-**Key Features:**
-- **Smart Duplicate Matching**: Handles multiple transactions with identical amounts using chronological order
-- **Automatic Date Adjustment**: Syncs YNAB dates with bank processing dates for perfect alignment
-- **Exact Balance Matching**: Zero tolerance validation ensures perfect reconciliation
-- **Comprehensive Actions**: Creates missing transactions, marks cleared status, adjusts dates automatically
-
-**Example Request:**
-```json
-{
-  "name": "reconcile_account",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321",
-    "expected_bank_balance": 1234.56,
-    "csv_data": "Date,Amount,Description\n2024-01-01,100.00,Coffee Shop\n2024-01-02,-50.25,Gas Station",
-    "auto_create_transactions": true,
-    "auto_update_cleared_status": true,
-    "auto_adjust_dates": true,
-    "dry_run": false
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"summary\": {\n    \"bank_transactions_count\": 15,\n    \"ynab_transactions_count\": 12,\n    \"matches_found\": 10,\n    \"missing_in_ynab\": 2,\n    \"missing_in_bank\": 1,\n    \"transactions_created\": 2,\n    \"transactions_updated\": 8,\n    \"dates_adjusted\": 3,\n    \"dry_run\": false\n  },\n  \"date_range\": {\n    \"start_date\": \"2024-01-01\",\n    \"end_date\": \"2024-01-15\",\n    \"bank_statement_range\": {\n      \"earliest_transaction\": \"2024-01-01\",\n      \"latest_transaction\": \"2024-01-15\"\n    },\n    \"ynab_data_range\": {\n      \"earliest_transaction\": \"2024-01-01\",\n      \"latest_transaction\": \"2024-01-16\"\n    }\n  },\n  \"account_balance\": {\n    \"before\": {\n      \"balance\": 123456,\n      \"cleared_balance\": 100000,\n      \"uncleared_balance\": 23456\n    },\n    \"after\": {\n      \"balance\": 123456,\n      \"cleared_balance\": 123456,\n      \"uncleared_balance\": 0\n    }\n  },\n  \"balance_reconciliation\": {\n    \"expected_bank_balance\": 123456,\n    \"ynab_cleared_balance\": 123456,\n    \"difference\": 0,\n    \"reconciled\": true\n  },\n  \"actions_taken\": [\n    {\n      \"type\": \"create_transaction\",\n      \"transaction\": { \"id\": \"new-txn-123\", \"amount\": -5000 },\n      \"reason\": \"Created missing transaction: Gas Station\"\n    },\n    {\n      \"type\": \"update_transaction\",\n      \"transaction\": { \"id\": \"txn-456\", \"cleared\": \"cleared\" },\n      \"reason\": \"Updated transaction: marked as cleared, date adjusted from 2024-01-15 to 2024-01-16\"\n    }\n  ],\n  \"recommendations\": [\n    \"✅ Adjusted 3 transaction date(s) to match bank statement dates\",\n    \"✅ Balance reconciliation successful: Bank and YNAB cleared balances match!\"\n  ]\n}"
-    }
-  ]
-}
-```
-
-### reconcile_account
-
-Performs the guided reconciliation workflow introduced in v0.9.0. The tool returns **two content entries**: a human-readable narrative for assistants and a structured JSON payload (`version: "2.0"`) that encodes MoneyValue objects, insights, and optional execution results.
+Performs comprehensive account reconciliation with bank statement data. The tool returns **two content entries**: a human-readable narrative for assistants and a structured JSON payload (`version: "2.0"`) that encodes MoneyValue objects, insights, and optional execution results.
 
 **Parameters (selected):**
 - `budget_id` / `account_id` (string, required)
@@ -767,10 +709,6 @@ For large discrepancies with many recommendations:
 3. **Review remaining discrepancy** and adjust strategy
 4. **Process medium-confidence items** with manual review
 5. **Final verification** before marking account as reconciled
-
-### reconcile_account_legacy
-
-Legacy reconciliation tool that returns a single minified JSON blob. It remains available under the `reconcile_account_legacy` name for backwards compatibility. New integrations should prefer `reconcile_account`, which exposes the dual-channel response and structured MoneyValue fields.
 
 ### get_transaction
 

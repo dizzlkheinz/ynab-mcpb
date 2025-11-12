@@ -7,6 +7,7 @@ import {
   amountToMilliunits,
   readCSVFile,
   detectDateFormat,
+  extractDateRangeFromCSV,
 } from '../../compareTransactions/parser.js';
 import { CSVFormat } from '../../compareTransactions/types.js';
 
@@ -682,6 +683,49 @@ describe('parser', () => {
       expect(transactions[0].amount).toBe(-50000);
       expect(transactions[1].description).toBe('Store;Purchase');
       expect(transactions[1].amount).toBe(-25000);
+    });
+  });
+
+  describe('extractDateRangeFromCSV', () => {
+    test('should extract min and max dates from CSV transactions', () => {
+      const csvContent = `Date,Description,Debit,Credit,Balance
+11/10/2025,DOLLARAMA # 109,10.91,,
+10/15/2025,Uber Trip,30.50,,
+09/22/2025,CIRCLE K # 05844 A,18.84,,`;
+
+      const format: CSVFormat = {
+        date_column: 'Date',
+        description_column: 'Description',
+        debit_column: 'Debit',
+        credit_column: 'Credit',
+        date_format: 'MM/DD/YYYY',
+        has_header: true,
+        delimiter: ',',
+      };
+
+      const { minDate, maxDate } = extractDateRangeFromCSV(csvContent, format);
+
+      expect(minDate).toBe('2025-09-22');
+      expect(maxDate).toBe('2025-11-10');
+    });
+
+    test('should handle single transaction', () => {
+      const csvContent = `Date,Description,Amount
+10/15/2025,Test,100.00`;
+
+      const format: CSVFormat = {
+        date_column: 'Date',
+        description_column: 'Description',
+        amount_column: 'Amount',
+        date_format: 'MM/DD/YYYY',
+        has_header: true,
+        delimiter: ',',
+      };
+
+      const { minDate, maxDate } = extractDateRangeFromCSV(csvContent, format);
+
+      expect(minDate).toBe('2025-10-15');
+      expect(maxDate).toBe('2025-10-15');
     });
   });
 

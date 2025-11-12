@@ -520,3 +520,38 @@ export function readCSVFile(filePath: string): string {
     );
   }
 }
+
+/**
+ * Extract date range from CSV bank statement
+ * Returns min and max dates in YYYY-MM-DD format
+ */
+export function extractDateRangeFromCSV(
+  csvContent: string,
+  format: CSVFormat,
+): { minDate: string; maxDate: string } {
+  const transactions = parseBankCSV(csvContent, format);
+
+  if (transactions.length === 0) {
+    throw new Error('No transactions found in CSV');
+  }
+
+  // Extract all dates (already Date objects from parseBankCSV)
+  const dates = transactions.map((txn) => txn.date.getTime());
+
+  // Find min and max
+  const minDateObj = new Date(Math.min(...dates));
+  const maxDateObj = new Date(Math.max(...dates));
+
+  // Convert to YYYY-MM-DD format
+  const toYYYYMMDD = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  return {
+    minDate: toYYYYMMDD(minDateObj),
+    maxDate: toYYYYMMDD(maxDateObj),
+  };
+}
