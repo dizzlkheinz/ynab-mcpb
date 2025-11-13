@@ -1,0 +1,5 @@
+Command failed: Error loading configuration: config profile `Context: Repository: ynab-mcp-dxt (TypeScript MCP host). Reference doc: docs/reconciliation-flow.md (Automated Reconciliation Flow covering input validation, phase 1 newest→oldest loop, phase 2 cleared sanity pass, finalize, leftovers, backlog). New vdocs page must include front matter, prerequisites/env, schema contracts (ReconcileAccountSchema, CSV parser outputs), algorithm phases, configuration knobs (tolerances, ±5-day drift, confidence thresholds), logging/audit expectations, leftover escalation details, testing hooks (Vitest suites under src/__tests__), and cross-links to src/tools and src/utils modules. Deliverable should be ordered steps with rationale, pointing to repo files to inspect/update, plus open questions/validation tasks. Audience: internal engineers + reviewers.
+
+Agent: Create a multi-step plan to author vdocs/reconciliation-flow.md.
+
+[Running in read-only mode - no modifications allowed]` not found

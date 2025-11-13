@@ -4,12 +4,14 @@ import {
   handleListTransactions,
   handleGetTransaction,
   handleCreateTransaction,
+  handleCreateTransactions,
   handleCreateReceiptSplitTransaction,
   handleUpdateTransaction,
   handleDeleteTransaction,
   ListTransactionsSchema,
   GetTransactionSchema,
   CreateTransactionSchema,
+  CreateTransactionsSchema,
   CreateReceiptSplitTransactionSchema,
   UpdateTransactionSchema,
   DeleteTransactionSchema,
@@ -39,6 +41,7 @@ const mockYnabAPI = {
     getTransactionsByCategory: vi.fn(),
     getTransactionById: vi.fn(),
     createTransaction: vi.fn(),
+    createTransactions: vi.fn(),
     updateTransaction: vi.fn(),
     deleteTransaction: vi.fn(),
   },
@@ -1048,6 +1051,64 @@ describe('transactionTools', () => {
     });
   });
 
+  describe('handleCreateTransactions', () => {
+    it('surfaces top-level validation errors with a reserved transaction index', async () => {
+      const invalidParams = {
+        budget_id: '',
+        transactions: [],
+      };
+
+      const result = await handleCreateTransactions(mockYnabAPI, invalidParams as any);
+
+      expect(result.content).toHaveLength(1);
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.error.code).toBe('VALIDATION_ERROR');
+      expect(parsed.error.details).toBeDefined();
+
+      const details = JSON.parse(parsed.error.details ?? '[]');
+      expect(details).toHaveLength(1);
+      expect(details[0].transaction_index).toBeNull();
+      expect(details[0].errors).toEqual(
+        expect.arrayContaining([
+          'Budget ID is required',
+          'At least one transaction is required',
+        ]),
+      );
+    });
+
+    it('combines reserved and per-transaction validation errors', async () => {
+      const invalidParams = {
+        budget_id: 'budget-123',
+        dry_run: 'later',
+        transactions: [
+          {
+            account_id: '',
+            amount: -50000,
+            date: '2024-01-01',
+          },
+        ],
+      };
+
+      const result = await handleCreateTransactions(mockYnabAPI, invalidParams as any);
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.error.code).toBe('VALIDATION_ERROR');
+      expect(parsed.error.details).toBeDefined();
+
+      const details = JSON.parse(parsed.error.details ?? '[]');
+      const generalEntry = details.find((entry: any) => entry.transaction_index === null);
+      const transactionEntry = details.find((entry: any) => entry.transaction_index === 0);
+
+      expect(generalEntry).toBeDefined();
+      expect(generalEntry.errors).toEqual(
+        expect.arrayContaining(['Expected boolean, received string']),
+      );
+
+      expect(transactionEntry).toBeDefined();
+      expect(transactionEntry.errors).toEqual(expect.arrayContaining(['Account ID is required']));
+    });
+  });
+
   describe('CreateReceiptSplitTransactionSchema', () => {
     const basePayload = {
       budget_id: 'budget-123',
@@ -1690,6 +1751,143 @@ describe('transactionTools', () => {
     });
   });
 
+  describe('CreateTransactionsSchema', () => {
+    const buildTransaction = (overrides: Record<string, unknown> = {}) => ({
+      account_id: 'account-123',
+      amount: -5000,
+      date: '2024-01-01',
+      memo: 'Bulk entry',
+      ...overrides,
+    });
+
+    it('should accept a valid batch of multiple transactions', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildTransaction(), buildTransaction({ account_id: 'account-456' })],
+      };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.transactions).toHaveLength(2);
+      }
+    });
+
+    it('should accept the minimum batch size of one transaction', () => {
+      const params = { budget_id: 'budget-123', transactions: [buildTransaction()] };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept the maximum batch size of 100 transactions', () => {
+      const hundred = Array.from({ length: 100 }, (_, index) =>
+        buildTransaction({ import_id: `YNAB:-5000:2024-01-01:${index + 1}` }),
+      );
+      const params = { budget_id: 'budget-123', transactions: hundred };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject an empty transactions array', () => {
+      const params = { budget_id: 'budget-123', transactions: [] as unknown[] };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toContain('At least one transaction is required');
+      }
+    });
+
+    it('should reject batches exceeding 100 transactions', () => {
+      const overLimit = Array.from({ length: 101 }, () => buildTransaction());
+      const result = CreateTransactionsSchema.safeParse({
+        budget_id: 'budget-123',
+        transactions: overLimit,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toContain('A maximum of 100 transactions');
+      }
+    });
+
+    it('should reject transactions missing required fields', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildTransaction({ account_id: undefined })],
+      };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].path).toEqual(['transactions', 0, 'account_id']);
+      }
+    });
+
+    it('should validate ISO date format for each transaction', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildTransaction({ date: '01/01/2024' })],
+      };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].path).toEqual(['transactions', 0, 'date']);
+      }
+    });
+
+    it('should require integer milliunit amounts', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildTransaction({ amount: -50.25 })],
+      };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].path).toEqual(['transactions', 0, 'amount']);
+      }
+    });
+
+    it('should reject invalid cleared enum values', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildTransaction({ cleared: 'pending' })],
+      };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject transactions containing subtransactions', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildTransaction({ subtransactions: [{ amount: -2500 }] })],
+      };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find((i) => i.path.includes('subtransactions'));
+        expect(issue?.message).toContain('Subtransactions are not supported');
+      }
+    });
+
+    it('should fail when any transaction in the batch is invalid', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildTransaction(), buildTransaction({ amount: 'invalid' })],
+      };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+    });
+
+    it('should accept optional import_id values', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildTransaction({ import_id: 'YNAB:-5000:2024-01-01:1' })],
+      };
+      const result = CreateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.transactions[0].import_id).toBe('YNAB:-5000:2024-01-01:1');
+      }
+    });
+  });
+
   describe('handleDeleteTransaction', () => {
     const mockDeletedTransaction = {
       id: 'transaction-456',
@@ -1851,6 +2049,471 @@ describe('transactionTools', () => {
         budget_id: 'budget-123',
         transaction_id: 'transaction-456',
         dry_run: true,
+      });
+    });
+  });
+
+  describe('handleCreateTransactions', () => {
+    let transactionCounter = 0;
+
+    const buildTransaction = (overrides: Record<string, unknown> = {}) => ({
+      account_id: 'account-001',
+      amount: -1500,
+      date: '2024-01-01',
+      memo: 'Bulk test',
+      cleared: 'cleared',
+      ...overrides,
+    });
+
+    const buildParams = (overrides: Record<string, unknown> = {}) => ({
+      budget_id: 'budget-123',
+      transactions: [buildTransaction()],
+      ...overrides,
+    });
+
+    const buildApiTransaction = (overrides: Record<string, unknown> = {}) => ({
+      id: overrides['id'] ?? `transaction-${++transactionCounter}`,
+      account_id: overrides['account_id'] ?? 'account-001',
+      date: overrides['date'] ?? '2024-01-01',
+      amount: overrides['amount'] ?? -1500,
+      memo: overrides['memo'] ?? 'Bulk test',
+      cleared: overrides['cleared'] ?? 'cleared',
+      approved: overrides['approved'] ?? true,
+      flag_color: overrides['flag_color'] ?? null,
+      account_name: overrides['account_name'] ?? 'Checking',
+      payee_id: overrides['payee_id'] ?? null,
+      payee_name: overrides['payee_name'] ?? null,
+      category_id: overrides['category_id'] ?? null,
+      category_name: overrides['category_name'] ?? null,
+      transfer_account_id: overrides['transfer_account_id'] ?? null,
+      transfer_transaction_id: overrides['transfer_transaction_id'] ?? null,
+      matched_transaction_id: overrides['matched_transaction_id'] ?? null,
+      import_id: overrides['import_id'] ?? null,
+      deleted: overrides['deleted'] ?? false,
+      subtransactions: [],
+    });
+
+    const buildApiResponse = (
+      transactions: Record<string, unknown>[],
+      extras: Record<string, unknown> = {},
+    ) => ({
+      data: {
+        transaction_ids: transactions.map((txn) => String(txn['id'])),
+        transactions,
+        duplicate_import_ids: extras['duplicate_import_ids'] ?? [],
+        server_knowledge: extras['server_knowledge'] ?? 1,
+      },
+    });
+
+    const parseResponse = async (resultPromise: ReturnType<typeof handleCreateTransactions>) => {
+      const result = await resultPromise;
+      const text = result.content?.[0]?.text ?? '{}';
+      return JSON.parse(text) as Record<string, any>;
+    };
+
+    beforeEach(() => {
+      transactionCounter = 0;
+      (mockYnabAPI.transactions.createTransactions as any).mockReset();
+      cacheManager.delete.mockReset();
+      (CacheManager.generateKey as any).mockReset();
+    });
+
+    describe('dry run', () => {
+      it('returns validation summary without calling the API', async () => {
+        const params = buildParams({
+          dry_run: true,
+          transactions: [
+            buildTransaction({ amount: -2000, account_id: 'account-foo' }),
+            buildTransaction({ amount: -1000, account_id: 'account-bar', date: '2024-02-15' }),
+          ],
+        });
+
+        const response = await parseResponse(handleCreateTransactions(mockYnabAPI, params));
+
+        expect(mockYnabAPI.transactions.createTransactions).not.toHaveBeenCalled();
+        expect(response.dry_run).toBe(true);
+        expect(response.summary.total_transactions).toBe(2);
+        expect(response.summary.accounts_affected).toEqual(['account-foo', 'account-bar']);
+        expect(response.transactions_preview).toHaveLength(2);
+        expect(cacheManager.delete).not.toHaveBeenCalled();
+      });
+
+      it('surfaces validation errors before execution', async () => {
+        const invalidParams = buildParams({
+          transactions: [
+            {
+              amount: -2000,
+              date: '2024-01-01',
+            },
+          ],
+        });
+
+        const result = await handleCreateTransactions(mockYnabAPI, invalidParams as any);
+        const parsed = JSON.parse(result.content?.[0]?.text ?? '{}');
+        expect(parsed.error).toBeDefined();
+        expect(parsed.error.message).toContain('validation failed');
+        expect(mockYnabAPI.transactions.createTransactions).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('successful creation', () => {
+      it('creates a small batch with import_ids and correlates results', async () => {
+        const transactions = [
+          buildTransaction({ import_id: 'YNAB:-1500:2024-01-01:1' }),
+          buildTransaction({
+            account_id: 'account-002',
+            amount: -2500,
+            import_id: 'YNAB:-2500:2024-01-02:1',
+          }),
+        ];
+
+        const apiTransactions = transactions.map((transaction, index) =>
+          buildApiTransaction({
+            ...transaction,
+            id: `ynab-${index + 1}`,
+          }),
+        );
+
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+
+        const response = await parseResponse(
+          handleCreateTransactions(
+            mockYnabAPI,
+            buildParams({
+              transactions,
+            }),
+          ),
+        );
+
+        expect(response.summary.created).toBe(2);
+        expect(response.results).toHaveLength(2);
+        expect(response.results.every((result: any) => result.status === 'created')).toBe(true);
+        expect(cacheManager.delete).toHaveBeenCalledWith('transactions:list:budget-123:all');
+      });
+
+      it('correlates transactions without import_ids using hashes', async () => {
+        const batch = [
+          buildTransaction({ memo: 'Hash me' }),
+          buildTransaction({ memo: 'Hash me', date: '2024-01-02' }),
+        ];
+        const apiTransactions = batch.map((txn, index) =>
+          buildApiTransaction({ ...txn, id: `hash-${index + 1}` }),
+        );
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch })),
+        );
+        expect(response.results.map((result: any) => result.transaction_id)).toEqual([
+          'hash-1',
+          'hash-2',
+        ]);
+      });
+
+      it('handles mixed import_id and hash correlation scenarios', async () => {
+        const batch = [
+          buildTransaction({ import_id: 'YNAB:-1500:2024-01-01:mix' }),
+          buildTransaction({ memo: 'no id' }),
+        ];
+        const apiTransactions = [
+          buildApiTransaction({ ...batch[0], id: 'mix-1' }),
+          buildApiTransaction({ ...batch[1], id: 'mix-2' }),
+        ];
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch })),
+        );
+        expect(response.results.find((r: any) => r.transaction_id === 'mix-1')?.status).toBe(
+          'created',
+        );
+        expect(response.results.find((r: any) => r.transaction_id === 'mix-2')?.status).toBe(
+          'created',
+        );
+      });
+    });
+
+    describe('duplicate handling', () => {
+      it('marks all transactions as duplicates when import_ids already exist', async () => {
+        const batch = [
+          buildTransaction({ import_id: 'dup-1' }),
+          buildTransaction({ import_id: 'dup-2' }),
+        ];
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue({
+          data: {
+            transaction_ids: [],
+            transactions: [],
+            duplicate_import_ids: ['dup-1', 'dup-2'],
+            server_knowledge: 5,
+          },
+        });
+
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch })),
+        );
+
+        expect(response.summary.duplicates).toBe(2);
+        expect(response.results.every((result: any) => result.status === 'duplicate')).toBe(true);
+      });
+
+      it('marks partial duplicates while creating the rest', async () => {
+        const batch = [
+          buildTransaction({ import_id: 'dup-1' }),
+          buildTransaction({ import_id: 'new-1', memo: 'fresh' }),
+        ];
+        const apiTransactions = [buildApiTransaction({ ...batch[1], id: 'created-new' })];
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue({
+          data: {
+            transaction_ids: ['created-new'],
+            transactions: apiTransactions,
+            duplicate_import_ids: ['dup-1'],
+            server_knowledge: 10,
+          },
+        });
+
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch })),
+        );
+
+        const duplicateResult = response.results.find(
+          (result: any) => result.correlation_key === 'dup-1',
+        );
+        const createdResult = response.results.find(
+          (result: any) => result.transaction_id === 'created-new',
+        );
+        expect(duplicateResult?.status).toBe('duplicate');
+        expect(createdResult?.status).toBe('created');
+      });
+    });
+
+    describe('response size management', () => {
+      it('keeps full response when under 64KB', async () => {
+        const apiTransactions = [buildApiTransaction()];
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams()),
+        );
+        expect(response.transactions).toBeDefined();
+        expect(response.mode).toBe('full');
+      });
+
+      it('downgrades to summary mode when response exceeds 64KB', async () => {
+        const byteSpy = vi.spyOn(Buffer, 'byteLength');
+        byteSpy.mockImplementationOnce(() => 70 * 1024).mockImplementationOnce(() => 80 * 1024);
+        const apiTransactions = [buildApiTransaction()];
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams()),
+        );
+
+        expect(response.transactions).toBeUndefined();
+        expect(response.mode).toBe('summary');
+        byteSpy.mockRestore();
+      });
+
+      it('downgrades to ids_only mode when necessary', async () => {
+        const byteSpy = vi.spyOn(Buffer, 'byteLength');
+        byteSpy
+          .mockImplementationOnce(() => 80 * 1024)
+          .mockImplementationOnce(() => 97 * 1024)
+          .mockImplementationOnce(() => 98 * 1024);
+        const apiTransactions = [buildApiTransaction()];
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams()),
+        );
+
+        expect(response.mode).toBe('ids_only');
+        expect(response.results[0].transaction_id).toBeDefined();
+        byteSpy.mockRestore();
+      });
+
+      it('errors when response cannot fit under 100KB', async () => {
+        const byteSpy = vi.spyOn(Buffer, 'byteLength');
+        byteSpy
+          .mockImplementationOnce(() => 90 * 1024)
+          .mockImplementationOnce(() => 99 * 1024)
+          .mockImplementationOnce(() => 101 * 1024);
+        const apiTransactions = [buildApiTransaction()];
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const result = await handleCreateTransactions(mockYnabAPI, buildParams());
+        const parsed = JSON.parse(result.content?.[0]?.text ?? '{}');
+        expect(parsed.error).toBeDefined();
+        expect(parsed.error.message).toContain('RESPONSE_TOO_LARGE');
+        byteSpy.mockRestore();
+      });
+    });
+
+    describe('correlation edge cases', () => {
+      it('supports multi-bucket matching for identical transactions', async () => {
+        const batch = [
+          buildTransaction({ memo: 'repeat' }),
+          buildTransaction({ memo: 'repeat' }),
+          buildTransaction({ memo: 'repeat' }),
+        ];
+        const apiTransactions = batch.map((txn, index) =>
+          buildApiTransaction({ ...txn, id: `repeat-${index + 1}` }),
+        );
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch })),
+        );
+
+        expect(response.results.map((r: any) => r.request_index)).toEqual([0, 1, 2]);
+      });
+
+      it('records failures and logs warnings when correlation fails', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse([]),
+        );
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams()),
+        );
+        expect(response.results[0].status).toBe('failed');
+        expect(warnSpy).toHaveBeenCalled();
+        warnSpy.mockRestore();
+      });
+    });
+
+    describe('cache invalidation', () => {
+      it('invalidates transaction, account, and month caches for affected resources', async () => {
+        const batch = [
+          buildTransaction({ account_id: 'account-A', date: '2024-03-15' }),
+          buildTransaction({ account_id: 'account-B', date: '2024-04-01' }),
+        ];
+        const apiTransactions = batch.map((txn, index) =>
+          buildApiTransaction({ ...txn, id: `cache-${index + 1}` }),
+        );
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        await handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch }));
+
+        expect(cacheManager.delete).toHaveBeenCalledWith('transactions:list:budget-123:all');
+        expect(cacheManager.delete).toHaveBeenCalledWith('account:get:budget-123:account-A');
+        expect(cacheManager.delete).toHaveBeenCalledWith('account:get:budget-123:account-B');
+        expect(cacheManager.delete).toHaveBeenCalledWith('month:get:budget-123:2024-03-01');
+        expect(cacheManager.delete).toHaveBeenCalledWith('month:get:budget-123:2024-04-01');
+      });
+
+      it('deduplicates cache keys for repeated accounts and months', async () => {
+        const batch = [
+          buildTransaction({ account_id: 'repeat-account', date: '2024-05-10' }),
+          buildTransaction({ account_id: 'repeat-account', date: '2024-05-20' }),
+        ];
+        const apiTransactions = batch.map((txn, index) =>
+          buildApiTransaction({ ...txn, id: `repeat-cache-${index + 1}` }),
+        );
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        await handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch }));
+
+        const uniqueKeys = new Set(cacheManager.delete.mock.calls.map((args) => args[0]));
+        expect(uniqueKeys.has('account:get:budget-123:repeat-account')).toBe(true);
+        expect(uniqueKeys.has('month:get:budget-123:2024-05-01')).toBe(true);
+        const accountKeyCalls = cacheManager.delete.mock.calls.filter(
+          ([key]) => key === 'account:get:budget-123:repeat-account',
+        );
+        expect(accountKeyCalls).toHaveLength(1);
+      });
+
+      it('does not invalidate caches during dry runs', async () => {
+        await handleCreateTransactions(
+          mockYnabAPI,
+          buildParams({
+            dry_run: true,
+          }),
+        );
+        expect(cacheManager.delete).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('error handling and edge cases', () => {
+      it('propagates API failures', async () => {
+        (mockYnabAPI.transactions.createTransactions as any).mockRejectedValue(
+          new Error('500 Internal Server Error'),
+        );
+        const result = await handleCreateTransactions(mockYnabAPI, buildParams());
+        const parsed = JSON.parse(result.content?.[0]?.text ?? '{}');
+        expect(parsed.error).toBeDefined();
+      });
+
+      it('handles general validation errors outside of dry run', async () => {
+        const invalidParams = {
+          budget_id: 'budget-123',
+          transactions: [],
+        };
+        const result = await handleCreateTransactions(mockYnabAPI, invalidParams as any);
+        const parsed = JSON.parse(result.content?.[0]?.text ?? '{}');
+        expect(parsed.error).toBeDefined();
+      });
+
+      it('supports transactions without payees or categories and special memo characters', async () => {
+        const batch = [
+          buildTransaction({ memo: 'Special | memo', payee_name: undefined, category_id: undefined }),
+        ];
+        const apiTransactions = batch.map((txn) => buildApiTransaction(txn));
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch })),
+        );
+        expect(response.results[0].status).toBe('created');
+      });
+
+      it('allows transfer transactions by passing transfer payee ids', async () => {
+        const batch = [
+          buildTransaction({
+            payee_id: 'transfer_payee_account_ABC',
+            memo: 'Transfer out',
+          }),
+        ];
+        const apiTransactions = batch.map((txn) => buildApiTransaction(txn));
+        (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+        const response = await parseResponse(
+          handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch })),
+        );
+        expect(response.results[0].status).toBe('created');
       });
     });
   });

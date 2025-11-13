@@ -1,0 +1,12 @@
+Command failed: Error loading configuration: config profile `You are assisting on the ynab-mcp-dxt repository. We need a concrete plan for refining docs/reconciliation-flow.md, which documents the automated account reconciliation flow for the YNAB MCP host. The file currently contains:
+- Front matter with title 'Automated Reconciliation Flow', status 'active', last_updated '2025-11-12', owners @ynab-dxt/tooling, related docs referencing reference/API.md#reconcile_account, reference/TOOLS.md#reconcile_account, guides/TESTING.md#comprehensive-account-reconciliation, reference/TROUBLESHOOTING.md#reconciliation.
+- Sections covering prerequisites/env setup, schema & data contracts, configuration knobs, logging & auditability, numbered execution steps (1-6) with rationale/validation/open questions, and testing hooks/cross-links.
+- Open questions around persisting CSV formats, adaptive confidence thresholds, dry-run previews, statement_date enforcement, SLA escalation, and telemetry snapshots.
+
+Repository writing guidance: docs live in docs/, Prettier 2-space indent & 100-col width, use explicit section headers, keep tool identifiers kebab-case, reference other docs via relative links. Tests via Vitest; documenting reconciliation features should reference docs/guides/TESTING.md and troubleshooting entries when relevant.
+
+Goal: produce a multi-step plan describing how to update docs/reconciliation-flow.md so it is clearer, actionable for engineers/operators, and aligned with repo standards. Consider whether to reorganize sections, address open questions, add diagrams or tables, highlight configuration defaults, and capture validation/test guidance. Include rationale for each planned change, dependencies (e.g., verifying schemas in src/tools/reconciliation/index.ts, cross-linking API docs), and any research or stakeholders to consult. Treat this like pre-work before editing the doc.
+
+Deliverable: numbered plan with 5-8 high-level steps, each containing objectives, key actions/files, and acceptance criteria.
+
+[Running in read-only mode - no modifications allowed]` not found

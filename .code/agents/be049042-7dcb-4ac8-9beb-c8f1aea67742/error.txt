@@ -1,0 +1,14 @@
+Command failed: Error loading configuration: config profile `Plan improvements for docs/reconciliation-flow.md.
+Context:
+- Repo: ynab-mcp-dxt (MCP host for YNAB automation). TypeScript backend under src/ (tools/, utils/, server/, index.ts). Docs live in docs/; built artifacts under dist/.
+- Document in scope: docs/reconciliation-flow.md ("Automated Reconciliation Flow"). Current version (last updated 2025-11-12) describes prerequisites, schema/data contracts, configuration knobs, logging/auditability, numbered steps (validation, statement pass, sanity pass, finalize, leftover escalation, telemetry), and testing hooks. Each step outlines rationale, actions, validation, and open questions.
+- Repo guidelines: Prettier 2-space formatting, ESLint required; tests via Vitest; docs changes should align with reference/API.md, reference/TOOLS.md, guides/TESTING.md, troubleshooting docs. Keep structured payload schema consistent with docs/schemas/reconciliation-v2.json.
+Goal:
+Produce a concrete plan for enhancing docs/reconciliation-flow.md so it is comprehensive, accurate, and actionable for engineers/operators. Address open questions, highlight code areas to verify (e.g., src/tools/reconciliation/index.ts, executor.ts, parser tests), and note any diagrams or examples to add. Include validation steps (tests, scripts) needed after edits.
+Deliverables:
+- Step-by-step plan with rationale.
+- Identify key files / modules to inspect while executing plan.
+- Mention coordination points with related docs or code to keep in sync.
+
+
+[Running in read-only mode - no modifications allowed]` not found

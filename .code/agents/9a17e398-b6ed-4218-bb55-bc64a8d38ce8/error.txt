@@ -1,0 +1,8 @@
+Command failed: error: unexpected argument '--allowedTools' found
+
+  tip: to pass '--allowedTools' as a value, use '-- --allowedTools'
+
+Usage: code [OPTIONS] [PROMPT]
+       code [OPTIONS] [PROMPT] <COMMAND>
+
+For more information, try '--help'.

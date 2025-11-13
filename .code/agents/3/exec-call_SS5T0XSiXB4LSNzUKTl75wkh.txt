@@ -1,0 +1,610 @@
+src/tools/reconciliation\types.ts:3: * Based on the 2025-10-31 reconciliation redesign specification
+src/tools/reconciliation\types.ts:19:  /** Transaction date in YYYY-MM-DD format */
+src/tools/reconciliation\types.ts:67:  /** Confidence score 0-100 */
+src/tools/reconciliation\types.ts:119: * Reconciliation insight - highlights important findings that help explain discrepancies
+src/tools/reconciliation\types.ts:173:  /** Description similarity threshold (0-1) */
+src/tools/reconciliation\types.ts:175:  /** Confidence threshold for auto-matching (0-100) */
+src/tools/reconciliation\types.ts:177:  /** Confidence threshold for suggestions (0-100) */
+src/tools/reconciliation\types.ts:182: * Default matching configuration (not type-only for use in code)
+src/tools/reconciliation\types.ts:217:  /** Confidence score 0-1 (higher = more confident) */
+src/tools/reconciliation\types.ts:219:  /** Human-readable message describing the recommendation */
+src/tools/reconciliation\payeeNormalizer.ts:3: * Implements two-tier matching: normalized string comparison + fuzzy matching
+src/tools/reconciliation\payeeNormalizer.ts:8: * - Lowercase
+src/tools/reconciliation\payeeNormalizer.ts:9: * - Remove spaces, punctuation, special characters
+src/tools/reconciliation\payeeNormalizer.ts:10: * - Keep only alphanumeric characters
+src/tools/reconciliation\payeeNormalizer.ts:19:  return payee.toLowerCase().replace(/[^a-z0-9]/g, ''); // Remove all non-alphanumeric
+src/tools/reconciliation\payeeNormalizer.ts:60:      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+src/tools/reconciliation\payeeNormalizer.ts:62:        matrix[i - 1]![j]! + 1, // deletion
+src/tools/reconciliation\payeeNormalizer.ts:63:        matrix[i]![j - 1]! + 1, // insertion
+src/tools/reconciliation\payeeNormalizer.ts:64:        matrix[i - 1]![j - 1]! + cost, // substitution
+src/tools/reconciliation\payeeNormalizer.ts:74: * Returns similarity score 0-100
+src/tools/reconciliation\payeeNormalizer.ts:94:  const similarity = (1 - distance / maxLen) * 100;
+src/tools/reconciliation\payeeNormalizer.ts:99: * Token-based similarity for better handling of word order differences
+src/tools/reconciliation\payeeNormalizer.ts:115:  const tokens1 = norm1.match(/[a-z]+|[0-9]+/g) || [];
+src/tools/reconciliation\payeeNormalizer.ts:116:  const tokens2 = norm2.match(/[a-z]+|[0-9]+/g) || [];
+src/tools/reconciliation\payeeNormalizer.ts:137: * - Normalized exact match (100 if matches)
+src/tools/reconciliation\payeeNormalizer.ts:138: * - Fuzzy match (Levenshtein distance)
+src/tools/reconciliation\payeeNormalizer.ts:139: * - Token-based match
+src/tools/reconciliation\payeeNormalizer.ts:148:  // Tier 2: Fuzzy and token-based matching
+src/tools/reconciliation\executor.ts:82:  let clearedDeltaMilli = addMilli(initialAccount.cleared_balance ?? 0, -statementTargetMilli);
+src/tools/reconciliation\executor.ts:104:          reason: `Cleared delta ${deltaDisplay} within ±${toleranceDisplay} after ${trigger} - halting newest-to-oldest pass`,
+src/tools/reconciliation\executor.ts:120:  // STEP 1: Auto-create missing transactions (bank -> YNAB)
+src/tools/reconciliation\executor.ts:148:          memo: bankTxn.memo ?? 'Auto-reconciled from bank statement',
+src/tools/reconciliation\executor.ts:237:  // STEP 3: Auto-unclear YNAB transactions missing from bank
+src/tools/reconciliation\executor.ts:249:          reason: `Would mark transaction ${ynabTxn.id} as uncleared - not present on statement`,
+src/tools/reconciliation\executor.ts:251:        applyClearedDelta(-ynabTxn.amount);
+src/tools/reconciliation\executor.ts:268:        reason: `Marked transaction ${ynabTxn.id} as uncleared - not found on statement`,
+src/tools/reconciliation\executor.ts:271:      applyClearedDelta(-ynabTxn.amount);
+src/tools/reconciliation\executor.ts:297:    params.dry_run || !accountSnapshotDirty ? 0 : afterAccount.balance - initialAccount.balance;
+src/tools/reconciliation\executor.ts:366:  const discrepancy = bankMilli - ynabMilli;
+src/tools/reconciliation\executor.ts:509:    recommendations.push('Dry run only — re-run with dry_run=false to apply these changes');
+src/tools/reconciliation\executor.ts:564:  return toChronoValue(dateA) - toChronoValue(dateB);
+src/tools/reconciliation\__tests__\analyzer.test.ts:23:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:24:            amount: -45.23,
+src/tools/reconciliation\__tests__\analyzer.test.ts:29:            date: '2025-10-16',
+src/tools/reconciliation\__tests__\analyzer.test.ts:30:            amount: -100.0,
+src/tools/reconciliation\__tests__\analyzer.test.ts:45:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:46:          amount: -45230,
+src/tools/reconciliation\__tests__\analyzer.test.ts:54:          date: '2025-10-16',
+src/tools/reconciliation\__tests__\analyzer.test.ts:55:          amount: -100000,
+src/tools/reconciliation\__tests__\analyzer.test.ts:67:        -145.23, // Target balance
+src/tools/reconciliation\__tests__\analyzer.test.ts:81:    it('should categorize high-confidence matches as auto-matches', () => {
+src/tools/reconciliation\__tests__\analyzer.test.ts:85:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:86:            amount: -50.0,
+src/tools/reconciliation\__tests__\analyzer.test.ts:101:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:102:          amount: -50000,
+src/tools/reconciliation\__tests__\analyzer.test.ts:110:      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:116:    it('should categorize medium-confidence matches as suggested', () => {
+src/tools/reconciliation\__tests__\analyzer.test.ts:120:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:121:            amount: -50.0,
+src/tools/reconciliation\__tests__\analyzer.test.ts:136:          date: '2025-10-18', // 3 days difference
+src/tools/reconciliation\__tests__\analyzer.test.ts:137:          amount: -50000,
+src/tools/reconciliation\__tests__\analyzer.test.ts:145:      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:155:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:156:            amount: -15.99,
+src/tools/reconciliation\__tests__\analyzer.test.ts:189:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:190:          amount: -50000,
+src/tools/reconciliation\__tests__\analyzer.test.ts:208:            date: '2025-10-20',
+src/tools/reconciliation\__tests__\analyzer.test.ts:209:            amount: -30.0,
+src/tools/reconciliation\__tests__\analyzer.test.ts:223:          id: 'y-combo-1',
+src/tools/reconciliation\__tests__\analyzer.test.ts:224:          date: '2025-10-19',
+src/tools/reconciliation\__tests__\analyzer.test.ts:225:          amount: -20000,
+src/tools/reconciliation\__tests__\analyzer.test.ts:232:          id: 'y-combo-2',
+src/tools/reconciliation\__tests__\analyzer.test.ts:233:          date: '2025-10-20',
+src/tools/reconciliation\__tests__\analyzer.test.ts:234:          amount: -10000,
+src/tools/reconciliation\__tests__\analyzer.test.ts:241:          id: 'y-extra',
+src/tools/reconciliation\__tests__\analyzer.test.ts:242:          date: '2025-10-22',
+src/tools/reconciliation\__tests__\analyzer.test.ts:243:          amount: -5000,
+src/tools/reconciliation\__tests__\analyzer.test.ts:251:      const result = analyzeReconciliation('csv', undefined, ynabTxns, -30.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:259:      const comboInsight = result.insights.find((insight) => insight.id.startsWith('combination-'));
+src/tools/reconciliation\__tests__\analyzer.test.ts:277:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:278:          amount: -50000, // -$50.00 cleared
+src/tools/reconciliation\__tests__\analyzer.test.ts:286:          date: '2025-10-16',
+src/tools/reconciliation\__tests__\analyzer.test.ts:287:          amount: -30000, // -$30.00 uncleared
+src/tools/reconciliation\__tests__\analyzer.test.ts:295:      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:297:      expect(result.balance_info.current_cleared.value).toBe(-50.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:298:      expect(result.balance_info.current_uncleared.value).toBe(-30.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:299:      expect(result.balance_info.current_total.value).toBe(-80.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:300:      expect(result.balance_info.target_statement.value).toBe(-50.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:308:          { date: '2025-10-15', amount: -50.0, payee: 'Store', memo: '' },
+src/tools/reconciliation\__tests__\analyzer.test.ts:309:          { date: '2025-10-20', amount: -30.0, payee: 'Restaurant', memo: '' },
+src/tools/reconciliation\__tests__\analyzer.test.ts:321:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:322:          amount: -50000,
+src/tools/reconciliation\__tests__\analyzer.test.ts:330:      const result = analyzeReconciliation('csv', undefined, ynabTxns, -80.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:334:      expect(result.summary.statement_date_range).toContain('2025-10-15');
+src/tools/reconciliation\__tests__\analyzer.test.ts:335:      expect(result.summary.statement_date_range).toContain('2025-10-20');
+src/tools/reconciliation\__tests__\analyzer.test.ts:340:        transactions: [{ date: '2025-10-15', amount: -50.0, payee: 'Store', memo: '' }],
+src/tools/reconciliation\__tests__\analyzer.test.ts:351:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\analyzer.test.ts:352:          amount: -50000,
+src/tools/reconciliation\__tests__\analyzer.test.ts:360:      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.0);
+src/tools/reconciliation\__tests__\analyzer.test.ts:369:        transactions: [{ date: '2025-10-15', amount: -50.0, payee: 'Store', memo: '' }],
+src/tools/reconciliation\__tests__\analyzer.test.ts:388:          { date: '2025-10-15', amount: -50.0, payee: 'Store1', memo: '' },
+src/tools/reconciliation\__tests__\analyzer.test.ts:389:          { date: '2025-10-16', amount: -30.0, payee: 'Store2', memo: '' },
+src/tools/reconciliation\analyzer.ts:75:  return Math.abs(a - b) / DAYS_IN_MS;
+src/tools/reconciliation\analyzer.ts:101:    base -= 5;
+src/tools/reconciliation\analyzer.ts:139:      const diff = Math.abs(sum - bankTxn.amount);
+src/tools/reconciliation\analyzer.ts:147:    for (let i = 0; i < n - 1; i++) {
+src/tools/reconciliation\analyzer.ts:154:      for (let i = 0; i < n - 2; i++) {
+src/tools/reconciliation\analyzer.ts:155:        for (let j = i + 1; j < n - 1; j++) {
+src/tools/reconciliation\analyzer.ts:165:    evaluated.sort((a, b) => a.diff - b.diff);
+src/tools/reconciliation\analyzer.ts:177:      const candidateConfidence = Math.max(60, score - 5);
+src/tools/reconciliation\analyzer.ts:199:      const insightId = `combination-${bankTxn.id}-${comboIds.join('+')}`;
+src/tools/reconciliation\analyzer.ts:425:  const discrepancy = clearedBalance - statementBalance;
+src/tools/reconciliation\analyzer.ts:451:  const dateRange = dates.length > 0 ? `${dates[0]} to ${dates[dates.length - 1]}` : 'Unknown';
+src/tools/reconciliation\analyzer.ts:495:    steps.push(`Review ${summary.auto_matched} auto-matched transactions for approval`);
+src/tools/reconciliation\analyzer.ts:520:  const formatter = new Intl.NumberFormat('en-US', {
+src/tools/reconciliation\analyzer.ts:546:    .sort((a, b) => b.txns.length - a.txns.length);
+src/tools/reconciliation\analyzer.ts:554:    id: `repeat-${top.amount.toFixed(2)}`,
+src/tools/reconciliation\analyzer.ts:585:      (match.confidence === 'medium' && score >= config.autoMatchThreshold - 5) ||
+src/tools/reconciliation\analyzer.ts:595:      id: `near-${bankTxn.id}`,
+src/tools/reconciliation\analyzer.ts:633:      id: 'balance-gap',
+src/tools/reconciliation\analyzer.ts:650:      id: 'bulk-missing-bank',
+src/tools/reconciliation\analyzer.ts:720: * @param csvContent - CSV file content or file path
+src/tools/reconciliation\analyzer.ts:721: * @param csvFilePath - Optional file path (if csvContent is a path)
+src/tools/reconciliation\analyzer.ts:722: * @param ynabTransactions - YNAB transactions from API
+src/tools/reconciliation\analyzer.ts:723: * @param statementBalance - Expected cleared balance from statement
+src/tools/reconciliation\analyzer.ts:724: * @param config - Matching configuration
+src/tools/reconciliation\analyzer.ts:725: * @param currency - Currency code (default: USD)
+src/tools/reconciliation\analyzer.ts:726: * @param accountId - Account ID for recommendation context
+src/tools/reconciliation\analyzer.ts:727: * @param budgetId - Budget ID for recommendation context
+src/tools/reconciliation\analyzer.ts:728: * @param isLiabilityAccount - Whether this is a credit card/liability account (inverts transaction signs)
+src/tools/reconciliation\analyzer.ts:749:      amount: -txn.amount,
+src/tools/reconciliation\reportFormatter.ts:2: * Human-readable report formatting for reconciliation results
+src/tools/reconciliation\reportFormatter.ts:3: * Implements Phase 3 of dual-channel output improvements
+src/tools/reconciliation\reportFormatter.ts:30: * Format the main human-readable reconciliation report
+src/tools/reconciliation\reportFormatter.ts:141:      lines.push(`   ... and ${analysis.unmatched_bank.length - maxToShow} more`);
+src/tools/reconciliation\reportFormatter.ts:157:      lines.push(`   ... and ${analysis.suggested_matches.length - maxToShow} more suggestions`);
+src/tools/reconciliation\reportFormatter.ts:169:  return `   ${txn.date} - ${txn.payee.substring(0, 40).padEnd(40)} ${amountStr}`;
+src/tools/reconciliation\reportFormatter.ts:179:  return `   ${bankTxn.date} - ${bankTxn.payee.substring(0, 35).padEnd(35)} ${amountStr} (${confidenceStr} confidence)`;
+src/tools/reconciliation\reportFormatter.ts:186:  const sign = amount >= 0 ? '+' : '-';
+src/tools/reconciliation\reportFormatter.ts:217:    lines.push(`... and ${insights.length - maxToShow} more insights (see structured output)`);
+src/tools/reconciliation\reportFormatter.ts:280:      lines.push(`  ... and ${execution.recommendations.length - maxRecs} more`);
+src/tools/reconciliation\reportFormatter.ts:354:      lines.push(`   ${txn.date} - ${payee.substring(0, 40).padEnd(40)} ${formatAmount(amount)}`);
+src/tools/reconciliation\reportFormatter.ts:359:    lines.push(`   ... and ${transactions.length - maxItems} more`);
+src/tools/reconciliation\matcher.ts:3: * Implements confidence-based matching with auto-match and suggestion tiers
+src/tools/reconciliation\matcher.ts:24:  const difference = Math.round(Math.abs(bankAmount - ynabDollars) * 100) / 100;
+src/tools/reconciliation\matcher.ts:37:  const diffMs = Math.abs(d1.getTime() - d2.getTime());
+src/tools/reconciliation\matcher.ts:45: * Returns score 0-100 and match reasons
+src/tools/reconciliation\matcher.ts:55:  // Amount match (40% weight) - REQUIRED
+src/tools/reconciliation\matcher.ts:68:      (new Date(bankTxn.date).getTime() - new Date(ynabTxn.date).getTime()) / (1000 * 60 * 60 * 24),
+src/tools/reconciliation\matcher.ts:124:    // Skip opposite-signed transactions (refunds vs purchases)
+src/tools/reconciliation\matcher.ts:144:      return b.confidence - a.confidence;
+src/tools/reconciliation\matcher.ts:146:    const priorityDiff = getPriority(b.ynab_transaction) - getPriority(a.ynab_transaction);
+src/tools/reconciliation\matcher.ts:151:      new Date(bankTxn.date).getTime() - new Date(a.ynab_transaction.date).getTime(),
+src/tools/reconciliation\matcher.ts:154:      new Date(bankTxn.date).getTime() - new Date(b.ynab_transaction.date).getTime(),
+src/tools/reconciliation\matcher.ts:156:    return dateProximityA - dateProximityB;
+src/tools/reconciliation\matcher.ts:163: * Build human-readable explanation for a match
+src/tools/reconciliation\matcher.ts:177:    parts.push('(Uncleared - awaiting confirmation)');
+src/tools/reconciliation\matcher.ts:209:  // HIGH confidence: Auto-match candidate (≥90%)
+src/tools/reconciliation\matcher.ts:220:  // MEDIUM confidence: Suggested match (60-89%)
+src/tools/reconciliation\matcher.ts:234:  // LOW confidence: Show as possible match but don't auto-suggest (30-59%)
+src/tools/reconciliation\matcher.ts:262:    // Mark high-confidence matches as used to prevent duplicate matching
+src/tools/reconciliation\recommendationEngine.ts:42: * @param context - The recommendation context containing analysis results, IDs, and config
+src/tools/reconciliation\recommendationEngine.ts:43: * @param context.account_id - The YNAB account ID for transaction operations
+src/tools/reconciliation\recommendationEngine.ts:44: * @param context.budget_id - The YNAB budget ID (reserved for future category suggestions)
+src/tools/reconciliation\recommendationEngine.ts:45: * @param context.analysis - The complete reconciliation analysis results
+src/tools/reconciliation\recommendationEngine.ts:46: * @param context.matching_config - The matching configuration used during analysis
+src/tools/reconciliation\recommendationEngine.ts:52: *   budget_id: 'budget-456',
+src/tools/reconciliation\recommendationEngine.ts:113: * @param match - The transaction match containing bank transaction and optional YNAB candidates
+src/tools/reconciliation\recommendationEngine.ts:114: * @param context - The recommendation context for account/budget IDs and analysis data
+src/tools/reconciliation\recommendationEngine.ts:392:  // Suggested matches → review as potential duplicates or auto-match
+src/tools/reconciliation\recommendationEngine.ts:414: * @param txn - The unmatched bank transaction
+src/tools/reconciliation\recommendationEngine.ts:415: * @param context - The recommendation context for account ID and currency
+src/tools/reconciliation\recommendationEngine.ts:460: * correspond to a bank statement entry. This is a low-priority suggestion since the
+src/tools/reconciliation\recommendationEngine.ts:463: * @param txn - The unmatched YNAB transaction (must have cleared status of 'uncleared')
+src/tools/reconciliation\recommendationEngine.ts:464: * @param context - The recommendation context for account ID and currency
+src/tools/reconciliation\recommendationEngine.ts:500:    const priorityDiff = PRIORITY_ORDER[b.priority] - PRIORITY_ORDER[a.priority];
+src/tools/reconciliation\recommendationEngine.ts:504:    return b.confidence - a.confidence;
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:10:    statement_date_range: '2025-10-01 to 2025-10-31',
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:17:    current_cleared_balance: -899.02,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:18:    target_statement_balance: -921.24,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:27:    current_cleared: -899.02,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:29:    current_total: -899.02,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:30:    target_statement: -921.24,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:51:    before: { balance: -899020, cleared_balance: -899020, uncleared_balance: 0 },
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:52:    after: { balance: -921240, cleared_balance: -921240, uncleared_balance: 0 },
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:59:      bank_statement_balance_milliunits: -921240,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:60:      ynab_calculated_balance_milliunits: -899020,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:61:      discrepancy_milliunits: -22220,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:62:      discrepancy_dollars: -22.22,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:72:          amount_milliunits: -1500,
+src/tools/reconciliation\__tests__\adapter.causes.test.ts:100:        accountId: 'acct-123',
+src/tools/reconciliation\__tests__\schemaUrl.test.ts:9:    statement_date_range: '2025-10-01 to 2025-10-31',
+src/tools/reconciliation\__tests__\schemaUrl.test.ts:40:      accountId: 'acct-id',
+src/tools/reconciliation\__tests__\schemaUrl.test.ts:47:    expect(schemaUrl).toContain('/docs/schemas/reconciliation-v2.json');
+src/tools/reconciliation\__tests__\adapter.test.ts:11:  value_display: value < 0 ? `-$${Math.abs(value).toFixed(2)}` : `$${value.toFixed(2)}`,
+src/tools/reconciliation\__tests__\adapter.test.ts:23:    statement_date_range: '2025-10-01 to 2025-10-31',
+src/tools/reconciliation\__tests__\adapter.test.ts:30:    current_cleared_balance: makeMoney(-899.02),
+src/tools/reconciliation\__tests__\adapter.test.ts:31:    target_statement_balance: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\adapter.test.ts:38:        id: 'bank-1',
+src/tools/reconciliation\__tests__\adapter.test.ts:39:        date: '2025-10-15',
+src/tools/reconciliation\__tests__\adapter.test.ts:40:        amount: -45.23,
+src/tools/reconciliation\__tests__\adapter.test.ts:45:        id: 'ynab-1',
+src/tools/reconciliation\__tests__\adapter.test.ts:46:        date: '2025-10-14',
+src/tools/reconciliation\__tests__\adapter.test.ts:47:        amount: -45230,
+src/tools/reconciliation\__tests__\adapter.test.ts:64:        id: 'bank-2',
+src/tools/reconciliation\__tests__\adapter.test.ts:65:        date: '2025-10-20',
+src/tools/reconciliation\__tests__\adapter.test.ts:66:        amount: -60,
+src/tools/reconciliation\__tests__\adapter.test.ts:73:            id: 'ynab-2',
+src/tools/reconciliation\__tests__\adapter.test.ts:74:            date: '2025-10-19',
+src/tools/reconciliation\__tests__\adapter.test.ts:75:            amount: -60000,
+src/tools/reconciliation\__tests__\adapter.test.ts:94:      id: 'bank-3',
+src/tools/reconciliation\__tests__\adapter.test.ts:95:      date: '2025-10-25',
+src/tools/reconciliation\__tests__\adapter.test.ts:103:      id: 'ynab-3',
+src/tools/reconciliation\__tests__\adapter.test.ts:104:      date: '2025-10-26',
+src/tools/reconciliation\__tests__\adapter.test.ts:105:      amount: -15000,
+src/tools/reconciliation\__tests__\adapter.test.ts:113:    current_cleared: makeMoney(-899.02),
+src/tools/reconciliation\__tests__\adapter.test.ts:114:    current_uncleared: makeMoney(-45.23),
+src/tools/reconciliation\__tests__\adapter.test.ts:115:    current_total: makeMoney(-944.25),
+src/tools/reconciliation\__tests__\adapter.test.ts:116:    target_statement: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\adapter.test.ts:120:  next_steps: ['Review 2 auto-matched transactions', 'Add missing bank transaction'],
+src/tools/reconciliation\__tests__\adapter.test.ts:123:      id: 'repeat-22.22',
+src/tools/reconciliation\__tests__\adapter.test.ts:137:      accountId: 'account-123',
+src/tools/reconciliation\__tests__\adapter.test.ts:146:    expect(structured.summary.current_cleared_balance.value_display).toBe('-$899.02');
+src/tools/reconciliation\__tests__\adapter.test.ts:149:    expect(structured.matches.auto[0].bank_transaction.amount_money.value_milliunits).toBe(-45230);
+src/tools/reconciliation\__tests__\adapter.test.ts:166:        before: { balance: -899020, cleared_balance: -899020, uncleared_balance: 0 },
+src/tools/reconciliation\__tests__\adapter.test.ts:167:        after: { balance: -921240, cleared_balance: -921240, uncleared_balance: 0 },
+src/tools/reconciliation\__tests__\adapter.test.ts:172:          transaction: { id: 'txn-1' },
+src/tools/reconciliation\__tests__\adapter.test.ts:183:          bank_statement_balance_milliunits: -921240,
+src/tools/reconciliation\__tests__\adapter.test.ts:184:          ynab_calculated_balance_milliunits: -899020,
+src/tools/reconciliation\__tests__\adapter.test.ts:185:          discrepancy_milliunits: -22220,
+src/tools/reconciliation\__tests__\adapter.test.ts:186:          discrepancy_dollars: -22.22,
+src/tools/reconciliation\__tests__\adapter.test.ts:215:        accountId: 'account-123',
+src/tools/reconciliation\__tests__\adapter.test.ts:225:      -921240,
+src/tools/reconciliation\__tests__\adapter.test.ts:231:    ).toBe('-CA$22.22');
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:30:    account_id: 'test-account',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:35:    category_id: 'test-category',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:36:    payee_id: 'test-payee',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:52:      const csvContent = 'Date,Description,Amount\n2024-01-15,Coffee Shop,22.22';
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:68:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:69:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:80:      expect(rec.account_id).toBe('test-account-id');
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:85:        expect(rec.parameters.date).toBe('2024-01-15');
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:95:      // Should generate high-priority create_transaction recommendation
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:97:      const csvContent = 'Date,Description,Amount\n2024-01-15,EvoCarShare,22.22\n2024-01-10,Grocery Store,100.00';
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:100:        createYNABTransaction('ynab-1', '2024-01-10', 100000, 'Grocery Store', 'cleared'),
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:116:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:117:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:134:      expect(evoCarShareRec!.parameters.date).toBe('2024-01-15');
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:140:      const csvContent = 'Date,Description,Amount\n2024-01-15,Coffee Shop,10.00';
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:143:        createYNABTransaction('ynab-1', '2024-01-15', 10000, 'Coffee Shop', 'uncleared'),
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:159:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:160:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:170:      // Depending on matching score, this could be an auto-match (no recommendation)
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:185:      // Create a near match that should be suggested but not auto-matched
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:186:      const csvContent = 'Date,Description,Amount\n2024-01-15,Amazon Online Purchase,49.99';
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:190:          'ynab-1',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:191:          '2024-01-14', // 1 day off
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:211:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:212:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:231:      const csvContent = 'Date,Description,Amount\n2024-01-15,Test Transaction,10.00';
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:258:        'Date,Description,Amount\n2024-01-15,Store A,25.00\n2024-01-16,Store B,35.00';
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:261:        createYNABTransaction('ynab-1', '2024-01-15', 25000, 'Store A', 'cleared'),
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:295:2024-01-15,Coffee Shop,5.00
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:296:2024-01-16,Gas Station,45.00
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:297:2024-01-17,Restaurant,25.00`;
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:314:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:315:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:330:2024-01-15,Netflix,15.99
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:331:2024-02-15,Netflix,15.99
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:332:2024-03-15,Netflix,15.99`;
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:349:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:350:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:370:2024-01-15,New Store,25.00
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:371:2024-01-16,Coffee,5.00
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:372:2024-01-17,Gas Station,45.00`;
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:375:        // Near match - might be Coffee
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:376:        createYNABTransaction('ynab-1', '2024-01-16', 4500, 'Starbucks Coffee', 'uncleared'),
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:377:        // Exact amount but different payee - might be Gas Station
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:378:        createYNABTransaction('ynab-2', '2024-01-17', 45000, 'Shell', 'uncleared'),
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:380:        createYNABTransaction('ynab-3', '2024-01-10', 10000, 'Grocery', 'uncleared'),
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:396:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:397:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:418:        expect(rec.account_id).toBe('test-account-id');
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:427:2024-01-15,Important Transaction,100.00
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:428:2024-01-16,Small Purchase,5.00
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:429:2024-01-17,Medium Transaction,25.00`;
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:446:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:447:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:457:      for (let i = 0; i < priorities.length - 1; i++) {
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:466:2024-01-15,Large Transaction A,500.00
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:467:2024-01-16,Large Transaction B,750.00
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:468:2024-01-17,Large Transaction C,1000.00`;
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:471:        createYNABTransaction('ynab-1', '2024-01-15', 500000, 'Transaction A', 'cleared'),
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:487:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:488:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:514:      const csvContent = 'Date,Description,Amount\n2024-01-15,Test,10.00';
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:530:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:531:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:552:        expect(rec.account_id).toBe('test-account-id');
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:560:        // Action-specific fields
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:569:      const csvContent = 'Date,Description,Amount\n2024-01-15,Test Store,25.50';
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:585:        'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:586:        'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:594:      expect(createRec!.parameters.account_id).toBe('test-account-id');
+src/tools/reconciliation\__tests__\recommendationEngine.integration.test.ts:595:      expect(createRec!.parameters.date).toBe('2024-01-15');
+src/tools/reconciliation\__tests__\matcher.test.ts:23:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:24:          amount: -45.23,
+src/tools/reconciliation\__tests__\matcher.test.ts:32:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:33:            amount: -45230, // milliunits
+src/tools/reconciliation\__tests__\matcher.test.ts:51:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:52:          amount: -100.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:60:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:61:            amount: -100000,
+src/tools/reconciliation\__tests__\matcher.test.ts:78:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:79:          amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:87:            date: '2025-10-14', // 1 day difference
+src/tools/reconciliation\__tests__\matcher.test.ts:88:            amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:103:    describe('medium confidence matches (60-89%)', () => {
+src/tools/reconciliation\__tests__\matcher.test.ts:107:          date: '2025-10-20',
+src/tools/reconciliation\__tests__\matcher.test.ts:108:          amount: -127.43,
+src/tools/reconciliation\__tests__\matcher.test.ts:116:            date: '2025-10-20',
+src/tools/reconciliation\__tests__\matcher.test.ts:117:            amount: -127430,
+src/tools/reconciliation\__tests__\matcher.test.ts:137:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:138:          amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:146:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:147:            amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:155:            date: '2025-10-16',
+src/tools/reconciliation\__tests__\matcher.test.ts:156:            amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:176:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:177:          amount: -45.23,
+src/tools/reconciliation\__tests__\matcher.test.ts:185:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:186:            amount: -100000, // Different amount
+src/tools/reconciliation\__tests__\matcher.test.ts:201:      it('should not match opposite-signed transactions', () => {
+src/tools/reconciliation\__tests__\matcher.test.ts:204:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:213:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:214:            amount: -50000, // Negative (purchase)
+src/tools/reconciliation\__tests__\matcher.test.ts:233:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:234:          amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:242:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:243:            amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:251:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:252:            amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:269:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:270:          amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:278:            date: '2025-10-13', // 2 days away
+src/tools/reconciliation\__tests__\matcher.test.ts:279:            amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:287:            date: '2025-10-14', // 1 day away
+src/tools/reconciliation\__tests__\matcher.test.ts:288:            amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:307:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:308:          amount: -45.23,
+src/tools/reconciliation\__tests__\matcher.test.ts:316:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:317:            amount: -45240, // $45.24 - within 1 cent tolerance
+src/tools/reconciliation\__tests__\matcher.test.ts:336:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:337:          amount: -45.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:345:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:346:            amount: -45050, // $45.05 - outside 1 cent tolerance
+src/tools/reconciliation\__tests__\matcher.test.ts:361:      it('should skip already-used YNAB transaction IDs', () => {
+src/tools/reconciliation\__tests__\matcher.test.ts:364:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:365:          amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:373:            date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:374:            amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:396:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:397:          amount: -45.23,
+src/tools/reconciliation\__tests__\matcher.test.ts:403:          date: '2025-10-16',
+src/tools/reconciliation\__tests__\matcher.test.ts:404:          amount: -100.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:413:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:414:          amount: -45230,
+src/tools/reconciliation\__tests__\matcher.test.ts:422:          date: '2025-10-16',
+src/tools/reconciliation\__tests__\matcher.test.ts:423:          amount: -100000,
+src/tools/reconciliation\__tests__\matcher.test.ts:442:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:443:          amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:449:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:450:          amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:459:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:460:          amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:484:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:485:          amount: -45.23,
+src/tools/reconciliation\__tests__\matcher.test.ts:491:          date: '2025-10-16',
+src/tools/reconciliation\__tests__\matcher.test.ts:492:          amount: -15.99,
+src/tools/reconciliation\__tests__\matcher.test.ts:501:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:502:          amount: -45230,
+src/tools/reconciliation\__tests__\matcher.test.ts:530:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:531:          amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:540:          date: '2025-10-11', // 4 days difference (within custom tolerance)
+src/tools/reconciliation\__tests__\matcher.test.ts:541:          amount: -50090, // $50.09 (within custom tolerance)
+src/tools/reconciliation\__tests__\matcher.test.ts:559:        date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:560:        amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:574:        date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:575:        amount: -50.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:583:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:584:          amount: -50000,
+src/tools/reconciliation\__tests__\matcher.test.ts:601:        date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:602:        amount: -0.01,
+src/tools/reconciliation\__tests__\matcher.test.ts:610:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:611:          amount: -10, // 1 cent in milliunits
+src/tools/reconciliation\__tests__\matcher.test.ts:627:        date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:628:        amount: -10000.0,
+src/tools/reconciliation\__tests__\matcher.test.ts:636:          date: '2025-10-15',
+src/tools/reconciliation\__tests__\matcher.test.ts:637:          amount: -10000000, // $10,000 in milliunits
+src/tools/reconciliation\__tests__\executor.test.ts:10:    statement_date_range: '2025-10-01 to 2025-10-31',
+src/tools/reconciliation\__tests__\executor.test.ts:17:    current_cleared_balance: -899.02,
+src/tools/reconciliation\__tests__\executor.test.ts:18:    target_statement_balance: -921.24,
+src/tools/reconciliation\__tests__\executor.test.ts:25:        id: 'bank-1',
+src/tools/reconciliation\__tests__\executor.test.ts:26:        date: '2025-10-15',
+src/tools/reconciliation\__tests__\executor.test.ts:27:        amount: -45.23,
+src/tools/reconciliation\__tests__\executor.test.ts:32:        id: 'ynab-1',
+src/tools/reconciliation\__tests__\executor.test.ts:33:        date: '2025-10-14',
+src/tools/reconciliation\__tests__\executor.test.ts:34:        amount: -45230,
+src/tools/reconciliation\__tests__\executor.test.ts:50:      id: 'bank-2',
+src/tools/reconciliation\__tests__\executor.test.ts:51:      date: '2025-10-25',
+src/tools/reconciliation\__tests__\executor.test.ts:59:      id: 'ynab-2',
+src/tools/reconciliation\__tests__\executor.test.ts:60:      date: '2025-10-10',
+src/tools/reconciliation\__tests__\executor.test.ts:61:      amount: -15000,
+src/tools/reconciliation\__tests__\executor.test.ts:70:    current_cleared: -899.02,
+src/tools/reconciliation\__tests__\executor.test.ts:71:    current_uncleared: -45.23,
+src/tools/reconciliation\__tests__\executor.test.ts:72:    current_total: -944.25,
+src/tools/reconciliation\__tests__\executor.test.ts:73:    target_statement: -921.24,
+src/tools/reconciliation\__tests__\executor.test.ts:85:      budget_id: 'budget-1',
+src/tools/reconciliation\__tests__\executor.test.ts:86:      account_id: 'account-1',
+src/tools/reconciliation\__tests__\executor.test.ts:88:      statement_balance: -921.24,
+src/tools/reconciliation\__tests__\executor.test.ts:104:      balance: -899020,
+src/tools/reconciliation\__tests__\executor.test.ts:105:      cleared_balance: -899020,
+src/tools/reconciliation\__tests__\executor.test.ts:113:      budgetId: 'budget-1',
+src/tools/reconciliation\__tests__\executor.test.ts:114:      accountId: 'account-1',
+src/tools/reconciliation\__tests__\executor.test.ts:124:      'Dry run only — re-run with dry_run=false to apply these changes',
+src/tools/reconciliation\__tests__\executor.test.ts:133:      budget_id: 'budget-apply',
+src/tools/reconciliation\__tests__\executor.test.ts:134:      account_id: 'account-apply',
+src/tools/reconciliation\__tests__\executor.test.ts:136:      statement_balance: -921.24,
+src/tools/reconciliation\__tests__\executor.test.ts:137:      statement_date: '2025-10-31',
+src/tools/reconciliation\__tests__\executor.test.ts:153:      balance: -899020,
+src/tools/reconciliation\__tests__\executor.test.ts:154:      cleared_balance: -899020,
+src/tools/reconciliation\__tests__\executor.test.ts:158:    const mockCreate = vi.fn().mockResolvedValue({ data: { transaction: { id: 'created-1' } } });
+src/tools/reconciliation\__tests__\executor.test.ts:159:    const mockUpdate = vi.fn().mockResolvedValue({ data: { transaction: { id: 'updated-1' } } });
+src/tools/reconciliation\__tests__\executor.test.ts:161:      data: { account: { balance: -921240, cleared_balance: -921240, uncleared_balance: 0 } },
+src/tools/reconciliation\__tests__\executor.test.ts:183:      budgetId: 'budget-apply',
+src/tools/reconciliation\__tests__\executor.test.ts:184:      accountId: 'account-apply',
+src/tools/reconciliation\__tests__\executor.test.ts:206:        statement_date_range: '2025-09-01 to 2025-10-31',
+src/tools/reconciliation\__tests__\executor.test.ts:215:        discrepancy: -10,
+src/tools/reconciliation\__tests__\executor.test.ts:221:            id: 'bank-older',
+src/tools/reconciliation\__tests__\executor.test.ts:222:            date: '2025-09-15',
+src/tools/reconciliation\__tests__\executor.test.ts:228:            id: 'ynab-older',
+src/tools/reconciliation\__tests__\executor.test.ts:229:            date: '2025-09-14',
+src/tools/reconciliation\__tests__\executor.test.ts:244:            id: 'bank-newer',
+src/tools/reconciliation\__tests__\executor.test.ts:245:            date: '2025-10-25',
+src/tools/reconciliation\__tests__\executor.test.ts:251:            id: 'ynab-newer',
+src/tools/reconciliation\__tests__\executor.test.ts:252:            date: '2025-10-24',
+src/tools/reconciliation\__tests__\executor.test.ts:274:        discrepancy: -10,
+src/tools/reconciliation\__tests__\executor.test.ts:282:      budget_id: 'budget-ordered',
+src/tools/reconciliation\__tests__\executor.test.ts:283:      account_id: 'account-ordered',
+src/tools/reconciliation\__tests__\executor.test.ts:310:      budgetId: 'budget-ordered',
+src/tools/reconciliation\__tests__\executor.test.ts:311:      accountId: 'account-ordered',
+src/tools/reconciliation\__tests__\executor.test.ts:320:    expect((updateActions[0]?.transaction as any)?.transaction_id).toBe('ynab-newer');
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:26:      expect(normalizePayee('Shell #1234 - Oakville, ON')).toBe('shell1234oakvilleon');
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:31:      expect(normalizePayee('Hello_World-2024')).toBe('helloworld2024');
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:43:    it('should handle real-world examples', () => {
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:57:      expect(normalizedMatch('Amazon Prime', 'amazon-prime')).toBe(true);
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:81:    it('should match real-world examples', () => {
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:117:      // 'shell' -> 'shells' requires 1 insertion
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:121:      // 'kitten' -> 'sitting' requires 3 operations
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:127:    it('should handle real-world payee variations', () => {
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:153:      // After normalization: 'amazonprime123' -> tokens ['amazonprime', '123']
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:154:      // 'amazonprime456' -> tokens ['amazonprime', '456']
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:174:    it('should handle real-world examples', () => {
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:207:    describe('real-world examples from design spec', () => {
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:265:      expect(normalizePayee('Café René')).toBe('cafren'); // Non-ASCII normalized
+src/tools/reconciliation\__tests__\payeeNormalizer.test.ts:266:      expect(normalizePayee('日本語')).toBe(''); // All non-alphanumeric removed
+src/tools/reconciliation\index.ts:2: * Reconciliation tool - Phase 1: Analysis Only
+src/tools/reconciliation\index.ts:21:// Re-export types for external use
+src/tools/reconciliation\index.ts:105: * execution of reconciliation actions. Returns human-readable narrative and
+src/tools/reconciliation\index.ts:148:        ? -Math.abs(params.statement_balance)
+src/tools/reconciliation\index.ts:155:      // Auto-detect date range from CSV if not explicitly provided
+src/tools/reconciliation\index.ts:162:        // Auto-detect from CSV content
+src/tools/reconciliation\index.ts:181:          // Add 7-day buffer before min date for pending transactions
+src/tools/reconciliation\index.ts:183:          minDateObj.setDate(minDateObj.getDate() - 7);
+src/tools/reconciliation\index.ts:187:          sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+src/tools/reconciliation\index.ts:253:      // Build response content - always include human narrative
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:22:  value_display: value < 0 ? `-$${Math.abs(value).toFixed(2)}` : `$${value.toFixed(2)}`,
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:39:    statement_date_range: '2025-10-01 to 2025-10-31',
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:46:    current_cleared_balance: makeMoney(-899.02),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:47:    target_statement_balance: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:56:    current_cleared: makeMoney(-899.02),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:57:    current_uncleared: makeMoney(-50.0),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:58:    current_total: makeMoney(-949.02),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:59:    target_statement: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:75:  date = '2025-10-15',
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:91:  date = '2025-10-15',
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:133:      balance: -899020,
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:134:      cleared_balance: -899020,
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:138:      balance: -899020,
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:139:      cleared_balance: -899020,
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:169:      expect(report).toContain('Statement Period: 2025-10-01 to 2025-10-31');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:175:          current_cleared: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:177:          current_total: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:178:          target_statement: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:197:          current_cleared: makeMoney(-900.0),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:199:          current_total: makeMoney(-900.0),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:200:          target_statement: makeMoney(-920.0),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:219:          current_cleared: makeMoney(-920.0),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:221:          current_total: makeMoney(-920.0),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:222:          target_statement: makeMoney(-900.0),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:223:          discrepancy: makeMoney(-20.0), // Negative means bank higher
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:228:          discrepancy: makeMoney(-20.0),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:234:      expect(report).toContain('❌ DISCREPANCY: -$20.00');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:251:          createBankTransaction('bank-1', -22.22, 'EvoCarShare', '2025-10-25'),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:252:          createBankTransaction('bank-2', -15.0, 'Coffee Shop', '2025-10-26'),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:259:      expect(report).toContain('2025-10-25');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:261:      expect(report).toContain('-$22.22');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:268:        unmatchedBank.push(createBankTransaction(`bank-${i}`, -10.0, `Payee ${i}`, '2025-10-15'));
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:281:            bank_transaction: createBankTransaction('bank-1', -60.0, 'Amazon', '2025-10-20'),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:442:        current_cleared: makeMoney(-899.02),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:443:        current_uncleared: makeMoney(-50.0),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:444:        current_total: makeMoney(-949.02),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:445:        target_statement: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:452:      expect(formatted).toContain('Current Cleared:  -$899.02');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:453:      expect(formatted).toContain('Current Total:    -$949.02');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:454:      expect(formatted).toContain('Target Statement: -$921.24');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:462:        createBankTransaction('1', -45.23, 'Shell Gas', '2025-10-15'),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:463:        createBankTransaction('2', -60.0, 'Amazon', '2025-10-20'),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:468:      expect(formatted).toContain('2025-10-15');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:470:      expect(formatted).toContain('-$45.23');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:476:        createYNABTransaction('1', -45230, 'Shell', '2025-10-15'),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:477:        createYNABTransaction('2', -60000, 'Amazon', '2025-10-20'),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:482:      expect(formatted).toContain('2025-10-15');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:484:      expect(formatted).toContain('-$45.23');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:486:      expect(formatted).toContain('-$60.00');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:492:        transactions.push(createBankTransaction(`${i}`, -10.0, `Payee ${i}`, '2025-10-15'));
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:509:        unmatched_bank: [createBankTransaction('1', -123.45, 'Test', '2025-10-15')],
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:513:      expect(report).toContain('-$123.45');
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:518:        unmatched_bank: [createBankTransaction('1', 123.45, 'Refund', '2025-10-15')],
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:528:        unmatched_bank: [createBankTransaction('1', -10.0, longPayee, '2025-10-15')],
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:540:          current_cleared: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:542:          current_total: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\reportFormatter.test.ts:543:          target_statement: makeMoney(-921.24),
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:43:      statement_date_range: '2024-01-01 to 2024-01-31',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:60:    account_id: 'test-account-id',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:61:    budget_id: 'test-budget-id',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:76:  id: 'bank-txn-1',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:77:  date: '2024-01-15',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:78:  amount: -50.0,
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:87:  id: 'ynab-txn-1',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:88:  date: '2024-01-15',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:89:  amount: -50000,
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:103:  id: `insight-${type}-1`,
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:239:          id: 'bank-1',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:240:          amount: -75.5,
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:242:          date: '2024-01-20',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:259:        expect(rec.parameters.account_id).toBe('test-account-id');
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:260:        expect(rec.parameters.date).toBe('2024-01-20');
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:261:        expect(rec.parameters.amount).toBe(-75500); // In milliunits
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:304:          createBankTransaction({ id: 'b1', amount: -10.0 }),
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:305:          createBankTransaction({ id: 'b2', amount: -20.0 }),
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:306:          createBankTransaction({ id: 'b3', amount: -30.0 }),
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:326:          id: 'ynab-1',
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:345:        expect(rec.parameters.transaction_id).toBe('ynab-1');
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:436:        const bankTxn = createBankTransaction({ amount: -45.0 });
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:459:        expect(rec.parameters.amount).toBe(-45000); // In milliunits
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:463:        const bankTxn = createBankTransaction({ amount: -100.0, payee: 'Split Payment' });
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:464:        const ynabTxn1 = createYNABTransaction({ id: 'y1', amount: -50000, payee_name: 'Vendor A' });
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:465:        const ynabTxn2 = createYNABTransaction({ id: 'y2', amount: -50000, payee_name: 'Vendor B' });
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:517:        expect(rec.metadata?.bank_transaction_amount.value).toBe(-100.0);
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:519:        expect(rec.metadata?.candidate_total_amount.value).toBe(-100.0); // -50 + -50
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:527:          amount: -123.45,
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:541:        expect(rec.parameters.amount).toBe(-123450); // In milliunits
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:543:        expect(rec.estimated_impact.value).toBe(-123.45); // Estimated impact stays in dollars
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:568:        const bankTxn = createBankTransaction({ amount: -99.99 });
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:587:        expect(rec.parameters.amount).toBe(-99990); // In milliunits
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:705:        expect(rec.account_id).toBe('test-account-id');
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:733:        const bankTxn = createBankTransaction({ amount: -50.0 });
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:751:      it('should include enhanced metadata in insight-based manual review recommendations', () => {
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:759:              discrepancy: makeMoney(-100, 'USD'),
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:772:        expect(rec.metadata?.current_discrepancy.value).toBe(-100);
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:777:      it('should include enhanced metadata for all insight-based recommendation types', () => {
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:788:              discrepancy: makeMoney(-250.75, 'CAD'),
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:797:        // All insight-based recommendations should have enhanced metadata
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:803:          expect(manualRec.metadata?.current_discrepancy.value).toBe(-250.75);
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:863:          createBankTransaction({ id: `b${i}`, amount: -10.0 - i }),
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:877:        for (let i = 0; i < recommendations.length - 1; i++) {
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:900:        const bankTxn = createBankTransaction({ amount: -0.01 });
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:912:        expect(rec.parameters.amount).toBe(-10); // In milliunits (0.01 * 1000)
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:916:        const bankTxn = createBankTransaction({ amount: -999999.99 });
+src/tools/reconciliation\__tests__\recommendationEngine.test.ts:928:        expect(rec.parameters.amount).toBe(-999999990); // In milliunits
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:16:  it('prioritizes repeat-amount insight when multiple bank rows share totals', () => {
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:19:        // Three -22.22 transactions: one will match YNAB, two will remain unmatched
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:20:        { date: '2025-10-20', amount: -22.22, payee: 'RideShare', memo: '' },
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:21:        { date: '2025-10-21', amount: -22.22, payee: 'RideShare', memo: '' },
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:22:        { date: '2025-10-25', amount: -22.22, payee: 'RideShare', memo: '' },
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:23:        { date: '2025-10-23', amount: -15.0, payee: 'Cafe', memo: '' },
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:34:        id: 'yn-1',
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:35:        date: '2025-10-19',
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:36:        amount: -22220,
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:43:        id: 'yn-2',
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:44:        date: '2025-10-22',
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:45:        amount: -15000,
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:53:    // Statement balance now accounts for 3 x -22.22 + 1 x -15.00 = -81.66
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:54:    const result = analyzeReconciliation('csv', undefined, ynabTxns, -81.66);
+src/tools/reconciliation\__tests__\scenarios\repeatAmount.scenario.test.ts:56:    const repeatInsight = result.insights.find((insight) => insight.id.startsWith('repeat--22.22')); // Note: double dash for negative
+src/tools/reconciliation\__tests__\scenarios\extremes.scenario.test.ts:19:        { date: '2025-11-01', amount: 0, payee: 'Zero Adjustment', memo: '' },
+src/tools/reconciliation\__tests__\scenarios\extremes.scenario.test.ts:20:        { date: '2025-11-02', amount: 2500, payee: 'Interest', memo: '' },
+src/tools/reconciliation\__tests__\scenarios\extremes.scenario.test.ts:31:        id: 'yn-neg',
+src/tools/reconciliation\__tests__\scenarios\extremes.scenario.test.ts:32:        date: '2025-10-31',
+src/tools/reconciliation\__tests__\scenarios\extremes.scenario.test.ts:33:        amount: -1000000,
+src/tools/reconciliation\__tests__\scenarios\adapterCurrency.scenario.test.ts:8:  value_display: value < 0 ? `-$${Math.abs(value).toFixed(2)}` : `$${value.toFixed(2)}`,
+src/tools/reconciliation\__tests__\scenarios\adapterCurrency.scenario.test.ts:17:    statement_date_range: '2025-10-01 to 2025-10-31',
+src/tools/reconciliation\__tests__\scenarios\adapterCurrency.scenario.test.ts:24:    current_cleared_balance: makeMoney(-899.02, currency),
+src/tools/reconciliation\__tests__\scenarios\adapterCurrency.scenario.test.ts:25:    target_statement_balance: makeMoney(-899.02, currency),
+src/tools/reconciliation\__tests__\scenarios\adapterCurrency.scenario.test.ts:34:    current_cleared: makeMoney(-899.02, currency),
+src/tools/reconciliation\__tests__\scenarios\adapterCurrency.scenario.test.ts:36:    current_total: makeMoney(-899.02, currency),
+src/tools/reconciliation\__tests__\scenarios\adapterCurrency.scenario.test.ts:37:    target_statement: makeMoney(-899.02, currency),
+src/tools/reconciliation\__tests__\scenarios\adapterCurrency.scenario.test.ts:45:describe('scenario: non-USD formatting in adapter payload', () => {
+src/tools/reconciliation\__tests__\scenarios\adapterCurrency.scenario.test.ts:49:      accountId: 'acct-123',

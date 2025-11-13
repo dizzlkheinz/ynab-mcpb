@@ -1,0 +1,14 @@
+Command failed: Error loading configuration: config profile `Repo: ynab-mcp-dxt (TypeScript MCP host). Need a concrete action plan for writing `vdocs/reconciliation-flow.md`, migrating and expanding the current draft that lives in `docs/reconciliation-flow.md`.
+
+Current draft outline:
+1. Automated Reconciliation Flow (Newest -> Oldest) overview.
+2. Sections covering: Input validation & window detection; Phase 1 statement pass; Phase 2 cleared-YNA B sanity pass; Finalize reconciliation; Escalate leftovers; Next Implementation Steps list (schema enforcement, CSV normalization, Phase 1 driver, Phase 2 logic, finalize & audit, leftover reporting).
+
+New vdocs page requirements:
+- Structured for internal engineers: include prerequisites, data contracts (schemas like ReconcileAccountSchema), sequence/flow diagrams (even placeholders), success vs abort criteria, configuration knobs (tolerances, +/-5 day drift, confidence thresholds), logging/audit expectations, leftover escalation details, testing hooks, and cross-links to relevant modules under `src/tools` or `src/utils`.
+- Should live in `vdocs/` with front matter metadata.
+- Reader journey should flow from overview -> phases -> data structures -> algorithms -> edge cases -> verification.
+
+Deliverable from you: a step-by-step plan (not the doc itself) listing concrete actions/files to inspect, content blocks to add, validation steps, and open questions. Ordered steps with rationale please.
+
+[Running in read-only mode - no modifications allowed]` not found

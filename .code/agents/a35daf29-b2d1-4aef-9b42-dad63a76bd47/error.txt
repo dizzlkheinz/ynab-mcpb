@@ -1,0 +1,3 @@
+Command failed: Error loading configuration: config profile `You are assisting on the ynab-mcp-dxt repo. Draft an actionable implementation plan for docs/reconciliation-flow.md covering schema enforcement via ReconcileAccountSchema, CSV normalization/window detection, Phase 1 newest→oldest driver, Phase 2 sanity pass, finalize/audit flow, leftover reporting. Reference src/server, src/tools, src/utils for placement; outline data models, tolerances, logging/audit flows, and Vitest testing strategy.
+
+[Running in read-only mode - no modifications allowed]` not found

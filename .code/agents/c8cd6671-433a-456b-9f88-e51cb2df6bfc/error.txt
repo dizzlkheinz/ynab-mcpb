@@ -1,0 +1,11 @@
+Command failed: Error loading configuration: config profile `We are working in the ynab-mcp-dxt repository (TypeScript MCP host for YNAB tooling). Goal: draft a concrete implementation plan for creating `vdocs/reconciliation-flow.md`, promoting and expanding the current notes stored in `docs/reconciliation-flow.md` (Automated Reconciliation Flow). The existing doc covers input validation & window detection, Phase 1 newest→oldest statement pass, Phase 2 cleared sanity pass, finalize reconciliation, escalate leftovers, plus a "Next Implementation Steps" backlog (schema enforcement, CSV normalization, drivers, audit logging, leftover reporting).
+
+Target vdocs page requirements:
+- Lives in `vdocs/` with whatever front matter/navigation metadata the site expects.
+- Audience: internal engineers & reviewers; plan should mention prerequisites (env vars, services), referenced schemas (`ReconcileAccountSchema`, CSV parser outputs), and cross-links to implementation files (likely under `src/tools/reconcileAccount`, `src/utils`, etc.).
+- Sections should walk readers from overview → prerequisites → data contracts (inputs, intermediate state, outputs) → phased algorithm details → configuration knobs (tolerances, ±5-day drift, confidence thresholds) → logging/audit expectations → leftover escalation UX, plus testing hooks/fixtures.
+- Call out diagrams/sequence placeholders, success vs abort criteria, and how to integrate with Vitest suites / `test-results/` artifacts.
+
+Deliverable from you: ordered plan steps with rationale, referencing which repo files or modules to inspect/update, plus any open questions or validation tasks. Do not write the doc itself—just the plan to author it.
+
+[Running in read-only mode - no modifications allowed]` not found

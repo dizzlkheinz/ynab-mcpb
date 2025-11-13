@@ -54,6 +54,8 @@ interface UpdateFlags {
 }
 
 const MONEY_EPSILON_MILLI = 100; // $0.10
+const DEFAULT_TOLERANCE_CENTS = 1;
+const CENTS_TO_MILLI = 10;
 
 export async function executeReconciliation(options: ExecutionOptions): Promise<ExecutionResult> {
   const { analysis, params, ynabAPI, budgetId, accountId, initialAccount, currencyCode } = options;
@@ -73,10 +75,52 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
 
   let afterAccount: AccountSnapshot = { ...initialAccount };
   let accountSnapshotDirty = false;
+  const statementTargetMilli = resolveStatementBalanceMilli(
+    analysis.balance_info,
+    params.statement_balance,
+  );
+  let clearedDeltaMilli = addMilli(initialAccount.cleared_balance ?? 0, -statementTargetMilli);
+  const balanceToleranceMilli =
+    Math.max(0, params.amount_tolerance_cents ?? DEFAULT_TOLERANCE_CENTS) * CENTS_TO_MILLI;
+  let balanceAligned = false;
+
+  const applyClearedDelta = (delta: number) => {
+    if (delta === 0) return;
+    clearedDeltaMilli = addMilli(clearedDeltaMilli, delta);
+  };
+
+  const recordAlignmentIfNeeded = (trigger: string, { log = true } = {}) => {
+    if (balanceAligned) {
+      return true;
+    }
+    if (Math.abs(clearedDeltaMilli) <= balanceToleranceMilli) {
+      balanceAligned = true;
+      if (log) {
+        const deltaDisplay = toMoneyValue(clearedDeltaMilli, currencyCode).value_display;
+        const toleranceDisplay = toMoneyValue(balanceToleranceMilli, currencyCode).value_display;
+        actions_taken.push({
+          type: 'balance_checkpoint',
+          transaction: null,
+          reason: `Cleared delta ${deltaDisplay} within ±${toleranceDisplay} after ${trigger} - halting newest-to-oldest pass`,
+        });
+      }
+      return true;
+    }
+    return false;
+  };
+
+  recordAlignmentIfNeeded('initial balance check', { log: false });
+
+  const orderedUnmatchedBank = params.auto_create_transactions
+    ? sortByDateDescending(analysis.unmatched_bank)
+    : [];
+  const orderedAutoMatches = sortMatchesByBankDateDescending(analysis.auto_matches);
+  const orderedUnmatchedYNAB = sortByDateDescending(analysis.unmatched_ynab);
 
   // STEP 1: Auto-create missing transactions (bank -> YNAB)
-  if (params.auto_create_transactions) {
-    for (const bankTxn of analysis.unmatched_bank) {
+  if (params.auto_create_transactions && !balanceAligned) {
+    for (const bankTxn of orderedUnmatchedBank) {
+      if (balanceAligned) break;
       if (params.dry_run) {
         summary.transactions_created += 1;
         actions_taken.push({
@@ -88,6 +132,10 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           },
           reason: `Would create missing transaction: ${bankTxn.payee ?? 'Unknown'} (${formatDisplay(bankTxn.amount, currencyCode)})`,
         });
+        applyClearedDelta(toMilli(bankTxn.amount));
+        if (recordAlignmentIfNeeded(`creating ${bankTxn.payee ?? 'missing transaction'}`)) {
+          break;
+        }
         continue;
       }
 
@@ -111,62 +159,99 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
         reason: `Created missing transaction: ${bankTxn.payee ?? 'Unknown'} (${formatDisplay(bankTxn.amount, currencyCode)})`,
       });
       accountSnapshotDirty = true;
+      applyClearedDelta(toMilli(bankTxn.amount));
+      if (recordAlignmentIfNeeded(`creating ${bankTxn.payee ?? 'missing transaction'}`)) {
+        break;
+      }
     }
   }
 
   // STEP 2: Update matched YNAB transactions (cleared status / date)
-  for (const match of analysis.auto_matches) {
-    const flags = computeUpdateFlags(match, params);
-    if (!flags.needsClearedUpdate && !flags.needsDateUpdate) continue;
+  // Collect all updates for batch processing
+  if (!balanceAligned) {
+    const transactionsToUpdate: ynab.SaveTransactionWithIdOrImportId[] = [];
 
-    if (params.dry_run) {
-      summary.transactions_updated += 1;
-      if (flags.needsDateUpdate) summary.dates_adjusted += 1;
-      actions_taken.push({
-        type: 'update_transaction',
-        transaction: {
-          transaction_id: match.ynab_transaction?.id,
-          new_date: flags.needsDateUpdate ? match.bank_transaction.date : undefined,
-          cleared: flags.needsClearedUpdate ? 'cleared' : undefined,
-        },
-        reason: `Would update transaction: ${updateReason(match, flags, currencyCode)}`,
-      });
-      continue;
+    for (const match of orderedAutoMatches) {
+      if (balanceAligned) break;
+      const flags = computeUpdateFlags(match, params);
+      if (!flags.needsClearedUpdate && !flags.needsDateUpdate) continue;
+      if (!match.ynab_transaction) continue;
+
+      const updatePayload: ynab.SaveTransactionWithIdOrImportId = {
+        id: match.ynab_transaction.id,
+        account_id: accountId,
+        amount: match.ynab_transaction.amount,
+        date: flags.needsDateUpdate ? match.bank_transaction.date : match.ynab_transaction.date,
+        cleared: (flags.needsClearedUpdate ? 'cleared' : match.ynab_transaction.cleared) as ynab.TransactionClearedStatus,
+        payee_name: match.ynab_transaction.payee_name ?? null,
+        memo: match.ynab_transaction.memo ?? null,
+        approved: match.ynab_transaction.approved,
+      };
+
+      if (params.dry_run) {
+        summary.transactions_updated += 1;
+        if (flags.needsDateUpdate) summary.dates_adjusted += 1;
+        actions_taken.push({
+          type: 'update_transaction',
+          transaction: {
+            transaction_id: match.ynab_transaction.id,
+            new_date: flags.needsDateUpdate ? match.bank_transaction.date : undefined,
+            cleared: flags.needsClearedUpdate ? 'cleared' : undefined,
+          },
+          reason: `Would update transaction: ${updateReason(match, flags, currencyCode)}`,
+        });
+        if (flags.needsClearedUpdate) {
+          applyClearedDelta(match.ynab_transaction.amount);
+          if (
+            recordAlignmentIfNeeded(
+              `clearing ${match.ynab_transaction.id ?? 'transaction'} (dry run)`,
+            )
+          ) {
+            break;
+          }
+        }
+      } else {
+        transactionsToUpdate.push(updatePayload);
+        if (flags.needsDateUpdate) summary.dates_adjusted += 1;
+        if (flags.needsClearedUpdate) {
+          applyClearedDelta(match.ynab_transaction.amount);
+          if (recordAlignmentIfNeeded(`clearing ${match.ynab_transaction.id}`)) {
+            break;
+          }
+        }
+      }
     }
 
-    if (!match.ynab_transaction) continue;
-    const updatePayload: Record<string, unknown> = {
-      account_id: accountId,
-      amount: match.ynab_transaction.amount,
-      date: flags.needsDateUpdate ? match.bank_transaction.date : match.ynab_transaction.date,
-      cleared: flags.needsClearedUpdate ? 'cleared' : match.ynab_transaction.cleared,
-      payee_name: match.ynab_transaction.payee_name ?? undefined,
-      memo: match.ynab_transaction.memo ?? undefined,
-      approved: match.ynab_transaction.approved,
-    };
+    // Batch update all transactions in a single API call
+    if (!params.dry_run && transactionsToUpdate.length > 0) {
+      const response = await ynabAPI.transactions.updateTransactions(budgetId, {
+        transactions: transactionsToUpdate,
+      });
 
-    const response = await ynabAPI.transactions.updateTransaction(
-      budgetId,
-      match.ynab_transaction.id,
-      {
-        transaction: updatePayload as ynab.ExistingTransaction,
-      },
-    );
-    const updatedTransaction = response.data.transaction ?? null;
-    summary.transactions_updated += 1;
-    if (flags.needsDateUpdate) summary.dates_adjusted += 1;
-    actions_taken.push({
-      type: 'update_transaction',
-      transaction: updatedTransaction as unknown as Record<string, unknown> | null,
-      reason: `Updated transaction: ${updateReason(match, flags, currencyCode)}`,
-    });
-    accountSnapshotDirty = true;
+      const updatedTransactions = response.data.transactions ?? [];
+      summary.transactions_updated += updatedTransactions.length;
+
+      for (const updatedTransaction of updatedTransactions) {
+        const match = orderedAutoMatches.find(m => m.ynab_transaction?.id === updatedTransaction.id);
+        const flags = match ? computeUpdateFlags(match, params) : { needsClearedUpdate: false, needsDateUpdate: false };
+        actions_taken.push({
+          type: 'update_transaction',
+          transaction: updatedTransaction as unknown as Record<string, unknown> | null,
+          reason: `Updated transaction: ${match ? updateReason(match, flags, currencyCode) : 'cleared'}`,
+        });
+      }
+      accountSnapshotDirty = true;
+    }
   }
 
   // STEP 3: Auto-unclear YNAB transactions missing from bank
-  if (params.auto_unclear_missing) {
-    for (const ynabTxn of analysis.unmatched_ynab) {
+  const shouldRunSanityPass = params.auto_unclear_missing && !balanceAligned;
+  if (shouldRunSanityPass) {
+    const transactionsToUnclear: ynab.SaveTransactionWithIdOrImportId[] = [];
+
+    for (const ynabTxn of orderedUnmatchedYNAB) {
       if (ynabTxn.cleared !== 'cleared') continue;
+      if (balanceAligned) break;
 
       if (params.dry_run) {
         summary.transactions_updated += 1;
@@ -175,21 +260,38 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           transaction: { transaction_id: ynabTxn.id, cleared: 'uncleared' },
           reason: `Would mark transaction ${ynabTxn.id} as uncleared - not present on statement`,
         });
-        continue;
+        applyClearedDelta(-ynabTxn.amount);
+        if (recordAlignmentIfNeeded(`unclearing ${ynabTxn.id} (dry run)`)) {
+          break;
+        }
+      } else {
+        transactionsToUnclear.push({
+          id: ynabTxn.id,
+          cleared: 'uncleared' as ynab.TransactionClearedStatus,
+        });
+        applyClearedDelta(-ynabTxn.amount);
+        if (recordAlignmentIfNeeded(`unclearing ${ynabTxn.id}`)) {
+          break;
+        }
       }
+    }
 
-      const response = await ynabAPI.transactions.updateTransaction(budgetId, ynabTxn.id, {
-        transaction: {
-          cleared: 'uncleared',
-        },
+    // Batch update all unclear operations in a single API call
+    if (!params.dry_run && transactionsToUnclear.length > 0) {
+      const response = await ynabAPI.transactions.updateTransactions(budgetId, {
+        transactions: transactionsToUnclear,
       });
-      const updatedTransaction = response.data.transaction ?? null;
-      summary.transactions_updated += 1;
-      actions_taken.push({
-        type: 'update_transaction',
-        transaction: updatedTransaction as unknown as Record<string, unknown> | null,
-        reason: `Marked transaction ${ynabTxn.id} as uncleared - not found on statement`,
-      });
+
+      const updatedTransactions = response.data.transactions ?? [];
+      summary.transactions_updated += updatedTransactions.length;
+
+      for (const updatedTransaction of updatedTransactions) {
+        actions_taken.push({
+          type: 'update_transaction',
+          transaction: updatedTransaction as unknown as Record<string, unknown> | null,
+          reason: `Marked transaction ${updatedTransaction.id} as uncleared - not found on statement`,
+        });
+      }
       accountSnapshotDirty = true;
     }
   }
@@ -438,3 +540,57 @@ function buildRecommendations(args: {
 }
 
 export type { ExecutionResult as LegacyReconciliationResult };
+
+function resolveStatementBalanceMilli(
+  balanceInfo: ReconciliationAnalysis['balance_info'],
+  provided?: number,
+): number {
+  if (typeof provided === 'number' && Number.isFinite(provided)) {
+    return toMilli(provided);
+  }
+
+  return (
+    extractMoneyValue(balanceInfo?.target_statement) ??
+    extractMoneyValue(balanceInfo?.current_cleared) ??
+    0
+  );
+}
+
+function extractMoneyValue(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return toMilli(value);
+  }
+  if (
+    value &&
+    typeof value === 'object' &&
+    'value_milliunits' in value &&
+    typeof (value as { value_milliunits: unknown }).value_milliunits === 'number'
+  ) {
+    return (value as { value_milliunits: number }).value_milliunits;
+  }
+  return undefined;
+}
+
+function sortByDateDescending<T extends { date: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => compareDates(b.date, a.date));
+}
+
+function sortMatchesByBankDateDescending(matches: TransactionMatch[]): TransactionMatch[] {
+  return [...matches].sort((a, b) =>
+    compareDates(b.bank_transaction.date, a.bank_transaction.date),
+  );
+}
+
+function compareDates(dateA: string, dateB: string): number {
+  return toChronoValue(dateA) - toChronoValue(dateB);
+}
+
+function toChronoValue(date: string): number {
+  const parsed = Date.parse(date);
+  if (!Number.isNaN(parsed)) {
+    return parsed;
+  }
+  const fallback = Date.parse(`${date}T00:00:00Z`);
+  return Number.isNaN(fallback) ? 0 : fallback;
+}
+

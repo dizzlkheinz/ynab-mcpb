@@ -725,6 +725,7 @@ function mergeInsights(
  * @param currency - Currency code (default: USD)
  * @param accountId - Account ID for recommendation context
  * @param budgetId - Budget ID for recommendation context
+ * @param isLiabilityAccount - Whether this is a credit card/liability account (inverts transaction signs)
  */
 export function analyzeReconciliation(
   csvContent: string,
@@ -735,9 +736,19 @@ export function analyzeReconciliation(
   currency: string = 'USD',
   accountId?: string,
   budgetId?: string,
+  isLiabilityAccount: boolean = false,
 ): ReconciliationAnalysis {
   // Step 1: Parse bank CSV
-  const bankTransactions = parseBankStatement(csvContent, csvFilePath);
+  let bankTransactions = parseBankStatement(csvContent, csvFilePath);
+
+  // Step 1b: For liability accounts (credit cards), invert transaction amounts
+  // Bank statements show charges as negative, but YNAB shows them as positive
+  if (isLiabilityAccount) {
+    bankTransactions = bankTransactions.map(txn => ({
+      ...txn,
+      amount: -txn.amount,
+    }));
+  }
 
   // Step 2: Convert YNAB transactions
   const convertedYNABTxns = ynabTransactions.map(convertYNABTransaction);

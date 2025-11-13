@@ -50,13 +50,28 @@ vi.mock('ynab', () => {
   return {
     API: vi.fn(() => mockAPI),
     utils: {
-      convertMilliUnitsToCurrencyAmount: vi.fn((milliunits: number) => milliunits / 1000),
+      convertMilliUnitsToCurrencyAmount: vi.fn(
+        (milliunits: number, currencyDecimalDigits: number = 2) => {
+          const amount = milliunits / 1000;
+          return Number(amount.toFixed(currencyDecimalDigits));
+        },
+      ),
       convertCurrencyAmountToMilliUnits: vi.fn((amount: number) => Math.round(amount * 1000)),
     },
   };
 });
 
 const TEST_BUDGET_UUID = '00000000-0000-0000-0000-000000000001';
+
+describe('YNAB utils mock', () => {
+  it('converts milliunits using SDK rounding rules', async () => {
+    const { utils } = await import('ynab');
+
+    expect(utils.convertMilliUnitsToCurrencyAmount(123456, 2)).toBe(123.46);
+    expect(utils.convertMilliUnitsToCurrencyAmount(123456, 3)).toBe(123.456);
+    expect(utils.convertMilliUnitsToCurrencyAmount(-98765, 2)).toBe(-98.77);
+  });
+});
 
 describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
   let server: YNABMCPServer;

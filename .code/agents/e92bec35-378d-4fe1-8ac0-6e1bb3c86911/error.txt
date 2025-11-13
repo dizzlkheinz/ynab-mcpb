@@ -1,0 +1,5 @@
+Command failed: Error loading configuration: config profile `Context: Repo: ynab-mcp-dxt (TypeScript). Reference doc: docs/reconciliation-flow.md already captures high-level flow and backlog. The new vdocs page should upgrade structure (front matter, diagrams/placeholders, cross-links to src/tools & src/utils, explicit success vs abort criteria, Vitest/test-results hooks). Deliverable: ordered steps with rationale + open questions.
+
+Agent: Create an actionable outline for vdocs/reconciliation-flow.md covering overview, prerequisites, data contracts, algorithm phases, configuration knobs, logging/audit, leftover escalation, and testing guidance.
+
+[Running in read-only mode - no modifications allowed]` not found

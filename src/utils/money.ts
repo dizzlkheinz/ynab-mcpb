@@ -1,4 +1,6 @@
 // money.ts
+import * as ynab from 'ynab';
+
 export type Milli = number; // integer milliunits (no bigint)
 
 export type MoneyDirection = 'credit' | 'debit' | 'balanced';
@@ -12,6 +14,25 @@ export interface MoneyValue {
 }
 
 const DEFAULT_CURRENCY = 'USD';
+const DEFAULT_DECIMAL_DIGITS = 2;
+
+/**
+ * Extract decimal digits from YNAB CurrencyFormat
+ */
+export const getDecimalDigits = (
+  currencyFormat: ynab.CurrencyFormat | null | undefined,
+): number => {
+  return currencyFormat?.decimal_digits ?? DEFAULT_DECIMAL_DIGITS;
+};
+
+/**
+ * Extract ISO currency code from YNAB CurrencyFormat
+ */
+export const getCurrencyCode = (
+  currencyFormat: ynab.CurrencyFormat | null | undefined,
+): string => {
+  return currencyFormat?.iso_code ?? DEFAULT_CURRENCY;
+};
 
 export const toMilli = (x: number | string): Milli => {
   const n = Number(x);
@@ -22,7 +43,15 @@ export const toMilli = (x: number | string): Milli => {
   return m;
 };
 
-export const fromMilli = (m: Milli): number => m / 1000;
+/**
+ * Convert milliunits to currency amount using proper decimal digits
+ * Uses YNAB SDK's conversion logic which handles different currency formats
+ * @param m - Milliunits value
+ * @param decimalDigits - Number of decimal digits for the currency (default: 2 for USD/EUR, 0 for JPY, 3 for BHD, etc.)
+ */
+export const fromMilli = (m: Milli, decimalDigits: number = DEFAULT_DECIMAL_DIGITS): number => {
+  return ynab.utils.convertMilliUnitsToCurrencyAmount(m, decimalDigits);
+};
 
 export const assertMilli = (m: number, msg = 'Expected safe integer milliunits') => {
   if (!Number.isSafeInteger(m)) throw new Error(msg);
@@ -45,26 +74,52 @@ export const moneyDirection = (value: Milli): MoneyDirection => {
   return value > 0 ? 'credit' : 'debit';
 };
 
-const makeFormatter = (currency: string) =>
+const makeFormatter = (currency: string, decimalDigits: number = DEFAULT_DECIMAL_DIGITS) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: decimalDigits,
+    maximumFractionDigits: decimalDigits,
   });
 
-export const formatMoney = (value: Milli, currency: string = DEFAULT_CURRENCY): string =>
-  makeFormatter(currency).format(fromMilli(value));
+/**
+ * Format milliunits as currency string with proper decimal digits
+ * @param value - Milliunits value
+ * @param currency - ISO currency code (default: USD)
+ * @param decimalDigits - Number of decimal digits (default: 2)
+ */
+export const formatMoney = (
+  value: Milli,
+  currency: string = DEFAULT_CURRENCY,
+  decimalDigits: number = DEFAULT_DECIMAL_DIGITS,
+): string => makeFormatter(currency, decimalDigits).format(fromMilli(value, decimalDigits));
 
-export const toMoneyValue = (value: Milli, currency: string = DEFAULT_CURRENCY): MoneyValue => ({
+/**
+ * Convert milliunits to MoneyValue with proper currency format
+ * @param value - Milliunits value
+ * @param currency - ISO currency code (default: USD)
+ * @param decimalDigits - Number of decimal digits (default: 2)
+ */
+export const toMoneyValue = (
+  value: Milli,
+  currency: string = DEFAULT_CURRENCY,
+  decimalDigits: number = DEFAULT_DECIMAL_DIGITS,
+): MoneyValue => ({
   value_milliunits: value,
-  value: fromMilli(value),
-  value_display: formatMoney(value, currency),
+  value: fromMilli(value, decimalDigits),
+  value_display: formatMoney(value, currency, decimalDigits),
   currency,
   direction: moneyDirection(value),
 });
 
+/**
+ * Convert decimal amount to MoneyValue
+ * @param amount - Decimal amount
+ * @param currency - ISO currency code (default: USD)
+ * @param decimalDigits - Number of decimal digits (default: 2)
+ */
 export const toMoneyValueFromDecimal = (
   amount: number,
   currency: string = DEFAULT_CURRENCY,
-): MoneyValue => toMoneyValue(toMilli(amount), currency);
+  decimalDigits: number = DEFAULT_DECIMAL_DIGITS,
+): MoneyValue => toMoneyValue(toMilli(amount), currency, decimalDigits);

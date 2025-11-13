@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type * as ynab from 'ynab';
 import {
   toMilli,
   fromMilli,
@@ -9,6 +10,8 @@ import {
   formatMoney,
   toMoneyValue,
   toMoneyValueFromDecimal,
+  getDecimalDigits,
+  getCurrencyCode,
 } from '../money.js';
 
 describe('money utilities', () => {
@@ -26,10 +29,24 @@ describe('money utilities', () => {
   });
 
   describe('fromMilli', () => {
-    it('converts milliunits to dollars correctly', () => {
+    it('converts milliunits with 2 decimal digits (USD) by default', () => {
       expect(fromMilli(1230)).toBe(1.23);
       expect(fromMilli(-5670)).toBe(-5.67);
       expect(fromMilli(0)).toBe(0);
+    });
+
+    it('converts milliunits with 0 decimal digits (JPY)', () => {
+      expect(fromMilli(123000, 0)).toBe(123);
+      expect(fromMilli(1000, 0)).toBe(1);
+    });
+
+    it('converts milliunits with 3 decimal digits (BHD)', () => {
+      expect(fromMilli(1234, 3)).toBe(1.234);
+      expect(fromMilli(500, 3)).toBe(0.5);
+    });
+
+    it('converts milliunits with explicit 2 decimal digits', () => {
+      expect(fromMilli(1230, 2)).toBe(1.23);
     });
   });
 
@@ -73,6 +90,58 @@ describe('money utilities', () => {
     });
   });
 
+  describe('currency format helpers', () => {
+    it('extracts decimal digits from currency format', () => {
+      const usdFormat: ynab.CurrencyFormat = {
+        iso_code: 'USD',
+        example_format: '$1,234.56',
+        decimal_digits: 2,
+        decimal_separator: '.',
+        symbol_first: true,
+        group_separator: ',',
+        currency_symbol: '$',
+        display_symbol: true,
+      };
+      expect(getDecimalDigits(usdFormat)).toBe(2);
+
+      const jpyFormat: ynab.CurrencyFormat = {
+        iso_code: 'JPY',
+        example_format: '¥1,234',
+        decimal_digits: 0,
+        decimal_separator: '.',
+        symbol_first: true,
+        group_separator: ',',
+        currency_symbol: '¥',
+        display_symbol: true,
+      };
+      expect(getDecimalDigits(jpyFormat)).toBe(0);
+    });
+
+    it('returns default decimal digits for null/undefined', () => {
+      expect(getDecimalDigits(null)).toBe(2);
+      expect(getDecimalDigits(undefined)).toBe(2);
+    });
+
+    it('extracts currency code from currency format', () => {
+      const eurFormat: ynab.CurrencyFormat = {
+        iso_code: 'EUR',
+        example_format: '€1.234,56',
+        decimal_digits: 2,
+        decimal_separator: ',',
+        symbol_first: false,
+        group_separator: '.',
+        currency_symbol: '€',
+        display_symbol: true,
+      };
+      expect(getCurrencyCode(eurFormat)).toBe('EUR');
+    });
+
+    it('returns default currency for null/undefined', () => {
+      expect(getCurrencyCode(null)).toBe('USD');
+      expect(getCurrencyCode(undefined)).toBe('USD');
+    });
+  });
+
   describe('moneyValue helpers', () => {
     it('derives direction correctly', () => {
       expect(moneyDirection(0)).toBe('balanced');
@@ -80,16 +149,34 @@ describe('money utilities', () => {
       expect(moneyDirection(-2500)).toBe('debit');
     });
 
-    it('formats milliunits into currency strings', () => {
+    it('formats milliunits into currency strings with default 2 decimals', () => {
       expect(formatMoney(1234)).toBe('$1.23');
       expect(formatMoney(-9870)).toBe('-$9.87');
     });
 
-    it('creates money values from milliunits', () => {
+    it('formats milliunits with custom currency format', () => {
+      expect(formatMoney(123000, 'JPY', 0)).toBe('¥123');
+      expect(formatMoney(1234, 'USD', 2)).toBe('$1.23');
+      expect(formatMoney(1234, 'EUR', 3)).toBe('€1.234'); // 3 decimal digits requested
+    });
+
+    it('creates money values from milliunits with default 2 decimals', () => {
       const value = toMoneyValue(22220);
       expect(value.value).toBe(22.22);
       expect(value.value_display).toBe('$22.22');
       expect(value.direction).toBe('credit');
+    });
+
+    it('creates currency-aware money values with decimal digits', () => {
+      const valueJPY = toMoneyValue(123000, 'JPY', 0);
+      expect(valueJPY.value).toBe(123);
+      expect(valueJPY.value_display).toBe('¥123');
+      expect(valueJPY.currency).toBe('JPY');
+      expect(valueJPY.direction).toBe('credit');
+
+      const valueUSD = toMoneyValue(1234, 'USD', 2);
+      expect(valueUSD.value).toBe(1.23);
+      expect(valueUSD.value_display).toBe('$1.23');
     });
 
     it('creates money values from decimal amounts', () => {

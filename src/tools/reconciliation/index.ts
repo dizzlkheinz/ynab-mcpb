@@ -206,6 +206,7 @@ export async function handleReconcileAccount(
         currencyCode,
         params.account_id,
         params.budget_id,
+        isLiabilityAccount,
       );
 
       const initialAccount: AccountSnapshot = {

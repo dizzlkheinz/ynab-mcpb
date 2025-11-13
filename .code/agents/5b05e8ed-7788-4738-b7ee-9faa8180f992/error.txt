@@ -1,0 +1,5 @@
+Command failed: Error loading configuration: config profile `Context: Repo: ynab-mcp-dxt. Source doc: docs/reconciliation-flow.md. Requirements: front matter, prerequisites/env, schema/data contracts, algorithm details, config knobs, logging/audit, leftover escalation, testing hooks & cross-links. Output: ordered steps with rationale + open questions.
+
+Agent: Produce a detailed plan for vdocs/reconciliation-flow.md update.
+
+[Running in read-only mode - no modifications allowed]` not found

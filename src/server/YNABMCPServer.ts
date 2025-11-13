@@ -37,12 +37,14 @@ import {
   handleListTransactions,
   handleGetTransaction,
   handleCreateTransaction,
+  handleCreateTransactions,
   handleCreateReceiptSplitTransaction,
   handleUpdateTransaction,
   handleDeleteTransaction,
   ListTransactionsSchema,
   GetTransactionSchema,
   CreateTransactionSchema,
+  CreateTransactionsSchema,
   CreateReceiptSplitTransactionSchema,
   UpdateTransactionSchema,
   DeleteTransactionSchema,
@@ -513,6 +515,15 @@ export class YNABMCPServer {
       inputSchema: CreateTransactionSchema,
       handler: adapt(handleCreateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionSchema>>(),
+    });
+
+    register({
+      name: 'create_transactions',
+      description:
+        'Create multiple transactions in a single batch (1-100 items) with duplicate detection, dry-run validation, and automatic response size management with correlation metadata.',
+      inputSchema: CreateTransactionsSchema,
+      handler: adapt(handleCreateTransactions),
+      defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionsSchema>>(),
     });
 
     register({

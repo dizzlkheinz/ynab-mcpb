@@ -1,0 +1,9 @@
+Command failed: Error loading configuration: config profile `You are helping document improvements for the file docs/reconciliation-flow.md in the YNAB MCP DXT repository (TypeScript MCP host). The document currently outlines the automated reconciliation flow: prerequisites/environment, schema/contracts, configuration knobs, logging/auditability, six numbered steps (validation through telemetry), and testing hooks. We need a concrete, multi-step plan for editing this document so it becomes clearer, stays aligned with the latest reconciliation tooling (src/tools/reconciliation/*), and highlights validation plus troubleshooting entry points. Consider:
+- clarifying structure (TOC, numbered steps, diagrams/ASCII where valuable)
+- ensuring schema references map to actual modules (ReconcileAccountSchema, buildReconciliationPayload, executor, etc.)
+- identifying any missing sections (e.g., failures/escalation, telemetry, examples)
+- listing verification work (tests/docs crosslinks) required after editing
+Produce a plan with explicit steps, rationale, and references to relevant code/docs. Assume repository docs guidelines (2-space indent, Prettier, lint, Vitest). Output should be bullet/numbered lists we can follow to edit the doc.
+
+
+[Running in read-only mode - no modifications allowed]` not found

@@ -2,8 +2,10 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
 import { SaveTransaction } from 'ynab/dist/models/SaveTransaction.js';
 import { SaveSubTransaction } from 'ynab/dist/models/SaveSubTransaction.js';
+import type { SaveTransactionsResponseData } from 'ynab/dist/models/SaveTransactionsResponseData.js';
 import { z } from 'zod/v4';
-import { withToolErrorHandling } from '../types/index.js';
+import { createHash } from 'crypto';
+import { ValidationError, withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import { amountToMilliunits, milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
@@ -64,6 +66,7 @@ export const CreateTransactionSchema = z
     cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
     approved: z.boolean().optional(),
     flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional(),
+    import_id: z.string().min(1, 'Import ID cannot be empty').optional(),
     dry_run: z.boolean().optional(),
     subtransactions: z
       .array(
@@ -95,6 +98,262 @@ export const CreateTransactionSchema = z
   });
 
 export type CreateTransactionParams = z.infer<typeof CreateTransactionSchema>;
+
+const BulkTransactionInputSchemaBase = CreateTransactionSchema.pick({
+  account_id: true,
+  amount: true,
+  date: true,
+  payee_name: true,
+  payee_id: true,
+  category_id: true,
+  memo: true,
+  cleared: true,
+  approved: true,
+  flag_color: true,
+  import_id: true,
+});
+
+type BulkTransactionInput = Omit<CreateTransactionParams, 'budget_id' | 'dry_run' | 'subtransactions'>;
+
+const BulkTransactionInputSchema = BulkTransactionInputSchemaBase.extend({
+  subtransactions: z.any().optional(),
+})
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.subtransactions !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Subtransactions are not supported in bulk transaction creation',
+        path: ['subtransactions'],
+      });
+    }
+  })
+  .transform((data): BulkTransactionInput => {
+    const { subtransactions, ...rest } = data;
+    return rest;
+  });
+
+export const CreateTransactionsSchema = z
+  .object({
+    budget_id: z.string().min(1, 'Budget ID is required'),
+    transactions: z
+      .array(BulkTransactionInputSchema, {
+        invalid_type_error: 'Transactions must be provided as an array',
+      })
+      .min(1, 'At least one transaction is required')
+      .max(100, 'A maximum of 100 transactions may be created at once'),
+    dry_run: z.boolean().optional(),
+  })
+  .strict();
+
+export type CreateTransactionsParams = z.infer<typeof CreateTransactionsSchema>;
+
+export interface BulkTransactionResult {
+  request_index: number;
+  status: 'created' | 'duplicate' | 'failed';
+  transaction_id?: string;
+  correlation_key: string;
+  error?: string;
+}
+
+export interface BulkCreateResponse {
+  success: boolean;
+  server_knowledge?: number;
+  summary: {
+    total_requested: number;
+    created: number;
+    duplicates: number;
+    failed: number;
+  };
+  results: BulkTransactionResult[];
+  transactions?: ynab.TransactionDetail[];
+  duplicate_import_ids?: string[];
+  message?: string;
+  mode?: 'full' | 'summary' | 'ids_only';
+}
+
+const FULL_RESPONSE_THRESHOLD = 64 * 1024;
+const SUMMARY_RESPONSE_THRESHOLD = 96 * 1024;
+const MAX_RESPONSE_BYTES = 100 * 1024;
+
+function generateCorrelationKey(transaction: {
+  account_id?: string;
+  date?: string;
+  amount?: number;
+  payee_id?: string | null;
+  payee_name?: string | null;
+  category_id?: string | null;
+  memo?: string | null;
+  cleared?: ynab.TransactionClearedStatus;
+  approved?: boolean;
+  flag_color?: ynab.TransactionFlagColor | null;
+  import_id?: string | null;
+}): string {
+  if (transaction.import_id) {
+    return transaction.import_id;
+  }
+
+  const segments = [
+    `account:${transaction.account_id ?? ''}`,
+    `date:${transaction.date ?? ''}`,
+    `amount:${transaction.amount ?? 0}`,
+    `payee:${transaction.payee_id ?? transaction.payee_name ?? ''}`,
+    `category:${transaction.category_id ?? ''}`,
+    `memo:${transaction.memo ?? ''}`,
+    `cleared:${transaction.cleared ?? ''}`,
+    `approved:${transaction.approved ?? false}`,
+    `flag:${transaction.flag_color ?? ''}`,
+  ];
+
+  const normalized = segments.join('|');
+  const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+  return `hash:${hash}`;
+}
+
+function correlateResults(
+  requests: BulkTransactionInput[],
+  responseData: SaveTransactionsResponseData,
+  duplicateImportIds: Set<string>,
+): BulkTransactionResult[] {
+  const createdByImportId = new Map<string, string[]>();
+  const createdByHash = new Map<string, string[]>();
+  const responseTransactions = responseData.transactions ?? [];
+
+  const register = (map: Map<string, string[]>, key: string, transactionId: string): void => {
+    const existing = map.get(key);
+    if (existing) {
+      existing.push(transactionId);
+      return;
+    }
+    map.set(key, [transactionId]);
+  };
+
+  for (const transaction of responseTransactions) {
+    if (!transaction.id) {
+      continue;
+    }
+    const key = generateCorrelationKey(transaction);
+    if (key.startsWith('hash:')) {
+      register(createdByHash, key, transaction.id);
+    } else {
+      register(createdByImportId, key, transaction.id);
+    }
+  }
+
+  const popId = (map: Map<string, string[]>, key: string): string | undefined => {
+    const bucket = map.get(key);
+    if (!bucket || bucket.length === 0) {
+      return undefined;
+    }
+    const [transactionId] = bucket.splice(0, 1);
+    if (bucket.length === 0) {
+      map.delete(key);
+    }
+    return transactionId;
+  };
+
+  return requests.map((transaction, index) => {
+    const correlationKey = generateCorrelationKey(transaction);
+
+    if (transaction.import_id && duplicateImportIds.has(transaction.import_id)) {
+      return {
+        request_index: index,
+        status: 'duplicate',
+        correlation_key: correlationKey,
+      };
+    }
+
+    let transactionId: string | undefined;
+    if (correlationKey.startsWith('hash:')) {
+      transactionId = popId(createdByHash, correlationKey);
+    } else {
+      transactionId = popId(createdByImportId, correlationKey);
+    }
+
+    if (!transactionId && !correlationKey.startsWith('hash:')) {
+      // Attempt hash-based fallback if import_id was not matched.
+      const hashKey = generateCorrelationKey({ ...transaction, import_id: undefined });
+      transactionId = popId(createdByHash, hashKey);
+    }
+
+    if (transactionId) {
+      return {
+        request_index: index,
+        status: 'created',
+        correlation_key: correlationKey,
+        transaction_id: transactionId,
+      };
+    }
+
+    console.warn(
+      `[create_transactions] Unable to correlate transaction at index ${index} (key: ${correlationKey})`,
+    );
+
+    return {
+      request_index: index,
+      status: 'failed',
+      correlation_key: correlationKey,
+      error: 'Unable to correlate request transaction with YNAB response',
+    };
+  });
+}
+
+function estimatePayloadSize(payload: BulkCreateResponse): number {
+  return Buffer.byteLength(JSON.stringify(payload), 'utf8');
+}
+
+function finalizeResponse(response: BulkCreateResponse): BulkCreateResponse {
+  const appendMessage = (message: string | undefined, addition: string): string => {
+    if (!message) {
+      return addition;
+    }
+    if (message.includes(addition)) {
+      return message;
+    }
+    return `${message} ${addition}`;
+  };
+
+  const fullSize = estimatePayloadSize({ ...response, mode: 'full' });
+  if (fullSize <= FULL_RESPONSE_THRESHOLD) {
+    return { ...response, mode: 'full' };
+  }
+
+  const { transactions, ...summaryResponse } = response;
+  const summaryPayload: BulkCreateResponse = {
+    ...summaryResponse,
+    message: appendMessage(
+      response.message,
+      'Response downgraded to summary to stay under size limits.',
+    ),
+    mode: 'summary',
+  };
+
+  if (estimatePayloadSize(summaryPayload) <= SUMMARY_RESPONSE_THRESHOLD) {
+    return summaryPayload;
+  }
+
+  const idsOnlyPayload: BulkCreateResponse = {
+    ...summaryPayload,
+    results: summaryResponse.results.map((result) => ({
+      request_index: result.request_index,
+      status: result.status,
+      transaction_id: result.transaction_id,
+      correlation_key: result.correlation_key,
+      error: result.error,
+    })),
+    message: appendMessage(
+      summaryResponse.message,
+      'Response downgraded to ids_only to meet 100KB limit.',
+    ),
+    mode: 'ids_only',
+  };
+
+  if (estimatePayloadSize(idsOnlyPayload) <= MAX_RESPONSE_BYTES) {
+    return idsOnlyPayload;
+  }
+
+  throw new Error('RESPONSE_TOO_LARGE: Unable to format bulk create response within 100KB limit');
+}
 
 const ReceiptSplitItemSchema = z
   .object({
@@ -469,6 +728,7 @@ export async function handleCreateTransaction(
     if (params.category_id !== undefined) transactionData.category_id = params.category_id;
     if (params.memo !== undefined) transactionData.memo = params.memo;
     if (params.approved !== undefined) transactionData.approved = params.approved;
+    if (params.import_id !== undefined) transactionData.import_id = params.import_id;
     if (params.subtransactions && params.subtransactions.length > 0) {
       const subtransactions: SaveSubTransaction[] = params.subtransactions.map((subtransaction) => {
         const mapped: SaveSubTransaction = {
@@ -1056,6 +1316,172 @@ export async function handleDeleteTransaction(
   } catch (error) {
     return handleTransactionError(error, 'Failed to delete transaction');
   }
+}
+
+export async function handleCreateTransactions(
+  ynabAPI: ynab.API,
+  params: CreateTransactionsParams,
+): Promise<CallToolResult> {
+  return (await withToolErrorHandling(
+    async () => {
+      const validationResult = CreateTransactionsSchema.safeParse(params);
+      if (!validationResult.success) {
+        const issuesByIndex = new Map<number, string[]>();
+        for (const issue of validationResult.error.errors) {
+          const transactionIndex = issue.path.find(
+            (segment): segment is number => typeof segment === 'number',
+          );
+          const message = issue.message;
+          if (transactionIndex !== undefined) {
+            const existing = issuesByIndex.get(transactionIndex) ?? [];
+            existing.push(message);
+            issuesByIndex.set(transactionIndex, existing);
+          }
+        }
+
+        const details = Array.from(issuesByIndex.entries()).map(([index, errors]) => ({
+          transaction_index: index,
+          errors,
+        }));
+
+        throw new ValidationError(
+          'Bulk transaction validation failed',
+          JSON.stringify(details, null, 2),
+          ['Ensure each transaction includes required fields', 'Limit batches to 100 items'],
+        );
+      }
+
+      const { budget_id, transactions, dry_run } = validationResult.data;
+
+      if (dry_run) {
+        const totalAmount = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+        const accountsAffected = Array.from(
+          new Set(transactions.map((transaction) => transaction.account_id)),
+        );
+        const sortedDates = [...transactions.map((transaction) => transaction.date)].sort();
+        const dateRange =
+          sortedDates.length > 0
+            ? { start: sortedDates[0], end: sortedDates[sortedDates.length - 1] }
+            : undefined;
+
+        const transactionsPreview = transactions.slice(0, 10).map((transaction, index) => ({
+          request_index: index,
+          account_id: transaction.account_id,
+          date: transaction.date,
+          amount: milliunitsToAmount(transaction.amount),
+          memo: transaction.memo,
+          payee_id: transaction.payee_id,
+          payee_name: transaction.payee_name,
+          category_id: transaction.category_id,
+          import_id: transaction.import_id,
+        }));
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: responseFormatter.format({
+                dry_run: true,
+                action: 'create_transactions',
+                validation: {
+                  passed: true,
+                },
+                summary: {
+                  total_transactions: transactions.length,
+                  total_amount: milliunitsToAmount(totalAmount),
+                  accounts_affected,
+                  date_range: dateRange,
+                },
+                transactions_preview: transactionsPreview,
+                message:
+                  'Dry run successful. No transactions were created. Re-run without dry_run to apply.',
+              }),
+            },
+          ],
+        };
+      }
+
+      const saveTransactions: SaveTransaction[] = transactions.map((transaction) => {
+        const payload: SaveTransaction = {
+          account_id: transaction.account_id,
+          amount: transaction.amount,
+          date: transaction.date,
+        };
+
+        if (transaction.payee_id !== undefined) payload.payee_id = transaction.payee_id;
+        if (transaction.payee_name !== undefined) payload.payee_name = transaction.payee_name;
+        if (transaction.category_id !== undefined) payload.category_id = transaction.category_id;
+        if (transaction.memo !== undefined) payload.memo = transaction.memo;
+        if (transaction.cleared !== undefined) payload.cleared = transaction.cleared;
+        if (transaction.approved !== undefined) payload.approved = transaction.approved;
+        if (transaction.flag_color !== undefined) payload.flag_color = transaction.flag_color;
+        if (transaction.import_id !== undefined) payload.import_id = transaction.import_id;
+
+        return payload;
+      });
+
+      const response = await ynabAPI.transactions.createTransactions(budget_id, {
+        transactions: saveTransactions,
+      });
+
+      const responseData = response.data;
+      const duplicateImportIds = new Set(responseData.duplicate_import_ids ?? []);
+      const results = correlateResults(transactions, responseData, duplicateImportIds);
+
+      const summary = {
+        total_requested: transactions.length,
+        created: responseData.transaction_ids?.length ?? 0,
+        duplicates: duplicateImportIds.size,
+        failed: results.filter((result) => result.status === 'failed').length,
+      };
+
+      const baseResponse: BulkCreateResponse = {
+        success: summary.failed === 0,
+        server_knowledge: responseData.server_knowledge,
+        summary,
+        results,
+        transactions: responseData.transactions ?? [],
+        duplicate_import_ids: responseData.duplicate_import_ids ?? [],
+        message: `Processed ${summary.total_requested} transactions: ${summary.created} created, ${summary.duplicates} duplicates, ${summary.failed} failed.`,
+      };
+
+      const cacheKeys = new Set<string>([
+        CacheManager.generateKey('transactions', 'list', budget_id),
+        CacheManager.generateKey('accounts', 'list', budget_id),
+        CacheManager.generateKey('categories', 'list', budget_id),
+        CacheManager.generateKey('months', 'list', budget_id),
+      ]);
+
+      const accountIds = new Set(transactions.map((transaction) => transaction.account_id));
+      for (const accountId of accountIds) {
+        cacheKeys.add(CacheManager.generateKey('account', 'get', budget_id, accountId));
+      }
+
+      const monthKeys = new Set(
+        transactions.map(
+          (transaction) => `${transaction.date.slice(0, 7)}-01`,
+        ),
+      );
+      for (const monthKey of monthKeys) {
+        cacheKeys.add(CacheManager.generateKey('month', 'get', budget_id, monthKey));
+      }
+
+      for (const key of cacheKeys) {
+        cacheManager.delete(key);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: responseFormatter.format(finalizedResponse),
+          },
+        ],
+      };
+    },
+    'ynab:create_transactions',
+    'bulk transaction creation',
+  )) as CallToolResult;
 }
 
 /**

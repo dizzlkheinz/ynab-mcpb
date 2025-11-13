@@ -1,0 +1,13 @@
+Command failed: Error loading configuration: config profile `Context: Repo: ynab-mcp-dxt (TypeScript MCP host). Docs live in docs/, code in src/, Vitest tests in src/__tests__. Format via Prettier (2-space) and ESLint; docs should cross-link reference/API.md#reconcile_account, reference/TOOLS.md#reconcile_account, docs/schemas/reconciliation-v2.json, and guides/TESTING.md.
+
+Target doc snapshot (last updated 2025-11-12) already covers: prerequisites, schema/data contracts, configuration knobs, logging/auditability, six steps (input validation, newest→oldest statement pass, cleared sanity pass, finalize, leftover escalation, telemetry feedback), plus testing hooks. Open questions noted per step: persisting detected CSV format, adaptive confidence thresholds for large ledgers, exposing dry-run previews for un-cleared transactions, enforcing statement_date before finalization, escalation triggers when leftovers exceed a threshold, telemetry snapshot privacy.
+
+Goal: plan incremental edits/additions to keep doc authoritative for engineers + assistant builders. Address structure, clarity, unresolved open questions (decide whether to resolve, defer, or log follow-ups), and ensure examples/tests reference current tooling (test-reconcile-*.js, npm run test:comprehensive). Mention verification steps (spellcheck? npm run format:check?). Provide numbered steps with rationale, referencing sections to touch.
+
+Constraints: prefer lightweight doc changes over rewrites; keep automation notes accurate; ensure any new sections mention validation (unit/integration/e2e).
+
+Agent: Produce an actionable plan to improve docs/reconciliation-flow.md for accuracy, clarity, and test guidance.
+
+Files to consider: docs/reconciliation-flow.md
+
+[Running in read-only mode - no modifications allowed]` not found
