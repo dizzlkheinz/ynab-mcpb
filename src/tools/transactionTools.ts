@@ -366,7 +366,7 @@ function correlateResults(
   return correlatedResults;
 }
 
-function estimatePayloadSize(payload: BulkCreateResponse): number {
+function estimatePayloadSize(payload: BulkCreateResponse | BulkUpdateResponse): number {
   return Buffer.byteLength(JSON.stringify(payload), 'utf8');
 }
 
@@ -1467,7 +1467,7 @@ export async function handleCreateTransactions(
   return (await withToolErrorHandling(
     async () => {
       const validationResult = CreateTransactionsSchema.safeParse(params);
-      if (!validationResult.success) {
+        if (!validationResult.success) {
         type TransactionIssueIndex = number | null;
         const issuesByIndex = new Map<TransactionIssueIndex, string[]>();
         const validationIssues = validationResult.error.issues ?? [];
@@ -1686,6 +1686,11 @@ interface TransactionMetadata {
 interface MetadataResolutionResult {
   metadata: Map<string, TransactionMetadata>;
   unresolvedIds: string[];
+  previewDetails: Map<string, ynab.TransactionDetail>;
+}
+
+interface ResolveMetadataOptions {
+  previewTransactionIds?: string[];
 }
 
 /**
@@ -1697,9 +1702,13 @@ async function resolveMetadata(
   ynabAPI: ynab.API,
   budgetId: string,
   transactions: BulkUpdateTransactionInput[],
+  options: ResolveMetadataOptions = {},
 ): Promise<MetadataResolutionResult> {
   const metadata = new Map<string, TransactionMetadata>();
   const needsResolution: string[] = [];
+  const previewIds = new Set(options.previewTransactionIds ?? []);
+  const previewDetails = new Map<string, ynab.TransactionDetail>();
+  const previewIdsNeedingFetch = new Set(previewIds);
 
   // First pass: Use provided metadata
   for (const transaction of transactions) {
@@ -1713,64 +1722,85 @@ async function resolveMetadata(
     }
   }
 
-  if (needsResolution.length === 0) {
-    return { metadata, unresolvedIds: [] };
+  if (needsResolution.length > 0) {
+    console.log('needsResolution', needsResolution);
   }
 
-  // Second pass: Try to hydrate from cache
-  const stillNeedsResolution: string[] = [];
-  for (const transactionId of needsResolution) {
+  if (previewIds.size === 0 && needsResolution.length === 0) {
+    return { metadata, unresolvedIds: [], previewDetails };
+  }
+
+  // Second pass: hydrate from cache for both metadata needs and preview requests
+  const needsResolutionSet = new Set(needsResolution);
+  const cacheLookupIds = new Set<string>([...needsResolution, ...previewIds]);
+  for (const transactionId of cacheLookupIds) {
     const cacheKey = CacheManager.generateKey('transaction', 'get', budgetId, transactionId);
     const cached = cacheManager.get<ynab.TransactionDetail>(cacheKey);
-    if (cached) {
+    if (!cached) {
+      continue;
+    }
+
+    if (needsResolutionSet.has(transactionId)) {
       metadata.set(transactionId, {
         account_id: cached.account_id,
         date: cached.date,
       });
-    } else {
-      stillNeedsResolution.push(transactionId);
+      needsResolutionSet.delete(transactionId);
+    }
+    if (previewIds.has(transactionId) && !previewDetails.has(transactionId)) {
+      previewDetails.set(transactionId, cached);
+      previewIdsNeedingFetch.delete(transactionId);
     }
   }
 
-  if (stillNeedsResolution.length === 0) {
-    return { metadata, unresolvedIds: [] };
+  const stillNeedsResolution = Array.from(needsResolutionSet);
+  if (stillNeedsResolution.length === 0 && previewIdsNeedingFetch.size === 0) {
+    return { metadata, unresolvedIds: [], previewDetails };
   }
 
   // Third pass: Limited API calls with concurrency limit
   const MAX_CONCURRENT_FETCHES = 5;
   const fetchPromises: Promise<void>[] = [];
-  const failedFetches: string[] = [];
+  const metadataAwaitingResolution = new Set(stillNeedsResolution);
+  const idsNeedingApiFetch = Array.from(
+    new Set([...stillNeedsResolution, ...previewIdsNeedingFetch]),
+  );
 
-  for (let i = 0; i < stillNeedsResolution.length; i += MAX_CONCURRENT_FETCHES) {
-    const batch = stillNeedsResolution.slice(i, i + MAX_CONCURRENT_FETCHES);
+  for (let i = 0; i < idsNeedingApiFetch.length; i += MAX_CONCURRENT_FETCHES) {
+    const batch = idsNeedingApiFetch.slice(i, i + MAX_CONCURRENT_FETCHES);
     const batchPromises = batch.map(async (transactionId) => {
       try {
         const response = await ynabAPI.transactions.getTransactionById(budgetId, transactionId);
         const transaction = response.data.transaction;
         if (transaction) {
-          metadata.set(transactionId, {
-            account_id: transaction.account_id,
-            date: transaction.date,
-          });
-        } else {
-          failedFetches.push(transactionId);
+          if (metadataAwaitingResolution.has(transactionId)) {
+            metadata.set(transactionId, {
+              account_id: transaction.account_id,
+              date: transaction.date,
+            });
+            metadataAwaitingResolution.delete(transactionId);
+          }
+          if (previewIdsNeedingFetch.has(transactionId) && !previewDetails.has(transactionId)) {
+            previewDetails.set(transactionId, transaction);
+            previewIdsNeedingFetch.delete(transactionId);
+          }
         }
       } catch {
-        // If we can't fetch metadata, track as unresolved
-        failedFetches.push(transactionId);
-        globalRequestLogger.logError(
-          'ynab:update_transactions',
-          'resolve_metadata',
-          { transaction_id: transactionId },
-          'Failed to resolve transaction metadata',
-        );
+        if (metadataAwaitingResolution.has(transactionId)) {
+          globalRequestLogger.logError(
+            'ynab:update_transactions',
+            'resolve_metadata',
+            { transaction_id: transactionId },
+            'Failed to resolve transaction metadata',
+          );
+        }
       }
     });
     fetchPromises.push(...batchPromises);
   }
 
   await Promise.all(fetchPromises);
-  return { metadata, unresolvedIds: failedFetches };
+  return { metadata, unresolvedIds: Array.from(metadataAwaitingResolution), previewDetails };
 }
 
 /**
@@ -1787,7 +1817,7 @@ function finalizeBulkUpdateResponse(response: BulkUpdateResponse): BulkUpdateRes
     return `${message} ${addition}`;
   };
 
-  const fullSize = estimatePayloadSize(response as unknown as BulkCreateResponse);
+  const fullSize = estimatePayloadSize(response);
   if (fullSize <= FULL_RESPONSE_THRESHOLD) {
     return { ...response, mode: 'full' };
   }
@@ -1803,7 +1833,7 @@ function finalizeBulkUpdateResponse(response: BulkUpdateResponse): BulkUpdateRes
     mode: 'summary',
   };
 
-  if (estimatePayloadSize(summaryPayload as unknown as BulkCreateResponse) <= SUMMARY_RESPONSE_THRESHOLD) {
+  if (estimatePayloadSize(summaryPayload) <= SUMMARY_RESPONSE_THRESHOLD) {
     return summaryPayload;
   }
 
@@ -1831,7 +1861,7 @@ function finalizeBulkUpdateResponse(response: BulkUpdateResponse): BulkUpdateRes
     mode: 'ids_only',
   };
 
-  if (estimatePayloadSize(idsOnlyPayload as unknown as BulkCreateResponse) <= MAX_RESPONSE_BYTES) {
+  if (estimatePayloadSize(idsOnlyPayload) <= MAX_RESPONSE_BYTES) {
     return idsOnlyPayload;
   }
 
@@ -1884,110 +1914,102 @@ export async function handleUpdateTransactions(
       const { budget_id, transactions, dry_run } = validationResult.data;
 
       if (dry_run) {
-        // Resolve metadata first to build before/after previews
-        const { metadata, unresolvedIds } = await resolveMetadata(ynabAPI, budget_id, transactions);
+        const previewTransactions = transactions.slice(0, 10);
+        const previewTransactionIds = previewTransactions.map((transaction) => transaction.id);
+        // Resolve metadata once and reuse any transaction details for preview rendering
+        const { metadata, unresolvedIds, previewDetails } = await resolveMetadata(
+          ynabAPI,
+          budget_id,
+          transactions,
+          {
+            previewTransactionIds,
+          },
+        );
 
-        // Build before/after previews for first 10 transactions
         const transactionsPreview = [];
-        let missingMetadataCount = 0;
+        const unavailablePreviewIds: string[] = [];
 
-        for (const transaction of transactions.slice(0, 10)) {
-          let currentState: ynab.TransactionDetail | null = null;
-
-          // Try to fetch current state from cache or API
-          const cacheKey = CacheManager.generateKey('transaction', 'get', budget_id, transaction.id);
-          currentState = cacheManager.get<ynab.TransactionDetail>(cacheKey) ?? null;
-
+        for (const transaction of previewTransactions) {
+          const currentState = previewDetails.get(transaction.id);
           if (!currentState) {
-            try {
-              const response = await ynabAPI.transactions.getTransactionById(
-                budget_id,
-                transaction.id,
-              );
-              currentState = response.data.transaction ?? null;
-            } catch {
-              missingMetadataCount++;
-            }
-          }
-
-          if (currentState) {
-            // Build before object with only fields that will be changed
-            const before: Record<string, unknown> = {};
-            const after: Record<string, unknown> = {};
-
-            if (transaction.amount !== undefined && transaction.amount !== currentState.amount) {
-              before['amount'] = milliunitsToAmount(currentState.amount);
-              after['amount'] = milliunitsToAmount(transaction.amount);
-            }
-            if (transaction.date !== undefined && transaction.date !== currentState.date) {
-              before['date'] = currentState.date;
-              after['date'] = transaction.date;
-            }
-            if (transaction.memo !== undefined && transaction.memo !== currentState.memo) {
-              before['memo'] = currentState.memo;
-              after['memo'] = transaction.memo;
-            }
-            if (transaction.payee_id !== undefined && transaction.payee_id !== currentState.payee_id) {
-              before['payee_id'] = currentState.payee_id;
-              after['payee_id'] = transaction.payee_id;
-            }
-            if (
-              transaction.payee_name !== undefined &&
-              transaction.payee_name !== currentState.payee_name
-            ) {
-              before['payee_name'] = currentState.payee_name;
-              after['payee_name'] = transaction.payee_name;
-            }
-            if (
-              transaction.category_id !== undefined &&
-              transaction.category_id !== currentState.category_id
-            ) {
-              before['category_id'] = currentState.category_id;
-              after['category_id'] = transaction.category_id;
-            }
-            if (transaction.cleared !== undefined && transaction.cleared !== currentState.cleared) {
-              before['cleared'] = currentState.cleared;
-              after['cleared'] = transaction.cleared;
-            }
-            if (
-              transaction.approved !== undefined &&
-              transaction.approved !== currentState.approved
-            ) {
-              before['approved'] = currentState.approved;
-              after['approved'] = transaction.approved;
-            }
-            if (
-              transaction.flag_color !== undefined &&
-              transaction.flag_color !== currentState.flag_color
-            ) {
-              before['flag_color'] = currentState.flag_color;
-              after['flag_color'] = transaction.flag_color;
-            }
-
-            transactionsPreview.push({
-              transaction_id: transaction.id,
-              before,
-              after,
-            });
-          } else {
-            // Unable to fetch current state
+            unavailablePreviewIds.push(transaction.id);
             transactionsPreview.push({
               transaction_id: transaction.id,
               before: 'unavailable',
               after: transaction,
             });
+            continue;
           }
+
+          const before: Record<string, unknown> = {};
+          const after: Record<string, unknown> = {};
+
+          if (transaction.amount !== undefined && transaction.amount !== currentState.amount) {
+            before['amount'] = milliunitsToAmount(currentState.amount);
+            after['amount'] = milliunitsToAmount(transaction.amount);
+          }
+          if (transaction.date !== undefined && transaction.date !== currentState.date) {
+            before['date'] = currentState.date;
+            after['date'] = transaction.date;
+          }
+          if (transaction.memo !== undefined && transaction.memo !== currentState.memo) {
+            before['memo'] = currentState.memo;
+            after['memo'] = transaction.memo;
+          }
+          if (transaction.payee_id !== undefined && transaction.payee_id !== currentState.payee_id) {
+            before['payee_id'] = currentState.payee_id;
+            after['payee_id'] = transaction.payee_id;
+          }
+          if (
+            transaction.payee_name !== undefined &&
+            transaction.payee_name !== currentState.payee_name
+          ) {
+            before['payee_name'] = currentState.payee_name;
+            after['payee_name'] = transaction.payee_name;
+          }
+          if (
+            transaction.category_id !== undefined &&
+            transaction.category_id !== currentState.category_id
+          ) {
+            before['category_id'] = currentState.category_id;
+            after['category_id'] = transaction.category_id;
+          }
+          if (transaction.cleared !== undefined && transaction.cleared !== currentState.cleared) {
+            before['cleared'] = currentState.cleared;
+            after['cleared'] = transaction.cleared;
+          }
+          if (transaction.approved !== undefined && transaction.approved !== currentState.approved) {
+            before['approved'] = currentState.approved;
+            after['approved'] = transaction.approved;
+          }
+          if (
+            transaction.flag_color !== undefined &&
+            transaction.flag_color !== currentState.flag_color
+          ) {
+            before['flag_color'] = currentState.flag_color;
+            after['flag_color'] = transaction.flag_color;
+          }
+
+          transactionsPreview.push({
+            transaction_id: transaction.id,
+            before,
+            after,
+          });
         }
 
         // Build warnings array
         const warnings: { code: string; count: number; message: string; sample_ids?: string[] }[] = [];
-        if (missingMetadataCount > 0 || unresolvedIds.length > 0) {
-          const totalMissing = Math.max(missingMetadataCount, unresolvedIds.length);
+        if (unavailablePreviewIds.length > 0 || unresolvedIds.length > 0) {
+          const totalMissing = Math.max(unavailablePreviewIds.length, unresolvedIds.length);
+          const sampleIds =
+            unresolvedIds.length > 0
+              ? unresolvedIds.slice(0, 10)
+              : unavailablePreviewIds.slice(0, 10);
           warnings.push({
             code: 'metadata_unavailable',
             count: totalMissing,
             message: `Unable to fetch prior state for ${totalMissing} transactions`,
-            sample_ids: unresolvedIds.slice(0, 10),
+            sample_ids: sampleIds,
           });
         }
 
@@ -2038,6 +2060,14 @@ export async function handleUpdateTransactions(
 
       // Check metadata completeness threshold (5%)
       const missingMetadataRatio = unresolvedIds.length / transactions.length;
+      if (missingMetadataRatio > 0) {
+        console.log('metadata completeness check', {
+          unresolvedIds,
+          transactions: transactions.length,
+          ratio: missingMetadataRatio,
+          dry_run,
+        });
+      }
       if (!dry_run && missingMetadataRatio > 0.05) {
         throw new ValidationError(
           'METADATA_INCOMPLETE: Too many transactions missing metadata for cache invalidation',

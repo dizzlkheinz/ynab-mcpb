@@ -178,7 +178,8 @@ describeIntegration('Transaction Tools Integration', () => {
         amount: -1234,
         date: today(),
         memo: `Bulk MCP Test ${randomUUID().slice(0, 8)}`,
-        import_id: `MCP:${randomUUID()}`,
+        // YNAB import_id max length is 36 characters: "MCP:" (4) + UUID first 32 chars = 36
+        import_id: `MCP:${randomUUID().slice(0, 32)}`,
       };
       return { ...base, ...overrides };
     };
@@ -224,18 +225,20 @@ describeIntegration('Transaction Tools Integration', () => {
       }
     });
     it('should create two transactions via the bulk handler', async () => {
-      const importPrefix = randomUUID();
+      const importPrefix = randomUUID().slice(0, 30); // Keep short for import_id
       const { response } = await executeBulkCreate({
         budget_id: testBudgetId,
         transactions: [
           buildTransaction({
             amount: -1500,
             memo: `Bulk Pair A ${importPrefix}`,
+            // Max 36 chars: "MCP:" (4) + prefix (30) + ":A" (2) = 36
             import_id: `MCP:${importPrefix}:A`,
           }),
           buildTransaction({
             amount: -2500,
             memo: `Bulk Pair B ${importPrefix}`,
+            // Max 36 chars: "MCP:" (4) + prefix (30) + ":B" (2) = 36
             import_id: `MCP:${importPrefix}:B`,
           }),
         ],
@@ -282,7 +285,8 @@ describeIntegration('Transaction Tools Integration', () => {
           buildTransaction({
             memo,
             amount: -4321,
-            import_id: `MCP:CACHE:${randomUUID()}`,
+            // Max 36 chars: "MCP:CACHE:" (10) + 26 chars
+            import_id: `MCP:CACHE:${randomUUID().slice(0, 26)}`,
           }),
         ],
       });
@@ -310,12 +314,14 @@ describeIntegration('Transaction Tools Integration', () => {
           buildTransaction({
             account_id: testAccountId,
             memo: 'Primary account bulk entry',
-            import_id: `MCP:PRIMARY:${randomUUID()}`,
+            // Max 36 chars: "MCP:PRIMARY:" (12) + 24 chars
+            import_id: `MCP:PRIMARY:${randomUUID().slice(0, 24)}`,
           }),
           buildTransaction({
             account_id: secondaryAccountId,
             memo: 'Secondary account bulk entry',
-            import_id: `MCP:SECONDARY:${randomUUID()}`,
+            // Max 36 chars: "MCP:SECONDARY:" (14) + 22 chars
+            import_id: `MCP:SECONDARY:${randomUUID().slice(0, 22)}`,
           }),
         ],
       });
@@ -333,7 +339,9 @@ describeIntegration('Transaction Tools Integration', () => {
         buildTransaction({
           amount: -1000 - index,
           memo: `Bulk batch item ${index}`,
-          import_id: `MCP:BATCH:${index}:${randomUUID()}`,
+          // Max 36 chars: "MCP:BATCH:" (10) + index (up to 2 chars) + ":" (1) + UUID
+          // With index 0-99, max prefix is 13 chars, leaving 23 for UUID
+          import_id: `MCP:BATCH:${index}:${randomUUID().slice(0, 23)}`,
         }),
       );
 
@@ -400,7 +408,8 @@ describeIntegration('Transaction Tools Integration', () => {
         transactions: [
           buildTransaction({
             account_id: 'invalid-account-id',
-            import_id: `MCP:INVALID:${randomUUID()}`,
+            // Max 36 chars: "MCP:INVALID:" (12) + 24 chars
+            import_id: `MCP:INVALID:${randomUUID().slice(0, 24)}`,
           }),
         ],
       });
@@ -451,14 +460,16 @@ describeIntegration('Transaction Tools Integration', () => {
             amount: -5000,
             date: new Date().toISOString().slice(0, 10),
             memo: 'Original memo 1',
-            import_id: `MCP:UPDATE-TEST-1:${randomUUID()}`,
+            // Max 36 chars: "MCP:UPDATE-TEST-1:" (18) + 18 chars
+            import_id: `MCP:UPDATE-TEST-1:${randomUUID().slice(0, 18)}`,
           },
           {
             account_id: testAccountId,
             amount: -10000,
             date: new Date().toISOString().slice(0, 10),
             memo: 'Original memo 2',
-            import_id: `MCP:UPDATE-TEST-2:${randomUUID()}`,
+            // Max 36 chars: "MCP:UPDATE-TEST-2:" (18) + 18 chars
+            import_id: `MCP:UPDATE-TEST-2:${randomUUID().slice(0, 18)}`,
           },
         ],
       });
@@ -532,7 +543,8 @@ describeIntegration('Transaction Tools Integration', () => {
             amount: -3000,
             date: new Date().toISOString().slice(0, 10),
             memo: 'Original',
-            import_id: `MCP:UPDATE-NO-META:${randomUUID()}`,
+            // Max 36 chars: "MCP:UPDATE-NO-META:" (19) + 17 chars
+            import_id: `MCP:UPDATE-NO-META:${randomUUID().slice(0, 17)}`,
           },
         ],
       });
@@ -577,7 +589,8 @@ describeIntegration('Transaction Tools Integration', () => {
             amount: -2000,
             date: new Date().toISOString().slice(0, 10),
             memo: 'For dry run test',
-            import_id: `MCP:DRY-RUN:${randomUUID()}`,
+            // Max 36 chars: "MCP:DRY-RUN:" (12) + 24 chars
+            import_id: `MCP:DRY-RUN:${randomUUID().slice(0, 24)}`,
           },
         ],
       });
@@ -636,7 +649,8 @@ describeIntegration('Transaction Tools Integration', () => {
             account_id: testAccountId,
             amount: -1000,
             date: new Date().toISOString().slice(0, 10),
-            import_id: `MCP:PARTIAL-FAIL:${randomUUID()}`,
+            // Max 36 chars: "MCP:PARTIAL-FAIL:" (17) + 19 chars
+            import_id: `MCP:PARTIAL-FAIL:${randomUUID().slice(0, 19)}`,
           },
         ],
       });
@@ -662,8 +676,7 @@ describeIntegration('Transaction Tools Integration', () => {
 
       const updateResponse = parseToolResult(updateResult);
       expect(updateResponse.summary.total_requested).toBe(2);
-      expect(updateResponse.summary.updated).toBeGreaterThanOrEqual(0);
-      expect(updateResponse.summary.failed).toBeGreaterThan(0);
+      expect(updateResponse.summary.updated).toBe(1);      expect(updateResponse.summary.failed).toBeGreaterThan(0);
 
       console.warn(
         `✅ Partial failure handled: ${updateResponse.summary.updated} updated, ${updateResponse.summary.failed} failed`,

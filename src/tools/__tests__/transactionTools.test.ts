@@ -2068,6 +2068,7 @@ describe('transactionTools', () => {
       date: '2024-01-01',
       memo: 'Bulk test',
       cleared: 'cleared',
+      approved: true,
       ...overrides,
     });
 
@@ -2706,8 +2707,17 @@ describe('transactionTools', () => {
 
     const buildUpdateTransaction = (overrides: Record<string, unknown> = {}) => ({
       id: 'transaction-001',
+      original_account_id: 'account-001',
+      original_date: '2024-01-01',
       ...overrides,
     });
+
+    const buildUpdateTransactionWithoutMetadata = (overrides: Record<string, unknown> = {}) =>
+      buildUpdateTransaction({
+        original_account_id: undefined,
+        original_date: undefined,
+        ...overrides,
+      });
 
     const buildParams = (overrides: Record<string, unknown> = {}) => ({
       budget_id: 'budget-123',
@@ -2890,6 +2900,60 @@ describe('transactionTools', () => {
         expect(parsed.error.message).toContain('validation failed');
         expect(mockYnabAPI.transactions.updateTransactions).not.toHaveBeenCalled();
       });
+
+      it('reuses metadata resolution output for preview without duplicate fetches', async () => {
+        const currentTransaction = buildApiTransaction({
+          id: 'transaction-001',
+          amount: -5000,
+          memo: 'Old memo',
+          account_id: 'account-001',
+          date: '2024-01-01',
+        });
+
+        // Mock cache to return the transaction for metadata resolution
+        (cacheManager.get as any).mockImplementation((key: string) => {
+          if (key.includes('transaction-001')) {
+            return currentTransaction;
+          }
+          return null;
+        });
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+
+        const params = buildParams({
+          dry_run: true,
+          transactions: [
+            buildUpdateTransaction({
+              id: 'transaction-001',
+              amount: -10000,
+              memo: 'New memo',
+            }),
+          ],
+        });
+
+        const response = await parseResponse(handleUpdateTransactions(mockYnabAPI, params));
+
+        // Verify the transaction was fetched only once during metadata resolution
+        // After refactoring, getTransactionById should NOT be called because
+        // resolveMetadata already provided the full TransactionDetail
+        expect(mockYnabAPI.transactions.getTransactionById).not.toHaveBeenCalled();
+
+        // Verify preview still works correctly
+        expect(response.dry_run).toBe(true);
+        expect(response.transactions_preview).toHaveLength(1);
+        const preview = response.transactions_preview[0];
+        expect(preview.transaction_id).toBe('transaction-001');
+        expect(preview.before).toEqual({
+          amount: -5,
+          memo: 'Old memo',
+        });
+        expect(preview.after).toEqual({
+          amount: -10,
+          memo: 'New memo',
+        });
+      });
     });
 
     describe('successful updates', () => {
@@ -2979,7 +3043,7 @@ describe('transactionTools', () => {
       });
 
       it('falls back to cache when metadata not provided', async () => {
-        const transaction = buildUpdateTransaction({
+        const transaction = buildUpdateTransactionWithoutMetadata({
           id: 'transaction-001',
           amount: -5000,
         });
@@ -3019,7 +3083,7 @@ describe('transactionTools', () => {
       });
 
       it('falls back to API when metadata not in cache', async () => {
-        const transaction = buildUpdateTransaction({
+        const transaction = buildUpdateTransactionWithoutMetadata({
           id: 'transaction-001',
           amount: -5000,
         });
@@ -3094,6 +3158,11 @@ describe('transactionTools', () => {
           },
         });
 
+        (cacheManager.get as any).mockReturnValue({
+          account_id: 'account-valid',
+          date: '2024-01-01',
+        });
+
         const response = await parseResponse(
           handleUpdateTransactions(
             mockYnabAPI,
@@ -3141,10 +3210,15 @@ describe('transactionTools', () => {
       it('throws ValidationError when >5% of transactions have missing metadata (live mode)', async () => {
         // Create 20 transactions, 2 (10%) with missing metadata - exceeds 5% threshold
         const transactions = Array.from({ length: 20 }, (_, i) =>
-          buildUpdateTransaction({
-            id: `transaction-${i + 1}`,
-            amount: -1000,
-          }),
+          i < 2
+            ? buildUpdateTransactionWithoutMetadata({
+                id: `transaction-${i + 1}`,
+                amount: -1000,
+              })
+            : buildUpdateTransaction({
+                id: `transaction-${i + 1}`,
+                amount: -1000,
+              }),
         );
 
         // Mock cache miss for all transactions
@@ -3168,18 +3242,29 @@ describe('transactionTools', () => {
           },
         );
 
-        await expect(
-          handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
-        ).rejects.toThrow('METADATA_INCOMPLETE');
+        console.log('metadata test transactions', transactions.slice(0, 2));
+
+        const result = await handleUpdateTransactions(mockYnabAPI, buildParams({ transactions }));
+        const response = JSON.parse(result.content[0].text);
+
+        expect(response.error).toBeDefined();
+        expect(response.error.code).toBe('VALIDATION_ERROR');
+        expect(response.error.message).toContain('METADATA_INCOMPLETE');
+        expect(response.error.details).toContain('10.0%');
       });
 
       it('succeeds when <=5% of transactions have missing metadata (live mode)', async () => {
         // Create 20 transactions, 1 (5%) with missing metadata - at threshold
         const transactions = Array.from({ length: 20 }, (_, i) =>
-          buildUpdateTransaction({
-            id: `transaction-${i + 1}`,
-            amount: -1000,
-          }),
+          i === 0
+            ? buildUpdateTransactionWithoutMetadata({
+                id: `transaction-${i + 1}`,
+                amount: -1000,
+              })
+            : buildUpdateTransaction({
+                id: `transaction-${i + 1}`,
+                amount: -1000,
+              }),
         );
 
         (cacheManager.get as any).mockReturnValue(null);
@@ -3216,8 +3301,8 @@ describe('transactionTools', () => {
 
       it('returns warnings in dry_run mode when metadata is missing', async () => {
         const transactions = [
-          buildUpdateTransaction({ id: 'transaction-001' }),
-          buildUpdateTransaction({ id: 'transaction-002' }),
+          buildUpdateTransactionWithoutMetadata({ id: 'transaction-001' }),
+          buildUpdateTransactionWithoutMetadata({ id: 'transaction-002' }),
         ];
 
         (cacheManager.get as any).mockReturnValue(null);
@@ -3245,6 +3330,18 @@ describe('transactionTools', () => {
             original_date: '2024-01-01',
           }),
         ];
+
+        (cacheManager.get as any).mockImplementation((key: string) => {
+          if (key.includes('transaction-001')) {
+            return buildApiTransaction({ id: 'transaction-001' });
+          }
+          return null;
+        });
+
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
 
         const response = await parseResponse(
           handleUpdateTransactions(mockYnabAPI, buildParams({ transactions, dry_run: true })),
@@ -3329,6 +3426,13 @@ describe('transactionTools', () => {
     });
 
     describe('response size management', () => {
+      beforeEach(() => {
+        (cacheManager.get as any).mockReturnValue({
+          account_id: 'account-default',
+          date: '2024-01-01',
+        });
+      });
+
       it('keeps full response when under 64KB', async () => {
         const apiTransactions = [buildApiTransaction()];
         (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
@@ -3359,10 +3463,14 @@ describe('transactionTools', () => {
       it('invalidates transaction and account caches after successful updates', async () => {
         const transaction = buildUpdateTransaction({
           id: 'transaction-001',
-          account_id: 'account-new',
+          // Note: account_id is not included because account moves are not supported
           original_account_id: 'account-old',
           original_date: '2024-01-01',
+          amount: -2000, // Include a change so the update does something
         });
+
+        // Mock cache to return null (no cached data)
+        (cacheManager.get as any).mockReturnValue(null);
 
         const apiTransaction = buildApiTransaction({ id: 'transaction-001' });
         (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
@@ -3374,7 +3482,14 @@ describe('transactionTools', () => {
             `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
         );
 
-        await handleUpdateTransactions(mockYnabAPI, buildParams({ transactions: [transaction] }));
+        const response = await parseResponse(
+          handleUpdateTransactions(mockYnabAPI, buildParams({ transactions: [transaction] })),
+        );
+
+        // Verify the update was successful
+        expect(response.error).toBeUndefined();
+        expect(response.summary).toBeDefined();
+        expect(response.summary.updated).toBe(1);
 
         const deletedKeys = cacheManager.deleteMany.mock.calls.flatMap((args) => args[0] ?? []);
         expect(deletedKeys).toEqual(
@@ -3382,7 +3497,7 @@ describe('transactionTools', () => {
             'transactions:list:budget-123:all',
             'transaction:get:budget-123:transaction-001',
             'account:get:budget-123:account-old',
-            'account:get:budget-123:account-new',
+            'month:get:budget-123:2024-01-01', // Month from original_date
           ]),
         );
       });
