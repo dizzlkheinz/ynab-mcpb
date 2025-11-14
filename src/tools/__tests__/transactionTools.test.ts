@@ -3242,7 +3242,6 @@ describe('transactionTools', () => {
           },
         );
 
-        console.log('metadata test transactions', transactions.slice(0, 2));
 
         const result = await handleUpdateTransactions(mockYnabAPI, buildParams({ transactions }));
         const response = JSON.parse(result.content[0].text);

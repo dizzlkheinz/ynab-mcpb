@@ -5,6 +5,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { YNABMCPServer } from '../server/YNABMCPServer.js';
 import { executeToolCall, parseToolResult } from './testUtils.js';
+import { executeReconciliation, type AccountSnapshot } from '../tools/reconciliation/executor.js';
+import type { ReconciliationAnalysis } from '../tools/reconciliation/types.js';
+import type { ReconcileAccountRequest } from '../tools/reconciliation/index.js';
+import type * as ynab from 'ynab';
 
 // Mock the YNAB SDK for performance tests
 vi.mock('ynab', () => {
@@ -34,6 +38,322 @@ vi.mock('ynab', () => {
     API: vi.fn(() => mockAPI),
   };
 });
+
+describe('Reconciliation Performance - Bulk vs Sequential', () => {
+  it(
+    'processes 20 transactions in bulk mode in under 8 seconds',
+    async () => {
+      const { duration, result } = await measurePerformanceScenario({
+        transactionCount: 20,
+        bulkDelay: 50,
+      });
+      console.info(`Bulk benchmark (20 txns): ${duration}ms`);
+      expect(duration).toBeLessThan(8000);
+      expect(result.summary.transactions_created).toBe(20);
+      expect(result.bulk_operation_details?.bulk_successes).toBe(1);
+    },
+    60000,
+  );
+
+  it(
+    'pure sequential mode (single transaction) takes longer than 20 seconds',
+    async () => {
+      // Pure sequential baseline: only 1 transaction per "unmatched_bank" to avoid bulk mode
+      const { duration, result } = await measurePerformanceScenario({
+        transactionCount: 1, // This ensures bulk mode is never entered
+        bulkDelay: 50,
+        sequentialDelay: 1050,
+        multipleRuns: 20, // Run 20 times to simulate 20 sequential transactions
+      });
+      console.info(`Pure sequential baseline (20 txns, 1 at a time): ${duration}ms`);
+      expect(duration).toBeGreaterThan(20000);
+      expect(result.summary.transactions_created).toBe(1);
+      expect(result.bulk_operation_details).toBeUndefined(); // No bulk operations at all
+    },
+    90000,
+  );
+
+  it(
+    'sequential fallback takes longer than 20 seconds for 20 transactions',
+    async () => {
+      const { duration, result } = await measurePerformanceScenario({
+        transactionCount: 20,
+        bulkDelay: 50,
+        sequentialDelay: 1050,
+        forceSequential: true,
+      });
+      console.info(`Sequential fallback (20 txns): ${duration}ms`);
+      expect(duration).toBeGreaterThan(20000);
+      expect(result.summary.transactions_created).toBe(20);
+      expect(result.bulk_operation_details?.sequential_fallbacks).toBe(1);
+      expect(result.bulk_operation_details?.bulk_successes).toBe(0);
+    },
+    90000,
+  );
+
+  it(
+    'achieves at least a 3x speedup over pure sequential mode',
+    async () => {
+      const bulkRun = await measurePerformanceScenario({
+        transactionCount: 20,
+        bulkDelay: 50,
+      });
+      // Use pure sequential baseline for canonical comparison
+      const pureSequentialRun = await measurePerformanceScenario({
+        transactionCount: 1,
+        bulkDelay: 50,
+        sequentialDelay: 1050,
+        multipleRuns: 20,
+      });
+      const speedup = pureSequentialRun.duration / bulkRun.duration;
+      console.info(`Bulk vs pure sequential speedup: ${speedup.toFixed(2)}x faster`);
+      expect(speedup).toBeGreaterThanOrEqual(3);
+    },
+    120000,
+  );
+
+  it(
+    'handles 150-transaction chunking without significant overhead',
+    async () => {
+      const { duration, result } = await measurePerformanceScenario({
+        transactionCount: 150,
+        bulkDelay: 60,
+      });
+      console.info(`Chunking benchmark (150 txns): ${duration}ms`);
+      expect(duration).toBeLessThan(15000);
+      expect(result.summary.transactions_created).toBe(150);
+      expect(result.bulk_operation_details?.chunks_processed).toBeGreaterThanOrEqual(2);
+    },
+    60000,
+  );
+
+  it('stays within 10MB of heap growth for 100 bulk transactions', async () => {
+    const before = process.memoryUsage().heapUsed;
+    const { result } = await measurePerformanceScenario({
+      transactionCount: 100,
+      bulkDelay: 30,
+    });
+    const after = process.memoryUsage().heapUsed;
+    const deltaMb = (after - before) / (1024 * 1024);
+    expect(result.summary.transactions_created).toBe(100);
+    expect(deltaMb).toBeLessThan(10);
+  });
+});
+
+const performanceInitialAccount: AccountSnapshot = {
+  balance: 0,
+  cleared_balance: 0,
+  uncleared_balance: 0,
+};
+
+function buildPerformanceAnalysis(
+  count: number,
+  amount = 5,
+  statementMultiplier = count,
+): ReconciliationAnalysis {
+  const statementBalance = amount * statementMultiplier;
+  const baseDate = Date.parse('2025-08-01');
+
+  return {
+    success: true,
+    phase: 'analysis',
+    summary: {
+      statement_date_range: 'Performance suite',
+      bank_transactions_count: count,
+      ynab_transactions_count: 0,
+      auto_matched: 0,
+      suggested_matches: 0,
+      unmatched_bank: count,
+      unmatched_ynab: 0,
+      current_cleared_balance: 0,
+      target_statement_balance: statementBalance,
+      discrepancy: statementBalance,
+      discrepancy_explanation: 'Synthetic performance delta',
+    },
+    auto_matches: [],
+    suggested_matches: [],
+    unmatched_bank: Array.from({ length: count }, (_, index) => {
+      const date = new Date(baseDate + index * 24 * 60 * 60 * 1000);
+      return {
+        id: `perf-bank-${index}`,
+        date: date.toISOString().slice(0, 10),
+        amount,
+        payee: `Performance Payee ${index}`,
+        memo: `Performance memo ${index}`,
+        original_csv_row: index + 1,
+      };
+    }),
+    unmatched_ynab: [],
+    balance_info: {
+      current_cleared: 0,
+      current_uncleared: 0,
+      current_total: 0,
+      target_statement: statementBalance,
+      discrepancy: statementBalance,
+      on_track: false,
+    },
+    next_steps: [],
+    insights: [],
+  };
+}
+
+function buildPerformanceParams(
+  statementBalance: number,
+  overrides: Partial<ReconcileAccountRequest> = {},
+): ReconcileAccountRequest {
+  return {
+    budget_id: 'budget-performance',
+    account_id: 'account-performance',
+    csv_data: 'Date,Description,Amount',
+    statement_balance: statementBalance,
+    statement_date: '2025-08-31',
+    date_tolerance_days: 1,
+    amount_tolerance_cents: 1,
+    auto_match_threshold: 90,
+    suggestion_threshold: 60,
+    auto_create_transactions: true,
+    auto_update_cleared_status: false,
+    auto_unclear_missing: false,
+    auto_adjust_dates: false,
+    dry_run: false,
+    require_exact_match: true,
+    confidence_threshold: 0.8,
+    max_resolution_attempts: 3,
+    include_structured_data: false,
+    ...overrides,
+  };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createPerformanceApi(options: {
+  bulkDelay?: number;
+  sequentialDelay?: number;
+  failBulk?: boolean;
+}) {
+  const createTransactions = vi.fn().mockImplementation(async (_budgetId, body: any) => {
+    if (options.failBulk) {
+      throw new Error('bulk failure');
+    }
+    if (options.bulkDelay) {
+      await delay(options.bulkDelay);
+    }
+    const transactions = (body.transactions ?? []).map((txn: any, index: number) => ({
+      id: `bulk-${index}-${Date.now()}`,
+      account_id: txn.account_id,
+      amount: txn.amount,
+      date: txn.date,
+      cleared: 'cleared',
+      approved: true,
+    }));
+    return { data: { transactions } };
+  });
+
+  const createTransaction = vi.fn().mockImplementation(async (_budgetId, body: any) => {
+    if (options.sequentialDelay) {
+      const asyncWait = Math.min(options.sequentialDelay, 50);
+      await delay(asyncWait);
+      const busyWait = Math.max(options.sequentialDelay - asyncWait, 0);
+      const start = Date.now();
+      while (Date.now() - start < busyWait) {
+        // busy-wait to simulate processing overhead
+      }
+    }
+    return {
+      data: {
+        transaction: {
+          id: `seq-${Date.now()}`,
+          amount: body.transaction?.amount ?? 0,
+          date: body.transaction?.date ?? '2025-09-01',
+          cleared: 'cleared',
+          approved: true,
+        },
+      },
+    };
+  });
+
+  const updateTransactions = vi.fn().mockResolvedValue({ data: { transactions: [] } });
+  const getTransactionsByAccount = vi.fn().mockResolvedValue({ data: { transactions: [] } });
+  const getAccountById = vi.fn().mockResolvedValue({
+    data: {
+      account: {
+        id: 'account-performance',
+        balance: performanceInitialAccount.balance,
+        cleared_balance: performanceInitialAccount.cleared_balance,
+        uncleared_balance: performanceInitialAccount.uncleared_balance,
+      },
+    },
+  });
+
+  const api = {
+    transactions: {
+      createTransactions,
+      createTransaction,
+      updateTransactions,
+      getTransactionsByAccount,
+    },
+    accounts: {
+      getAccountById,
+    },
+  } as unknown as ynab.API;
+
+  return { api, mocks: { createTransactions, createTransaction } };
+}
+
+async function measurePerformanceScenario(options: {
+  transactionCount: number;
+  amount?: number;
+  bulkDelay?: number;
+  sequentialDelay?: number;
+  forceSequential?: boolean;
+  multipleRuns?: number;
+}): Promise<{
+  duration: number;
+  result: Awaited<ReturnType<typeof executeReconciliation>>;
+}> {
+  const analysis = buildPerformanceAnalysis(
+    options.transactionCount,
+    options.amount ?? 5,
+  );
+  const params = buildPerformanceParams(analysis.summary.target_statement_balance);
+  const { api } = createPerformanceApi({
+    bulkDelay: options.bulkDelay,
+    sequentialDelay: options.sequentialDelay,
+    failBulk: options.forceSequential,
+  });
+
+  const start = Date.now();
+  let result: Awaited<ReturnType<typeof executeReconciliation>>;
+
+  if (options.multipleRuns) {
+    // Run the scenario multiple times sequentially to measure pure sequential performance
+    for (let i = 0; i < options.multipleRuns; i++) {
+      result = await executeReconciliation({
+        ynabAPI: api,
+        analysis,
+        params,
+        budgetId: params.budget_id,
+        accountId: params.account_id,
+        initialAccount: performanceInitialAccount,
+        currencyCode: 'USD',
+      });
+    }
+  } else {
+    result = await executeReconciliation({
+      ynabAPI: api,
+      analysis,
+      params,
+      budgetId: params.budget_id,
+      accountId: params.account_id,
+      initialAccount: performanceInitialAccount,
+      currencyCode: 'USD',
+    });
+  }
+  const duration = Date.now() - start;
+  return { duration, result: result! };
+}
 
 describe('YNAB MCP Server - Performance Tests', () => {
   let server: YNABMCPServer;

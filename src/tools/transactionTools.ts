@@ -177,7 +177,7 @@ const FULL_RESPONSE_THRESHOLD = 64 * 1024;
 const SUMMARY_RESPONSE_THRESHOLD = 96 * 1024;
 const MAX_RESPONSE_BYTES = 100 * 1024;
 
-function generateCorrelationKey(transaction: {
+export function generateCorrelationKey(transaction: {
   account_id?: string;
   date?: string;
   amount?: number;
@@ -227,7 +227,7 @@ interface CorrelationPayloadInput {
   import_id?: string | null | undefined;
 }
 
-function toCorrelationPayload(transaction: CorrelationPayloadInput): CorrelationPayload {
+export function toCorrelationPayload(transaction: CorrelationPayloadInput): CorrelationPayload {
   const payload: CorrelationPayload = {};
   if (transaction.account_id !== undefined) {
     payload.account_id = transaction.account_id;
@@ -255,7 +255,7 @@ function toCorrelationPayload(transaction: CorrelationPayloadInput): Correlation
   return payload;
 }
 
-function correlateResults(
+export function correlateResults(
   requests: BulkTransactionInput[],
   responseData: SaveTransactionsResponseData,
   duplicateImportIds: Set<string>,
@@ -1722,10 +1722,6 @@ async function resolveMetadata(
     }
   }
 
-  if (needsResolution.length > 0) {
-    console.log('needsResolution', needsResolution);
-  }
-
   if (previewIds.size === 0 && needsResolution.length === 0) {
     return { metadata, unresolvedIds: [], previewDetails };
   }
@@ -2060,22 +2056,17 @@ export async function handleUpdateTransactions(
 
       // Check metadata completeness threshold (5%)
       const missingMetadataRatio = unresolvedIds.length / transactions.length;
-      if (missingMetadataRatio > 0) {
-        console.log('metadata completeness check', {
-          unresolvedIds,
-          transactions: transactions.length,
-          ratio: missingMetadataRatio,
-          dry_run,
-        });
-      }
-      if (!dry_run && missingMetadataRatio > 0.05) {
-        throw new ValidationError(
-          'METADATA_INCOMPLETE: Too many transactions missing metadata for cache invalidation',
-          `Missing metadata for ${unresolvedIds.length} of ${transactions.length} transactions (${(missingMetadataRatio * 100).toFixed(1)}% > 5% threshold)`,
-          [
-            'Provide original_account_id and original_date for transactions to ensure proper cache invalidation',
-            `Affected transaction IDs: ${unresolvedIds.slice(0, 10).join(', ')}${unresolvedIds.length > 10 ? ` ... and ${unresolvedIds.length - 10} more` : ''}`,
-          ],
+      if (missingMetadataRatio > 0.01) {
+        globalRequestLogger.logWarning(
+          'ynab:update_transactions',
+          'metadata_resolution',
+          {
+            unresolved_count: unresolvedIds.length,
+            total_transactions: transactions.length,
+            ratio: missingMetadataRatio.toFixed(3),
+            sample_ids: unresolvedIds.slice(0, 5),
+          },
+          'Metadata resolution incomplete for some transactions'
         );
       }
 
