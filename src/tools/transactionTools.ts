@@ -2057,16 +2057,17 @@ export async function handleUpdateTransactions(
       // Check metadata completeness threshold (5%)
       const missingMetadataRatio = unresolvedIds.length / transactions.length;
       if (missingMetadataRatio > 0.01) {
-        globalRequestLogger.logWarning(
+        globalRequestLogger.logRequest(
           'ynab:update_transactions',
-          'metadata_resolution',
+          'metadata_resolution_warning',
           {
             unresolved_count: unresolvedIds.length,
             total_transactions: transactions.length,
             ratio: missingMetadataRatio.toFixed(3),
             sample_ids: unresolvedIds.slice(0, 5),
+            message: 'Metadata resolution incomplete for some transactions',
           },
-          'Metadata resolution incomplete for some transactions'
+          true,
         );
       }
 

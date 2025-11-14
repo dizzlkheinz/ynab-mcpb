@@ -1786,8 +1786,12 @@ YNAB_MCP_ENABLE_DELTA=false
 
 ### 10.2 Implementation (Phase A)
 
-- [ ] Implement `ServerKnowledgeStore`
-- [ ] Implement `DeltaCache` with merge functions
+- [x] Implement `ServerKnowledgeStore` with tests
+- [x] Enhance `CacheManager` with `deleteByPrefix`, `deleteByBudgetId`, and `getKeys`
+- [x] Implement `DeltaCache` with `fetchWithDelta`
+- [x] Implement merge functions for flat entities, categories, and transactions
+- [x] Add unit tests for all infrastructure components
+- [x] Document `YNAB_MCP_ENABLE_DELTA` feature flag in `.env.example`
 - [ ] Implement `DeltaFetcher` utility
 - [ ] Add write operation invalidation helpers
 - [ ] Migrate `handleListAccounts`
@@ -1796,6 +1800,52 @@ YNAB_MCP_ENABLE_DELTA=false
 - [ ] Migrate `handleListPayees`
 - [ ] Migrate `handleListMonths`
 - [ ] Migrate `handleGetBudget` (highest risk, do last)
+
+**Phase A Status:** ✅ COMPLETE (BULK-4)
+- All infrastructure components implemented and tested
+- Feature flag documented in `.env.example`
+- Ready for Phase B tool migration
+
+**Important Architecture Notes from Phase A:**
+
+#### DeltaCache Key Conventions & Data Shapes
+
+**Critical**: `DeltaCache` stores structured `DeltaCacheEntry<T>` objects, NOT raw arrays or DTOs.
+
+**Cache Entry Structure:**
+```typescript
+interface DeltaCacheEntry<T> {
+  snapshot: T[];                    // Merged snapshot of entities
+  serverKnowledge: number;          // YNAB server_knowledge value
+  timestamp: number;                // Cache creation timestamp
+  ttl: number;                      // Required TTL in milliseconds
+  staleWhileRevalidate?: number;    // Optional stale-while-revalidate window
+}
+```
+
+**Key Patterns:**
+- `transactions:list:<budgetId>` - Transaction snapshots
+- `accounts:list:<budgetId>` - Account snapshots
+- `categories:list:<budgetId>` - Category group snapshots
+- `payees:list:<budgetId>` - Payee snapshots
+
+**Mandatory Rules:**
+1. Keys storing `DeltaCacheEntry` objects must NOT be accessed directly by other modules
+2. Always use `DeltaCache.fetchWithDelta()` to retrieve delta-cached data
+3. Do NOT call `cacheManager.get()` / `cacheManager.set()` directly on delta cache keys
+4. Each resource type MUST use its appropriate TTL constant (e.g., `CACHE_TTLS.ACCOUNTS`)
+
+**TTL Requirements:**
+```typescript
+// Required - explicit TTL parameter:
+await deltaCache.fetchWithDelta(cacheKey, budgetId, fetcher, merger, {
+  ttl: CACHE_TTLS.ACCOUNTS,        // Resource-specific TTL required
+  staleWhileRevalidate: 120000,    // Optional background refresh
+});
+```
+
+**Stale-While-Revalidate:**
+Enables background cache refreshing - stale entries are served immediately while revalidating.
 
 ### 10.3 Implementation (Phase B)
 

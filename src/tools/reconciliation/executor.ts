@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import type * as ynab from 'ynab';
+import type { SaveTransaction } from 'ynab/dist/models/SaveTransaction.js';
 import { toMilli, toMoneyValue, toMoneyValueFromDecimal, addMilli } from '../../utils/money.js';
 import type { ReconciliationAnalysis, TransactionMatch, BankTransaction } from './types.js';
 import type { ReconcileAccountRequest } from './index.js';
@@ -100,7 +101,7 @@ function chunkArray<T>(array: T[], size: number): T[][] {
 
 interface PreparedBulkCreateEntry {
   bankTransaction: BankTransaction;
-  saveTransaction: ynab.SaveTransaction;
+  saveTransaction: SaveTransaction;
   amountMilli: number;
   correlationKey: string;
 }
@@ -195,7 +196,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
   if (params.auto_create_transactions && !balanceAligned) {
     const buildPreparedEntry = (bankTxn: BankTransaction): PreparedBulkCreateEntry => {
       const amountMilli = toMilli(bankTxn.amount);
-      const saveTransaction: ynab.SaveTransaction = {
+      const saveTransaction: SaveTransaction = {
         account_id: accountId,
         amount: amountMilli,
         date: bankTxn.date,
@@ -222,15 +223,18 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     }) => {
       const { entry, createdTxn, chunkIndex, prefix } = args;
       summary.transactions_created += 1;
-      actions_taken.push({
+      const action: ExecutionActionRecord = {
         type: 'create_transaction',
         transaction: createdTxn as unknown as Record<string, unknown> | null,
         reason: `${prefix ?? 'Created missing transaction'}: ${
           entry.bankTransaction.payee ?? 'Unknown'
         } (${formatDisplay(entry.bankTransaction.amount, currencyCode)})`,
-        bulk_chunk_index: chunkIndex,
         correlation_key: entry.correlationKey,
-      });
+      };
+      if (chunkIndex !== undefined) {
+        action.bulk_chunk_index = chunkIndex;
+      }
+      actions_taken.push(action);
     };
 
     const processSequentialEntries = async (
@@ -248,14 +252,17 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
             transaction: entry.saveTransaction,
           });
           const createdTransaction = response.data.transaction ?? null;
-          recordCreateAction({
+          const recordArgs: Parameters<typeof recordCreateAction>[0] = {
             entry,
             createdTxn: createdTransaction,
-            chunkIndex: options.chunkIndex,
             prefix: options.fallbackError
               ? 'Created missing transaction after bulk fallback'
               : 'Created missing transaction',
-          });
+          };
+          if (options.chunkIndex !== undefined) {
+            recordArgs.chunkIndex = options.chunkIndex;
+          }
+          recordCreateAction(recordArgs);
           accountSnapshotDirty = true;
           applyClearedDelta(entry.amountMilli);
           const trigger = options.chunkIndex
@@ -268,15 +275,18 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           }
           const failureReason =
             error instanceof Error ? error.message : 'Unknown error occurred';
-          actions_taken.push({
+          const failureAction: ExecutionActionRecord = {
             type: 'create_transaction_failed',
             transaction: entry.saveTransaction as unknown as Record<string, unknown>,
             reason: options.fallbackError
               ? `Bulk fallback failed for ${entry.bankTransaction.payee ?? 'Unknown'} (${failureReason})`
               : `Failed to create transaction ${entry.bankTransaction.payee ?? 'Unknown'} (${failureReason})`,
-            bulk_chunk_index: options.chunkIndex,
             correlation_key: entry.correlationKey,
-          });
+          };
+          if (options.chunkIndex !== undefined) {
+            failureAction.bulk_chunk_index = options.chunkIndex;
+          }
+          actions_taken.push(failureAction);
         }
       }
       // Update sequential_attempts metric if this was a fallback operation
@@ -385,6 +395,10 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
         let projectedDelta = clearedDeltaMilli;
         while (nextBankIndex < orderedUnmatchedBank.length) {
           const bankTxn = orderedUnmatchedBank[nextBankIndex];
+          if (!bankTxn) {
+            nextBankIndex += 1;
+            continue;
+          }
           const entry = buildPreparedEntry(bankTxn);
           batch.push(entry);
           nextBankIndex += 1;

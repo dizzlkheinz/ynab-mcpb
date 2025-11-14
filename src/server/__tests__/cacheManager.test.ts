@@ -713,6 +713,144 @@ describe('CacheManager', () => {
     });
   });
 
+  describe('Prefix and Budget-based Deletion', () => {
+    describe('deleteByPrefix', () => {
+      it('should delete entries matching prefix and return count', () => {
+        cache.set('transactions:list:budget-123', 'list');
+        cache.set('transactions:get:budget-123', 'detail');
+        cache.set('accounts:list:budget-123', 'accounts');
+
+        const removed = cache.deleteByPrefix('transactions:');
+        expect(removed).toBe(2);
+        expect(cache.getKeys()).toEqual(['accounts:list:budget-123']);
+      });
+
+      it('should return 0 when no matches found', () => {
+        cache.set('accounts:list:budget-123', 'accounts');
+        const removed = cache.deleteByPrefix('payments:');
+        expect(removed).toBe(0);
+        expect(cache.getKeys()).toEqual(['accounts:list:budget-123']);
+      });
+
+      it('should handle empty prefix safely', () => {
+        cache.set('transactions:list:budget-123', 'list');
+        cache.set('accounts:list:budget-123', 'accounts');
+
+        const removed = cache.deleteByPrefix('');
+        expect(removed).toBe(0);
+        expect(cache.getKeys()).toEqual([
+          'transactions:list:budget-123',
+          'accounts:list:budget-123',
+        ]);
+      });
+
+      it("should not delete when prefix only partially matches a resource's namespace", () => {
+        cache.set('transactions:list:budget-123', 'list');
+        cache.set('accounts:list:budget-123', 'accounts');
+
+        const removed = cache.deleteByPrefix('trans');
+        expect(removed).toBe(0);
+        expect(cache.getKeys()).toEqual([
+          'transactions:list:budget-123',
+          'accounts:list:budget-123',
+        ]);
+      });
+
+      it('should not affect cache hit or miss counters', () => {
+        cache.set('transactions:list:budget-123', 'list');
+        cache.set('transactions:list:budget-456', 'list');
+
+        const before = cache.getStats();
+        cache.deleteByPrefix('transactions:');
+        const after = cache.getStats();
+
+        expect(after.hits).toBe(before.hits);
+        expect(after.misses).toBe(before.misses);
+      });
+    });
+
+    describe('deleteByBudgetId', () => {
+      it('should delete entries containing the provided budget ID', () => {
+        cache.set('transactions:list:budget-123', 'txn');
+        cache.set('accounts:list:budget-123', 'acct');
+        cache.set('transactions:list:budget-456', 'other');
+
+        const removed = cache.deleteByBudgetId('budget-123');
+        expect(removed).toBe(2);
+        expect(cache.getKeys()).toEqual(['transactions:list:budget-456']);
+      });
+
+      it('should return 0 when budget ID does not exist in cache', () => {
+        cache.set('transactions:list:budget-123', 'txn');
+
+        const removed = cache.deleteByBudgetId('budget-999');
+        expect(removed).toBe(0);
+        expect(cache.getKeys()).toEqual(['transactions:list:budget-123']);
+      });
+
+      it('should not match budget IDs that are substrings of other IDs', () => {
+        cache.set('transactions:list:budget-123', 'txn');
+        cache.set('transactions:list:budget-1234', 'txn2');
+
+        const removed = cache.deleteByBudgetId('budget-1');
+        expect(removed).toBe(0);
+        expect(cache.getKeys()).toEqual([
+          'transactions:list:budget-123',
+          'transactions:list:budget-1234',
+        ]);
+      });
+
+      it('should handle UUID formatted budget identifiers', () => {
+        const uuid = '123e4567-e89b-12d3-a456-426614174000';
+        cache.set(`transactions:list:${uuid}`, 'txn');
+        cache.set(`accounts:list:${uuid}`, 'acct');
+        cache.set('transactions:list:budget-456', 'other');
+
+        const removed = cache.deleteByBudgetId(uuid);
+        expect(removed).toBe(2);
+        expect(cache.getKeys()).toEqual(['transactions:list:budget-456']);
+      });
+
+      it('should not affect cache stats when deleting by budget ID', () => {
+        cache.set('transactions:list:budget-123', 'txn');
+        cache.set('transactions:list:budget-456', 'other');
+
+        const before = cache.getStats();
+        cache.deleteByBudgetId('budget-123');
+        const after = cache.getStats();
+
+        expect(after.hits).toBe(before.hits);
+        expect(after.misses).toBe(before.misses);
+      });
+    });
+
+    describe('getKeys', () => {
+      it('should return an empty array when cache is empty', () => {
+        expect(cache.getKeys()).toEqual([]);
+      });
+
+      it('should return all cache keys', () => {
+        cache.set('accounts:list:budget-123', 'acct');
+        cache.set('transactions:list:budget-123', 'txn');
+        cache.set('payees:list:budget-123', 'payees');
+
+        expect(cache.getKeys()).toEqual([
+          'accounts:list:budget-123',
+          'transactions:list:budget-123',
+          'payees:list:budget-123',
+        ]);
+      });
+
+      it('should preserve insertion order of cache keys', () => {
+        cache.set('key-a', 'a');
+        cache.set('key-b', 'b');
+        cache.set('key-c', 'c');
+
+        expect(cache.getKeys()).toEqual(['key-a', 'key-b', 'key-c']);
+      });
+    });
+  });
+
   describe('Integration with Existing Patterns', () => {
     it('should work with existing tool usage patterns', () => {
       // Simulate existing usage pattern from tools

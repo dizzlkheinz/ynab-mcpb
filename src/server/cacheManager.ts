@@ -184,6 +184,63 @@ export class CacheManager {
   }
 
   /**
+   * Delete cache entries whose keys begin with the provided prefix.
+   * Useful for invalidating a specific resource type across budgets.
+   *
+   * @param prefix - Cache key prefix (e.g., 'transactions:' or 'accounts:list:')
+   * @returns The number of entries removed
+   */
+  deleteByPrefix(prefix: string): number {
+    if (!prefix) {
+      return 0;
+    }
+
+    const normalizedPrefix = prefix.endsWith(':') ? prefix.slice(0, -1) : prefix;
+    const prefixWithColon = `${normalizedPrefix}:`;
+
+    let removed = 0;
+    for (const key of this.cache.keys()) {
+      if (key === normalizedPrefix || key.startsWith(prefixWithColon)) {
+        this.cache.delete(key);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  /**
+   * Delete cache entries that belong to a specific budget.
+   * Matches keys containing the budget ID (e.g., '...:budget-123:...').
+   *
+   * @param budgetId - Budget identifier to match
+   * @returns Number of entries removed
+   */
+  deleteByBudgetId(budgetId: string): number {
+    if (!budgetId) {
+      return 0;
+    }
+
+    let removed = 0;
+    for (const key of this.cache.keys()) {
+      const segments = key.split(':');
+      if (segments.some((segment) => segment === budgetId)) {
+        this.cache.delete(key);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  /**
+   * Return all cache keys for debugging and diagnostics.
+   *
+   * @returns Snapshot of cache keys in insertion order
+   */
+  getKeys(): string[] {
+    return Array.from(this.cache.keys());
+  }
+
+  /**
    * Clear all cache entries
    */
   clear(): void {
