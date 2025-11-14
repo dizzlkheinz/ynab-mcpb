@@ -182,7 +182,7 @@ export async function handleReconcileAccount(
           const minDateObj = new Date(minDate);
           minDateObj.setDate(minDateObj.getDate() - 7);
           sinceDate = minDateObj;
-        } catch (error) {
+        } catch {
           // Fallback to 90 days if CSV parsing fails
           sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
         }
@@ -251,7 +251,7 @@ export async function handleReconcileAccount(
       const payload = buildReconciliationPayload(analysis, adapterOptions, executionData);
 
       // Build response content - always include human narrative
-      const content: Array<{ type: 'text'; text: string }> = [
+      const content: { type: 'text'; text: string }[] = [
         {
           type: 'text',
           text: payload.human,

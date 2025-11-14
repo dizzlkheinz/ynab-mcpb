@@ -6,6 +6,7 @@ import {
   handleListTransactions,
   handleGetTransaction,
   handleCreateTransactions,
+  handleUpdateTransactions,
   CreateTransactionsSchema,
 } from '../transactionTools.js';
 
@@ -215,14 +216,13 @@ describeIntegration('Transaction Tools Integration', () => {
           await ynabAPI.transactions.deleteTransaction(testBudgetId, transactionId);
         } catch (error) {
           console.warn(
-            `?? Failed to clean up integration test transaction ${transactionId}: ${
+            `⚠️ Failed to clean up integration test transaction ${transactionId}: ${
               (error as Error).message
             }`,
           );
         }
       }
     });
-
     it('should create two transactions via the bulk handler', async () => {
       const importPrefix = randomUUID();
       const { response } = await executeBulkCreate({
@@ -299,7 +299,7 @@ describeIntegration('Transaction Tools Integration', () => {
     it('should create transactions across multiple accounts within one batch', async () => {
       if (!secondaryAccountId || secondaryAccountId === testAccountId) {
         console.warn(
-          '?? Skipping multi-account bulk test because only one account is available in this budget.',
+          'Skipping multi-account bulk test because only one account is available in this budget.',
         );
         return;
       }
@@ -411,6 +411,263 @@ describeIntegration('Transaction Tools Integration', () => {
 
     it.skip('documents rate limiting behavior for bulk requests', () => {
       // Intentionally skipped – provoking API rate limits is outside automated integration scope
+    });
+  });
+
+  describeIntegration('Bulk Update Transactions Integration', () => {
+    const createdTransactionIds: string[] = [];
+
+    const parseToolResult = (result: any) => {
+      if (!result.content || !result.content[0]?.text) {
+        throw new Error('Invalid tool result structure');
+      }
+      return JSON.parse(result.content[0].text);
+    };
+
+    afterEach(async () => {
+      // Clean up created transactions
+      while (createdTransactionIds.length > 0) {
+        const transactionId = createdTransactionIds.pop();
+        if (!transactionId) continue;
+        try {
+          await ynabAPI.transactions.deleteTransaction(testBudgetId, transactionId);
+        } catch (error) {
+          console.warn(
+            `⚠️ Failed to clean up integration test transaction ${transactionId}: ${
+              (error as Error).message
+            }`,
+          );
+        }
+      }
+    });
+
+    it('should successfully update multiple transactions with provided metadata', async () => {
+      // First create test transactions
+      const createResult = await handleCreateTransactions(ynabAPI, {
+        budget_id: testBudgetId,
+        transactions: [
+          {
+            account_id: testAccountId,
+            amount: -5000,
+            date: new Date().toISOString().slice(0, 10),
+            memo: 'Original memo 1',
+            import_id: `MCP:UPDATE-TEST-1:${randomUUID()}`,
+          },
+          {
+            account_id: testAccountId,
+            amount: -10000,
+            date: new Date().toISOString().slice(0, 10),
+            memo: 'Original memo 2',
+            import_id: `MCP:UPDATE-TEST-2:${randomUUID()}`,
+          },
+        ],
+      });
+
+      const createResponse = parseToolResult(createResult);
+      const transactionIds = createResponse.results
+        .filter((r: any) => r.status === 'created')
+        .map((r: any) => r.transaction_id);
+
+      expect(transactionIds).toHaveLength(2);
+      createdTransactionIds.push(...transactionIds);
+
+      // Now update the transactions with metadata
+      const updateResult = await handleUpdateTransactions(ynabAPI, {
+        budget_id: testBudgetId,
+        transactions: [
+          {
+            id: transactionIds[0],
+            amount: -7500,
+            memo: 'Updated memo 1',
+            original_account_id: testAccountId,
+            original_date: new Date().toISOString().slice(0, 10),
+          },
+          {
+            id: transactionIds[1],
+            memo: 'Updated memo 2',
+            cleared: 'cleared' as const,
+            original_account_id: testAccountId,
+            original_date: new Date().toISOString().slice(0, 10),
+          },
+        ],
+      });
+
+      const updateResponse = parseToolResult(updateResult);
+      expect(updateResponse.success).toBe(true);
+      expect(updateResponse.summary.updated).toBe(2);
+      expect(updateResponse.summary.failed).toBe(0);
+      expect(updateResponse.results).toHaveLength(2);
+      expect(updateResponse.results[0].status).toBe('updated');
+      expect(updateResponse.results[0].correlation_key).toBe(transactionIds[0]);
+      expect(updateResponse.results[1].status).toBe('updated');
+      expect(updateResponse.results[1].correlation_key).toBe(transactionIds[1]);
+
+      // Verify changes persisted
+      const getResult1 = await handleGetTransaction(ynabAPI, {
+        budget_id: testBudgetId,
+        transaction_id: transactionIds[0],
+      });
+      const transaction1 = parseToolResult(getResult1).transaction;
+      expect(transaction1.amount).toBe(-7.5);
+      expect(transaction1.memo).toBe('Updated memo 1');
+
+      const getResult2 = await handleGetTransaction(ynabAPI, {
+        budget_id: testBudgetId,
+        transaction_id: transactionIds[1],
+      });
+      const transaction2 = parseToolResult(getResult2).transaction;
+      expect(transaction2.memo).toBe('Updated memo 2');
+      expect(transaction2.cleared).toBe('cleared');
+
+      console.warn('✅ Successfully updated 2 transactions with provided metadata');
+    });
+
+    it('should successfully update transactions without metadata (using cache/API)', async () => {
+      // Create a test transaction
+      const createResult = await handleCreateTransactions(ynabAPI, {
+        budget_id: testBudgetId,
+        transactions: [
+          {
+            account_id: testAccountId,
+            amount: -3000,
+            date: new Date().toISOString().slice(0, 10),
+            memo: 'Original',
+            import_id: `MCP:UPDATE-NO-META:${randomUUID()}`,
+          },
+        ],
+      });
+
+      const createResponse = parseToolResult(createResult);
+      const transactionId = createResponse.results[0].transaction_id;
+      createdTransactionIds.push(transactionId);
+
+      // Update without providing original_account_id/original_date
+      const updateResult = await handleUpdateTransactions(ynabAPI, {
+        budget_id: testBudgetId,
+        transactions: [
+          {
+            id: transactionId,
+            memo: 'Updated without metadata',
+          },
+        ],
+      });
+
+      const updateResponse = parseToolResult(updateResult);
+      expect(updateResponse.success).toBe(true);
+      expect(updateResponse.summary.updated).toBe(1);
+
+      // Verify change
+      const getResult = await handleGetTransaction(ynabAPI, {
+        budget_id: testBudgetId,
+        transaction_id: transactionId,
+      });
+      const transaction = parseToolResult(getResult).transaction;
+      expect(transaction.memo).toBe('Updated without metadata');
+
+      console.warn('✅ Successfully updated transaction without metadata');
+    });
+
+    it('should provide before/after preview in dry_run mode', async () => {
+      // Create a test transaction
+      const createResult = await handleCreateTransactions(ynabAPI, {
+        budget_id: testBudgetId,
+        transactions: [
+          {
+            account_id: testAccountId,
+            amount: -2000,
+            date: new Date().toISOString().slice(0, 10),
+            memo: 'For dry run test',
+            import_id: `MCP:DRY-RUN:${randomUUID()}`,
+          },
+        ],
+      });
+
+      const createResponse = parseToolResult(createResult);
+      const transactionId = createResponse.results[0].transaction_id;
+      createdTransactionIds.push(transactionId);
+
+      // Run dry_run update
+      const dryRunResult = await handleUpdateTransactions(ynabAPI, {
+        budget_id: testBudgetId,
+        transactions: [
+          {
+            id: transactionId,
+            amount: -5000,
+            memo: 'Dry run update',
+          },
+        ],
+        dry_run: true,
+      });
+
+      const dryRunResponse = parseToolResult(dryRunResult);
+      expect(dryRunResponse.dry_run).toBe(true);
+      expect(dryRunResponse.transactions_preview).toHaveLength(1);
+
+      const preview = dryRunResponse.transactions_preview[0];
+      expect(preview.transaction_id).toBe(transactionId);
+      expect(preview.before).toBeDefined();
+      expect(preview.after).toBeDefined();
+
+      if (typeof preview.before !== 'string') {
+        expect(preview.before.amount).toBe(-2);
+        expect(preview.before.memo).toBe('For dry run test');
+        expect(preview.after.amount).toBe(-5);
+        expect(preview.after.memo).toBe('Dry run update');
+      }
+
+      // Verify transaction was NOT actually updated
+      const getResult = await handleGetTransaction(ynabAPI, {
+        budget_id: testBudgetId,
+        transaction_id: transactionId,
+      });
+      const transaction = parseToolResult(getResult).transaction;
+      expect(transaction.amount).toBe(-2); // Should still be original amount
+      expect(transaction.memo).toBe('For dry run test'); // Should still be original memo
+
+      console.warn('✅ Dry run preview successful, no changes persisted');
+    });
+
+    it('should handle partial failures gracefully', async () => {
+      // Create one valid transaction
+      const createResult = await handleCreateTransactions(ynabAPI, {
+        budget_id: testBudgetId,
+        transactions: [
+          {
+            account_id: testAccountId,
+            amount: -1000,
+            date: new Date().toISOString().slice(0, 10),
+            import_id: `MCP:PARTIAL-FAIL:${randomUUID()}`,
+          },
+        ],
+      });
+
+      const createResponse = parseToolResult(createResult);
+      const validTransactionId = createResponse.results[0].transaction_id;
+      createdTransactionIds.push(validTransactionId);
+
+      // Try to update with one valid and one invalid ID
+      const updateResult = await handleUpdateTransactions(ynabAPI, {
+        budget_id: testBudgetId,
+        transactions: [
+          {
+            id: validTransactionId,
+            memo: 'Valid update',
+          },
+          {
+            id: 'invalid-transaction-id-12345',
+            memo: 'This should fail',
+          },
+        ],
+      });
+
+      const updateResponse = parseToolResult(updateResult);
+      expect(updateResponse.summary.total_requested).toBe(2);
+      expect(updateResponse.summary.updated).toBeGreaterThanOrEqual(0);
+      expect(updateResponse.summary.failed).toBeGreaterThan(0);
+
+      console.warn(
+        `✅ Partial failure handled: ${updateResponse.summary.updated} updated, ${updateResponse.summary.failed} failed`,
+      );
     });
   });
 });

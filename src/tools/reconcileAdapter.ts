@@ -172,6 +172,7 @@ const convertBalanceReconciliationLegacy = (
 ) => {
   if (!balance) return undefined;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result: any = {
     status: balance.status,
   };

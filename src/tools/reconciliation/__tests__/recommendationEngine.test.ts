@@ -7,7 +7,6 @@ import type {
   YNABTransaction,
   MoneyValue,
   ReconciliationInsight,
-  ActionableRecommendation,
   CreateTransactionRecommendation,
   UpdateClearedRecommendation,
   ReviewDuplicateRecommendation,

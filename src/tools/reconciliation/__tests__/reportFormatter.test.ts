@@ -11,7 +11,7 @@ import type {
   YNABTransaction,
   ReconciliationInsight,
 } from '../types.js';
-import type { LegacyReconciliationResult, AccountSnapshot } from '../executor.js';
+import type { LegacyReconciliationResult } from '../executor.js';
 
 /**
  * Helper to create MoneyValue for tests

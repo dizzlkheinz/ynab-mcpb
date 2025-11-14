@@ -40,6 +40,7 @@ import {
   handleCreateTransactions,
   handleCreateReceiptSplitTransaction,
   handleUpdateTransaction,
+  handleUpdateTransactions,
   handleDeleteTransaction,
   ListTransactionsSchema,
   GetTransactionSchema,
@@ -47,6 +48,7 @@ import {
   CreateTransactionsSchema,
   CreateReceiptSplitTransactionSchema,
   UpdateTransactionSchema,
+  UpdateTransactionsSchema,
   DeleteTransactionSchema,
 } from '../tools/transactionTools.js';
 import { handleExportTransactions, ExportTransactionsSchema } from '../tools/exportTransactions.js';
@@ -524,6 +526,15 @@ export class YNABMCPServer {
       inputSchema: CreateTransactionsSchema,
       handler: adapt(handleCreateTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionsSchema>>(),
+    });
+
+    register({
+      name: 'update_transactions',
+      description:
+        'Update multiple transactions in a single batch (1-100 items) with dry-run validation, automatic cache invalidation, and response size management. Supports optional original_account_id and original_date metadata for efficient cache invalidation.',
+      inputSchema: UpdateTransactionsSchema,
+      handler: adapt(handleUpdateTransactions),
+      defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionsSchema>>(),
     });
 
     register({

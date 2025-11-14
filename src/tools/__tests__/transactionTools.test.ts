@@ -7,6 +7,7 @@ import {
   handleCreateTransactions,
   handleCreateReceiptSplitTransaction,
   handleUpdateTransaction,
+  handleUpdateTransactions,
   handleDeleteTransaction,
   ListTransactionsSchema,
   GetTransactionSchema,
@@ -14,6 +15,7 @@ import {
   CreateTransactionsSchema,
   CreateReceiptSplitTransactionSchema,
   UpdateTransactionSchema,
+  UpdateTransactionsSchema,
   DeleteTransactionSchema,
 } from '../transactionTools.js';
 
@@ -22,6 +24,7 @@ vi.mock('../../server/cacheManager.js', () => ({
   cacheManager: {
     wrap: vi.fn(),
     has: vi.fn(),
+    get: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     clear: vi.fn(),
@@ -44,6 +47,7 @@ const mockYnabAPI = {
     createTransaction: vi.fn(),
     createTransactions: vi.fn(),
     updateTransaction: vi.fn(),
+    updateTransactions: vi.fn(),
     deleteTransaction: vi.fn(),
   },
   accounts: {
@@ -2392,7 +2396,9 @@ describe('transactionTools', () => {
       });
 
       it('records failures and logs correlation errors when correlation fails', async () => {
-        const logErrorSpy = vi.spyOn(globalRequestLogger, 'logError').mockImplementation(() => {});
+        const logErrorSpy = vi.spyOn(globalRequestLogger, 'logError').mockImplementation(() => {
+          // Mock implementation
+        });
         (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
           buildApiResponse([]),
         );
@@ -2532,6 +2538,866 @@ describe('transactionTools', () => {
           handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch })),
         );
         expect(response.results[0].status).toBe('created');
+      });
+    });
+  });
+
+  describe('UpdateTransactionsSchema', () => {
+    const buildUpdateTransaction = (overrides: Record<string, unknown> = {}) => ({
+      id: 'transaction-123',
+      ...overrides,
+    });
+
+    it('should accept a valid batch of updates with all fields optional except id', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [
+          buildUpdateTransaction({ amount: -10000, memo: 'Updated' }),
+          buildUpdateTransaction({ id: 'transaction-456', cleared: 'cleared' }),
+        ],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.transactions).toHaveLength(2);
+      }
+    });
+
+    it('should require id field for each transaction', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [{ amount: -5000 }],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].path).toContain('id');
+      }
+    });
+
+    it('should accept minimum batch size of one transaction', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildUpdateTransaction()],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept maximum batch size of 100 transactions', () => {
+      const hundred = Array.from({ length: 100 }, (_, index) =>
+        buildUpdateTransaction({ id: `transaction-${index + 1}` }),
+      );
+      const params = { budget_id: 'budget-123', transactions: hundred };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject empty transactions array', () => {
+      const params = { budget_id: 'budget-123', transactions: [] };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toContain('At least one transaction is required');
+      }
+    });
+
+    it('should reject batches exceeding 100 transactions', () => {
+      const overLimit = Array.from({ length: 101 }, (_, i) =>
+        buildUpdateTransaction({ id: `transaction-${i}` }),
+      );
+      const params = { budget_id: 'budget-123', transactions: overLimit };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toContain('A maximum of 100 transactions');
+      }
+    });
+
+    it('should validate ISO date format for optional date field', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildUpdateTransaction({ date: '01/01/2024' })],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].path).toEqual(['transactions', 0, 'date']);
+      }
+    });
+
+    it('should validate ISO date format for optional original_date field', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildUpdateTransaction({ original_date: '01/01/2024' })],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].path).toEqual(['transactions', 0, 'original_date']);
+      }
+    });
+
+    it('should require integer milliunit amounts when provided', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildUpdateTransaction({ amount: -50.25 })],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].path).toEqual(['transactions', 0, 'amount']);
+      }
+    });
+
+    it('should reject invalid cleared enum values', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildUpdateTransaction({ cleared: 'pending' })],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+    });
+
+    it('should accept optional metadata fields for cache invalidation', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [
+          buildUpdateTransaction({
+            original_account_id: 'account-old',
+            original_date: '2024-01-01',
+          }),
+        ],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.transactions[0].original_account_id).toBe('account-old');
+        expect(result.data.transactions[0].original_date).toBe('2024-01-01');
+      }
+    });
+
+    it('should accept update with only id field (no changes)', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [{ id: 'transaction-123' }],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject account_id field (account moves not supported)', () => {
+      const params = {
+        budget_id: 'budget-123',
+        transactions: [buildUpdateTransaction({ account_id: 'new-account-456' })],
+      };
+      const result = UpdateTransactionsSchema.safeParse(params);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        // Expect "unrecognized_keys" error from strict() schema
+        expect(result.error.issues[0].code).toBe('unrecognized_keys');
+        expect(result.error.issues[0].path).toEqual(['transactions', 0]);
+      }
+    });
+  });
+
+  describe('handleUpdateTransactions', () => {
+    let transactionCounter = 0;
+
+    const buildUpdateTransaction = (overrides: Record<string, unknown> = {}) => ({
+      id: 'transaction-001',
+      ...overrides,
+    });
+
+    const buildParams = (overrides: Record<string, unknown> = {}) => ({
+      budget_id: 'budget-123',
+      transactions: [buildUpdateTransaction()],
+      ...overrides,
+    });
+
+    const buildApiTransaction = (overrides: Record<string, unknown> = {}) => ({
+      id: overrides['id'] ?? `transaction-${++transactionCounter}`,
+      account_id: overrides['account_id'] ?? 'account-001',
+      date: overrides['date'] ?? '2024-01-01',
+      amount: overrides['amount'] ?? -1500,
+      memo: overrides['memo'] ?? 'Updated',
+      cleared: overrides['cleared'] ?? 'cleared',
+      approved: overrides['approved'] ?? true,
+      flag_color: overrides['flag_color'] ?? null,
+      account_name: overrides['account_name'] ?? 'Checking',
+      payee_id: overrides['payee_id'] ?? null,
+      payee_name: overrides['payee_name'] ?? null,
+      category_id: overrides['category_id'] ?? null,
+      category_name: overrides['category_name'] ?? null,
+      transfer_account_id: overrides['transfer_account_id'] ?? null,
+      transfer_transaction_id: overrides['transfer_transaction_id'] ?? null,
+      matched_transaction_id: overrides['matched_transaction_id'] ?? null,
+      import_id: overrides['import_id'] ?? null,
+      deleted: overrides['deleted'] ?? false,
+      subtransactions: [],
+    });
+
+    const buildApiResponse = (
+      transactions: Record<string, unknown>[],
+      extras: Record<string, unknown> = {},
+    ) => ({
+      data: {
+        transactions,
+        server_knowledge: extras['server_knowledge'] ?? 1,
+      },
+    });
+
+    const parseResponse = async (resultPromise: ReturnType<typeof handleUpdateTransactions>) => {
+      const result = await resultPromise;
+      const text = result.content?.[0]?.text ?? '{}';
+      return JSON.parse(text) as Record<string, any>;
+    };
+
+    beforeEach(() => {
+      transactionCounter = 0;
+      (mockYnabAPI.transactions.updateTransactions as any).mockReset();
+      (mockYnabAPI.transactions.getTransactionById as any).mockReset();
+      cacheManager.delete.mockReset();
+      cacheManager.deleteMany.mockReset();
+      (cacheManager.get as any).mockReset();
+      (CacheManager.generateKey as any).mockReset();
+    });
+
+    describe('dry run', () => {
+      it('returns validation summary without calling the API', async () => {
+        const params = buildParams({
+          dry_run: true,
+          transactions: [
+            buildUpdateTransaction({ id: 'transaction-001', amount: -2000 }),
+            buildUpdateTransaction({ id: 'transaction-002', memo: 'Updated memo' }),
+          ],
+        });
+
+        const response = await parseResponse(handleUpdateTransactions(mockYnabAPI, params));
+
+        expect(mockYnabAPI.transactions.updateTransactions).not.toHaveBeenCalled();
+        expect(response.dry_run).toBe(true);
+        expect(response.summary.total_transactions).toBe(2);
+        expect(response.transactions_preview).toHaveLength(2);
+        expect(cacheManager.deleteMany).not.toHaveBeenCalled();
+      });
+
+      it('provides before/after preview showing only changed fields', async () => {
+        const currentTransaction = buildApiTransaction({
+          id: 'transaction-001',
+          amount: -5000,
+          memo: 'Old memo',
+          cleared: 'uncleared',
+        });
+
+        (cacheManager.get as any).mockReturnValue(null);
+        (mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue({
+          data: { transaction: currentTransaction },
+        });
+
+        const params = buildParams({
+          dry_run: true,
+          transactions: [
+            buildUpdateTransaction({
+              id: 'transaction-001',
+              amount: -10000,
+              memo: 'New memo',
+            }),
+          ],
+        });
+
+        const response = await parseResponse(handleUpdateTransactions(mockYnabAPI, params));
+
+        expect(response.dry_run).toBe(true);
+        expect(response.transactions_preview).toHaveLength(1);
+
+        const preview = response.transactions_preview[0];
+        expect(preview.transaction_id).toBe('transaction-001');
+        expect(preview.before).toEqual({
+          amount: -5,
+          memo: 'Old memo',
+        });
+        expect(preview.after).toEqual({
+          amount: -10,
+          memo: 'New memo',
+        });
+      });
+
+      it('sets before to "unavailable" when current state cannot be fetched', async () => {
+        (cacheManager.get as any).mockReturnValue(null);
+        (mockYnabAPI.transactions.getTransactionById as any).mockRejectedValue(
+          new Error('Not found'),
+        );
+
+        const params = buildParams({
+          dry_run: true,
+          transactions: [
+            buildUpdateTransaction({
+              id: 'transaction-001',
+              amount: -10000,
+            }),
+          ],
+        });
+
+        const response = await parseResponse(handleUpdateTransactions(mockYnabAPI, params));
+
+        expect(response.dry_run).toBe(true);
+        const preview = response.transactions_preview[0];
+        expect(preview.before).toBe('unavailable');
+        expect(preview.after).toBeDefined();
+      });
+
+      it('includes summary with accounts_affected and fields_to_update', async () => {
+        (cacheManager.get as any).mockReturnValue(null);
+        (mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue({
+          data: {
+            transaction: buildApiTransaction({
+              id: 'transaction-001',
+              account_id: 'account-001',
+              date: '2024-01-01',
+            }),
+          },
+        });
+
+        const params = buildParams({
+          dry_run: true,
+          transactions: [
+            buildUpdateTransaction({
+              id: 'transaction-001',
+              amount: -10000,
+              memo: 'Updated',
+              original_account_id: 'account-001',
+              original_date: '2024-01-01',
+            }),
+          ],
+        });
+
+        const response = await parseResponse(handleUpdateTransactions(mockYnabAPI, params));
+
+        expect(response.summary.accounts_affected).toContain('account-001');
+        expect(response.summary.fields_to_update).toContain('amount');
+        expect(response.summary.fields_to_update).toContain('memo');
+      });
+
+      it('surfaces validation errors before execution', async () => {
+        const invalidParams = buildParams({
+          transactions: [{ amount: -2000 }],
+        });
+
+        const result = await handleUpdateTransactions(mockYnabAPI, invalidParams as any);
+        const parsed = JSON.parse(result.content?.[0]?.text ?? '{}');
+        expect(parsed.error).toBeDefined();
+        expect(parsed.error.message).toContain('validation failed');
+        expect(mockYnabAPI.transactions.updateTransactions).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('successful updates', () => {
+      it('updates transactions and correlates results', async () => {
+        const transactions = [
+          buildUpdateTransaction({ id: 'transaction-001', amount: -10000 }),
+          buildUpdateTransaction({ id: 'transaction-002', memo: 'New memo' }),
+        ];
+
+        const apiTransactions = transactions.map((transaction) =>
+          buildApiTransaction({ id: transaction.id }),
+        );
+
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+
+        const response = await parseResponse(
+          handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
+        );
+
+        expect(response.summary.updated).toBe(2);
+        expect(response.results).toHaveLength(2);
+        expect(response.results.every((result: any) => result.status === 'updated')).toBe(true);
+        const deletedKeys = cacheManager.deleteMany.mock.calls.flatMap((args) => args[0] ?? []);
+        expect(deletedKeys).toEqual(expect.arrayContaining(['transactions:list:budget-123:all']));
+      });
+
+      it('only updates provided fields (partial updates)', async () => {
+        const transaction = buildUpdateTransaction({
+          id: 'transaction-001',
+          memo: 'Updated memo only',
+        });
+
+        const apiTransaction = buildApiTransaction({ id: 'transaction-001' });
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse([apiTransaction]),
+        );
+
+        await handleUpdateTransactions(mockYnabAPI, buildParams({ transactions: [transaction] }));
+
+        const updateCall = (mockYnabAPI.transactions.updateTransactions as any).mock.calls[0];
+        const updatePayload = updateCall[1].transactions[0];
+        expect(updatePayload.transaction.memo).toBe('Updated memo only');
+        expect(updatePayload.transaction.amount).toBeUndefined();
+        expect(updatePayload.transaction.account_id).toBeUndefined();
+      });
+    });
+
+    describe('metadata resolution for cache invalidation', () => {
+      it('uses client-supplied original_* metadata when provided', async () => {
+        const transaction = buildUpdateTransaction({
+          id: 'transaction-001',
+          amount: -5000,
+          original_account_id: 'account-old',
+          original_date: '2024-01-01',
+        });
+
+        const apiTransaction = buildApiTransaction({ id: 'transaction-001' });
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse([apiTransaction]),
+        );
+
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+
+        await handleUpdateTransactions(mockYnabAPI, buildParams({ transactions: [transaction] }));
+
+        // Should not need to fetch transaction since metadata was provided
+        expect(mockYnabAPI.transactions.getTransactionById).not.toHaveBeenCalled();
+
+        // Should invalidate cache using provided metadata
+        const deletedKeys = cacheManager.deleteMany.mock.calls.flatMap((args) => args[0] ?? []);
+        expect(deletedKeys).toEqual(
+          expect.arrayContaining([
+            'account:get:budget-123:account-old',
+            'month:get:budget-123:2024-01-01',
+          ]),
+        );
+      });
+
+      it('falls back to cache when metadata not provided', async () => {
+        const transaction = buildUpdateTransaction({
+          id: 'transaction-001',
+          amount: -5000,
+        });
+
+        const cachedTransaction = {
+          id: 'transaction-001',
+          account_id: 'account-cached',
+          date: '2024-02-01',
+        };
+
+        (cacheManager.get as any).mockReturnValue(cachedTransaction);
+
+        const apiTransaction = buildApiTransaction({ id: 'transaction-001' });
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse([apiTransaction]),
+        );
+
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+
+        await handleUpdateTransactions(mockYnabAPI, buildParams({ transactions: [transaction] }));
+
+        // Should use cache and not fetch from API
+        expect(cacheManager.get).toHaveBeenCalled();
+        expect(mockYnabAPI.transactions.getTransactionById).not.toHaveBeenCalled();
+
+        // Should invalidate cache using cached metadata
+        const deletedKeys = cacheManager.deleteMany.mock.calls.flatMap((args) => args[0] ?? []);
+        expect(deletedKeys).toEqual(
+          expect.arrayContaining([
+            'account:get:budget-123:account-cached',
+            'month:get:budget-123:2024-02-01',
+          ]),
+        );
+      });
+
+      it('falls back to API when metadata not in cache', async () => {
+        const transaction = buildUpdateTransaction({
+          id: 'transaction-001',
+          amount: -5000,
+        });
+
+        (cacheManager.get as any).mockReturnValue(null);
+
+        const fetchedTransaction = {
+          data: {
+            transaction: {
+              id: 'transaction-001',
+              account_id: 'account-fetched',
+              date: '2024-03-01',
+            },
+          },
+        };
+
+        (mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue(
+          fetchedTransaction,
+        );
+
+        const apiTransaction = buildApiTransaction({ id: 'transaction-001' });
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse([apiTransaction]),
+        );
+
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+
+        await handleUpdateTransactions(mockYnabAPI, buildParams({ transactions: [transaction] }));
+
+        // Should fetch from API when not in cache
+        expect(cacheManager.get).toHaveBeenCalled();
+        expect(mockYnabAPI.transactions.getTransactionById).toHaveBeenCalledWith(
+          'budget-123',
+          'transaction-001',
+        );
+
+        // Should invalidate cache using fetched metadata
+        const deletedKeys = cacheManager.deleteMany.mock.calls.flatMap((args) => args[0] ?? []);
+        expect(deletedKeys).toEqual(
+          expect.arrayContaining([
+            'account:get:budget-123:account-fetched',
+            'month:get:budget-123:2024-03-01',
+          ]),
+        );
+      });
+    });
+
+    describe('error handling', () => {
+      it('handles network failures', async () => {
+        const error = new Error('Network error');
+        (mockYnabAPI.transactions.updateTransactions as any).mockRejectedValue(error);
+
+        const result = await handleUpdateTransactions(
+          mockYnabAPI,
+          buildParams({
+            transactions: [buildUpdateTransaction()],
+          }),
+        );
+
+        const response = JSON.parse(result.content[0].text);
+        expect(response.error).toBeDefined();
+      });
+
+      it('handles invalid transaction IDs gracefully', async () => {
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue({
+          data: {
+            transactions: [],
+            server_knowledge: 1,
+          },
+        });
+
+        const response = await parseResponse(
+          handleUpdateTransactions(
+            mockYnabAPI,
+            buildParams({
+              transactions: [buildUpdateTransaction({ id: 'invalid-id' })],
+            }),
+          ),
+        );
+
+        expect(response.results[0].status).toBe('failed');
+        expect(response.results[0].error_code).toBe('update_failed');
+      });
+
+      it('handles metadata resolution failures without crashing', async () => {
+        const transaction = buildUpdateTransaction({
+          id: 'transaction-001',
+          amount: -5000,
+        });
+
+        (cacheManager.get as any).mockReturnValue(null);
+        (mockYnabAPI.transactions.getTransactionById as any).mockRejectedValue(
+          new Error('Transaction not found'),
+        );
+
+        const apiTransaction = buildApiTransaction({ id: 'transaction-001' });
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse([apiTransaction]),
+        );
+
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+
+        // Should complete successfully even if metadata resolution fails
+        const response = await parseResponse(
+          handleUpdateTransactions(mockYnabAPI, buildParams({ transactions: [transaction] })),
+        );
+
+        expect(response.summary.updated).toBe(1);
+      });
+    });
+
+    describe('metadata completeness threshold', () => {
+      it('throws ValidationError when >5% of transactions have missing metadata (live mode)', async () => {
+        // Create 20 transactions, 2 (10%) with missing metadata - exceeds 5% threshold
+        const transactions = Array.from({ length: 20 }, (_, i) =>
+          buildUpdateTransaction({
+            id: `transaction-${i + 1}`,
+            amount: -1000,
+          }),
+        );
+
+        // Mock cache miss for all transactions
+        (cacheManager.get as any).mockReturnValue(null);
+
+        // Mock API to fail for 2 transactions (10% > 5% threshold)
+        (mockYnabAPI.transactions.getTransactionById as any).mockImplementation(
+          async (budgetId: string, transactionId: string) => {
+            if (transactionId === 'transaction-1' || transactionId === 'transaction-2') {
+              throw new Error('Transaction not found');
+            }
+            return {
+              data: {
+                transaction: {
+                  id: transactionId,
+                  account_id: 'account-001',
+                  date: '2024-01-01',
+                },
+              },
+            };
+          },
+        );
+
+        await expect(
+          handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
+        ).rejects.toThrow('METADATA_INCOMPLETE');
+      });
+
+      it('succeeds when <=5% of transactions have missing metadata (live mode)', async () => {
+        // Create 20 transactions, 1 (5%) with missing metadata - at threshold
+        const transactions = Array.from({ length: 20 }, (_, i) =>
+          buildUpdateTransaction({
+            id: `transaction-${i + 1}`,
+            amount: -1000,
+          }),
+        );
+
+        (cacheManager.get as any).mockReturnValue(null);
+
+        // Mock API to fail for only 1 transaction (5% = threshold)
+        (mockYnabAPI.transactions.getTransactionById as any).mockImplementation(
+          async (budgetId: string, transactionId: string) => {
+            if (transactionId === 'transaction-1') {
+              throw new Error('Transaction not found');
+            }
+            return {
+              data: {
+                transaction: {
+                  id: transactionId,
+                  account_id: 'account-001',
+                  date: '2024-01-01',
+                },
+              },
+            };
+          },
+        );
+
+        const apiTransactions = transactions.map((t) => buildApiTransaction({ id: t.id }));
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const response = await parseResponse(
+          handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
+        );
+
+        expect(response.summary.updated).toBe(20);
+      });
+
+      it('returns warnings in dry_run mode when metadata is missing', async () => {
+        const transactions = [
+          buildUpdateTransaction({ id: 'transaction-001' }),
+          buildUpdateTransaction({ id: 'transaction-002' }),
+        ];
+
+        (cacheManager.get as any).mockReturnValue(null);
+        (mockYnabAPI.transactions.getTransactionById as any).mockRejectedValue(
+          new Error('Not found'),
+        );
+
+        const response = await parseResponse(
+          handleUpdateTransactions(mockYnabAPI, buildParams({ transactions, dry_run: true })),
+        );
+
+        expect(response.dry_run).toBe(true);
+        expect(response.warnings).toBeDefined();
+        expect(response.warnings).toHaveLength(1);
+        expect(response.warnings[0].code).toBe('metadata_unavailable');
+        expect(response.warnings[0].count).toBe(2);
+        expect(response.warnings[0].sample_ids).toEqual(['transaction-001', 'transaction-002']);
+      });
+
+      it('does not return warnings in dry_run when all metadata is resolved', async () => {
+        const transactions = [
+          buildUpdateTransaction({
+            id: 'transaction-001',
+            original_account_id: 'account-001',
+            original_date: '2024-01-01',
+          }),
+        ];
+
+        const response = await parseResponse(
+          handleUpdateTransactions(mockYnabAPI, buildParams({ transactions, dry_run: true })),
+        );
+
+        expect(response.dry_run).toBe(true);
+        expect(response.warnings).toBeUndefined();
+      });
+    });
+
+    describe('correlation_key in results', () => {
+      it('includes correlation_key in successful update results', async () => {
+        const transactions = [
+          buildUpdateTransaction({ id: 'transaction-001', amount: -2000 }),
+          buildUpdateTransaction({ id: 'transaction-002', memo: 'Updated' }),
+        ];
+
+        const apiTransactions = transactions.map((transaction) =>
+          buildApiTransaction({ id: transaction.id }),
+        );
+
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const response = await parseResponse(
+          handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
+        );
+
+        expect(response.results).toHaveLength(2);
+        expect(response.results[0].correlation_key).toBe('transaction-001');
+        expect(response.results[1].correlation_key).toBe('transaction-002');
+      });
+
+      it('includes correlation_key in failed update results', async () => {
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue({
+          data: {
+            transactions: [],
+            server_knowledge: 1,
+          },
+        });
+
+        const response = await parseResponse(
+          handleUpdateTransactions(
+            mockYnabAPI,
+            buildParams({
+              transactions: [buildUpdateTransaction({ id: 'failed-id' })],
+            }),
+          ),
+        );
+
+        expect(response.results[0].status).toBe('failed');
+        expect(response.results[0].correlation_key).toBe('failed-id');
+      });
+
+      it('preserves correlation_key in ids_only downgrade mode', async () => {
+        const byteSpy = vi.spyOn(Buffer, 'byteLength');
+        byteSpy
+          .mockImplementationOnce(() => 70 * 1024)
+          .mockImplementationOnce(() => 97 * 1024)
+          .mockImplementationOnce(() => 80 * 1024);
+
+        const apiTransactions = [buildApiTransaction({ id: 'transaction-001' })];
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const response = await parseResponse(
+          handleUpdateTransactions(
+            mockYnabAPI,
+            buildParams({ transactions: [buildUpdateTransaction({ id: 'transaction-001' })] }),
+          ),
+        );
+
+        expect(response.mode).toBe('ids_only');
+        expect(response.results[0].correlation_key).toBe('transaction-001');
+        expect(response.results[0].transaction_id).toBe('transaction-001');
+        expect(response.results[0].status).toBe('updated');
+
+        byteSpy.mockRestore();
+      });
+    });
+
+    describe('response size management', () => {
+      it('keeps full response when under 64KB', async () => {
+        const apiTransactions = [buildApiTransaction()];
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+        const response = await parseResponse(handleUpdateTransactions(mockYnabAPI, buildParams()));
+        expect(response.transactions).toBeDefined();
+        expect(response.mode).toBe('full');
+      });
+
+      it('downgrades to summary mode when response exceeds 64KB', async () => {
+        const byteSpy = vi.spyOn(Buffer, 'byteLength');
+        byteSpy.mockImplementationOnce(() => 70 * 1024).mockImplementationOnce(() => 80 * 1024);
+        const apiTransactions = [buildApiTransaction()];
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse(apiTransactions),
+        );
+
+        const response = await parseResponse(handleUpdateTransactions(mockYnabAPI, buildParams()));
+
+        expect(response.transactions).toBeUndefined();
+        expect(response.mode).toBe('summary');
+        byteSpy.mockRestore();
+      });
+    });
+
+    describe('cache invalidation', () => {
+      it('invalidates transaction and account caches after successful updates', async () => {
+        const transaction = buildUpdateTransaction({
+          id: 'transaction-001',
+          account_id: 'account-new',
+          original_account_id: 'account-old',
+          original_date: '2024-01-01',
+        });
+
+        const apiTransaction = buildApiTransaction({ id: 'transaction-001' });
+        (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+          buildApiResponse([apiTransaction]),
+        );
+
+        (CacheManager.generateKey as any).mockImplementation(
+          (scope: string, action: string, budgetId: string, qualifier?: string) =>
+            `${scope}:${action}:${budgetId}:${qualifier ?? 'all'}`,
+        );
+
+        await handleUpdateTransactions(mockYnabAPI, buildParams({ transactions: [transaction] }));
+
+        const deletedKeys = cacheManager.deleteMany.mock.calls.flatMap((args) => args[0] ?? []);
+        expect(deletedKeys).toEqual(
+          expect.arrayContaining([
+            'transactions:list:budget-123:all',
+            'transaction:get:budget-123:transaction-001',
+            'account:get:budget-123:account-old',
+            'account:get:budget-123:account-new',
+          ]),
+        );
+      });
+
+      it('does not invalidate cache on dry run', async () => {
+        await handleUpdateTransactions(
+          mockYnabAPI,
+          buildParams({
+            dry_run: true,
+            transactions: [buildUpdateTransaction()],
+          }),
+        );
+
+        expect(cacheManager.deleteMany).not.toHaveBeenCalled();
+        expect(cacheManager.delete).not.toHaveBeenCalled();
       });
     });
   });

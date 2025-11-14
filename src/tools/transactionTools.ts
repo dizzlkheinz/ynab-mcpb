@@ -130,6 +130,7 @@ const BulkTransactionInputSchema = BulkTransactionInputSchemaBase.extend({
     }
   })
   .transform((data): BulkTransactionInput => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { subtransactions, ...rest } = data;
     return rest;
   });
@@ -201,7 +202,7 @@ function generateCorrelationKey(transaction: {
     `category:${transaction.category_id ?? ''}`,
     `memo:${transaction.memo ?? ''}`,
     `cleared:${transaction.cleared ?? ''}`,
-    `approved:${transaction.approved ?? true}`,
+    `approved:${transaction.approved ?? false}`,
     `flag:${transaction.flag_color ?? ''}`,
   ];
 
@@ -212,7 +213,7 @@ function generateCorrelationKey(transaction: {
 
 type CorrelationPayload = Parameters<typeof generateCorrelationKey>[0];
 
-type CorrelationPayloadInput = {
+interface CorrelationPayloadInput {
   account_id?: string | undefined;
   date?: string | undefined;
   amount?: number | undefined;
@@ -224,7 +225,7 @@ type CorrelationPayloadInput = {
   approved?: boolean | undefined;
   flag_color?: ynab.TransactionFlagColor | null | undefined;
   import_id?: string | null | undefined;
-};
+}
 
 function toCorrelationPayload(transaction: CorrelationPayloadInput): CorrelationPayload {
   const payload: CorrelationPayload = {};
@@ -385,6 +386,7 @@ function finalizeResponse(response: BulkCreateResponse): BulkCreateResponse {
     return { ...response, mode: 'full' };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { transactions, ...summaryResponse } = response;
   const summaryPayload: BulkCreateResponse = {
     ...summaryResponse,
@@ -538,6 +540,75 @@ export const UpdateTransactionSchema = z
   .strict();
 
 export type UpdateTransactionParams = z.infer<typeof UpdateTransactionSchema>;
+
+/**
+ * Schema for bulk transaction updates - each item in the array
+ * Note: account_id is intentionally excluded as account moves are not supported in bulk updates
+ */
+const BulkUpdateTransactionInputSchema = z
+  .object({
+    id: z.string().min(1, 'Transaction ID is required'),
+    amount: z.number().int('Amount must be an integer in milliunits').optional(),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
+      .optional(),
+    payee_name: z.string().optional(),
+    payee_id: z.string().optional(),
+    category_id: z.string().optional(),
+    memo: z.string().optional(),
+    cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
+    approved: z.boolean().optional(),
+    flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional(),
+    // Metadata fields for cache invalidation
+    original_account_id: z.string().optional(),
+    original_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
+      .optional(),
+  })
+  .strict();
+
+export type BulkUpdateTransactionInput = z.infer<typeof BulkUpdateTransactionInputSchema>;
+
+/**
+ * Schema for ynab:update_transactions tool parameters
+ */
+export const UpdateTransactionsSchema = z
+  .object({
+    budget_id: z.string().min(1, 'Budget ID is required'),
+    transactions: z
+      .array(BulkUpdateTransactionInputSchema)
+      .min(1, 'At least one transaction is required')
+      .max(100, 'A maximum of 100 transactions may be updated at once'),
+    dry_run: z.boolean().optional(),
+  })
+  .strict();
+
+export type UpdateTransactionsParams = z.infer<typeof UpdateTransactionsSchema>;
+
+export interface BulkUpdateResult {
+  request_index: number;
+  status: 'updated' | 'failed';
+  transaction_id: string;
+  correlation_key: string;
+  error_code?: string;
+  error?: string;
+}
+
+export interface BulkUpdateResponse {
+  success: boolean;
+  server_knowledge?: number;
+  summary: {
+    total_requested: number;
+    updated: number;
+    failed: number;
+  };
+  results: BulkUpdateResult[];
+  transactions?: ynab.TransactionDetail[];
+  message?: string;
+  mode?: 'full' | 'summary' | 'ids_only';
+}
 
 /**
  * Schema for ynab:delete_transaction tool parameters
@@ -1482,7 +1553,7 @@ export async function handleCreateTransactions(
           request_index: index,
           account_id: transaction.account_id,
           date: transaction.date,
-          amount: transaction.amount,
+          amount: milliunitsToAmount(transaction.amount),
           memo: transaction.memo,
           payee_id: transaction.payee_id,
           payee_name: transaction.payee_name,
@@ -1500,7 +1571,7 @@ export async function handleCreateTransactions(
                 validation: 'passed',
                 summary: {
                   total_transactions: transactions.length,
-                  total_amount: totalAmount,
+                  total_amount: milliunitsToAmount(totalAmount),
                   accounts_affected: accountsAffected,
                   date_range: dateRange,
                   categories_affected: categoriesAffected,
@@ -1576,6 +1647,7 @@ export async function handleCreateTransactions(
       }
 
       const keysToDelete = Array.from(cacheKeys);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (typeof (cacheManager as any).deleteMany === 'function') {
         cacheManager.deleteMany(keysToDelete);
       } else {
@@ -1597,6 +1669,541 @@ export async function handleCreateTransactions(
     },
     'ynab:create_transactions',
     'bulk transaction creation',
+  )) as CallToolResult;
+}
+
+/**
+ * Interface for transaction metadata needed for cache invalidation
+ */
+interface TransactionMetadata {
+  account_id: string;
+  date: string;
+}
+
+/**
+ * Result of metadata resolution including both resolved metadata and unresolved IDs
+ */
+interface MetadataResolutionResult {
+  metadata: Map<string, TransactionMetadata>;
+  unresolvedIds: string[];
+}
+
+/**
+ * Resolves metadata for bulk update transactions
+ * Uses a multi-tier approach: request metadata -> cache -> limited API calls
+ * Returns both the resolved metadata and a list of IDs that could not be resolved
+ */
+async function resolveMetadata(
+  ynabAPI: ynab.API,
+  budgetId: string,
+  transactions: BulkUpdateTransactionInput[],
+): Promise<MetadataResolutionResult> {
+  const metadata = new Map<string, TransactionMetadata>();
+  const needsResolution: string[] = [];
+
+  // First pass: Use provided metadata
+  for (const transaction of transactions) {
+    if (transaction.original_account_id && transaction.original_date) {
+      metadata.set(transaction.id, {
+        account_id: transaction.original_account_id,
+        date: transaction.original_date,
+      });
+    } else {
+      needsResolution.push(transaction.id);
+    }
+  }
+
+  if (needsResolution.length === 0) {
+    return { metadata, unresolvedIds: [] };
+  }
+
+  // Second pass: Try to hydrate from cache
+  const stillNeedsResolution: string[] = [];
+  for (const transactionId of needsResolution) {
+    const cacheKey = CacheManager.generateKey('transaction', 'get', budgetId, transactionId);
+    const cached = cacheManager.get<ynab.TransactionDetail>(cacheKey);
+    if (cached) {
+      metadata.set(transactionId, {
+        account_id: cached.account_id,
+        date: cached.date,
+      });
+    } else {
+      stillNeedsResolution.push(transactionId);
+    }
+  }
+
+  if (stillNeedsResolution.length === 0) {
+    return { metadata, unresolvedIds: [] };
+  }
+
+  // Third pass: Limited API calls with concurrency limit
+  const MAX_CONCURRENT_FETCHES = 5;
+  const fetchPromises: Promise<void>[] = [];
+  const failedFetches: string[] = [];
+
+  for (let i = 0; i < stillNeedsResolution.length; i += MAX_CONCURRENT_FETCHES) {
+    const batch = stillNeedsResolution.slice(i, i + MAX_CONCURRENT_FETCHES);
+    const batchPromises = batch.map(async (transactionId) => {
+      try {
+        const response = await ynabAPI.transactions.getTransactionById(budgetId, transactionId);
+        const transaction = response.data.transaction;
+        if (transaction) {
+          metadata.set(transactionId, {
+            account_id: transaction.account_id,
+            date: transaction.date,
+          });
+        } else {
+          failedFetches.push(transactionId);
+        }
+      } catch {
+        // If we can't fetch metadata, track as unresolved
+        failedFetches.push(transactionId);
+        globalRequestLogger.logError(
+          'ynab:update_transactions',
+          'resolve_metadata',
+          { transaction_id: transactionId },
+          'Failed to resolve transaction metadata',
+        );
+      }
+    });
+    fetchPromises.push(...batchPromises);
+  }
+
+  await Promise.all(fetchPromises);
+  return { metadata, unresolvedIds: failedFetches };
+}
+
+/**
+ * Finalizes bulk update response based on size constraints
+ */
+function finalizeBulkUpdateResponse(response: BulkUpdateResponse): BulkUpdateResponse {
+  const appendMessage = (message: string | undefined, addition: string): string => {
+    if (!message) {
+      return addition;
+    }
+    if (message.includes(addition)) {
+      return message;
+    }
+    return `${message} ${addition}`;
+  };
+
+  const fullSize = estimatePayloadSize(response as unknown as BulkCreateResponse);
+  if (fullSize <= FULL_RESPONSE_THRESHOLD) {
+    return { ...response, mode: 'full' };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { transactions, ...summaryResponse } = response;
+  const summaryPayload: BulkUpdateResponse = {
+    ...summaryResponse,
+    message: appendMessage(
+      response.message,
+      'Response downgraded to summary to stay under size limits.',
+    ),
+    mode: 'summary',
+  };
+
+  if (estimatePayloadSize(summaryPayload as unknown as BulkCreateResponse) <= SUMMARY_RESPONSE_THRESHOLD) {
+    return summaryPayload;
+  }
+
+  const idsOnlyPayload: BulkUpdateResponse = {
+    ...summaryPayload,
+    results: summaryResponse.results.map((result) => {
+      const simplified: BulkUpdateResult = {
+        request_index: result.request_index,
+        status: result.status,
+        transaction_id: result.transaction_id,
+        correlation_key: result.correlation_key,
+      };
+      if (result.error) {
+        simplified.error = result.error;
+      }
+      if (result.error_code) {
+        simplified.error_code = result.error_code;
+      }
+      return simplified;
+    }),
+    message: appendMessage(
+      summaryResponse.message,
+      'Response downgraded to ids_only to meet 100KB limit.',
+    ),
+    mode: 'ids_only',
+  };
+
+  if (estimatePayloadSize(idsOnlyPayload as unknown as BulkCreateResponse) <= MAX_RESPONSE_BYTES) {
+    return idsOnlyPayload;
+  }
+
+  throw new ValidationError(
+    'RESPONSE_TOO_LARGE: Unable to format bulk update response within 100KB limit',
+    `Batch size: ${response.summary.total_requested} transactions`,
+    ['Reduce the batch size and retry', 'Consider splitting into multiple smaller batches'],
+  );
+}
+
+/**
+ * Handles the ynab:update_transactions tool call
+ * Updates multiple transactions in a single batch operation
+ */
+export async function handleUpdateTransactions(
+  ynabAPI: ynab.API,
+  params: UpdateTransactionsParams,
+): Promise<CallToolResult> {
+  return (await withToolErrorHandling(
+    async () => {
+      const validationResult = UpdateTransactionsSchema.safeParse(params);
+      if (!validationResult.success) {
+        type TransactionIssueIndex = number | null;
+        const issuesByIndex = new Map<TransactionIssueIndex, string[]>();
+        const validationIssues = validationResult.error.issues ?? [];
+        for (const issue of validationIssues) {
+          const transactionIndex = issue.path.find(
+            (segment): segment is number => typeof segment === 'number',
+          );
+          const message = issue.message;
+          const issueIndex: TransactionIssueIndex =
+            transactionIndex !== undefined ? transactionIndex : null;
+          const existing = issuesByIndex.get(issueIndex) ?? [];
+          existing.push(message);
+          issuesByIndex.set(issueIndex, existing);
+        }
+
+        const details = Array.from(issuesByIndex.entries()).map(([index, errors]) => ({
+          transaction_index: index,
+          errors,
+        }));
+
+        throw new ValidationError(
+          'Bulk transaction update validation failed',
+          JSON.stringify(details, null, 2),
+          ['Ensure each transaction includes an id field', 'Limit batches to 100 items'],
+        );
+      }
+
+      const { budget_id, transactions, dry_run } = validationResult.data;
+
+      if (dry_run) {
+        // Resolve metadata first to build before/after previews
+        const { metadata, unresolvedIds } = await resolveMetadata(ynabAPI, budget_id, transactions);
+
+        // Build before/after previews for first 10 transactions
+        const transactionsPreview = [];
+        let missingMetadataCount = 0;
+
+        for (const transaction of transactions.slice(0, 10)) {
+          let currentState: ynab.TransactionDetail | null = null;
+
+          // Try to fetch current state from cache or API
+          const cacheKey = CacheManager.generateKey('transaction', 'get', budget_id, transaction.id);
+          currentState = cacheManager.get<ynab.TransactionDetail>(cacheKey) ?? null;
+
+          if (!currentState) {
+            try {
+              const response = await ynabAPI.transactions.getTransactionById(
+                budget_id,
+                transaction.id,
+              );
+              currentState = response.data.transaction ?? null;
+            } catch {
+              missingMetadataCount++;
+            }
+          }
+
+          if (currentState) {
+            // Build before object with only fields that will be changed
+            const before: Record<string, unknown> = {};
+            const after: Record<string, unknown> = {};
+
+            if (transaction.amount !== undefined && transaction.amount !== currentState.amount) {
+              before['amount'] = milliunitsToAmount(currentState.amount);
+              after['amount'] = milliunitsToAmount(transaction.amount);
+            }
+            if (transaction.date !== undefined && transaction.date !== currentState.date) {
+              before['date'] = currentState.date;
+              after['date'] = transaction.date;
+            }
+            if (transaction.memo !== undefined && transaction.memo !== currentState.memo) {
+              before['memo'] = currentState.memo;
+              after['memo'] = transaction.memo;
+            }
+            if (transaction.payee_id !== undefined && transaction.payee_id !== currentState.payee_id) {
+              before['payee_id'] = currentState.payee_id;
+              after['payee_id'] = transaction.payee_id;
+            }
+            if (
+              transaction.payee_name !== undefined &&
+              transaction.payee_name !== currentState.payee_name
+            ) {
+              before['payee_name'] = currentState.payee_name;
+              after['payee_name'] = transaction.payee_name;
+            }
+            if (
+              transaction.category_id !== undefined &&
+              transaction.category_id !== currentState.category_id
+            ) {
+              before['category_id'] = currentState.category_id;
+              after['category_id'] = transaction.category_id;
+            }
+            if (transaction.cleared !== undefined && transaction.cleared !== currentState.cleared) {
+              before['cleared'] = currentState.cleared;
+              after['cleared'] = transaction.cleared;
+            }
+            if (
+              transaction.approved !== undefined &&
+              transaction.approved !== currentState.approved
+            ) {
+              before['approved'] = currentState.approved;
+              after['approved'] = transaction.approved;
+            }
+            if (
+              transaction.flag_color !== undefined &&
+              transaction.flag_color !== currentState.flag_color
+            ) {
+              before['flag_color'] = currentState.flag_color;
+              after['flag_color'] = transaction.flag_color;
+            }
+
+            transactionsPreview.push({
+              transaction_id: transaction.id,
+              before,
+              after,
+            });
+          } else {
+            // Unable to fetch current state
+            transactionsPreview.push({
+              transaction_id: transaction.id,
+              before: 'unavailable',
+              after: transaction,
+            });
+          }
+        }
+
+        // Build warnings array
+        const warnings: { code: string; count: number; message: string; sample_ids?: string[] }[] = [];
+        if (missingMetadataCount > 0 || unresolvedIds.length > 0) {
+          const totalMissing = Math.max(missingMetadataCount, unresolvedIds.length);
+          warnings.push({
+            code: 'metadata_unavailable',
+            count: totalMissing,
+            message: `Unable to fetch prior state for ${totalMissing} transactions`,
+            sample_ids: unresolvedIds.slice(0, 10),
+          });
+        }
+
+        // Collect summary statistics
+        const accountsAffected = Array.from(new Set(Array.from(metadata.values()).map((m) => m.account_id)));
+        const fieldsToUpdate = new Set<string>();
+        for (const transaction of transactions) {
+          if (transaction.amount !== undefined) fieldsToUpdate.add('amount');
+          if (transaction.date !== undefined) fieldsToUpdate.add('date');
+          if (transaction.memo !== undefined) fieldsToUpdate.add('memo');
+          if (transaction.payee_id !== undefined) fieldsToUpdate.add('payee_id');
+          if (transaction.payee_name !== undefined) fieldsToUpdate.add('payee_name');
+          if (transaction.category_id !== undefined) fieldsToUpdate.add('category_id');
+          if (transaction.cleared !== undefined) fieldsToUpdate.add('cleared');
+          if (transaction.approved !== undefined) fieldsToUpdate.add('approved');
+          if (transaction.flag_color !== undefined) fieldsToUpdate.add('flag_color');
+        }
+
+        const response: Record<string, unknown> = {
+          dry_run: true,
+          action: 'update_transactions',
+          validation: 'passed',
+          summary: {
+            total_transactions: transactions.length,
+            accounts_affected: accountsAffected,
+            fields_to_update: Array.from(fieldsToUpdate),
+          },
+          transactions_preview: transactionsPreview,
+          note: 'Dry run complete. No transactions updated. No caches invalidated. No server_knowledge updated.',
+        };
+
+        if (warnings.length > 0) {
+          response['warnings'] = warnings;
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: responseFormatter.format(response),
+            },
+          ],
+        };
+      }
+
+      // Resolve metadata for cache invalidation before making updates
+      const { metadata, unresolvedIds } = await resolveMetadata(ynabAPI, budget_id, transactions);
+
+      // Check metadata completeness threshold (5%)
+      const missingMetadataRatio = unresolvedIds.length / transactions.length;
+      if (!dry_run && missingMetadataRatio > 0.05) {
+        throw new ValidationError(
+          'METADATA_INCOMPLETE: Too many transactions missing metadata for cache invalidation',
+          `Missing metadata for ${unresolvedIds.length} of ${transactions.length} transactions (${(missingMetadataRatio * 100).toFixed(1)}% > 5% threshold)`,
+          [
+            'Provide original_account_id and original_date for transactions to ensure proper cache invalidation',
+            `Affected transaction IDs: ${unresolvedIds.slice(0, 10).join(', ')}${unresolvedIds.length > 10 ? ` ... and ${unresolvedIds.length - 10} more` : ''}`,
+          ],
+        );
+      }
+
+      // Prepare update transactions for the YNAB API
+      const updateTransactions: { id: string; transaction: SaveTransaction }[] = transactions.map(
+        (transaction) => {
+          const transactionData: SaveTransaction = {};
+
+          // Note: account_id is intentionally excluded as account moves are not supported
+          if (transaction.amount !== undefined) {
+            transactionData.amount = transaction.amount;
+          }
+          if (transaction.date !== undefined) {
+            transactionData.date = transaction.date;
+          }
+          if (transaction.payee_name !== undefined) {
+            transactionData.payee_name = transaction.payee_name;
+          }
+          if (transaction.payee_id !== undefined) {
+            transactionData.payee_id = transaction.payee_id;
+          }
+          if (transaction.category_id !== undefined) {
+            transactionData.category_id = transaction.category_id;
+          }
+          if (transaction.memo !== undefined) {
+            transactionData.memo = transaction.memo;
+          }
+          if (transaction.cleared !== undefined) {
+            transactionData.cleared = transaction.cleared as ynab.TransactionClearedStatus;
+          }
+          if (transaction.approved !== undefined) {
+            transactionData.approved = transaction.approved;
+          }
+          if (transaction.flag_color !== undefined) {
+            transactionData.flag_color = transaction.flag_color as ynab.TransactionFlagColor;
+          }
+
+          return {
+            id: transaction.id,
+            transaction: transactionData,
+          };
+        },
+      );
+
+      // Execute bulk update
+      const response = await ynabAPI.transactions.updateTransactions(budget_id, {
+        transactions: updateTransactions,
+      });
+
+      const responseData = response.data;
+      const updatedTransactions = responseData.transactions ?? [];
+
+      // Build results
+      const results: BulkUpdateResult[] = [];
+      const updatedIds = new Set(updatedTransactions.map((t) => t.id));
+
+      for (const [index, transaction] of transactions.entries()) {
+        if (updatedIds.has(transaction.id)) {
+          results.push({
+            request_index: index,
+            status: 'updated',
+            transaction_id: transaction.id,
+            correlation_key: transaction.id,
+          });
+        } else {
+          results.push({
+            request_index: index,
+            status: 'failed',
+            transaction_id: transaction.id,
+            correlation_key: transaction.id,
+            error_code: 'update_failed',
+            error: 'Transaction was not updated by YNAB API',
+          });
+        }
+      }
+
+      const summary = {
+        total_requested: transactions.length,
+        updated: updatedTransactions.length,
+        failed: results.filter((r) => r.status === 'failed').length,
+      };
+
+      const baseResponse: BulkUpdateResponse = {
+        success: summary.failed === 0,
+        server_knowledge: responseData.server_knowledge,
+        summary,
+        results,
+        transactions: updatedTransactions,
+        message: `Processed ${summary.total_requested} transactions: ${summary.updated} updated, ${summary.failed} failed.`,
+      };
+
+      // Compute affected cache keys from resolved metadata and updated data
+      const cacheKeys = new Set<string>([
+        CacheManager.generateKey('transactions', 'list', budget_id),
+      ]);
+
+      // Add cache keys for each updated transaction
+      for (const transaction of transactions) {
+        cacheKeys.add(
+          CacheManager.generateKey('transaction', 'get', budget_id, transaction.id),
+        );
+      }
+
+      // Collect affected account IDs from metadata only (account moves not supported)
+      const affectedAccountIds = new Set<string>();
+      for (const transaction of transactions) {
+        const meta = metadata.get(transaction.id);
+        if (meta) {
+          affectedAccountIds.add(meta.account_id);
+        }
+      }
+
+      // Add account cache keys
+      for (const accountId of affectedAccountIds) {
+        cacheKeys.add(CacheManager.generateKey('account', 'get', budget_id, accountId));
+      }
+
+      // Collect affected month keys from metadata and updates
+      const affectedMonthKeys = new Set<string>();
+      for (const transaction of transactions) {
+        const meta = metadata.get(transaction.id);
+        if (meta) {
+          affectedMonthKeys.add(`${meta.date.slice(0, 7)}-01`);
+        }
+        if (transaction.date) {
+          affectedMonthKeys.add(`${transaction.date.slice(0, 7)}-01`);
+        }
+      }
+
+      // Add month cache keys
+      for (const monthKey of affectedMonthKeys) {
+        cacheKeys.add(CacheManager.generateKey('month', 'get', budget_id, monthKey));
+      }
+
+      // Invalidate caches
+      const keysToDelete = Array.from(cacheKeys);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (typeof (cacheManager as any).deleteMany === 'function') {
+        cacheManager.deleteMany(keysToDelete);
+      } else {
+        for (const key of keysToDelete) {
+          cacheManager.delete(key);
+        }
+      }
+
+      const finalizedResponse = finalizeBulkUpdateResponse(baseResponse);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: responseFormatter.format(finalizedResponse),
+          },
+        ],
+      };
+    },
+    'ynab:update_transactions',
+    'bulk transaction update',
   )) as CallToolResult;
 }
 
