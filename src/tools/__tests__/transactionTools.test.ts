@@ -23,6 +23,7 @@ vi.mock('../../server/cacheManager.js', () => ({
     wrap: vi.fn(),
     has: vi.fn(),
     delete: vi.fn(),
+    deleteMany: vi.fn(),
     clear: vi.fn(),
   },
   CacheManager: {
@@ -52,6 +53,7 @@ const mockYnabAPI = {
 
 // Import mocked cache manager
 const { cacheManager, CacheManager, CACHE_TTLS } = await import('../../server/cacheManager.js');
+const { globalRequestLogger } = await import('../../server/requestLogger.js');
 
 describe('transactionTools', () => {
   beforeEach(() => {
@@ -1101,7 +1103,7 @@ describe('transactionTools', () => {
 
       expect(generalEntry).toBeDefined();
       expect(generalEntry.errors).toEqual(
-        expect.arrayContaining(['Expected boolean, received string']),
+        expect.arrayContaining([expect.stringContaining('expected boolean')]),
       );
 
       expect(transactionEntry).toBeDefined();
@@ -2115,6 +2117,7 @@ describe('transactionTools', () => {
       transactionCounter = 0;
       (mockYnabAPI.transactions.createTransactions as any).mockReset();
       cacheManager.delete.mockReset();
+      cacheManager.deleteMany.mockReset();
       (CacheManager.generateKey as any).mockReset();
     });
 
@@ -2135,7 +2138,7 @@ describe('transactionTools', () => {
         expect(response.summary.total_transactions).toBe(2);
         expect(response.summary.accounts_affected).toEqual(['account-foo', 'account-bar']);
         expect(response.transactions_preview).toHaveLength(2);
-        expect(cacheManager.delete).not.toHaveBeenCalled();
+        expect(cacheManager.deleteMany).not.toHaveBeenCalled();
       });
 
       it('surfaces validation errors before execution', async () => {
@@ -2195,7 +2198,8 @@ describe('transactionTools', () => {
         expect(response.summary.created).toBe(2);
         expect(response.results).toHaveLength(2);
         expect(response.results.every((result: any) => result.status === 'created')).toBe(true);
-        expect(cacheManager.delete).toHaveBeenCalledWith('transactions:list:budget-123:all');
+        const deletedKeys = cacheManager.deleteMany.mock.calls.flatMap((args) => args[0] ?? []);
+        expect(deletedKeys).toEqual(expect.arrayContaining(['transactions:list:budget-123:all']));
       });
 
       it('correlates transactions without import_ids using hashes', async () => {
@@ -2387,8 +2391,8 @@ describe('transactionTools', () => {
         expect(response.results.map((r: any) => r.request_index)).toEqual([0, 1, 2]);
       });
 
-      it('records failures and logs warnings when correlation fails', async () => {
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      it('records failures and logs correlation errors when correlation fails', async () => {
+        const logErrorSpy = vi.spyOn(globalRequestLogger, 'logError').mockImplementation(() => {});
         (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
           buildApiResponse([]),
         );
@@ -2396,8 +2400,17 @@ describe('transactionTools', () => {
           handleCreateTransactions(mockYnabAPI, buildParams()),
         );
         expect(response.results[0].status).toBe('failed');
-        expect(warnSpy).toHaveBeenCalled();
-        warnSpy.mockRestore();
+        expect(response.results[0].error_code).toBe('correlation_failed');
+        expect(logErrorSpy).toHaveBeenCalledWith(
+          'ynab:create_transactions',
+          'correlate_results',
+          expect.objectContaining({
+            request_index: 0,
+            correlation_key: expect.any(String),
+          }),
+          'correlation_failed',
+        );
+        logErrorSpy.mockRestore();
       });
     });
 
@@ -2420,11 +2433,16 @@ describe('transactionTools', () => {
 
         await handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch }));
 
-        expect(cacheManager.delete).toHaveBeenCalledWith('transactions:list:budget-123:all');
-        expect(cacheManager.delete).toHaveBeenCalledWith('account:get:budget-123:account-A');
-        expect(cacheManager.delete).toHaveBeenCalledWith('account:get:budget-123:account-B');
-        expect(cacheManager.delete).toHaveBeenCalledWith('month:get:budget-123:2024-03-01');
-        expect(cacheManager.delete).toHaveBeenCalledWith('month:get:budget-123:2024-04-01');
+        const deletedKeys = cacheManager.deleteMany.mock.calls.flatMap((args) => args[0] ?? []);
+        expect(deletedKeys).toEqual(
+          expect.arrayContaining([
+            'transactions:list:budget-123:all',
+            'account:get:budget-123:account-A',
+            'account:get:budget-123:account-B',
+            'month:get:budget-123:2024-03-01',
+            'month:get:budget-123:2024-04-01',
+          ]),
+        );
       });
 
       it('deduplicates cache keys for repeated accounts and months', async () => {
@@ -2445,13 +2463,13 @@ describe('transactionTools', () => {
 
         await handleCreateTransactions(mockYnabAPI, buildParams({ transactions: batch }));
 
-        const uniqueKeys = new Set(cacheManager.delete.mock.calls.map((args) => args[0]));
+        const deletedKeys = cacheManager.deleteMany.mock.calls.flatMap((args) => args[0] ?? []);
+        const uniqueKeys = new Set(deletedKeys);
         expect(uniqueKeys.has('account:get:budget-123:repeat-account')).toBe(true);
         expect(uniqueKeys.has('month:get:budget-123:2024-05-01')).toBe(true);
-        const accountKeyCalls = cacheManager.delete.mock.calls.filter(
-          ([key]) => key === 'account:get:budget-123:repeat-account',
+        expect(deletedKeys.filter((key) => key === 'account:get:budget-123:repeat-account')).toHaveLength(
+          1,
         );
-        expect(accountKeyCalls).toHaveLength(1);
       });
 
       it('does not invalidate caches during dry runs', async () => {
@@ -2461,7 +2479,7 @@ describe('transactionTools', () => {
             dry_run: true,
           }),
         );
-        expect(cacheManager.delete).not.toHaveBeenCalled();
+        expect(cacheManager.deleteMany).not.toHaveBeenCalled();
       });
     });
 

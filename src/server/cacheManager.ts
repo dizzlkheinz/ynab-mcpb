@@ -175,6 +175,15 @@ export class CacheManager {
   }
 
   /**
+   * Delete multiple cache entries in a single operation
+   */
+  deleteMany(keys: Iterable<string>): void {
+    for (const key of keys) {
+      this.cache.delete(key);
+    }
+  }
+
+  /**
    * Clear all cache entries
    */
   clear(): void {

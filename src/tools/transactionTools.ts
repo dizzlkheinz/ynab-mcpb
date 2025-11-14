@@ -9,6 +9,7 @@ import { ValidationError, withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import { amountToMilliunits, milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
+import { globalRequestLogger } from '../server/requestLogger.js';
 
 /**
  * Utility function to ensure transaction is not null/undefined
@@ -137,9 +138,7 @@ export const CreateTransactionsSchema = z
   .object({
     budget_id: z.string().min(1, 'Budget ID is required'),
     transactions: z
-      .array(BulkTransactionInputSchema, {
-        invalid_type_error: 'Transactions must be provided as an array',
-      })
+      .array(BulkTransactionInputSchema)
       .min(1, 'At least one transaction is required')
       .max(100, 'A maximum of 100 transactions may be created at once'),
     dry_run: z.boolean().optional(),
@@ -151,9 +150,10 @@ export type CreateTransactionsParams = z.infer<typeof CreateTransactionsSchema>;
 export interface BulkTransactionResult {
   request_index: number;
   status: 'created' | 'duplicate' | 'failed';
-  transaction_id?: string;
+  transaction_id?: string | undefined;
   correlation_key: string;
-  error?: string;
+  error_code?: string | undefined;
+  error?: string | undefined;
 }
 
 export interface BulkCreateResponse {
@@ -201,13 +201,57 @@ function generateCorrelationKey(transaction: {
     `category:${transaction.category_id ?? ''}`,
     `memo:${transaction.memo ?? ''}`,
     `cleared:${transaction.cleared ?? ''}`,
-    `approved:${transaction.approved ?? false}`,
+    `approved:${transaction.approved ?? true}`,
     `flag:${transaction.flag_color ?? ''}`,
   ];
 
   const normalized = segments.join('|');
   const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
   return `hash:${hash}`;
+}
+
+type CorrelationPayload = Parameters<typeof generateCorrelationKey>[0];
+
+type CorrelationPayloadInput = {
+  account_id?: string | undefined;
+  date?: string | undefined;
+  amount?: number | undefined;
+  payee_id?: string | null | undefined;
+  payee_name?: string | null | undefined;
+  category_id?: string | null | undefined;
+  memo?: string | null | undefined;
+  cleared?: ynab.TransactionClearedStatus | undefined;
+  approved?: boolean | undefined;
+  flag_color?: ynab.TransactionFlagColor | null | undefined;
+  import_id?: string | null | undefined;
+};
+
+function toCorrelationPayload(transaction: CorrelationPayloadInput): CorrelationPayload {
+  const payload: CorrelationPayload = {};
+  if (transaction.account_id !== undefined) {
+    payload.account_id = transaction.account_id;
+  }
+  if (transaction.date !== undefined) {
+    payload.date = transaction.date;
+  }
+  if (transaction.amount !== undefined) {
+    payload.amount = transaction.amount;
+  }
+  if (transaction.cleared !== undefined) {
+    payload.cleared = transaction.cleared;
+  }
+  if (transaction.approved !== undefined) {
+    payload.approved = transaction.approved;
+  }
+  if (transaction.flag_color !== undefined) {
+    payload.flag_color = transaction.flag_color;
+  }
+  payload.payee_id = transaction.payee_id ?? null;
+  payload.payee_name = transaction.payee_name ?? null;
+  payload.category_id = transaction.category_id ?? null;
+  payload.memo = transaction.memo ?? null;
+  payload.import_id = transaction.import_id ?? null;
+  return payload;
 }
 
 function correlateResults(
@@ -252,15 +296,19 @@ function correlateResults(
     return transactionId;
   };
 
-  return requests.map((transaction, index) => {
-    const correlationKey = generateCorrelationKey(transaction);
+  const correlatedResults: BulkTransactionResult[] = [];
+
+  for (const [index, transaction] of requests.entries()) {
+    const normalizedRequest = toCorrelationPayload(transaction);
+    const correlationKey = generateCorrelationKey(normalizedRequest);
 
     if (transaction.import_id && duplicateImportIds.has(transaction.import_id)) {
-      return {
+      correlatedResults.push({
         request_index: index,
         status: 'duplicate',
         correlation_key: correlationKey,
-      };
+      });
+      continue;
     }
 
     let transactionId: string | undefined;
@@ -272,30 +320,49 @@ function correlateResults(
 
     if (!transactionId && !correlationKey.startsWith('hash:')) {
       // Attempt hash-based fallback if import_id was not matched.
-      const hashKey = generateCorrelationKey({ ...transaction, import_id: undefined });
+      const hashKey = generateCorrelationKey(
+        toCorrelationPayload({ ...transaction, import_id: undefined }),
+      );
       transactionId = popId(createdByHash, hashKey);
     }
 
     if (transactionId) {
-      return {
+      const successResult: BulkTransactionResult = {
         request_index: index,
         status: 'created',
         correlation_key: correlationKey,
-        transaction_id: transactionId,
       };
+      successResult.transaction_id = transactionId;
+      correlatedResults.push(successResult);
+      continue;
     }
 
-    console.warn(
-      `[create_transactions] Unable to correlate transaction at index ${index} (key: ${correlationKey})`,
+    globalRequestLogger.logError(
+      'ynab:create_transactions',
+      'correlate_results',
+      {
+        request_index: index,
+        correlation_key: correlationKey,
+        request: {
+          account_id: transaction.account_id,
+          date: transaction.date,
+          amount: transaction.amount,
+          import_id: transaction.import_id,
+        },
+      },
+      'correlation_failed',
     );
 
-    return {
+    correlatedResults.push({
       request_index: index,
       status: 'failed',
       correlation_key: correlationKey,
+      error_code: 'correlation_failed',
       error: 'Unable to correlate request transaction with YNAB response',
-    };
-  });
+    });
+  }
+
+  return correlatedResults;
 }
 
 function estimatePayloadSize(payload: BulkCreateResponse): number {
@@ -352,7 +419,11 @@ function finalizeResponse(response: BulkCreateResponse): BulkCreateResponse {
     return idsOnlyPayload;
   }
 
-  throw new Error('RESPONSE_TOO_LARGE: Unable to format bulk create response within 100KB limit');
+  throw new ValidationError(
+    'RESPONSE_TOO_LARGE: Unable to format bulk create response within 100KB limit',
+    `Batch size: ${response.summary.total_requested} transactions`,
+    ['Reduce the batch size and retry', 'Consider splitting into multiple smaller batches'],
+  );
 }
 
 const ReceiptSplitItemSchema = z
@@ -1326,17 +1397,19 @@ export async function handleCreateTransactions(
     async () => {
       const validationResult = CreateTransactionsSchema.safeParse(params);
       if (!validationResult.success) {
-        const issuesByIndex = new Map<number, string[]>();
-        for (const issue of validationResult.error.errors) {
+        type TransactionIssueIndex = number | null;
+        const issuesByIndex = new Map<TransactionIssueIndex, string[]>();
+        const validationIssues = validationResult.error.issues ?? [];
+        for (const issue of validationIssues) {
           const transactionIndex = issue.path.find(
             (segment): segment is number => typeof segment === 'number',
           );
           const message = issue.message;
-          if (transactionIndex !== undefined) {
-            const existing = issuesByIndex.get(transactionIndex) ?? [];
-            existing.push(message);
-            issuesByIndex.set(transactionIndex, existing);
-          }
+          const issueIndex: TransactionIssueIndex =
+            transactionIndex !== undefined ? transactionIndex : null;
+          const existing = issuesByIndex.get(issueIndex) ?? [];
+          existing.push(message);
+          issuesByIndex.set(issueIndex, existing);
         }
 
         const details = Array.from(issuesByIndex.entries()).map(([index, errors]) => ({
@@ -1353,22 +1426,63 @@ export async function handleCreateTransactions(
 
       const { budget_id, transactions, dry_run } = validationResult.data;
 
+      // Pre-flight duplicate import_id detection within batch
+      const importIdMap = new Map<string, number[]>();
+      for (const [index, transaction] of transactions.entries()) {
+        if (transaction.import_id && transaction.import_id.trim().length > 0) {
+          const existing = importIdMap.get(transaction.import_id);
+          if (existing) {
+            existing.push(index);
+          } else {
+            importIdMap.set(transaction.import_id, [index]);
+          }
+        }
+      }
+
+      const duplicates = Array.from(importIdMap.entries())
+        .filter(([, indices]) => indices.length > 1)
+        .map(([importId, indices]) => ({ import_id: importId, indices }));
+
+      if (duplicates.length > 0) {
+        const details = duplicates.map(({ import_id, indices }) => ({
+          import_id,
+          transaction_indices: indices,
+          count: indices.length,
+        }));
+
+        throw new ValidationError(
+          'Duplicate import_id values detected within batch',
+          JSON.stringify(details, null, 2),
+          [
+            'Ensure each transaction has a unique import_id within the batch',
+            'Remove duplicate import_id values or omit import_id to use hash-based correlation',
+          ],
+        );
+      }
+
       if (dry_run) {
         const totalAmount = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
         const accountsAffected = Array.from(
           new Set(transactions.map((transaction) => transaction.account_id)),
         );
+        const categoriesAffected = Array.from(
+          new Set(
+            transactions
+              .map((transaction) => transaction.category_id)
+              .filter((id): id is string => id !== undefined),
+          ),
+        );
         const sortedDates = [...transactions.map((transaction) => transaction.date)].sort();
         const dateRange =
           sortedDates.length > 0
-            ? { start: sortedDates[0], end: sortedDates[sortedDates.length - 1] }
+            ? { earliest: sortedDates[0], latest: sortedDates[sortedDates.length - 1] }
             : undefined;
 
         const transactionsPreview = transactions.slice(0, 10).map((transaction, index) => ({
           request_index: index,
           account_id: transaction.account_id,
           date: transaction.date,
-          amount: milliunitsToAmount(transaction.amount),
+          amount: transaction.amount,
           memo: transaction.memo,
           payee_id: transaction.payee_id,
           payee_name: transaction.payee_name,
@@ -1383,18 +1497,16 @@ export async function handleCreateTransactions(
               text: responseFormatter.format({
                 dry_run: true,
                 action: 'create_transactions',
-                validation: {
-                  passed: true,
-                },
+                validation: 'passed',
                 summary: {
                   total_transactions: transactions.length,
-                  total_amount: milliunitsToAmount(totalAmount),
-                  accounts_affected,
+                  total_amount: totalAmount,
+                  accounts_affected: accountsAffected,
                   date_range: dateRange,
+                  categories_affected: categoriesAffected,
                 },
                 transactions_preview: transactionsPreview,
-                message:
-                  'Dry run successful. No transactions were created. Re-run without dry_run to apply.',
+                note: 'Dry run complete. No transactions created. No caches invalidated. No server_knowledge updated.',
               }),
             },
           ],
@@ -1447,9 +1559,6 @@ export async function handleCreateTransactions(
 
       const cacheKeys = new Set<string>([
         CacheManager.generateKey('transactions', 'list', budget_id),
-        CacheManager.generateKey('accounts', 'list', budget_id),
-        CacheManager.generateKey('categories', 'list', budget_id),
-        CacheManager.generateKey('months', 'list', budget_id),
       ]);
 
       const accountIds = new Set(transactions.map((transaction) => transaction.account_id));
@@ -1466,9 +1575,16 @@ export async function handleCreateTransactions(
         cacheKeys.add(CacheManager.generateKey('month', 'get', budget_id, monthKey));
       }
 
-      for (const key of cacheKeys) {
-        cacheManager.delete(key);
+      const keysToDelete = Array.from(cacheKeys);
+      if (typeof (cacheManager as any).deleteMany === 'function') {
+        cacheManager.deleteMany(keysToDelete);
+      } else {
+        for (const key of keysToDelete) {
+          cacheManager.delete(key);
+        }
       }
+
+      const finalizedResponse = finalizeResponse(baseResponse);
 
       return {
         content: [
