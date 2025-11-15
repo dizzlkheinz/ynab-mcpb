@@ -763,56 +763,7 @@ export async function handleListTransactions(
   );
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      if (!useCache) {
-        let response;
-        if (params.account_id) {
-          response = await ynabAPI.transactions.getTransactionsByAccount(
-            params.budget_id,
-            params.account_id,
-            params.since_date,
-          );
-        } else if (params.category_id) {
-          response = await ynabAPI.transactions.getTransactionsByCategory(
-            params.budget_id,
-            params.category_id,
-            params.since_date,
-          );
-        } else {
-          response = await ynabAPI.transactions.getTransactions(
-            params.budget_id,
-            params.since_date,
-            params.type,
-          );
-        }
-        const transactions = response.data.transactions;
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: responseFormatter.format({
-                transactions: transactions.map((transaction) => ({
-                  id: transaction.id,
-                  date: transaction.date,
-                  account_name: transaction.account_name,
-                  payee_name: transaction.payee_name,
-                  category_name: transaction.category_name,
-                  memo: transaction.memo,
-                  amount: milliunitsToAmount(transaction.amount),
-                  cleared: transaction.cleared,
-                  approved: transaction.approved,
-                  flag_color: transaction.flag_color,
-                })),
-                cached: false,
-                cache_info: 'Fresh data retrieved from YNAB API',
-              }),
-            },
-          ],
-        };
-      }
-
+      // Always use cache
       let transactions: (ynab.TransactionDetail | ynab.HybridTransaction)[];
       let cacheHit = false;
       let usedDelta = false;

@@ -42,35 +42,7 @@ export async function handleListBudgets(
   );
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      if (!useCache) {
-        // Bypass cache in test environment
-        const response = await ynabAPI.budgets.getBudgets();
-        const budgets = response.data.budgets;
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: responseFormatter.format({
-                budgets: budgets.map((budget) => ({
-                  id: budget.id,
-                  name: budget.name,
-                  last_modified_on: budget.last_modified_on,
-                  first_month: budget.first_month,
-                  last_month: budget.last_month,
-                  date_format: budget.date_format,
-                  currency_format: budget.currency_format,
-                })),
-                cached: false,
-                cache_info: 'Fresh data retrieved from YNAB API',
-              }),
-            },
-          ],
-        };
-      }
-
+      // Always use cache unless explicitly disabled
       const result = await deltaFetcher.fetchBudgets();
       const budgets = result.data;
       const wasCached = result.wasCached;

@@ -41,27 +41,16 @@ export async function handleGetMonth(
 ): Promise<CallToolResult> {
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      let month: ynab.MonthDetail;
-      let wasCached = false;
-
-      if (useCache) {
-        // Use enhanced CacheManager wrap method
-        const cacheKey = CacheManager.generateKey('month', 'get', params.budget_id, params.month);
-        wasCached = cacheManager.has(cacheKey);
-        month = await cacheManager.wrap<ynab.MonthDetail>(cacheKey, {
-          ttl: CACHE_TTLS.MONTHS,
-          loader: async () => {
-            const response = await ynabAPI.months.getBudgetMonth(params.budget_id, params.month);
-            return response.data.month;
-          },
-        });
-      } else {
-        // Bypass cache in test environment
-        const response = await ynabAPI.months.getBudgetMonth(params.budget_id, params.month);
-        month = response.data.month;
-      }
+      // Always use cache
+      const cacheKey = CacheManager.generateKey('month', 'get', params.budget_id, params.month);
+      const wasCached = cacheManager.has(cacheKey);
+      const month = await cacheManager.wrap<ynab.MonthDetail>(cacheKey, {
+        ttl: CACHE_TTLS.MONTHS,
+        loader: async () => {
+          const response = await ynabAPI.months.getBudgetMonth(params.budget_id, params.month);
+          return response.data.month;
+        },
+      });
 
       return {
         content: [
@@ -139,22 +128,11 @@ export async function handleListMonths(
   );
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      let months: ynab.MonthSummary[];
-      let wasCached = false;
-      let usedDelta = false;
-
-      if (!useCache) {
-        // Bypass cache in test environment
-        const response = await ynabAPI.months.getBudgetMonths(params.budget_id);
-        months = response.data.months;
-      } else {
-        const result = await deltaFetcher.fetchMonths(params.budget_id);
-        months = result.data;
-        wasCached = result.wasCached;
-        usedDelta = result.usedDelta;
-      }
+      // Always use cache
+      const result = await deltaFetcher.fetchMonths(params.budget_id);
+      const months = result.data;
+      const wasCached = result.wasCached;
+      const usedDelta = result.usedDelta;
 
       return {
         content: [
