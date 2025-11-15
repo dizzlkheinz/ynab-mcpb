@@ -36,19 +36,22 @@ All monetary amounts are automatically converted to dollars (YNAB stores them in
 1. Log in to [YNAB Web App](https://app.youneedabudget.com)
 2. Go to **Account Settings** → **Developer Settings**
 3. Click **New Token**
-4. Give it a name (e.g., "Claude Desktop")
+4. Give it a name (e.g., "MCP Server")
 5. Copy the token (you'll only see it once!)
 
-### Step 2: Install in Claude Desktop
+### Step 2: Install in Your MCP Client
 
-**Option A: Download the Extension (Recommended)**
+<details>
+<summary><b>Claude Desktop</b> (Recommended)</summary>
+
+#### Option A: Download the Extension
 
 1. Download the latest `.dxt` file from [Releases](https://github.com/dizzlkheinz/mcp-for-ynab/releases/latest)
 2. Drag and drop it into Claude Desktop
 3. Paste your YNAB Access Token when prompted
 4. Restart Claude Desktop
 
-**Option B: Use npx (Advanced)**
+#### Option B: Use npx
 
 Add this to your Claude Desktop MCP settings file:
 
@@ -66,9 +69,46 @@ Add this to your Claude Desktop MCP settings file:
 }
 ```
 
+</details>
+
+<details>
+<summary><b>Cline (VS Code Extension)</b></summary>
+
+Add this to your Cline MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "ynab": {
+      "command": "npx",
+      "args": ["-y", "@dizzlkheinz/ynab-mcp-server"],
+      "env": {
+        "YNAB_ACCESS_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Other MCP Clients</b></summary>
+
+For any MCP-compatible client, configure the server with:
+
+**Command:** `npx`
+**Arguments:** `["-y", "@dizzlkheinz/ynab-mcp-server"]`
+**Environment Variables:**
+- `YNAB_ACCESS_TOKEN`: Your YNAB Personal Access Token
+
+Refer to your MCP client's documentation for specific configuration steps.
+
+</details>
+
 ### Step 3: Start Using It
 
-Ask Claude questions like:
+Ask your AI assistant questions like:
 - "What's my checking account balance?"
 - "How much have I spent on dining out this month?"
 - "List my recent transactions"
