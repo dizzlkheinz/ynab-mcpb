@@ -2304,6 +2304,25 @@ export async function handleUpdateTransactions(
 
       // Check metadata completeness threshold (5%)
       const missingMetadataRatio = unresolvedIds.length / transactions.length;
+      const METADATA_THRESHOLD = 0.05; // 5%
+
+      if (missingMetadataRatio > METADATA_THRESHOLD) {
+        throw new ValidationError(
+          `METADATA_INCOMPLETE: ${(missingMetadataRatio * 100).toFixed(1)}% of transactions have missing metadata (threshold: ${(METADATA_THRESHOLD * 100).toFixed(0)}%)`,
+          JSON.stringify({
+            unresolved_count: unresolvedIds.length,
+            total_transactions: transactions.length,
+            ratio: (missingMetadataRatio * 100).toFixed(1) + '%',
+            threshold: (METADATA_THRESHOLD * 100).toFixed(0) + '%',
+            sample_unresolved_ids: unresolvedIds.slice(0, 5),
+          }, null, 2),
+          [
+            'Provide original_account_id and original_date for all transactions being updated',
+            'Ensure transactions exist in YNAB before updating them',
+          ],
+        );
+      }
+
       if (missingMetadataRatio > 0.01) {
         globalRequestLogger.logRequest(
           'ynab:update_transactions',

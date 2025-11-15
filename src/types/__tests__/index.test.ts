@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { AuthenticationError, ConfigurationError } from '../index';
 
 describe('Error Classes', () => {
