@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       YNAB_ACCESS_TOKEN: ${{ secrets.YNAB_ACCESS_TOKEN }}
-    if: ${{ secrets.YNAB_ACCESS_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
