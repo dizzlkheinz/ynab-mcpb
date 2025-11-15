@@ -15,6 +15,9 @@ vi.mock('../../server/cacheManager.js', () => ({
     wrap: vi.fn(),
     has: vi.fn(),
     delete: vi.fn(),
+    deleteMany: vi.fn(),
+    deleteByPrefix: vi.fn(),
+    deleteByBudgetId: vi.fn(),
     clear: vi.fn(),
   },
   CacheManager: {
@@ -35,7 +38,7 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { cacheManager, CacheManager, CACHE_TTLS } = await import('../../server/cacheManager.js');
+const { cacheManager, CacheManager } = await import('../../server/cacheManager.js');
 
 // Capture original NODE_ENV for restoration
 const originalNodeEnv = process.env.NODE_ENV;
@@ -90,48 +93,9 @@ describe('Account Tools', () => {
       expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
     });
 
-    it('should use cache when NODE_ENV is not test', async () => {
-      // Temporarily set NODE_ENV to non-test
-      process.env['NODE_ENV'] = 'development';
-
-      const mockAccounts = [
-        {
-          id: 'account-1',
-          name: 'Checking Account',
-          type: 'checking',
-          on_budget: true,
-          closed: false,
-          note: 'Main checking account',
-          balance: 100000,
-          cleared_balance: 95000,
-          uncleared_balance: 5000,
-          transfer_payee_id: 'payee-1',
-          direct_import_linked: false,
-          direct_import_in_error: false,
-        },
-      ];
-
-      const mockCacheKey = 'accounts:list:budget-1:generated-key';
-      (CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-      (cacheManager.wrap as any).mockResolvedValue(mockAccounts);
-      (cacheManager.has as any).mockReturnValue(true);
-
-      const result = await handleListAccounts(mockYnabAPI, { budget_id: 'budget-1' });
-
-      // Verify cache was used
-      expect(CacheManager.generateKey).toHaveBeenCalledWith('accounts', 'list', 'budget-1');
-      expect(cacheManager.wrap).toHaveBeenCalledWith(mockCacheKey, {
-        ttl: CACHE_TTLS.ACCOUNTS,
-        loader: expect.any(Function),
-      });
-      expect(cacheManager.has).toHaveBeenCalledWith(mockCacheKey);
-
-      const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.cached).toBe(true);
-      expect(parsedContent.cache_info).toBe('Data retrieved from cache for improved performance');
-
-      // Reset NODE_ENV
-      process.env['NODE_ENV'] = 'test';
+    // NOTE: Caching is now handled by DeltaFetcher, tested separately in deltaFetcher.test.ts
+    it.skip('should use cache when NODE_ENV is not test', async () => {
+      // This test is obsolete - caching is now handled by DeltaFetcher
     });
 
     it('should return formatted account list on success', async () => {
@@ -227,53 +191,9 @@ describe('Account Tools', () => {
   });
 
   describe('handleGetAccount', () => {
-    it('should use cache when NODE_ENV is not test', async () => {
-      // Temporarily set NODE_ENV to non-test
-      process.env['NODE_ENV'] = 'development';
-
-      const mockAccount = {
-        id: 'account-1',
-        name: 'Checking Account',
-        type: 'checking',
-        on_budget: true,
-        closed: false,
-        note: 'Main checking account',
-        balance: 100000,
-        cleared_balance: 95000,
-        uncleared_balance: 5000,
-        transfer_payee_id: 'payee-1',
-        direct_import_linked: false,
-        direct_import_in_error: false,
-      };
-
-      const mockCacheKey = 'account:get:budget-1:account-1:generated-key';
-      (CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-      (cacheManager.wrap as any).mockResolvedValue(mockAccount);
-      (cacheManager.has as any).mockReturnValue(true);
-
-      const result = await handleGetAccount(mockYnabAPI, {
-        budget_id: 'budget-1',
-        account_id: 'account-1',
-      });
-
-      // Verify cache was used
-      expect(CacheManager.generateKey).toHaveBeenCalledWith(
-        'account',
-        'get',
-        'budget-1',
-        'account-1',
-      );
-      expect(cacheManager.wrap).toHaveBeenCalledWith(mockCacheKey, {
-        ttl: CACHE_TTLS.ACCOUNTS,
-        loader: expect.any(Function),
-      });
-
-      const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.cached).toBe(true);
-      expect(parsedContent.cache_info).toBe('Data retrieved from cache for improved performance');
-
-      // Reset NODE_ENV
-      process.env['NODE_ENV'] = 'test';
+    // NOTE: Caching is now handled by DeltaFetcher, tested separately in deltaFetcher.test.ts
+    it.skip('should use cache when NODE_ENV is not test', async () => {
+      // This test is obsolete - caching is now handled by DeltaFetcher
     });
 
     it('should return detailed account information on success', async () => {

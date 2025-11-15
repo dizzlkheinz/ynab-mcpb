@@ -13,6 +13,36 @@ if (!process.env['SKIP_E2E_TESTS']) {
   process.env['SKIP_E2E_TESTS'] = hasAccessToken ? 'false' : 'true';
 }
 
+type TierFilter = 'core' | 'domain' | 'full';
+interface TestMeta {
+  tier?: TierFilter;
+  domain?: string;
+}
+
+const parseFilterList = (value: string | undefined) =>
+  value
+    ?.split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean) ?? [];
+
+const tierFilters = parseFilterList(process.env['INTEGRATION_TEST_TIER'] ?? 'full') as TierFilter[];
+const domainFilters = parseFilterList(process.env['INTEGRATION_TEST_DOMAINS']);
+
+const shouldRunTier = (tier?: string): boolean => {
+  if (!tier) return true;
+  if (tierFilters.length === 0 || tierFilters.includes('full')) {
+    return true;
+  }
+  return tierFilters.includes(tier.toLowerCase() as TierFilter);
+};
+
+const shouldRunDomain = (domain?: string): boolean => {
+  if (!domain || domainFilters.length === 0) {
+    return true;
+  }
+  return domainFilters.includes(domain.toLowerCase());
+};
+
 /**
  * Global test setup
  */
@@ -65,6 +95,19 @@ beforeEach(async () => {
     }
   } catch {
     // Module doesn't exist yet, which is fine
+  }
+});
+
+beforeEach((ctx) => {
+  const meta = ctx.task.meta as TestMeta;
+
+  if (!shouldRunTier(meta?.tier)) {
+    ctx.skip();
+    return;
+  }
+
+  if (!shouldRunDomain(meta?.domain)) {
+    ctx.skip();
   }
 });
 

@@ -26,7 +26,7 @@ describeIntegration('Account Tools Integration', () => {
     testBudgetId = budgetsResponse.data.budgets[0].id;
   });
 
-  it('should successfully list accounts from real API', async () => {
+  it('should successfully list accounts from real API', { meta: { tier: 'core', domain: 'accounts' } }, async () => {
     const result = await handleListAccounts(ynabAPI, { budget_id: testBudgetId });
 
     expect(result.content).toHaveLength(1);
@@ -48,7 +48,7 @@ describeIntegration('Account Tools Integration', () => {
     }
   });
 
-  it('should successfully get account details from real API', async () => {
+  it('should successfully get account details from real API', { meta: { tier: 'domain', domain: 'accounts' } }, async () => {
     // First get the list of accounts to get a valid account ID
     const listResult = await handleListAccounts(ynabAPI, { budget_id: testBudgetId });
     const parsedListContent = JSON.parse(listResult.content[0].text);
@@ -78,7 +78,7 @@ describeIntegration('Account Tools Integration', () => {
     console.warn(`✅ Successfully retrieved account: ${parsedContent.account.name}`);
   });
 
-  it('should handle invalid budget ID gracefully', async () => {
+  it('should handle invalid budget ID gracefully', { meta: { tier: 'domain', domain: 'accounts' } }, async () => {
     const result = await handleListAccounts(ynabAPI, { budget_id: 'invalid-budget-id' });
 
     expect(result.content).toHaveLength(1);
@@ -89,7 +89,7 @@ describeIntegration('Account Tools Integration', () => {
     console.warn('✅ Correctly handled invalid budget ID:', parsedContent.error.message);
   });
 
-  it('should handle invalid account ID gracefully', async () => {
+  it('should handle invalid account ID gracefully', { meta: { tier: 'domain', domain: 'accounts' } }, async () => {
     const result = await handleGetAccount(ynabAPI, {
       budget_id: testBudgetId,
       account_id: 'invalid-account-id',

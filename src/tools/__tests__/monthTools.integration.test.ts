@@ -39,7 +39,7 @@ describeIntegration('Month Tools Integration', () => {
   });
 
   describe('handleListMonths', () => {
-    it('should successfully list months from real API', async () => {
+    it('should successfully list months from real API', { meta: { tier: 'domain', domain: 'months' } }, async () => {
       const result = await handleListMonths(ynabAPI, { budget_id: testBudgetId });
 
       expect(result.content).toHaveLength(1);
@@ -65,7 +65,7 @@ describeIntegration('Month Tools Integration', () => {
       console.warn(`   - Budgeted: ${firstMonth.budgeted} milliunits`);
     });
 
-    it('should handle invalid budget ID gracefully', async () => {
+    it('should handle invalid budget ID gracefully', { meta: { tier: 'domain', domain: 'months' } }, async () => {
       const result = await handleListMonths(ynabAPI, { budget_id: 'invalid-budget-id' });
 
       expect(result.content).toHaveLength(1);
@@ -80,7 +80,7 @@ describeIntegration('Month Tools Integration', () => {
   });
 
   describe('handleGetMonth', () => {
-    it('should successfully get month details from real API', async () => {
+    it('should successfully get month details from real API', { meta: { tier: 'domain', domain: 'months' } }, async () => {
       const result = await handleGetMonth(ynabAPI, {
         budget_id: testBudgetId,
         month: testMonth,
@@ -123,7 +123,7 @@ describeIntegration('Month Tools Integration', () => {
       console.warn(`   - Categories: ${month.categories.length}`);
     });
 
-    it('should handle invalid budget ID gracefully', async () => {
+    it('should handle invalid budget ID gracefully', { meta: { tier: 'domain', domain: 'months' } }, async () => {
       const result = await handleGetMonth(ynabAPI, {
         budget_id: 'invalid-budget-id',
         month: testMonth,
@@ -139,7 +139,7 @@ describeIntegration('Month Tools Integration', () => {
       console.warn(`✅ Correctly handled invalid budget ID: ${parsedContent.error.message}`);
     });
 
-    it('should handle invalid month format gracefully', async () => {
+    it('should handle invalid month format gracefully', { meta: { tier: 'domain', domain: 'months' } }, async () => {
       const result = await handleGetMonth(ynabAPI, {
         budget_id: testBudgetId,
         month: '2024-13-01', // Invalid month

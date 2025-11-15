@@ -21,10 +21,11 @@ export type GetBudgetParams = z.infer<typeof GetBudgetSchema>;
  * Handles the ynab:list_budgets tool call
  * Lists all budgets associated with the user's account
  */
+// eslint-disable-next-line @typescript-eslint/unified-signatures
 export async function handleListBudgets(
   ynabAPI: ynab.API,
   deltaFetcher: DeltaFetcher,
-  _params: Record<string, never>,
+  _params?: Record<string, never>,
 ): Promise<CallToolResult>;
 export async function handleListBudgets(
   ynabAPI: ynab.API,

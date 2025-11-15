@@ -27,6 +27,41 @@ export { findMatches, findBestMatch } from './matcher.js';
 export { normalizePayee, normalizedMatch, fuzzyMatch, payeeSimilarity } from './payeeNormalizer.js';
 
 /**
+ * Helper function to determine audit data source based on fetch result
+ */
+function getAuditDataSource(
+  transactionsResult: { usedDelta?: boolean; wasCached?: boolean },
+  forceFullRefresh: boolean,
+): string {
+  if (forceFullRefresh) {
+    return 'full_api_fetch_no_delta';
+  }
+  if (transactionsResult.usedDelta) {
+    return 'delta_fetch_with_merge';
+  }
+  if (transactionsResult.wasCached) {
+    return 'delta_fetch_cache_hit';
+  }
+  return 'delta_fetch_full_refresh';
+}
+
+/**
+ * Helper function to determine data freshness based on fetch result
+ */
+function getDataFreshness(
+  transactionsResult: { wasCached?: boolean },
+  forceFullRefresh: boolean,
+): string {
+  if (forceFullRefresh) {
+    return 'guaranteed_fresh';
+  }
+  if (transactionsResult.wasCached) {
+    return 'cache_validated_via_server_knowledge';
+  }
+  return 'fresh_via_delta_fetch';
+}
+
+/**
  * Schema for reconcile_account tool
  */
 export const ReconcileAccountSchema = z
@@ -224,20 +259,9 @@ export async function handleReconcileAccount(
 
       const ynabTransactions = transactionsResult.data;
 
-      const auditDataSource = forceFullRefresh
-        ? 'full_api_fetch_no_delta'
-        : transactionsResult.usedDelta
-          ? 'delta_fetch_with_merge'
-          : transactionsResult.wasCached
-            ? 'delta_fetch_cache_hit'
-            : 'delta_fetch_full_refresh';
       const auditMetadata = {
-        data_freshness: forceFullRefresh
-          ? 'guaranteed_fresh'
-          : transactionsResult.wasCached
-            ? 'cache_validated_via_server_knowledge'
-            : 'fresh_via_delta_fetch',
-        data_source: auditDataSource,
+        data_freshness: getDataFreshness(transactionsResult, forceFullRefresh),
+        data_source: getAuditDataSource(transactionsResult, forceFullRefresh),
         server_knowledge: transactionsResult.serverKnowledge,
         fetched_at: new Date().toISOString(),
         accounts_count: accountResult.data.length,
@@ -263,9 +287,9 @@ export async function handleReconcileAccount(
       );
 
       const initialAccount: AccountSnapshot = {
-        balance: accountData?.balance ?? 0,
-        cleared_balance: accountData?.cleared_balance ?? 0,
-        uncleared_balance: accountData?.uncleared_balance ?? 0,
+        balance: accountData.balance,
+        cleared_balance: accountData.cleared_balance,
+        uncleared_balance: accountData.uncleared_balance,
       };
 
       let executionData: LegacyReconciliationResult | undefined;

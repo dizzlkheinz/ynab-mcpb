@@ -203,7 +203,6 @@ describe('DeltaFetcher', () => {
     (mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mockResolvedValue({});
 
     await fetcher.fetchBudgets();
-    expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledWith();
 
     expect(mockDeltaCache.fetchWithDelta).toHaveBeenCalledWith(
       'budgets:list',
@@ -212,6 +211,11 @@ describe('DeltaFetcher', () => {
       mergeFlatEntities,
       expect.objectContaining({ ttl: CACHE_TTLS.BUDGETS, forceFullRefresh: true }),
     );
+
+    // Verify the loader function calls the YNAB API correctly
+    const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mock.calls[0][2];
+    await fetcherFn();
+    expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledWith();
   });
 
   it('fetchAccountsFull bypasses cache and filters deleted accounts', async () => {

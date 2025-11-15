@@ -342,7 +342,15 @@ describe('DeltaCache', () => {
         { ttl: 5000 },
       );
 
-      expect(result.data).toEqual([{ id: 'snap' }, { id: 'delta' }]);
+      // When knowledge gap > 100, a full refresh is triggered, so cached snapshot is discarded
+      expect(result.data).toEqual([{ id: 'delta' }]);
+      expect(loggerSpies.warn).toHaveBeenCalledWith(
+        'delta-cache.knowledge-gap',
+        expect.objectContaining({
+          gap: 300,
+          action: 'full-refresh',
+        }),
+      );
     });
   });
 
@@ -699,9 +707,11 @@ describe('DeltaCache', () => {
       });
     });
 
-    it('tracks knowledge gap events and treats them as misses', async () => {
+    it('tracks knowledge gap events and treats them as hits', async () => {
       cacheManagerSpies.get.mockReturnValue(createCacheEntry([{ id: 'snap' }], 1000));
       knowledgeStoreSpies.get.mockReturnValue(1000);
+      // Two responses required: first triggers gap detection (205 > threshold),
+      // second is the full refresh that follows gap detection
       const fetcher = vi
         .fn()
         .mockResolvedValueOnce({ data: [{ id: 'delta' }], serverKnowledge: 1205 })
@@ -716,8 +726,8 @@ describe('DeltaCache', () => {
       );
 
       expect(deltaCache.getStats()).toEqual({
-        deltaHits: 0,
-        deltaMisses: 1,
+        deltaHits: 1,
+        deltaMisses: 0,
         mergeOperations: 0,
         knowledgeGapEvents: 1,
       });

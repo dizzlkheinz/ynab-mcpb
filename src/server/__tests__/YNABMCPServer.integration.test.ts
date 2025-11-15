@@ -36,13 +36,13 @@ describeIntegration('YNABMCPServer', () => {
   });
 
   describe('Constructor and Environment Validation', () => {
-    it('should create server instance with valid access token', () => {
+    it('should create server instance with valid access token', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const server = new YNABMCPServer();
       expect(server).toBeInstanceOf(YNABMCPServer);
       expect(server.getYNABAPI()).toBeDefined();
     });
 
-    it('should throw ConfigurationError when YNAB_ACCESS_TOKEN is missing', () => {
+    it('should throw ConfigurationError when YNAB_ACCESS_TOKEN is missing', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       delete process.env['YNAB_ACCESS_TOKEN'];
 
@@ -55,7 +55,7 @@ describeIntegration('YNABMCPServer', () => {
       process.env['YNAB_ACCESS_TOKEN'] = originalToken;
     });
 
-    it('should throw ConfigurationError when YNAB_ACCESS_TOKEN is empty string', () => {
+    it('should throw ConfigurationError when YNAB_ACCESS_TOKEN is empty string', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = '';
 
@@ -66,7 +66,7 @@ describeIntegration('YNABMCPServer', () => {
       process.env['YNAB_ACCESS_TOKEN'] = originalToken;
     });
 
-    it('should throw ConfigurationError when YNAB_ACCESS_TOKEN is only whitespace', () => {
+    it('should throw ConfigurationError when YNAB_ACCESS_TOKEN is only whitespace', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = '   ';
 
@@ -77,7 +77,7 @@ describeIntegration('YNABMCPServer', () => {
       process.env['YNAB_ACCESS_TOKEN'] = originalToken;
     });
 
-    it('should trim whitespace from access token', () => {
+    it('should trim whitespace from access token', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = `  ${originalToken}  `;
 
@@ -96,12 +96,12 @@ describeIntegration('YNABMCPServer', () => {
       server = new YNABMCPServer(false); // Don't exit on error in tests
     });
 
-    it('should successfully validate real YNAB token', async () => {
+    it('should successfully validate real YNAB token', { meta: { tier: 'core', domain: 'server' } }, async () => {
       const isValid = await server.validateToken();
       expect(isValid).toBe(true);
     });
 
-    it('should successfully get user information', async () => {
+    it('should successfully get user information', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Verify we can get user info
       const ynabAPI = server.getYNABAPI();
       const userResponse = await ynabAPI.user.getUser();
@@ -111,7 +111,7 @@ describeIntegration('YNABMCPServer', () => {
       console.warn(`✅ Connected to YNAB user: ${userResponse.data.user.id}`);
     });
 
-    it('should successfully get budgets', async () => {
+    it('should successfully get budgets', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const ynabAPI = server.getYNABAPI();
       const budgetsResponse = await ynabAPI.budgets.getBudgets();
 
@@ -125,7 +125,7 @@ describeIntegration('YNABMCPServer', () => {
       });
     });
 
-    it('should handle invalid token gracefully', async () => {
+    it('should handle invalid token gracefully', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token-format';
 
@@ -138,7 +138,7 @@ describeIntegration('YNABMCPServer', () => {
       }
     });
 
-    it('should successfully start and connect MCP server', async () => {
+    it('should successfully start and connect MCP server', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // This test verifies the full server startup process
       // Note: We can't fully test the stdio connection in a test environment,
       // but we can verify the server initializes without errors
@@ -161,7 +161,7 @@ describeIntegration('YNABMCPServer', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should handle multiple rapid API calls without rate limiting issues', async () => {
+    it('should handle multiple rapid API calls without rate limiting issues', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Make multiple validation calls to test rate limiting behavior
       const promises = Array(3)
         .fill(null)
@@ -190,7 +190,7 @@ describeIntegration('YNABMCPServer', () => {
       registry = (server as unknown as { toolRegistry: ToolRegistry }).toolRegistry;
     });
 
-    it('should expose registered tools via the registry', () => {
+    it('should expose registered tools via the registry', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const tools = registry.listTools();
       expect(tools.length).toBeGreaterThan(0);
       const names = tools.map((tool) => tool.name);
@@ -198,7 +198,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(names).toContain('diagnostic_info');
     });
 
-    it('should execute get_user tool via the registry', async () => {
+    it('should execute get_user tool via the registry', { meta: { tier: 'core', domain: 'server' } }, async () => {
       const result = await registry.executeTool({
         name: 'get_user',
         accessToken: accessToken(),
@@ -208,7 +208,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(payload.user?.id).toBeDefined();
     });
 
-    it('should set and retrieve default budget using tools', async () => {
+    it('should set and retrieve default budget using tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const budgetsResult = await registry.executeTool({
         name: 'list_budgets',
         accessToken: accessToken(),
@@ -234,7 +234,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(defaultPayload.has_default).toBe(true);
     });
 
-    it('should provide diagnostic info with requested sections', async () => {
+    it('should provide diagnostic info with requested sections', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const diagResult = await registry.executeTool({
         name: 'diagnostic_info',
         accessToken: accessToken(),
@@ -255,7 +255,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(diagnostics.environment).toBeUndefined();
     });
 
-    it('should clear cache using the clear_cache tool', async () => {
+    it('should clear cache using the clear_cache tool', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       cacheManager.set('test:key', { value: 1 }, 1000);
       const statsBeforeClear = cacheManager.getStats();
       expect(statsBeforeClear.size).toBeGreaterThan(0);
@@ -274,7 +274,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(statsAfterClear.lastCleanup).toBe(null);
     });
 
-    it('should track cache performance metrics during real tool execution', async () => {
+    it('should track cache performance metrics during real tool execution', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Clear cache and capture initial state
       cacheManager.clear();
 
@@ -297,7 +297,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(stats.hitRate).toBeGreaterThan(0);
     });
 
-    it('should demonstrate LRU eviction with real cache operations', async () => {
+    it('should demonstrate LRU eviction with real cache operations', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // This test demonstrates the LRU eviction functionality
       // by creating a temporary cache with a low maxEntries limit
       const originalEnvValue = process.env.YNAB_MCP_CACHE_MAX_ENTRIES;
@@ -328,7 +328,7 @@ describeIntegration('YNABMCPServer', () => {
       }
     });
 
-    it('should show cache hit rate improvement with repeated operations', async () => {
+    it('should show cache hit rate improvement with repeated operations', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       cacheManager.clear();
 
       // Manually demonstrate cache hit rate improvement
@@ -344,7 +344,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(finalStats.hitRate).toBeGreaterThan(0.5); // Should have more hits than misses
     });
 
-    it('should handle concurrent cache operations correctly', async () => {
+    it('should handle concurrent cache operations correctly', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       cacheManager.clear();
 
       // Simulate concurrent cache operations manually
@@ -366,7 +366,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(stats.hits + stats.misses).toBeGreaterThan(0);
     });
 
-    it('should include enhanced cache metrics in real diagnostic collection', async () => {
+    it('should include enhanced cache metrics in real diagnostic collection', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Generate some real cache activity
       await registry.executeTool({
         name: 'list_budgets',
@@ -414,7 +414,7 @@ describeIntegration('YNABMCPServer', () => {
       ).toBe(true);
     });
 
-    it('should configure output formatter via set_output_format tool', async () => {
+    it('should configure output formatter via set_output_format tool', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const baseline = responseFormatter.format({ probe: true });
 
       try {
@@ -436,7 +436,7 @@ describeIntegration('YNABMCPServer', () => {
       }
     });
 
-    it('should surface validation errors for invalid inputs', async () => {
+    it('should surface validation errors for invalid inputs', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const result = await registry.executeTool({
         name: 'get_budget',
         accessToken: accessToken(),
@@ -465,7 +465,7 @@ describeIntegration('YNABMCPServer', () => {
       registry = (server as unknown as { toolRegistry: ToolRegistry }).toolRegistry;
     });
 
-    it('should maintain real API functionality after modular refactoring', async () => {
+    it('should maintain real API functionality after modular refactoring', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Test that the key integration points work with real API calls
       // This verifies that resource manager, diagnostic manager, and other modules
       // properly integrate with the real YNAB API
@@ -510,7 +510,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(diagnostics.cache).toBeDefined();
     });
 
-    it('should handle modular service errors gracefully in integration', async () => {
+    it('should handle modular service errors gracefully in integration', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Test error handling through the modules with real API
       const result = await registry.executeTool({
         name: 'get_budget',
@@ -557,7 +557,7 @@ describeIntegration('YNABMCPServer', () => {
       registry = (server as unknown as { toolRegistry: ToolRegistry }).toolRegistry;
     });
 
-    it('should handle real YNAB API calls with budget resolution errors', async () => {
+    it('should handle real YNAB API calls with budget resolution errors', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Test with no default budget set - should get standardized error
       const result = await registry.executeTool({
         name: 'list_accounts',
@@ -572,7 +572,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(payload.error.suggestions).toBeDefined();
     });
 
-    it('should handle real YNAB API calls with invalid budget ID', async () => {
+    it('should handle real YNAB API calls with invalid budget ID', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const invalidBudgetId = 'invalid-uuid-format';
       const result = await registry.executeTool({
         name: 'list_accounts',
@@ -590,7 +590,7 @@ describeIntegration('YNABMCPServer', () => {
       );
     });
 
-    it('should complete end-to-end workflow with real YNAB API after setting default budget', async () => {
+    it('should complete end-to-end workflow with real YNAB API after setting default budget', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Step 1: Verify error with no default budget for a tool that requires budget_id
       let result = await registry.executeTool({
         name: 'list_accounts',
@@ -623,7 +623,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(Array.isArray(payload.accounts)).toBe(true);
     });
 
-    it('should handle real API errors properly with budget resolution', async () => {
+    it('should handle real API errors properly with budget resolution', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Use a UUID that is valid format but doesn't exist in YNAB
       const nonExistentButValidUuid = '123e4567-e89b-12d3-a456-426614174000';
 
@@ -639,7 +639,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(payload.error.code).toBe(404); // YNAB NOT_FOUND error
     });
 
-    it('should maintain performance with real API calls and budget resolution', async () => {
+    it('should maintain performance with real API calls and budget resolution', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const budgetId = await getFirstAvailableBudgetId();
       await registry.executeTool({
         name: 'set_default_budget',
@@ -681,7 +681,7 @@ describeIntegration('YNABMCPServer', () => {
       expect(endTime - startTime).toBeLessThan(10000); // 10 seconds max for 3 API calls
     });
 
-    it('should handle security middleware with budget resolution errors', async () => {
+    it('should handle security middleware with budget resolution errors', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Test that security middleware still works with budget resolution
       const result = await registry.executeTool({
         name: 'list_accounts',

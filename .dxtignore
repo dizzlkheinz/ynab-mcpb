@@ -4,14 +4,30 @@ src/
 **/*.test.*
 coverage/
 *.log
-.git/
-.github/
-.vscode/
+.*/
 **/*.map
 tsconfig*.json
 vitest.config.ts
+vitest-reporters/
 eslint.config.js
 test-results.json
+test-results/
 README.md
+
+# Test files and data
+test_*.js
+test_*.mjs
+test-*.js
+test-*.cjs
+test-*.csv
+test-exports/
+accountactivity-merged.csv
+
+# Temporary and development files
+temp/
+tmp/
+fix-types.sh
+NUL
+package-lock.json
 
 # keep dist/, manifest.json, docs/

@@ -19,13 +19,22 @@ describeIntegration('Reconciliation delta isolation', () => {
   let deltaFetcher: DeltaFetcher;
   let previousNodeEnv: string | undefined;
   const parseStructuredPayload = (result: CallToolResult) => {
-    const structuredEntry = result.content?.find(
-      (entry, index) => entry.type === 'text' && index > 0,
-    );
-    if (!structuredEntry || structuredEntry.type !== 'text') {
-      throw new Error('Expected structured reconciliation payload to be present');
+    // Find the last text entry that contains valid JSON with an "audit" key
+    const textEntries = result.content?.filter((entry) => entry.type === 'text') ?? [];
+    for (let i = textEntries.length - 1; i >= 0; i--) {
+      const entry = textEntries[i];
+      if (entry.type === 'text') {
+        try {
+          const parsed = JSON.parse(entry.text);
+          if (parsed && typeof parsed === 'object' && 'audit' in parsed) {
+            return parsed;
+          }
+        } catch {
+          // Not valid JSON, continue searching
+        }
+      }
     }
-    return JSON.parse(structuredEntry.text);
+    throw new Error('Expected structured reconciliation payload with "audit" key to be present');
   };
 
   beforeAll(async () => {
@@ -73,7 +82,7 @@ describeIntegration('Reconciliation delta isolation', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses full-fetch helpers and exposes audit metadata', async () => {
+  it('uses full-fetch helpers and exposes audit metadata', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
     const csvData = ['Date,Amount,Description', '2024-01-01,10,Coffee'].join('\n');
     const params = {
       budget_id: testBudgetId,
@@ -102,7 +111,7 @@ describeIntegration('Reconciliation delta isolation', () => {
     expect(structuredPayload.audit).toHaveProperty('transactions_count');
   });
 
-  it('can opt into delta-backed fetches when force_full_refresh is false', async () => {
+  it('can opt into delta-backed fetches when force_full_refresh is false', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
     const csvData = ['Date,Amount,Description', '2024-01-01,10,Coffee'].join('\n');
     const params = {
       budget_id: testBudgetId,

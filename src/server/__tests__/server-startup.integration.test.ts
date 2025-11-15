@@ -38,7 +38,7 @@ describe('Server Startup and Transport Integration', () => {
   });
 
   describe('Server Initialization', () => {
-    it('should successfully initialize server with valid configuration', () => {
+    it('should successfully initialize server with valid configuration', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const server = new YNABMCPServer(false);
 
       expect(server).toBeInstanceOf(YNABMCPServer);
@@ -46,7 +46,7 @@ describe('Server Startup and Transport Integration', () => {
       expect(server.getServer()).toBeInstanceOf(Server);
     });
 
-    it('should fail initialization with missing access token', () => {
+    it('should fail initialization with missing access token', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       delete process.env['YNAB_ACCESS_TOKEN'];
 
@@ -59,7 +59,7 @@ describe('Server Startup and Transport Integration', () => {
       process.env['YNAB_ACCESS_TOKEN'] = originalToken;
     });
 
-    it('should fail initialization with invalid access token format', () => {
+    it('should fail initialization with invalid access token format', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = '';
 
@@ -80,12 +80,12 @@ describe('Server Startup and Transport Integration', () => {
       server = new YNABMCPServer(false);
     });
 
-    it('should validate YNAB token during startup', async () => {
+    it('should validate YNAB token during startup', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const isValid = await server.validateToken();
       expect(isValid).toBe(true);
     });
 
-    it('should handle invalid token gracefully during startup', async () => {
+    it('should handle invalid token gracefully during startup', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token-12345';
 
@@ -97,7 +97,7 @@ describe('Server Startup and Transport Integration', () => {
       }
     });
 
-    it('should provide detailed error messages for authentication failures', async () => {
+    it('should provide detailed error messages for authentication failures', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = 'definitely-invalid-token';
 
@@ -125,7 +125,7 @@ describe('Server Startup and Transport Integration', () => {
       server = new YNABMCPServer(false);
     });
 
-    it('should register all expected YNAB tools', async () => {
+    it('should register all expected YNAB tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const mcpServer = server.getServer();
 
       // We can't directly call the handler, but we can verify the server has the right structure
@@ -140,7 +140,7 @@ describe('Server Startup and Transport Integration', () => {
       expect(typeof server.run).toBe('function');
     });
 
-    it('should register budget management tools', () => {
+    it('should register budget management tools', { meta: { tier: 'domain', domain: 'server' } }, () => {
       // Test that the server instance includes budget tools
       const mcpServer = server.getServer();
       expect(mcpServer).toBeDefined();
@@ -150,31 +150,31 @@ describe('Server Startup and Transport Integration', () => {
       expect(server.getYNABAPI().budgets).toBeDefined();
     });
 
-    it('should register account management tools', () => {
+    it('should register account management tools', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const mcpServer = server.getServer();
       expect(mcpServer).toBeDefined();
       expect(server.getYNABAPI().accounts).toBeDefined();
     });
 
-    it('should register transaction management tools', () => {
+    it('should register transaction management tools', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const mcpServer = server.getServer();
       expect(mcpServer).toBeDefined();
       expect(server.getYNABAPI().transactions).toBeDefined();
     });
 
-    it('should register category management tools', () => {
+    it('should register category management tools', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const mcpServer = server.getServer();
       expect(mcpServer).toBeDefined();
       expect(server.getYNABAPI().categories).toBeDefined();
     });
 
-    it('should register payee management tools', () => {
+    it('should register payee management tools', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const mcpServer = server.getServer();
       expect(mcpServer).toBeDefined();
       expect(server.getYNABAPI().payees).toBeDefined();
     });
 
-    it('should register utility tools', () => {
+    it('should register utility tools', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const mcpServer = server.getServer();
       expect(mcpServer).toBeDefined();
       expect(server.getYNABAPI().user).toBeDefined();
@@ -188,7 +188,7 @@ describe('Server Startup and Transport Integration', () => {
       server = new YNABMCPServer(false);
     });
 
-    it('should attempt to connect with StdioServerTransport', async () => {
+    it('should attempt to connect with StdioServerTransport', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Mock console.error to capture startup messages
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
         // Mock implementation for testing
@@ -210,7 +210,7 @@ describe('Server Startup and Transport Integration', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should handle transport connection errors gracefully', async () => {
+    it('should handle transport connection errors gracefully', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
         // Mock implementation for testing
       });
@@ -225,7 +225,7 @@ describe('Server Startup and Transport Integration', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should validate token before attempting transport connection', async () => {
+    it('should validate token before attempting transport connection', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const validateTokenSpy = vi.spyOn(server, 'validateToken');
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
         // Mock implementation for testing
@@ -244,7 +244,7 @@ describe('Server Startup and Transport Integration', () => {
   });
 
   describe('Error Reporting', () => {
-    it('should report configuration errors clearly', () => {
+    it('should report configuration errors clearly', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       delete process.env['YNAB_ACCESS_TOKEN'];
 
@@ -257,7 +257,7 @@ describe('Server Startup and Transport Integration', () => {
       process.env['YNAB_ACCESS_TOKEN'] = originalToken;
     });
 
-    it('should report authentication errors clearly', async () => {
+    it('should report authentication errors clearly', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token';
 
@@ -269,7 +269,7 @@ describe('Server Startup and Transport Integration', () => {
       }
     });
 
-    it('should handle startup errors without exposing sensitive information', async () => {
+    it('should handle startup errors without exposing sensitive information', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token';
 
@@ -290,7 +290,7 @@ describe('Server Startup and Transport Integration', () => {
   });
 
   describe('Graceful Shutdown', () => {
-    it('should handle process signals gracefully', () => {
+    it('should handle process signals gracefully', { meta: { tier: 'domain', domain: 'server' } }, () => {
       // Test that the server can be created without throwing
       const server = new YNABMCPServer(false);
       expect(server).toBeDefined();
@@ -300,7 +300,7 @@ describe('Server Startup and Transport Integration', () => {
       // But we can verify the server initializes properly
     });
 
-    it('should clean up resources on shutdown', () => {
+    it('should clean up resources on shutdown', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const server = new YNABMCPServer(false);
 
       // Verify server has the necessary components for cleanup
@@ -310,7 +310,7 @@ describe('Server Startup and Transport Integration', () => {
   });
 
   describe('Full Startup Workflow', () => {
-    it('should complete full startup sequence successfully', async () => {
+    it('should complete full startup sequence successfully', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
         // Mock implementation for testing
       });
@@ -338,7 +338,7 @@ describe('Server Startup and Transport Integration', () => {
       }
     });
 
-    it('should fail fast on configuration errors', () => {
+    it('should fail fast on configuration errors', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       delete process.env['YNAB_ACCESS_TOKEN'];
 
@@ -348,7 +348,7 @@ describe('Server Startup and Transport Integration', () => {
       process.env['YNAB_ACCESS_TOKEN'] = originalToken;
     });
 
-    it('should fail fast on authentication errors', async () => {
+    it('should fail fast on authentication errors', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token';
 

@@ -30,7 +30,7 @@ describeIntegration('Category Tools Integration', () => {
   });
 
   describe('handleListCategories', () => {
-    it('should successfully list categories from real API', async () => {
+    it('should successfully list categories from real API', { meta: { tier: 'domain', domain: 'categories' } }, async () => {
       const result = await handleListCategories(ynabAPI, { budget_id: testBudgetId });
 
       expect(result.content).toHaveLength(1);
@@ -82,7 +82,7 @@ describeIntegration('Category Tools Integration', () => {
       }
     });
 
-    it('should handle invalid budget ID gracefully', async () => {
+    it('should handle invalid budget ID gracefully', { meta: { tier: 'domain', domain: 'categories' } }, async () => {
       const result = await handleListCategories(ynabAPI, { budget_id: 'invalid-budget-id' });
 
       expect(result.content).toHaveLength(1);
@@ -97,7 +97,7 @@ describeIntegration('Category Tools Integration', () => {
   });
 
   describe('handleGetCategory', () => {
-    it('should successfully get category details from real API', async () => {
+    it('should successfully get category details from real API', { meta: { tier: 'domain', domain: 'categories' } }, async () => {
       if (!testCategoryId) {
         console.warn('⚠️ Skipping test - no test category ID available');
         return;
@@ -129,7 +129,7 @@ describeIntegration('Category Tools Integration', () => {
       console.warn(`   - Balance: ${category.balance} milliunits`);
     });
 
-    it('should handle invalid category ID gracefully', async () => {
+    it('should handle invalid category ID gracefully', { meta: { tier: 'domain', domain: 'categories' } }, async () => {
       const result = await handleGetCategory(ynabAPI, {
         budget_id: testBudgetId,
         category_id: 'invalid-category-id',
@@ -147,7 +147,7 @@ describeIntegration('Category Tools Integration', () => {
   });
 
   describe('handleUpdateCategory', () => {
-    it('should successfully update category budget from real API', async () => {
+    it('should successfully update category budget from real API', { meta: { tier: 'domain', domain: 'categories' } }, async () => {
       if (!testCategoryId) {
         console.warn('⚠️ Skipping test - no test category ID available');
         return;
@@ -200,7 +200,7 @@ describeIntegration('Category Tools Integration', () => {
       console.warn(`✅ Restored original budget amount: ${originalBudgetedAmount} milliunits`);
     });
 
-    it('should handle invalid category ID gracefully', async () => {
+    it('should handle invalid category ID gracefully', { meta: { tier: 'domain', domain: 'categories' } }, async () => {
       const result = await handleUpdateCategory(ynabAPI, {
         budget_id: testBudgetId,
         category_id: 'invalid-category-id',
@@ -217,7 +217,7 @@ describeIntegration('Category Tools Integration', () => {
       console.warn(`✅ Correctly handled invalid category ID: ${parsedContent.error.message}`);
     });
 
-    it('should handle negative budgeted amounts', async () => {
+    it('should handle negative budgeted amounts', { meta: { tier: 'domain', domain: 'categories' } }, async () => {
       if (!testCategoryId) {
         console.warn('⚠️ Skipping test - no test category ID available');
         return;

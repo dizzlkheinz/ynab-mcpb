@@ -23,10 +23,14 @@ describePerformance('Delta performance characteristics', () => {
     }
     ynabAPI = new ynab.API(accessToken);
     const budgetsResponse = await ynabAPI.budgets.getBudgets();
-    const budget = budgetsResponse.data.budgets[0];
-    if (!budget) {
+    if (
+      !budgetsResponse.data ||
+      !Array.isArray(budgetsResponse.data.budgets) ||
+      budgetsResponse.data.budgets.length === 0
+    ) {
       throw new Error('No budgets available for performance tests.');
     }
+    const budget = budgetsResponse.data.budgets[0];
     testBudgetId = budget.id;
 
     const accountsResponse = await ynabAPI.accounts.getAccounts(testBudgetId);
@@ -71,6 +75,6 @@ describePerformance('Delta performance characteristics', () => {
 
     expect(first.result.wasCached).toBe(false);
     expect(second.result.wasCached).toBe(true);
-    expect(second.duration).toBeLessThan(first.duration + 250);
+    expect(second.duration).toBeLessThan(first.duration * 0.8); // Cached should be at least 20% faster
   });
 });

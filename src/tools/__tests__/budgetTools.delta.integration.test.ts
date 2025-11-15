@@ -57,12 +57,9 @@ describeIntegration('Delta-backed budget tool handler', () => {
   const expectCacheHit = (payload: { cached: boolean; cache_info: string }) => {
     expect(payload.cached).toBe(true);
     expect(payload.cache_info).toMatch(/cache/i);
-    if (/delta merge applied/i.test(payload.cache_info)) {
-      expect(payload.cache_info).toMatch(/delta merge applied/i);
-    }
   };
 
-  it('serves cached budget summaries on the second invocation', async () => {
+  it('serves cached budget summaries on the second invocation', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
     const firstCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
     const firstPayload = parseResponse(firstCall);
     expect(firstPayload.cached).toBe(false);
@@ -70,5 +67,8 @@ describeIntegration('Delta-backed budget tool handler', () => {
     const secondCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
     const secondPayload = parseResponse(secondCall);
     expectCacheHit(secondPayload);
+
+    // Verify cached response contains the same budget data as initial fetch
+    expect(secondPayload.budgets).toEqual(firstPayload.budgets);
   });
 });

@@ -113,7 +113,7 @@ function invalidateTransactionCaches(
   }
 
   const shouldInvalidateMonths = options.invalidateMonths ?? affectedMonths.size > 0;
-  if (shouldInvalidateMonths && affectedMonths.size > 0) {
+  if (shouldInvalidateMonths) {
     cacheManager.delete(CacheManager.generateKey('months', 'list', budgetId));
     deltaCache.invalidate(budgetId, 'months');
     for (const month of affectedMonths) {

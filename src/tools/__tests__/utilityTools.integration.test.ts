@@ -14,7 +14,7 @@ describe('Utility Tools Integration Tests', () => {
   });
 
   describe('handleGetUser', () => {
-    it('should retrieve user information from YNAB API', async () => {
+    it('should retrieve user information from YNAB API', { meta: { tier: 'core', domain: 'utility' } }, async () => {
       const result = await handleGetUser(ynabAPI);
       const response = JSON.parse(result.content[0].text);
 
@@ -26,7 +26,7 @@ describe('Utility Tools Integration Tests', () => {
   });
 
   describe('handleConvertAmount', () => {
-    it('should convert various dollar amounts to milliunits', async () => {
+    it('should convert various dollar amounts to milliunits', { meta: { tier: 'domain', domain: 'utility' } }, async () => {
       const testCases = [
         { dollars: 1.0, expectedMilliunits: 1000 },
         { dollars: 0.01, expectedMilliunits: 10 },
@@ -52,7 +52,7 @@ describe('Utility Tools Integration Tests', () => {
       }
     });
 
-    it('should convert various milliunit amounts to dollars', async () => {
+    it('should convert various milliunit amounts to dollars', { meta: { tier: 'domain', domain: 'utility' } }, async () => {
       const testCases = [
         { milliunits: 1000, expectedDollars: 1.0 },
         { milliunits: 10, expectedDollars: 0.01 },
@@ -78,7 +78,7 @@ describe('Utility Tools Integration Tests', () => {
       }
     });
 
-    it('should handle precision edge cases', async () => {
+    it('should handle precision edge cases', { meta: { tier: 'domain', domain: 'utility' } }, async () => {
       // Test floating-point precision issues
       const precisionTests = [
         { amount: 0.1 + 0.2, to_milliunits: true }, // Should handle 0.30000000000000004

@@ -53,13 +53,24 @@ describeIntegration('Delta fetcher scheduled transactions integration', () => {
     previousNodeEnv = undefined;
   });
 
-  it('caches scheduled transactions on repeated fetches', async () => {
+  it('caches scheduled transactions on repeated fetches', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
     const firstResult = await deltaFetcher.fetchScheduledTransactions(testBudgetId);
     expect(firstResult.wasCached).toBe(false);
     expect(firstResult.serverKnowledge).toBeGreaterThanOrEqual(0);
+    // Validate data structure
+    expect(Array.isArray(firstResult.data)).toBe(true);
+    if (firstResult.data.length > 0) {
+      const sample = firstResult.data[0];
+      expect(sample).toHaveProperty('id');
+      expect(sample).toHaveProperty('date_first');
+      expect(sample).toHaveProperty('frequency');
+    }
 
     const secondResult = await deltaFetcher.fetchScheduledTransactions(testBudgetId);
     expect(secondResult.wasCached).toBe(true);
     expect(secondResult.serverKnowledge).toBeGreaterThanOrEqual(firstResult.serverKnowledge);
+    // Validate cached data structure matches
+    expect(Array.isArray(secondResult.data)).toBe(true);
+    expect(secondResult.data.length).toBe(firstResult.data.length);
   });
 });

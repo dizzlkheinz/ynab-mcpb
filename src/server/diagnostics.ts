@@ -310,7 +310,7 @@ export class DiagnosticManager {
     }
 
     if (
-      options.include_delta !== false &&
+      options.include_delta === true &&
       this.dependencies.serverKnowledgeStore &&
       this.dependencies.deltaCache
     ) {
@@ -320,9 +320,8 @@ export class DiagnosticManager {
       const deltaHitRate = totalDeltaRequests > 0 ? deltaStats.deltaHits / totalDeltaRequests : 0;
       diagnostics['delta'] = {
         enabled: process.env['YNAB_MCP_ENABLE_DELTA'] === 'true',
-        knowledge_entries: knowledgeStats.entryCount,
+        knowledge_entries: Object.keys(knowledgeStats.entries).length, // Canonical count from entries
         knowledge_stats: knowledgeStats.entries,
-        cache_entries_with_knowledge: Object.keys(knowledgeStats.entries).length,
         feature_flag: process.env['YNAB_MCP_ENABLE_DELTA'] ?? 'false',
         delta_hits: deltaStats.deltaHits,
         delta_misses: deltaStats.deltaMisses,

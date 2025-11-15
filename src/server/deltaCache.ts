@@ -129,7 +129,6 @@ export class DeltaCache {
       !options.forceFullRefresh && cachedEntry && lastKnowledge !== undefined,
     );
     const requestedKnowledge = canUseDelta ? lastKnowledge : undefined;
-    let fullRefreshPerformed = !canUseDelta;
 
     let response = await fetcher(requestedKnowledge);
     const knowledgeGap =
@@ -150,7 +149,6 @@ export class DeltaCache {
       });
       forcedFullRefreshDueToGap = true;
       this.knowledgeGapEvents++;
-      fullRefreshPerformed = true;
       response = await fetcher(undefined);
     }
 
@@ -194,10 +192,9 @@ export class DeltaCache {
     this.cacheManager.set(cacheKey, cacheEntry, cacheOptions);
     this.knowledgeStore.update(cacheKey, response.serverKnowledge);
 
-    if (canUseDelta && receivedDelta) {
+    if (canUseDelta) {
       this.deltaHits++;
-      fullRefreshPerformed = false;
-    } else if (fullRefreshPerformed) {
+    } else {
       this.deltaMisses++;
     }
 

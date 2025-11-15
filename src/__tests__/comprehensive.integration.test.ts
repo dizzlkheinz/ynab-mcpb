@@ -64,7 +64,7 @@ vi.mock('ynab', () => {
 const TEST_BUDGET_UUID = '00000000-0000-0000-0000-000000000001';
 
 describe('YNAB utils mock', () => {
-  it('converts milliunits using SDK rounding rules', async () => {
+  it('converts milliunits using SDK rounding rules', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
     const { utils } = await import('ynab');
 
     expect(utils.convertMilliUnitsToCurrencyAmount(123456, 2)).toBe(123.46);
@@ -93,7 +93,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
   });
 
   describe('Complete Budget Management Integration', () => {
-    it('should handle complete budget listing and retrieval workflow', async () => {
+    it('should handle complete budget listing and retrieval workflow', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       // Mock budget list response
       const mockBudgets = {
         data: {
@@ -167,7 +167,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       expect(mockYnabAPI.budgets.getBudgetById).toHaveBeenCalledWith('budget-1');
     });
 
-    it('should handle budget retrieval errors gracefully', async () => {
+    it('should handle budget retrieval errors gracefully', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       // Mock API error
       const apiError = new Error('Budget not found');
       (apiError as any).error = { id: '404.2', name: 'not_found', description: 'Budget not found' };
@@ -188,7 +188,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
   });
 
   describe('Complete Account Management Integration', () => {
-    it('should handle complete account workflow', async () => {
+    it('should handle complete account workflow', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       const budgetId = TEST_BUDGET_UUID;
 
       // Mock accounts list
@@ -303,7 +303,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
   });
 
   describe('Complete Transaction Management Integration', () => {
-    it('should handle complete transaction workflow', async () => {
+    it('should handle complete transaction workflow', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       const budgetId = TEST_BUDGET_UUID;
       const accountId = 'test-account';
 
@@ -469,7 +469,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       );
     });
 
-    it('should handle transaction filtering', async () => {
+    it('should handle transaction filtering', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       const budgetId = TEST_BUDGET_UUID;
 
       // Mock filtered transactions
@@ -553,7 +553,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
   });
 
   describe('Complete Category Management Integration', () => {
-    it('should handle complete category workflow', async () => {
+    it('should handle complete category workflow', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       const budgetId = 'test-budget';
 
       // Mock categories response
@@ -658,7 +658,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
   });
 
   describe('Complete Utility Tools Integration', () => {
-    it('should handle user information retrieval', async () => {
+    it('should handle user information retrieval', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       // Mock user response
       const mockUser = {
         data: {
@@ -681,7 +681,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       expect(mockYnabAPI.user.getUser).toHaveBeenCalledTimes(1);
     });
 
-    it('should handle amount conversion', async () => {
+    it('should handle amount conversion', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       // Test dollar to milliunits conversion
       const toMilliunitsResult = await executeToolCall(server, 'ynab:convert_amount', {
         amount: 25.75,
@@ -707,7 +707,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
   });
 
   describe('Error Handling Integration', () => {
-    it('should handle various API error scenarios', async () => {
+    it('should handle various API error scenarios', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       // Test 401 Unauthorized
       const authError = new Error('Unauthorized');
       (authError as any).error = { id: '401', name: 'unauthorized', description: 'Unauthorized' };
@@ -753,7 +753,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       }
     });
 
-    it('should validate input parameters', async () => {
+    it('should validate input parameters', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       // Test missing required parameters
       try {
         await executeToolCall(server, 'ynab:get_budget', {});
@@ -799,7 +799,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       }
     });
 
-    it('should cache budget list requests and improve performance on subsequent calls', async () => {
+    it('should cache budget list requests and improve performance on subsequent calls', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       const mockBudgets = {
         data: {
           budgets: [
@@ -851,7 +851,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       expect(finalStats.hits).toBeGreaterThan(statsBeforeFirstCall.hits);
     });
 
-    it('should invalidate cache on write operations', async () => {
+    it('should invalidate cache on write operations', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       const budgetId = TEST_BUDGET_UUID;
 
       // Mock responses
@@ -912,7 +912,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       expect(mockYnabAPI.accounts.getAccounts).toHaveBeenCalledTimes(1);
     });
 
-    it('should not cache filtered transaction requests', async () => {
+    it('should not cache filtered transaction requests', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       const budgetId = TEST_BUDGET_UUID;
 
       const mockTransactions = {
@@ -965,7 +965,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       expect(mockYnabAPI.transactions.getTransactionsByAccount).toHaveBeenCalledTimes(1);
     });
 
-    it('should handle cache warming after setting default budget', async () => {
+    it('should handle cache warming after setting default budget', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       const budgetId = TEST_BUDGET_UUID;
 
       // Mock all the responses for cache warming
@@ -1010,7 +1010,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       expect(mockYnabAPI.payees.getPayees).toHaveBeenCalled();
     });
 
-    it('should handle cache clear operation', async () => {
+    it('should handle cache clear operation', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       // Populate cache with some data
       mockYnabAPI.budgets.getBudgets.mockResolvedValue({
         data: { budgets: [] },
@@ -1032,7 +1032,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       expect(statsAfterClear.misses).toBe(0);
     });
 
-    it('should respect cache TTL and return fresh data after expiration', async () => {
+    it('should respect cache TTL and return fresh data after expiration', { meta: { tier: 'domain', domain: 'workflows' } }, async () => {
       // Note: This test is conceptual since TTL testing requires time manipulation
       // In a real scenario, we would mock the Date.now() or use a test clock
 

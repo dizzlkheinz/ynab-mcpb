@@ -1,17 +1,18 @@
 import { defineConfig } from 'vitest/config';
 
+const integrationFiles = ['src/**/*.integration.test.ts'];
+
 export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    setupFiles: ['src/__tests__/setup.ts'],
+    exclude: ['src/__tests__/testRunner.ts'],
     // Use projects to target unit/integration/e2e groups (Vitest v3)
     projects: [
       {
         test: {
           name: 'unit',
-          globals: true,
-          environment: 'node',
-          setupFiles: ['src/__tests__/setup.ts'],
           include: ['src/**/*.{test,spec}.ts'],
           exclude: [
             'src/**/*.integration.test.ts',
@@ -22,27 +23,46 @@ export default defineConfig({
       },
       {
         test: {
-          name: 'integration',
-          globals: true,
-          environment: 'node',
-          setupFiles: ['src/__tests__/setup.ts'],
-          include: ['src/**/*.integration.test.ts'],
+          name: 'integration:core',
+          include: integrationFiles,
+          env: {
+            INTEGRATION_TEST_TIER: 'core',
+          },
+          testTimeout: 30000,
+          hookTimeout: 10000,
+        },
+      },
+      {
+        test: {
+          name: 'integration:domain',
+          include: integrationFiles,
+          env: {
+            INTEGRATION_TEST_TIER: 'domain',
+          },
+          testTimeout: 60000,
+          hookTimeout: 15000,
+        },
+      },
+      {
+        test: {
+          name: 'integration:full',
+          include: integrationFiles,
+          env: {
+            INTEGRATION_TEST_TIER: 'full',
+          },
+          testTimeout: 120000,
+          hookTimeout: 30000,
+          fileParallelism: false,
+          maxWorkers: 1,
         },
       },
       {
         test: {
           name: 'e2e',
-          globals: true,
-          environment: 'node',
-          setupFiles: ['src/__tests__/setup.ts'],
           include: ['src/**/*.e2e.test.ts'],
         },
       },
     ],
-    exclude: ['src/__tests__/testRunner.ts'], // Exclude test runner from test execution
-    setupFiles: ['src/__tests__/setup.ts'],
-    testTimeout: 30000, // 30 seconds for e2e tests
-    hookTimeout: 10000, // 10 seconds for setup/teardown
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

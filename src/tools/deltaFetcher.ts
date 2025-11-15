@@ -269,12 +269,9 @@ export class DeltaFetcher {
     defaultTtl: number,
     options?: DeltaFetchOptions,
   ): { ttl: number; forceFullRefresh?: boolean } {
-    const deltaOptions: { ttl: number; forceFullRefresh?: boolean } = {
+    return {
       ttl: options?.ttl ?? defaultTtl,
+      ...(options?.forceFullRefresh !== undefined && { forceFullRefresh: options.forceFullRefresh }),
     };
-    if (options?.forceFullRefresh !== undefined) {
-      deltaOptions.forceFullRefresh = options.forceFullRefresh;
-    }
-    return deltaOptions;
   }
 }

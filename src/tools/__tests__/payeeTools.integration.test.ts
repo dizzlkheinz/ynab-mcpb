@@ -27,7 +27,7 @@ describeIntegration('Payee Tools Integration', () => {
   });
 
   describe('handleListPayees', () => {
-    it('should successfully list payees from real API', async () => {
+    it('should successfully list payees from real API', { meta: { tier: 'domain', domain: 'payees' } }, async () => {
       const result = await handleListPayees(ynabAPI, { budget_id: testBudgetId });
 
       expect(result.content).toHaveLength(1);
@@ -57,7 +57,7 @@ describeIntegration('Payee Tools Integration', () => {
       console.warn(`   - ${parsedContent.payees.length - transferPayees.length} regular payees`);
     });
 
-    it('should handle invalid budget ID gracefully', async () => {
+    it('should handle invalid budget ID gracefully', { meta: { tier: 'domain', domain: 'payees' } }, async () => {
       const result = await handleListPayees(ynabAPI, { budget_id: 'invalid-budget-id' });
 
       expect(result.content).toHaveLength(1);
@@ -72,7 +72,7 @@ describeIntegration('Payee Tools Integration', () => {
   });
 
   describe('handleGetPayee', () => {
-    it('should successfully get payee details from real API', async () => {
+    it('should successfully get payee details from real API', { meta: { tier: 'domain', domain: 'payees' } }, async () => {
       // Use the payee ID from the previous test
       const result = await handleGetPayee(ynabAPI, {
         budget_id: testBudgetId,
@@ -99,7 +99,7 @@ describeIntegration('Payee Tools Integration', () => {
       }
     });
 
-    it('should handle invalid payee ID gracefully', async () => {
+    it('should handle invalid payee ID gracefully', { meta: { tier: 'domain', domain: 'payees' } }, async () => {
       const result = await handleGetPayee(ynabAPI, {
         budget_id: testBudgetId,
         payee_id: 'invalid-payee-id',
@@ -115,7 +115,7 @@ describeIntegration('Payee Tools Integration', () => {
       console.warn(`✅ Correctly handled invalid payee ID: ${parsedContent.error.message}`);
     });
 
-    it('should handle invalid budget ID gracefully', async () => {
+    it('should handle invalid budget ID gracefully', { meta: { tier: 'domain', domain: 'payees' } }, async () => {
       const result = await handleGetPayee(ynabAPI, {
         budget_id: 'invalid-budget-id',
         payee_id: testPayeeId,

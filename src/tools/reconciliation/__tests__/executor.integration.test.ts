@@ -50,8 +50,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     }
   });
 
-  it(
-    'creates 10 transactions via bulk mode',
+  it('creates 10 transactions via bulk mode', { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 10, 7);
       const params = buildIntegrationParams(accountId, budgetId, analysis.summary.target_statement_balance);
@@ -79,8 +78,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     60000,
   );
 
-  it(
-    'reports duplicates when import IDs already exist',
+  it('reports duplicates when import IDs already exist', { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 9);
       const params = buildIntegrationParams(accountId, budgetId, analysis.summary.target_statement_balance);
@@ -126,8 +124,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     60000,
   );
 
-  it(
-    'processes 150 transactions across multiple chunks',
+  it('processes 150 transactions across multiple chunks', { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 150, 3);
       const params = buildIntegrationParams(accountId, budgetId, analysis.summary.target_statement_balance);
@@ -154,8 +151,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     90000,
   );
 
-  it(
-    'processes 20 transactions in under 8 seconds',
+  it('processes 20 transactions in under 8 seconds', { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 20, 4);
       const params = buildIntegrationParams(accountId, budgetId, analysis.summary.target_statement_balance);
@@ -178,14 +174,13 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
       trackCreatedTransactions(result);
 
       const duration = Date.now() - start;
-      console.warn(`Bulk mode (20 txns): ${duration}ms`);
+      console.info(`Bulk mode (20 txns): ${duration}ms`);
       expect(duration).toBeLessThan(8000);
     },
     60000,
   );
 
-  it(
-    'propagates API errors for invalid account IDs',
+  it('propagates API errors for invalid account IDs', { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 6);
       const params = buildIntegrationParams('invalid-account', budgetId, analysis.summary.target_statement_balance);
@@ -207,7 +202,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     60000,
   );
 
-  it('skips work when a rate limit error is detected', async () => {
+  it('skips work when a rate limit error is detected', { meta: { tier: 'domain', domain: 'reconciliation' } }, async () => {
     const fakeContext = { skip: vi.fn() };
     const rateLimitError = Object.assign(new Error('429 Too Many Requests'), { status: 429 });
     const result = await skipOnRateLimit(async () => {

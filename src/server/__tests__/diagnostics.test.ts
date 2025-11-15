@@ -312,38 +312,51 @@ describe('diagnostics module', () => {
       });
 
       describe('delta diagnostics', () => {
-        it('should include delta metrics when dependencies are provided', async () => {
-          mockKnowledgeStore.getStats.mockReturnValue({
-            entryCount: 2,
-            entries: { 'accounts:list:budget-1': 1000, 'transactions:list:budget-1': 1500 },
-          });
-          mockDeltaCache.getStats.mockReturnValue({
-            deltaHits: 5,
-            deltaMisses: 3,
-            mergeOperations: 7,
-            knowledgeGapEvents: 1,
-          });
+        it('should include delta metrics when include_delta is true', async () => {
+          const originalEnv = process.env.YNAB_MCP_ENABLE_DELTA;
+          process.env.YNAB_MCP_ENABLE_DELTA = 'true';
 
-          await diagnosticManager.collectDiagnostics({});
+          try {
+            mockKnowledgeStore.getStats.mockReturnValue({
+              entryCount: 2,
+              entries: { 'accounts:list:budget-1': 1000, 'transactions:list:budget-1': 1500 },
+            });
+            mockDeltaCache.getStats.mockReturnValue({
+              deltaHits: 5,
+              deltaMisses: 3,
+              mergeOperations: 7,
+              knowledgeGapEvents: 1,
+            });
 
-          expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-            expect.objectContaining({
-              delta: expect.objectContaining({
-                knowledge_entries: 2,
-                cache_entries_with_knowledge: 2,
-                delta_hits: 5,
-                delta_misses: 3,
-                delta_hit_rate: Number((5 / 8).toFixed(4)),
-                merge_operations: 7,
-                knowledge_gap_events: 1,
+            await diagnosticManager.collectDiagnostics({ include_delta: true });
+
+            expect(mockResponseFormatter.format).toHaveBeenCalledWith(
+              expect.objectContaining({
+                delta: expect.objectContaining({
+                  enabled: true,
+                  knowledge_entries: 2,
+                  knowledge_stats: { 'accounts:list:budget-1': 1000, 'transactions:list:budget-1': 1500 },
+                  feature_flag: 'true',
+                  delta_hits: 5,
+                  delta_misses: 3,
+                  delta_hit_rate: Number((5 / 8).toFixed(4)),
+                  merge_operations: 7,
+                  knowledge_gap_events: 1,
+                }),
               }),
-            }),
-          );
-          expect(mockDeltaCache.getStats).toHaveBeenCalled();
+            );
+            expect(mockDeltaCache.getStats).toHaveBeenCalled();
+          } finally {
+            if (originalEnv === undefined) {
+              delete process.env.YNAB_MCP_ENABLE_DELTA;
+            } else {
+              process.env.YNAB_MCP_ENABLE_DELTA = originalEnv;
+            }
+          }
         });
 
-        it('should skip delta metrics when include_delta is false', async () => {
-          await diagnosticManager.collectDiagnostics({ include_delta: false });
+        it('should skip delta metrics when include_delta is not explicitly true', async () => {
+          await diagnosticManager.collectDiagnostics({});
 
           expect(mockResponseFormatter.format).toHaveBeenCalledWith(
             expect.not.objectContaining({

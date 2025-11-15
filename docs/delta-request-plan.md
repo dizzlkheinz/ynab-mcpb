@@ -1328,6 +1328,8 @@ Live integration suites (run with `vitest --project integration`) now hit the re
 - `src/tools/reconciliation/__tests__/reconciliation.delta.integration.test.ts`: ensures reconciliation paths bypass cached data and inject audit metadata after forcing fresh fetches.
 - `src/tools/__tests__/deltaFetcher.scheduled.integration.test.ts`: directly exercises `DeltaFetcher.fetchScheduledTransactions` so scheduled transactions participate in caching until a public tool ships.
 
+**Note:** See §7.5 Known Gaps & Follow-ups for planned coverage improvements and test areas not yet implemented.
+
 ### 7.3 Edge Case Tests
 
 **Concurrent Access:**
@@ -1414,9 +1416,15 @@ describe('Delta performance', () => {
 
 ### 7.5 Known Gaps & Follow-ups
 
-- `handleListTransactions` still needs a live delta suite that walks the since-date/type/account filters. Add once test fixtures can safely mutate transactions without polluting production budgets.
-- Scheduled transactions only have fetcher-level coverage today. When we expose a public `handleListScheduledTransactions` tool we should port those assertions to a handler-focused integration test so cache metadata and error handling are validated end-to-end.
-- Write flows (transaction and category edits) are primarily covered by unit tests. We still plan to add disposable-budget integration tests that perform a write followed by a read to guarantee cache invalidation and knowledge propagation.
+This section is the canonical list of planned test coverage improvements. See §7.2 Integration Tests for currently implemented test suites.
+
+**Integration Test Gaps:**
+
+- **`handleListTransactions` filter coverage:** The current integration suite (§7.2) covers basic `handleListTransactions` flows, but still needs a live delta suite that walks the `since_date`, `type`, and `account_id` filter parameters. Add once test fixtures can safely mutate transactions without polluting production budgets.
+
+- **Scheduled transactions handler coverage:** Scheduled transactions only have fetcher-level coverage today via `deltaFetcher.scheduled.integration.test.ts` (§7.2). When we expose a public `handleListScheduledTransactions` tool, port those assertions to a handler-focused integration test so cache metadata and error handling are validated end-to-end.
+
+- **Write-then-read integration tests:** Write flows (transaction creates/updates, category edits) are primarily covered by unit tests. We still plan to add disposable-budget integration tests that perform a write followed by a read to guarantee cache invalidation and knowledge propagation work correctly in the full request cycle.
 
 ---
 

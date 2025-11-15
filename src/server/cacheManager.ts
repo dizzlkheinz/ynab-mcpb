@@ -67,6 +67,8 @@ export class CacheManager {
       }
 
       this.cache.delete(key);
+      this.pendingFetches.delete(key);
+      this.pendingRefresh.delete(key);
       this.misses++;
       return null;
     }
@@ -96,6 +98,8 @@ export class CacheManager {
       }
 
       this.cache.delete(key);
+      this.pendingFetches.delete(key);
+      this.pendingRefresh.delete(key);
       return false;
     }
 
@@ -165,13 +169,21 @@ export class CacheManager {
       this.cache.delete(key);
     }
     this.cache.set(key, entry);
+    // Clear any pending operations since we have fresh data
+    this.pendingFetches.delete(key);
+    this.pendingRefresh.delete(key);
   }
 
   /**
    * Clear specific cache entry
    */
   delete(key: string): boolean {
-    return this.cache.delete(key);
+    const deleted = this.cache.delete(key);
+    if (deleted) {
+      this.pendingFetches.delete(key);
+      this.pendingRefresh.delete(key);
+    }
+    return deleted;
   }
 
   /**
@@ -180,6 +192,8 @@ export class CacheManager {
   deleteMany(keys: Iterable<string>): void {
     for (const key of keys) {
       this.cache.delete(key);
+      this.pendingFetches.delete(key);
+      this.pendingRefresh.delete(key);
     }
   }
 
@@ -346,6 +360,8 @@ export class CacheManager {
     for (const [key, entry] of this.cache.entries()) {
       if (now - entry.timestamp > entry.ttl) {
         this.cache.delete(key);
+        this.pendingFetches.delete(key);
+        this.pendingRefresh.delete(key);
         cleaned++;
         this.evictions++;
       }
@@ -438,6 +454,8 @@ export class CacheManager {
       const firstKey = this.cache.keys().next().value;
       if (firstKey) {
         this.cache.delete(firstKey);
+        this.pendingFetches.delete(firstKey);
+        this.pendingRefresh.delete(firstKey);
         this.evictions++;
       } else {
         break;

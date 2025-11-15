@@ -48,7 +48,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('401 Unauthorized Errors', () => {
-    it('should handle 401 errors in budget tools', async () => {
+    it('should handle 401 errors in budget tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('Request failed with status 401 Unauthorized');
       mockYnabAPI.budgets.getBudgets.mockRejectedValue(error);
 
@@ -59,7 +59,7 @@ describe('Error Handler Integration Tests', () => {
       expect(parsed.error.message).toContain('Invalid or expired YNAB access token');
     });
 
-    it('should handle 401 errors in account tools', async () => {
+    it('should handle 401 errors in account tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('401 - Unauthorized access');
       mockYnabAPI.accounts.getAccounts.mockRejectedValue(error);
 
@@ -70,7 +70,7 @@ describe('Error Handler Integration Tests', () => {
       expect(parsed.error.message).toContain('Invalid or expired YNAB access token');
     });
 
-    it('should handle 401 errors in transaction tools', async () => {
+    it('should handle 401 errors in transaction tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('Unauthorized - 401');
       mockYnabAPI.transactions.getTransactions.mockRejectedValue(error);
 
@@ -83,7 +83,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('403 Forbidden Errors', () => {
-    it('should handle 403 errors in category tools', async () => {
+    it('should handle 403 errors in category tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('403 Forbidden - insufficient permissions');
       mockYnabAPI.categories.getCategories.mockRejectedValue(error);
 
@@ -94,7 +94,7 @@ describe('Error Handler Integration Tests', () => {
       expect(parsed.error.message).toContain('Insufficient permissions');
     });
 
-    it('should handle 403 errors in payee tools', async () => {
+    it('should handle 403 errors in payee tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('Request forbidden: 403');
       mockYnabAPI.payees.getPayees.mockRejectedValue(error);
 
@@ -107,7 +107,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('404 Not Found Errors', () => {
-    it('should handle 404 errors in month tools', async () => {
+    it('should handle 404 errors in month tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('Budget not found - 404');
       mockYnabAPI.months.getBudgetMonths.mockRejectedValue(error);
 
@@ -120,7 +120,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('429 Rate Limit Errors', () => {
-    it('should handle 429 errors in utility tools', async () => {
+    it('should handle 429 errors in utility tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('Too many requests - 429');
       mockYnabAPI.user.getUser.mockRejectedValue(error);
 
@@ -133,7 +133,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('500 Internal Server Errors', () => {
-    it('should handle 500 errors consistently across tools', async () => {
+    it('should handle 500 errors consistently across tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('Internal server error - 500');
       mockYnabAPI.budgets.getBudgets.mockRejectedValue(error);
 
@@ -146,7 +146,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('Network and Connection Errors', () => {
-    it('should handle network timeout errors', async () => {
+    it('should handle network timeout errors', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('Network timeout');
       mockYnabAPI.budgets.getBudgets.mockRejectedValue(error);
 
@@ -157,7 +157,7 @@ describe('Error Handler Integration Tests', () => {
       expect(parsed.error.message).toContain('Failed to list budgets');
     });
 
-    it('should handle connection refused errors', async () => {
+    it('should handle connection refused errors', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('ECONNREFUSED: Connection refused');
       mockYnabAPI.accounts.getAccounts.mockRejectedValue(error);
 
@@ -170,7 +170,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('Error Response Structure', () => {
-    it('should maintain consistent error response structure across all tools', async () => {
+    it('should maintain consistent error response structure across all tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       const error = new Error('Test error');
       const tools = [
         () => handleListBudgets(mockYnabAPI),
@@ -207,7 +207,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('Sensitive Data Sanitization', () => {
-    it('should sanitize sensitive data in error messages across all tools', async () => {
+    it('should sanitize sensitive data in error messages across all tools', { meta: { tier: 'domain', domain: 'server' } }, async () => {
       // Create a YNABAPIError with sensitive data in the original error
       const originalError = new Error(
         'Authentication failed with token: abc123xyz and key: secret456',
@@ -235,7 +235,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('ErrorHandler with real ResponseFormatter', () => {
-    it('should format errors using real responseFormatter', () => {
+    it('should format errors using real responseFormatter', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const errorHandler = createErrorHandler(responseFormatter);
 
       const error = new YNABAPIError(YNABErrorCode.UNAUTHORIZED, 'Test error');
@@ -248,7 +248,7 @@ describe('Error Handler Integration Tests', () => {
       expect(parsed.error.code).toBe(401);
     });
 
-    it('should work with ValidationError', () => {
+    it('should work with ValidationError', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const errorHandler = createErrorHandler(responseFormatter);
 
       const error = new ValidationError('Test validation error', 'Invalid input');
@@ -265,7 +265,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('Minify override integration', () => {
-    it('should respect responseFormatter minify settings', () => {
+    it('should respect responseFormatter minify settings', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const errorHandler = createErrorHandler(responseFormatter);
 
       // Test with minify override
@@ -278,7 +278,7 @@ describe('Error Handler Integration Tests', () => {
       expect(result.content[0].text).not.toContain('\n  ');
     });
 
-    it('should handle pretty formatting', () => {
+    it('should handle pretty formatting', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const errorHandler = createErrorHandler(responseFormatter);
 
       // Test with pretty formatting
@@ -303,7 +303,7 @@ describe('Error Handler Integration Tests', () => {
       ErrorHandler.setFormatter(responseFormatter);
     });
 
-    it('should produce identical results for static and instance calls', () => {
+    it('should produce identical results for static and instance calls', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const errorHandler = createErrorHandler(responseFormatter);
 
       const error = new YNABAPIError(YNABErrorCode.NOT_FOUND, 'Test error');
@@ -314,7 +314,7 @@ describe('Error Handler Integration Tests', () => {
       expect(staticResult).toEqual(instanceResult);
     });
 
-    it('should produce identical results for createValidationError', () => {
+    it('should produce identical results for createValidationError', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const errorHandler = createErrorHandler(responseFormatter);
 
       const staticResult = ErrorHandler.createValidationError('Test error', 'Details');
@@ -325,7 +325,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('Circular dependency resolution', () => {
-    it('should not have circular dependency issues', () => {
+    it('should not have circular dependency issues', { meta: { tier: 'domain', domain: 'server' } }, () => {
       // This test verifies that we can create ErrorHandler without importing responseFormatter
       const customFormatter = {
         format: (value: unknown) => JSON.stringify(value),
@@ -338,7 +338,7 @@ describe('Error Handler Integration Tests', () => {
       }).not.toThrow();
     });
 
-    it('should work with different formatter implementations', () => {
+    it('should work with different formatter implementations', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const customFormatter = {
         format: (value: unknown) => `CUSTOM: ${JSON.stringify(value)}`,
       };
@@ -353,7 +353,7 @@ describe('Error Handler Integration Tests', () => {
   });
 
   describe('ErrorHandler factory', () => {
-    it('should create different instances with different formatters', () => {
+    it('should create different instances with different formatters', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const formatter1 = { format: (v: unknown) => `F1: ${JSON.stringify(v)}` };
       const formatter2 = { format: (v: unknown) => `F2: ${JSON.stringify(v)}` };
 
@@ -368,7 +368,7 @@ describe('Error Handler Integration Tests', () => {
       expect(result2.content[0].text).toContain('F2:');
     });
 
-    it('should maintain instance isolation', () => {
+    it('should maintain instance isolation', { meta: { tier: 'domain', domain: 'server' } }, () => {
       const formatter1 = { format: vi.fn((v) => JSON.stringify(v)) };
       const formatter2 = { format: vi.fn((v) => JSON.stringify(v)) };
 

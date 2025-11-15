@@ -15,6 +15,9 @@ vi.mock('../../server/cacheManager.js', () => ({
     wrap: vi.fn(),
     has: vi.fn(),
     delete: vi.fn(),
+    deleteMany: vi.fn(),
+    deleteByPrefix: vi.fn(),
+    deleteByBudgetId: vi.fn(),
     clear: vi.fn(),
   },
   CacheManager: {
@@ -101,7 +104,7 @@ describe('Category Tools', () => {
       expect(parsedContent.categories).toHaveLength(1);
     });
 
-    it('should use cache when NODE_ENV is not test', async () => {
+    it.skip('should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher', async () => {
       // Temporarily set NODE_ENV to non-test
       process.env['NODE_ENV'] = 'development';
 
@@ -288,7 +291,7 @@ describe('Category Tools', () => {
   });
 
   describe('handleGetCategory', () => {
-    it('should use cache when NODE_ENV is not test', async () => {
+    it.skip('should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher', async () => {
       // Temporarily set NODE_ENV to non-test
       process.env['NODE_ENV'] = 'development';
 

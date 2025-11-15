@@ -47,7 +47,7 @@ function createYNABTransaction(
 
 describe('Recommendation Engine Integration', () => {
   describe('with account_id and budget_id provided', () => {
-    it('should generate recommendations for unmatched bank transactions', () => {
+    it('should generate recommendations for unmatched bank transactions', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       // Create CSV with unmatched bank transaction
       const csvContent = 'Date,Description,Amount\n2024-01-15,Coffee Shop,22.22';
       const ynabTransactions: ynab.TransactionDetail[] = [];
@@ -87,7 +87,7 @@ describe('Recommendation Engine Integration', () => {
       }
     });
 
-    it('should handle the EvoCarShare scenario correctly', () => {
+    it('should handle the EvoCarShare scenario correctly', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       // Test the exact scenario from documentation
       // YNAB cleared balance: $100
       // Statement balance: $122.22
@@ -136,7 +136,7 @@ describe('Recommendation Engine Integration', () => {
       expect(evoCarShareRec!.confidence).toBeGreaterThan(0.5); // Reasonable confidence
     });
 
-    it('should generate update_cleared recommendations for unmatched uncleared YNAB transactions', () => {
+    it('should generate update_cleared recommendations for unmatched uncleared YNAB transactions', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent = 'Date,Description,Amount\n2024-01-15,Coffee Shop,10.00';
 
       const ynabTransactions: ynab.TransactionDetail[] = [
@@ -181,7 +181,7 @@ describe('Recommendation Engine Integration', () => {
       }
     });
 
-    it('should generate review_duplicate for suggested matches', () => {
+    it('should generate review_duplicate for suggested matches', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       // Create a near match that should be suggested but not auto-matched
       const csvContent = 'Date,Description,Amount\n2024-01-15,Amazon Online Purchase,49.99';
 
@@ -227,7 +227,7 @@ describe('Recommendation Engine Integration', () => {
   });
 
   describe('without account_id and budget_id (backward compatibility)', () => {
-    it('should NOT generate recommendations when IDs are missing', () => {
+    it('should NOT generate recommendations when IDs are missing', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent = 'Date,Description,Amount\n2024-01-15,Test Transaction,10.00';
       const ynabTransactions: ynab.TransactionDetail[] = [];
 
@@ -253,7 +253,7 @@ describe('Recommendation Engine Integration', () => {
       expect(analysis.unmatched_bank.length).toBe(1);
     });
 
-    it('should still perform analysis correctly without recommendations', () => {
+    it('should still perform analysis correctly without recommendations', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent =
         'Date,Description,Amount\n2024-01-15,Store A,25.00\n2024-01-16,Store B,35.00';
 
@@ -290,7 +290,7 @@ describe('Recommendation Engine Integration', () => {
   });
 
   describe('complex scenarios', () => {
-    it('should generate multiple recommendations for multiple unmatched transactions', () => {
+    it('should generate multiple recommendations for multiple unmatched transactions', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent = `Date,Description,Amount
 2024-01-15,Coffee Shop,5.00
 2024-01-16,Gas Station,45.00
@@ -325,7 +325,7 @@ describe('Recommendation Engine Integration', () => {
       expect(createRecs.length).toBeGreaterThanOrEqual(3);
     });
 
-    it('should handle repeat amounts with recommendations', () => {
+    it('should handle repeat amounts with recommendations', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent = `Date,Description,Amount
 2024-01-15,Netflix,15.99
 2024-02-15,Netflix,15.99
@@ -365,7 +365,7 @@ describe('Recommendation Engine Integration', () => {
       expect(relevantRecs.length).toBeGreaterThan(0);
     });
 
-    it('should generate mixed recommendation types for complex scenario', () => {
+    it('should generate mixed recommendation types for complex scenario', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent = `Date,Description,Amount
 2024-01-15,New Store,25.00
 2024-01-16,Coffee,5.00
@@ -422,7 +422,7 @@ describe('Recommendation Engine Integration', () => {
       }
     });
 
-    it('should prioritize recommendations by priority and confidence', () => {
+    it('should prioritize recommendations by priority and confidence', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent = `Date,Description,Amount
 2024-01-15,Important Transaction,100.00
 2024-01-16,Small Purchase,5.00
@@ -461,7 +461,7 @@ describe('Recommendation Engine Integration', () => {
       }
     });
 
-    it('should handle large discrepancies with appropriate recommendations', () => {
+    it('should handle large discrepancies with appropriate recommendations', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent = `Date,Description,Amount
 2024-01-15,Large Transaction A,500.00
 2024-01-16,Large Transaction B,750.00
@@ -510,7 +510,7 @@ describe('Recommendation Engine Integration', () => {
   });
 
   describe('recommendation field validation', () => {
-    it('should include all required metadata fields', () => {
+    it('should include all required metadata fields', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent = 'Date,Description,Amount\n2024-01-15,Test,10.00';
       const ynabTransactions: ynab.TransactionDetail[] = [];
 
@@ -565,7 +565,7 @@ describe('Recommendation Engine Integration', () => {
       }
     });
 
-    it('should generate valid create_transaction parameters', () => {
+    it('should generate valid create_transaction parameters', { meta: { tier: 'domain', domain: 'reconciliation' } }, () => {
       const csvContent = 'Date,Description,Amount\n2024-01-15,Test Store,25.50';
       const ynabTransactions: ynab.TransactionDetail[] = [];
 

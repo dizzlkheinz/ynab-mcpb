@@ -65,12 +65,9 @@ describeIntegration('Delta-backed payee tool handler', () => {
   const expectCacheHit = (payload: { cached: boolean; cache_info: string }) => {
     expect(payload.cached).toBe(true);
     expect(payload.cache_info).toMatch(/cache/i);
-    if (/delta merge applied/i.test(payload.cache_info)) {
-      expect(payload.cache_info).toMatch(/delta merge applied/i);
-    }
   };
 
-  it('serves cached payee results on the second invocation', async () => {
+  it('serves cached payee results on the second invocation', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
     const params = { budget_id: testBudgetId };
     const firstCall = await handleListPayees(ynabAPI, deltaFetcher, params);
     const firstPayload = parseResponse(firstCall);

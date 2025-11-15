@@ -32,7 +32,7 @@ describe('Security Integration', () => {
   });
 
   describe('end-to-end security flow', () => {
-    it('should handle a complete successful request flow', async () => {
+    it('should handle a complete successful request flow', { meta: { tier: 'domain', domain: 'security' } }, async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
         // Mock implementation for testing
       });
@@ -81,7 +81,7 @@ describe('Security Integration', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should handle validation failures with proper logging', async () => {
+    it('should handle validation failures with proper logging', { meta: { tier: 'domain', domain: 'security' } }, async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
         // Mock implementation for testing
       });
@@ -118,7 +118,7 @@ describe('Security Integration', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should handle rate limiting with proper responses and logging', async () => {
+    it('should handle rate limiting with proper responses and logging', { meta: { tier: 'domain', domain: 'security' } }, async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
         // Mock implementation for testing
       });
@@ -172,7 +172,7 @@ describe('Security Integration', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should sanitize sensitive data in logs', async () => {
+    it('should sanitize sensitive data in logs', { meta: { tier: 'domain', domain: 'security' } }, async () => {
       const context = {
         accessToken: testAccessToken,
         toolName: 'ynab:create_transaction',
@@ -209,7 +209,7 @@ describe('Security Integration', () => {
       expect(loggedParams.api_key).toBe('***'); // Sensitive parameter name sanitized
     });
 
-    it('should handle multiple users with independent rate limits', async () => {
+    it('should handle multiple users with independent rate limits', { meta: { tier: 'domain', domain: 'security' } }, async () => {
       const token1 = 'user-1-token';
       const token2 = 'user-2-token';
 
@@ -267,7 +267,7 @@ describe('Security Integration', () => {
       expect(user2Logs[0].rateLimitInfo.remaining).toBe(2);
     });
 
-    it('should provide comprehensive security statistics', async () => {
+    it('should provide comprehensive security statistics', { meta: { tier: 'domain', domain: 'security' } }, async () => {
       const context = {
         accessToken: testAccessToken,
         toolName: 'ynab:test',
@@ -306,7 +306,7 @@ describe('Security Integration', () => {
   });
 
   describe('performance under load', () => {
-    it('should handle rapid requests efficiently', async () => {
+    it('should handle rapid requests efficiently', { meta: { tier: 'domain', domain: 'security' } }, async () => {
       const context = {
         accessToken: testAccessToken,
         toolName: 'ynab:performance_test',
@@ -345,7 +345,7 @@ describe('Security Integration', () => {
   });
 
   describe('cleanup and maintenance', () => {
-    it('should clean up expired rate limit entries', async () => {
+    it('should clean up expired rate limit entries', { meta: { tier: 'domain', domain: 'security' } }, async () => {
       // Use a very short window for testing
       const testLimiter = new RateLimiter({
         maxRequests: 5,
@@ -371,7 +371,7 @@ describe('Security Integration', () => {
       expect(testLimiter.getStatus(testToken).remaining).toBe(5);
     });
 
-    it('should maintain log size limits', async () => {
+    it('should maintain log size limits', { meta: { tier: 'domain', domain: 'security' } }, async () => {
       const testLogger = new RequestLogger({ maxLogEntries: 2 });
 
       // Add more logs than the limit

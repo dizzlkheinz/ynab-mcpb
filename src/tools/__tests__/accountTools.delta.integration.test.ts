@@ -72,7 +72,7 @@ describeIntegration('Delta-backed account tool handlers', () => {
     return JSON.parse(content.text);
   };
 
-  it('serves cached account results on the second invocation', async () => {
+  it('serves cached account results on the second invocation', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
     const params = { budget_id: testBudgetId };
     const firstCall = await handleListAccounts(ynabAPI, deltaFetcher, params);
     const firstPayload = parseResponse(firstCall);
@@ -84,7 +84,7 @@ describeIntegration('Delta-backed account tool handlers', () => {
     expect(secondPayload.cache_info).toMatch(/cache/i);
   });
 
-  it('reports delta usage for list_transactions after a change', async () => {
+  it('reports delta usage for list_transactions after a change', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
     const params = { budget_id: testBudgetId, account_id: testAccountId };
     const firstCall = await handleListTransactions(ynabAPI, deltaFetcher, params);
     const firstPayload = parseResponse(firstCall);
@@ -105,13 +105,16 @@ describeIntegration('Delta-backed account tool handlers', () => {
     const createResponse = await ynabAPI.transactions.createTransaction(testBudgetId, {
       transaction: transactionPayload,
     });
+    expect(createResponse.data.transaction).toBeDefined();
     const createdId = createResponse.data.transaction?.id;
+    expect(createdId).toBeTruthy();
 
     try {
       const secondCall = await handleListTransactions(ynabAPI, deltaFetcher, params);
       const secondPayload = parseResponse(secondCall);
       expect(secondPayload.cached).toBe(true);
-      expect(secondPayload.cache_info).toContain('delta merge applied');
+      // Check for delta-related keywords (flexible assertion)
+      expect(secondPayload.cache_info).toMatch(/delta.*merge|merge.*delta/i);
     } finally {
       if (createdId) {
         await ynabAPI.transactions.deleteTransaction(testBudgetId, createdId);

@@ -44,7 +44,7 @@ describeIntegration('Transaction Tools Integration', () => {
     secondaryAccountId = accounts[1]?.id;
   });
 
-  it('should successfully list transactions from real API', async () => {
+  it('should successfully list transactions from real API', { meta: { tier: 'core', domain: 'transactions' } }, async () => {
     const params = {
       budget_id: testBudgetId,
     };
@@ -61,7 +61,7 @@ describeIntegration('Transaction Tools Integration', () => {
     console.warn(`✅ Successfully listed ${count} transactions`);
   });
 
-  it('should successfully list transactions with account filter', async () => {
+  it('should successfully list transactions with account filter', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
     const params = {
       budget_id: testBudgetId,
       account_id: testAccountId,
@@ -81,7 +81,7 @@ describeIntegration('Transaction Tools Integration', () => {
     console.warn(`✅ Successfully listed ${response.transactions.length} transactions for account`);
   });
 
-  it('should successfully list transactions with date filter', async () => {
+  it('should successfully list transactions with date filter', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
     const params = {
       budget_id: testBudgetId,
       since_date: '2024-01-01',
@@ -99,7 +99,7 @@ describeIntegration('Transaction Tools Integration', () => {
     console.warn(`✅ Successfully listed ${count} transactions since 2024-01-01`);
   });
 
-  it('should get transaction details if transactions exist', async () => {
+  it('should get transaction details if transactions exist', { meta: { tier: 'core', domain: 'transactions' } }, async () => {
     // First get a list of transactions to find one to test with
     const listParams = {
       budget_id: testBudgetId,
@@ -128,7 +128,7 @@ describeIntegration('Transaction Tools Integration', () => {
     }
   });
 
-  it('should handle invalid budget ID gracefully', async () => {
+  it('should handle invalid budget ID gracefully', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
     const params = {
       budget_id: 'invalid-budget-id',
     };
@@ -142,7 +142,7 @@ describeIntegration('Transaction Tools Integration', () => {
     console.warn(`✅ Correctly handled invalid budget ID: ${response.error.message}`);
   });
 
-  it('should handle invalid transaction ID gracefully', async () => {
+  it('should handle invalid transaction ID gracefully', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
     const params = {
       budget_id: testBudgetId,
       transaction_id: 'invalid-transaction-id',
@@ -224,7 +224,7 @@ describeIntegration('Transaction Tools Integration', () => {
         }
       }
     });
-    it('should create two transactions via the bulk handler', async () => {
+    it('should create two transactions via the bulk handler', { meta: { tier: 'core', domain: 'transactions' } }, async () => {
       const importPrefix = randomUUID().slice(0, 30); // Keep short for import_id
       const { response } = await executeBulkCreate({
         budget_id: testBudgetId,
@@ -249,7 +249,7 @@ describeIntegration('Transaction Tools Integration', () => {
       expect(response.results.every((res: any) => res.status === 'created')).toBe(true);
     });
 
-    it('should detect duplicates when reusing import IDs', async () => {
+    it('should detect duplicates when reusing import IDs', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       const importId = `MCP:DUP:${randomUUID()}`;
       await executeBulkCreate({
         budget_id: testBudgetId,
@@ -275,7 +275,7 @@ describeIntegration('Transaction Tools Integration', () => {
       expect(response.results[0].status).toBe('duplicate');
     });
 
-    it('should invalidate caches so new transactions appear in list results', async () => {
+    it('should invalidate caches so new transactions appear in list results', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       const memo = `Cache Invalidation ${randomUUID()}`;
       await fetchBudgetTransactions(); // warm cache to ensure invalidation path executes
 
@@ -300,7 +300,7 @@ describeIntegration('Transaction Tools Integration', () => {
       ).toBe(true);
     });
 
-    it('should create transactions across multiple accounts within one batch', async () => {
+    it('should create transactions across multiple accounts within one batch', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       if (!secondaryAccountId || secondaryAccountId === testAccountId) {
         console.warn(
           'Skipping multi-account bulk test because only one account is available in this budget.',
@@ -334,7 +334,7 @@ describeIntegration('Transaction Tools Integration', () => {
       expect(accountIds.has(secondaryAccountId)).toBe(true);
     });
 
-    it('should handle large batches and report response mode', async () => {
+    it('should handle large batches and report response mode', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       const batch = Array.from({ length: 50 }, (_, index) =>
         buildTransaction({
           amount: -1000 - index,
@@ -355,7 +355,7 @@ describeIntegration('Transaction Tools Integration', () => {
       expect(['full', 'summary', 'ids_only']).toContain(response.mode);
     });
 
-    it('should support dry run mode without creating transactions', async () => {
+    it('should support dry run mode without creating transactions', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       const result = await handleCreateTransactions(ynabAPI, {
         budget_id: testBudgetId,
         dry_run: true,
@@ -371,7 +371,7 @@ describeIntegration('Transaction Tools Integration', () => {
       expect(response.summary.total_transactions).toBe(1);
     });
 
-    it('should confirm dry run does not persist data', async () => {
+    it('should confirm dry run does not persist data', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       const memo = `DryRunNoPersist ${randomUUID()}`;
       await handleCreateTransactions(ynabAPI, {
         budget_id: testBudgetId,
@@ -392,7 +392,7 @@ describeIntegration('Transaction Tools Integration', () => {
       expect(memoExists).toBe(false);
     });
 
-    it('should handle invalid budget IDs gracefully during bulk create', async () => {
+    it('should handle invalid budget IDs gracefully during bulk create', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       const result = await handleCreateTransactions(ynabAPI, {
         budget_id: 'invalid-budget-id',
         transactions: [buildTransaction()],
@@ -402,7 +402,7 @@ describeIntegration('Transaction Tools Integration', () => {
       expect(response.error.message).toBeDefined();
     });
 
-    it('should handle invalid account IDs during bulk create', async () => {
+    it('should handle invalid account IDs during bulk create', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       const result = await handleCreateTransactions(ynabAPI, {
         budget_id: testBudgetId,
         transactions: [
@@ -418,7 +418,7 @@ describeIntegration('Transaction Tools Integration', () => {
       expect(response.error.message).toBeDefined();
     });
 
-    it.skip('documents rate limiting behavior for bulk requests', () => {
+    it.skip('documents rate limiting behavior for bulk requests', { meta: { tier: 'domain', domain: 'transactions' } }, () => {
       // Intentionally skipped – provoking API rate limits is outside automated integration scope
     });
   });
@@ -450,7 +450,7 @@ describeIntegration('Transaction Tools Integration', () => {
       }
     });
 
-    it('should successfully update multiple transactions with provided metadata', async () => {
+    it('should successfully update multiple transactions with provided metadata', { meta: { tier: 'core', domain: 'transactions' } }, async () => {
       // First create test transactions
       const createResult = await handleCreateTransactions(ynabAPI, {
         budget_id: testBudgetId,
@@ -533,7 +533,7 @@ describeIntegration('Transaction Tools Integration', () => {
       console.warn('✅ Successfully updated 2 transactions with provided metadata');
     });
 
-    it('should successfully update transactions without metadata (using cache/API)', async () => {
+    it('should successfully update transactions without metadata (using cache/API)', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       // Create a test transaction
       const createResult = await handleCreateTransactions(ynabAPI, {
         budget_id: testBudgetId,
@@ -579,7 +579,7 @@ describeIntegration('Transaction Tools Integration', () => {
       console.warn('✅ Successfully updated transaction without metadata');
     });
 
-    it('should provide before/after preview in dry_run mode', async () => {
+    it('should provide before/after preview in dry_run mode', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       // Create a test transaction
       const createResult = await handleCreateTransactions(ynabAPI, {
         budget_id: testBudgetId,
@@ -640,7 +640,7 @@ describeIntegration('Transaction Tools Integration', () => {
       console.warn('✅ Dry run preview successful, no changes persisted');
     });
 
-    it('should handle partial failures gracefully', async () => {
+    it('should handle partial failures gracefully', { meta: { tier: 'domain', domain: 'transactions' } }, async () => {
       // Create one valid transaction
       const createResult = await handleCreateTransactions(ynabAPI, {
         budget_id: testBudgetId,

@@ -360,10 +360,8 @@ export async function handleUpdateCategory(
     deltaCache.invalidate(params.budget_id, 'months');
     const serverKnowledge = response.data.server_knowledge;
     if (typeof serverKnowledge === 'number') {
-      const categoryCacheKey = CacheManager.generateKey('categories', 'list', params.budget_id);
-      knowledgeStore.update(categoryCacheKey, serverKnowledge);
-      const monthListCacheKey = CacheManager.generateKey('months', 'list', params.budget_id);
-      knowledgeStore.update(monthListCacheKey, serverKnowledge);
+      knowledgeStore.update(categoriesListCacheKey, serverKnowledge);
+      knowledgeStore.update(monthsListCacheKey, serverKnowledge);
     }
 
     return {
