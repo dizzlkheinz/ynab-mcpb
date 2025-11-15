@@ -55,32 +55,6 @@ export async function handleListPayees(
   );
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      if (!useCache) {
-        // Bypass cache in test environment
-        const response = await ynabAPI.payees.getPayees(params.budget_id);
-        const payees = response.data.payees;
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: responseFormatter.format({
-                payees: payees.map((payee) => ({
-                  id: payee.id,
-                  name: payee.name,
-                  transfer_account_id: payee.transfer_account_id,
-                  deleted: payee.deleted,
-                })),
-                cached: false,
-                cache_info: 'Fresh data retrieved from YNAB API',
-              }),
-            },
-          ],
-        };
-      }
-
       const result = await deltaFetcher.fetchPayees(params.budget_id);
       const payees = result.data;
       const wasCached = result.wasCached;
@@ -120,32 +94,6 @@ export async function handleGetPayee(
 ): Promise<CallToolResult> {
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      if (!useCache) {
-        // Bypass cache in test environment
-        const response = await ynabAPI.payees.getPayeeById(params.budget_id, params.payee_id);
-        const payee = response.data.payee;
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: responseFormatter.format({
-                payee: {
-                  id: payee.id,
-                  name: payee.name,
-                  transfer_account_id: payee.transfer_account_id,
-                  deleted: payee.deleted,
-                },
-                cached: false,
-                cache_info: 'Fresh data retrieved from YNAB API',
-              }),
-            },
-          ],
-        };
-      }
-
       // Use enhanced CacheManager wrap method
       const cacheKey = CacheManager.generateKey('payee', 'get', params.budget_id, params.payee_id);
       const wasCached = cacheManager.has(cacheKey);

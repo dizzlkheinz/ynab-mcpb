@@ -81,40 +81,6 @@ export async function handleListAccounts(
   );
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      if (!useCache) {
-        // Bypass cache in test environment
-        const response = await ynabAPI.accounts.getAccounts(params.budget_id);
-        const accounts = response.data.accounts;
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: responseFormatter.format({
-                accounts: accounts.map((account) => ({
-                  id: account.id,
-                  name: account.name,
-                  type: account.type,
-                  on_budget: account.on_budget,
-                  closed: account.closed,
-                  note: account.note,
-                  balance: milliunitsToAmount(account.balance),
-                  cleared_balance: milliunitsToAmount(account.cleared_balance),
-                  uncleared_balance: milliunitsToAmount(account.uncleared_balance),
-                  transfer_payee_id: account.transfer_payee_id,
-                  direct_import_linked: account.direct_import_linked,
-                  direct_import_in_error: account.direct_import_in_error,
-                })),
-                cached: false,
-                cache_info: 'Fresh data retrieved from YNAB API',
-              }),
-            },
-          ],
-        };
-      }
-
       const result = await deltaFetcher.fetchAccounts(params.budget_id);
       const accounts = result.data;
       const wasCached = result.wasCached;
@@ -162,40 +128,6 @@ export async function handleGetAccount(
 ): Promise<CallToolResult> {
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      if (!useCache) {
-        // Bypass cache in test environment
-        const response = await ynabAPI.accounts.getAccountById(params.budget_id, params.account_id);
-        const account = response.data.account;
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: responseFormatter.format({
-                account: {
-                  id: account.id,
-                  name: account.name,
-                  type: account.type,
-                  on_budget: account.on_budget,
-                  closed: account.closed,
-                  note: account.note,
-                  balance: milliunitsToAmount(account.balance),
-                  cleared_balance: milliunitsToAmount(account.cleared_balance),
-                  uncleared_balance: milliunitsToAmount(account.uncleared_balance),
-                  transfer_payee_id: account.transfer_payee_id,
-                  direct_import_linked: account.direct_import_linked,
-                  direct_import_in_error: account.direct_import_in_error,
-                },
-                cached: false,
-                cache_info: 'Fresh data retrieved from YNAB API',
-              }),
-            },
-          ],
-        };
-      }
-
       // Use enhanced CacheManager wrap method
       const cacheKey = CacheManager.generateKey(
         'account',

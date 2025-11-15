@@ -72,32 +72,6 @@ export async function handleListCategories(
   );
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      if (!useCache) {
-        // Bypass cache in test environment
-        const response = await ynabAPI.categories.getCategories(params.budget_id);
-        const categoryGroups = response.data.category_groups;
-
-        // Flatten categories from all category groups
-        const allCategories = categoryGroups.flatMap((group) =>
-          group.categories.map((category) => ({
-            id: category.id,
-            category_group_id: category.category_group_id,
-            category_group_name: group.name,
-            name: category.name,
-            hidden: category.hidden,
-            original_category_group_id: category.original_category_group_id,
-            note: category.note,
-            budgeted: milliunitsToAmount(category.budgeted),
-            activity: milliunitsToAmount(category.activity),
-            balance: milliunitsToAmount(category.balance),
-            goal_type: category.goal_type,
-            goal_creation_month: category.goal_creation_month,
-            goal_target: category.goal_target,
-            goal_target_month: category.goal_target_month,
-            goal_percentage_complete: category.goal_percentage_complete,
-          })),
         );
 
         return {
@@ -118,8 +92,6 @@ export async function handleListCategories(
             },
           ],
         };
-      }
-
       const result = await deltaFetcher.fetchCategories(params.budget_id);
       const categoryGroups = result.data;
       const wasCached = result.wasCached;
@@ -181,45 +153,6 @@ export async function handleGetCategory(
 ): Promise<CallToolResult> {
   return await withToolErrorHandling(
     async () => {
-      const useCache = process.env['NODE_ENV'] !== 'test';
-
-      if (!useCache) {
-        // Bypass cache in test environment
-        const response = await ynabAPI.categories.getCategoryById(
-          params.budget_id,
-          params.category_id,
-        );
-        const category = response.data.category;
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: responseFormatter.format({
-                category: {
-                  id: category.id,
-                  category_group_id: category.category_group_id,
-                  name: category.name,
-                  hidden: category.hidden,
-                  original_category_group_id: category.original_category_group_id,
-                  note: category.note,
-                  budgeted: milliunitsToAmount(category.budgeted),
-                  activity: milliunitsToAmount(category.activity),
-                  balance: milliunitsToAmount(category.balance),
-                  goal_type: category.goal_type,
-                  goal_creation_month: category.goal_creation_month,
-                  goal_target: category.goal_target,
-                  goal_target_month: category.goal_target_month,
-                  goal_percentage_complete: category.goal_percentage_complete,
-                },
-                cached: false,
-                cache_info: 'Fresh data retrieved from YNAB API',
-              }),
-            },
-          ],
-        };
-      }
-
       // Use enhanced CacheManager wrap method
       const cacheKey = CacheManager.generateKey(
         'category',
