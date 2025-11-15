@@ -7,14 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2025-01-14
+
 ### Added
 
-- **Phase 5: Enhanced Recommendations for Reconciliation** - Actionable recommendation engine that analyzes reconciliation results and generates specific suggestions for resolving discrepancies
-  - Four recommendation types: create_transaction, update_cleared, review_duplicate, manual_review
-  - Confidence scoring (0-1.0) and priority levels (high/medium/low)
-  - Complete executable parameters for YNAB tool calls
-  - Discriminated union types for type-safe recommendation handling
-  - 36 comprehensive unit tests and 13 integration tests
+- **Tiered Integration Testing Infrastructure** - Comprehensive three-tier testing system for improved reliability
+  - Core integration tests: Budget-agnostic tests for fundamental operations
+  - Domain integration tests: Budget-specific tests organized by functional domain
+  - Throttled execution with configurable delays to respect API rate limits
+  - Enhanced test isolation and parallel execution support
+- **Delta Request System** - Efficient incremental data fetching using YNAB's delta protocol
+  - `ServerKnowledgeStore`: Tracks server knowledge values for all delta-supported endpoints
+  - `DeltaCache`: Specialized caching layer for delta-backed data with conflict detection
+  - `DeltaFetcher`: Unified interface for delta-backed API calls with automatic cache management
+  - 70-90% reduction in API response size for cached data
+  - Automatic fallback to full refresh when conflicts detected
+- **Bulk Transaction Operations** - High-performance batch transaction handling
+  - `create_transactions`: Create up to 100 transactions in a single API call
+  - `update_transactions`: Update up to 100 transactions with automatic cache invalidation
+  - Duplicate detection via import_id with partial success reporting
+  - Correlation metadata for tracking individual transaction results
+  - Dry-run mode for safe validation before execution
+- **Enhanced Transaction Metadata** - Improved transaction tracking and cache management
+  - Optional `original_account_id` and `original_date` metadata for efficient cache invalidation
+  - Preview functionality for transaction updates before execution
+  - Automatic response size management for large batch operations
+
+### Changed
+
+- Tool count increased from 28 to 30 with addition of bulk transaction operations
+- Delta-backed tools now use `DeltaFetcher` for automatic cache optimization
+- Write operations now support `DeltaCache` and `ServerKnowledgeStore` for better consistency
+- Integration tests reorganized into core and domain-specific suites for better coverage
+
+### Fixed
+
+- Linting issues across codebase with comprehensive ESLint configuration
+- Cache invalidation now properly handles transaction updates across accounts
+- Response size management prevents oversized payloads in bulk operations
 
 ## [0.10.0] - 2025-11-03
 

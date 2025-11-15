@@ -19,7 +19,7 @@ This document provides comprehensive documentation for all tools available in th
 
 ## Overview
 
-The YNAB MCP Server provides 28 tools that enable AI assistants to interact with YNAB data. All tools follow consistent patterns for parameters, responses, and error handling.
+The YNAB MCP Server provides 30 tools that enable AI assistants to interact with YNAB data. All tools follow consistent patterns for parameters, responses, and error handling.
 
 ### Tool Naming Convention
 

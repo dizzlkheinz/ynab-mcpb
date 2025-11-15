@@ -6,14 +6,14 @@ Quick reference guide for all available tools. For detailed documentation, see t
 
 - [Budget Management](#budget-management) (4 tools)
 - [Account Management](#account-management) (3 tools)
-- [Transaction Management](#transaction-management) (9 tools)
+- [Transaction Management](#transaction-management) (11 tools)
 - [Category Management](#category-management) (3 tools)
 - [Payee Management](#payee-management) (2 tools)
 - [Monthly Data](#monthly-data) (2 tools)
 - [Utilities](#utilities) (2 tools)
 - [Diagnostics](#diagnostics) (3 tools)
 
-**Total: 28 tools**
+**Total: 30 tools**
 
 ---
 
