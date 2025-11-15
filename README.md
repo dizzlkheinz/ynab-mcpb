@@ -1,6 +1,8 @@
 # YNAB MCP Server
 
 [![Download latest DXT](https://img.shields.io/badge/Download-latest%20DXT-blue?logo=github)](https://github.com/dizzlkheinz/mcp-for-ynab/releases/latest)
+[![npm version](https://img.shields.io/npm/v/@dizzlkheinz/ynab-mcp-server.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcp-server)
+[![npm downloads](https://img.shields.io/npm/dm/@dizzlkheinz/ynab-mcp-server.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcp-server)
 
 [![Release](https://img.shields.io/github/v/release/dizzlkheinz/mcp-for-ynab?sort=semver)](https://github.com/dizzlkheinz/mcp-for-ynab/releases/latest)
 [![Release DXT](https://github.com/dizzlkheinz/mcp-for-ynab/actions/workflows/release.yml/badge.svg)](https://github.com/dizzlkheinz/mcp-for-ynab/actions/workflows/release.yml)
