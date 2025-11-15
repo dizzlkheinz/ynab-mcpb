@@ -4,6 +4,8 @@ import { z } from 'zod/v4';
 import { withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
+import type { DeltaFetcher } from './deltaFetcher.js';
+import { resolveDeltaFetcherArgs } from './deltaSupport.js';
 
 /**
  * Schema for ynab:list_payees tool parameters
@@ -34,8 +36,23 @@ export type GetPayeeParams = z.infer<typeof GetPayeeSchema>;
  */
 export async function handleListPayees(
   ynabAPI: ynab.API,
+  deltaFetcher: DeltaFetcher,
   params: ListPayeesParams,
+): Promise<CallToolResult>;
+export async function handleListPayees(
+  ynabAPI: ynab.API,
+  params: ListPayeesParams,
+): Promise<CallToolResult>;
+export async function handleListPayees(
+  ynabAPI: ynab.API,
+  deltaFetcherOrParams: DeltaFetcher | ListPayeesParams,
+  maybeParams?: ListPayeesParams,
 ): Promise<CallToolResult> {
+  const { deltaFetcher, params } = resolveDeltaFetcherArgs(
+    ynabAPI,
+    deltaFetcherOrParams,
+    maybeParams,
+  );
   return await withToolErrorHandling(
     async () => {
       const useCache = process.env['NODE_ENV'] !== 'test';
@@ -64,16 +81,9 @@ export async function handleListPayees(
         };
       }
 
-      // Use enhanced CacheManager wrap method
-      const cacheKey = CacheManager.generateKey('payees', 'list', params.budget_id);
-      const wasCached = cacheManager.has(cacheKey);
-      const payees = await cacheManager.wrap<ynab.Payee[]>(cacheKey, {
-        ttl: CACHE_TTLS.PAYEES,
-        loader: async () => {
-          const response = await ynabAPI.payees.getPayees(params.budget_id);
-          return response.data.payees;
-        },
-      });
+      const result = await deltaFetcher.fetchPayees(params.budget_id);
+      const payees = result.data;
+      const wasCached = result.wasCached;
 
       return {
         content: [
@@ -88,7 +98,7 @@ export async function handleListPayees(
               })),
               cached: wasCached,
               cache_info: wasCached
-                ? 'Data retrieved from cache for improved performance'
+                ? `Data retrieved from cache for improved performance${result.usedDelta ? ' (delta merge applied)' : ''}`
                 : 'Fresh data retrieved from YNAB API',
             }),
           },

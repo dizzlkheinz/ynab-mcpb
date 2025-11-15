@@ -1318,35 +1318,15 @@ describe('handleReconcileAccount', () => {
 
 ### 7.2 Integration Tests
 
-**`src/tools/__tests__/accountTools.delta.integration.test.ts`:**
-```typescript
-describe('handleListAccounts with delta', () => {
-  it('should use delta on second call', async () => {
-    // First call - full refresh
-    const result1 = await handleListAccounts(ynabAPI, deltaFetcher, { budget_id });
-    expect(result1.usedDelta).toBe(false);
+Live integration suites (run with `vitest --project integration`) now hit the real YNAB API and verify delta caching, cache hints, and full-refresh fallbacks:
 
-    // Simulate account update in YNAB (mock returns delta)
-    mockYnabAPI.accounts.getAccounts.mockResolvedValueOnce({
-      data: {
-        accounts: [{ id: 'acc1', name: 'Updated Name', deleted: false }],
-        server_knowledge: 12346,
-      },
-    });
-
-    // Second call - delta
-    const result2 = await handleListAccounts(ynabAPI, deltaFetcher, { budget_id });
-    expect(result2.usedDelta).toBe(true);
-    expect(result2.data).toContainEqual(
-      expect.objectContaining({ id: 'acc1', name: 'Updated Name' })
-    );
-  });
-
-  it('should handle deleted entities', async () => {
-    // ... test deleted: true handling ...
-  });
-});
-```
+- `src/tools/__tests__/accountTools.delta.integration.test.ts`: covers `handleListAccounts` and `handleListTransactions`, ensuring first-call priming, second-call cache hits, and delta cache messaging once writes occur.
+- `src/tools/__tests__/categoryTools.delta.integration.test.ts`: validates `handleListCategories` emits `cached: true` plus a `cache_info` hint for the follow-up request.
+- `src/tools/__tests__/payeeTools.delta.integration.test.ts`: mirrors the category suite for `handleListPayees`, guarding cache wiring on real responses.
+- `src/tools/__tests__/monthTools.delta.integration.test.ts`: proves `handleListMonths` reuses cached month summaries and surfaces `(delta merge applied)` when appropriate.
+- `src/tools/__tests__/budgetTools.delta.integration.test.ts`: confirms `handleListBudgets` reuses the cached global summaries with proper telemetry.
+- `src/tools/reconciliation/__tests__/reconciliation.delta.integration.test.ts`: ensures reconciliation paths bypass cached data and inject audit metadata after forcing fresh fetches.
+- `src/tools/__tests__/deltaFetcher.scheduled.integration.test.ts`: directly exercises `DeltaFetcher.fetchScheduledTransactions` so scheduled transactions participate in caching until a public tool ships.
 
 ### 7.3 Edge Case Tests
 
@@ -1431,6 +1411,12 @@ describe('Delta performance', () => {
   });
 });
 ```
+
+### 7.5 Known Gaps & Follow-ups
+
+- `handleListTransactions` still needs a live delta suite that walks the since-date/type/account filters. Add once test fixtures can safely mutate transactions without polluting production budgets.
+- Scheduled transactions only have fetcher-level coverage today. When we expose a public `handleListScheduledTransactions` tool we should port those assertions to a handler-focused integration test so cache metadata and error handling are validated end-to-end.
+- Write flows (transaction and category edits) are primarily covered by unit tests. We still plan to add disposable-budget integration tests that perform a write followed by a read to guarantee cache invalidation and knowledge propagation.
 
 ---
 

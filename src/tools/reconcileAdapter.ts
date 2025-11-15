@@ -21,6 +21,7 @@ interface AdapterOptions {
   accountId?: string;
   currencyCode?: string;
   csvFormat?: CsvFormatPayload;
+  auditMetadata?: Record<string, unknown>;
 }
 
 interface DualChannelPayload {
@@ -272,6 +273,10 @@ export const buildReconciliationPayload = (
 
   if (executionView) {
     structured['execution'] = executionView;
+  }
+
+  if (options.auditMetadata) {
+    structured['audit'] = options.auditMetadata;
   }
 
   return {

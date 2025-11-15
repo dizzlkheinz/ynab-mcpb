@@ -6,6 +6,8 @@
  */
 
 import type { CacheManager } from './cacheManager.js';
+import type { ServerKnowledgeStore } from './serverKnowledgeStore.js';
+import type { DeltaCache } from './deltaCache.js';
 
 /**
  * Security stats provider interface
@@ -30,6 +32,7 @@ export interface DiagnosticOptions {
   include_environment?: boolean;
   include_security?: boolean;
   include_cache?: boolean;
+  include_delta?: boolean;
 }
 
 /**
@@ -95,6 +98,8 @@ export interface DiagnosticDependencies {
   cacheManager: CacheManager;
   responseFormatter: ResponseFormatter;
   serverVersion: string;
+  serverKnowledgeStore?: ServerKnowledgeStore;
+  deltaCache?: DeltaCache;
 }
 
 /**
@@ -302,6 +307,29 @@ export class DiagnosticManager {
       }
 
       diagnostics['cache'] = cacheData;
+    }
+
+    if (
+      options.include_delta !== false &&
+      this.dependencies.serverKnowledgeStore &&
+      this.dependencies.deltaCache
+    ) {
+      const knowledgeStats = this.dependencies.serverKnowledgeStore.getStats();
+      const deltaStats = this.dependencies.deltaCache.getStats();
+      const totalDeltaRequests = deltaStats.deltaHits + deltaStats.deltaMisses;
+      const deltaHitRate = totalDeltaRequests > 0 ? deltaStats.deltaHits / totalDeltaRequests : 0;
+      diagnostics['delta'] = {
+        enabled: process.env['YNAB_MCP_ENABLE_DELTA'] === 'true',
+        knowledge_entries: knowledgeStats.entryCount,
+        knowledge_stats: knowledgeStats.entries,
+        cache_entries_with_knowledge: Object.keys(knowledgeStats.entries).length,
+        feature_flag: process.env['YNAB_MCP_ENABLE_DELTA'] ?? 'false',
+        delta_hits: deltaStats.deltaHits,
+        delta_misses: deltaStats.deltaMisses,
+        delta_hit_rate: Number(deltaHitRate.toFixed(4)),
+        merge_operations: deltaStats.mergeOperations,
+        knowledge_gap_events: deltaStats.knowledgeGapEvents,
+      };
     }
 
     return {

@@ -2,8 +2,9 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
 import { z } from 'zod/v4';
 import { withToolErrorHandling } from '../types/index.js';
-import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
 import { responseFormatter } from '../server/responseFormatter.js';
+import type { DeltaFetcher } from './deltaFetcher.js';
+import { resolveDeltaFetcherArgs } from './deltaSupport.js';
 
 /**
  * Schema for ynab:get_budget tool parameters
@@ -20,7 +21,24 @@ export type GetBudgetParams = z.infer<typeof GetBudgetSchema>;
  * Handles the ynab:list_budgets tool call
  * Lists all budgets associated with the user's account
  */
-export async function handleListBudgets(ynabAPI: ynab.API): Promise<CallToolResult> {
+export async function handleListBudgets(
+  ynabAPI: ynab.API,
+  deltaFetcher: DeltaFetcher,
+  _params: Record<string, never>,
+): Promise<CallToolResult>;
+export async function handleListBudgets(
+  ynabAPI: ynab.API,
+): Promise<CallToolResult>;
+export async function handleListBudgets(
+  ynabAPI: ynab.API,
+  deltaFetcherOrParams?: DeltaFetcher | Record<string, never>,
+  maybeParams?: Record<string, never>,
+): Promise<CallToolResult> {
+  const { deltaFetcher } = resolveDeltaFetcherArgs(
+    ynabAPI,
+    (deltaFetcherOrParams ?? {}) as DeltaFetcher | Record<string, never>,
+    maybeParams,
+  );
   return await withToolErrorHandling(
     async () => {
       const useCache = process.env['NODE_ENV'] !== 'test';
@@ -52,16 +70,9 @@ export async function handleListBudgets(ynabAPI: ynab.API): Promise<CallToolResu
         };
       }
 
-      // Use enhanced CacheManager wrap method
-      const cacheKey = CacheManager.generateKey('budgets', 'list');
-      const wasCached = cacheManager.has(cacheKey);
-      const budgets = await cacheManager.wrap<ynab.BudgetSummary[]>(cacheKey, {
-        ttl: CACHE_TTLS.BUDGETS,
-        loader: async () => {
-          const response = await ynabAPI.budgets.getBudgets();
-          return response.data.budgets;
-        },
-      });
+      const result = await deltaFetcher.fetchBudgets();
+      const budgets = result.data;
+      const wasCached = result.wasCached;
 
       return {
         content: [
@@ -79,7 +90,7 @@ export async function handleListBudgets(ynabAPI: ynab.API): Promise<CallToolResu
               })),
               cached: wasCached,
               cache_info: wasCached
-                ? 'Data retrieved from cache for improved performance'
+                ? `Data retrieved from cache for improved performance${result.usedDelta ? ' (delta merge applied)' : ''}`
                 : 'Fresh data retrieved from YNAB API',
             }),
           },

@@ -47,7 +47,7 @@ export class ServerKnowledgeStore {
    * @param keyPattern - Optional pattern to match (uses key.includes(keyPattern))
    */
   reset(keyPattern?: string): void {
-    if (keyPattern === undefined) {
+    if (keyPattern === undefined || keyPattern === '') {
       this.knowledge.clear();
       return;
     }
@@ -63,7 +63,6 @@ export class ServerKnowledgeStore {
       this.knowledge.delete(key);
     }
   }
-
   /**
    * Convenience helper to reset all knowledge entries for a specific budget.
    *

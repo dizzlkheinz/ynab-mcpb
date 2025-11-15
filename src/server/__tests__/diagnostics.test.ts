@@ -31,6 +31,14 @@ const mockResponseFormatter = {
   format: vi.fn((data) => JSON.stringify(data)),
 };
 
+const mockKnowledgeStore = {
+  getStats: vi.fn(),
+};
+
+const mockDeltaCache = {
+  getStats: vi.fn(),
+};
+
 // Mock process functions for testing
 const mockProcess = {
   uptime: vi.fn(),
@@ -55,6 +63,8 @@ describe('diagnostics module', () => {
       cacheManager: mockCacheManager as any,
       responseFormatter: mockResponseFormatter,
       serverVersion: '1.0.0',
+      serverKnowledgeStore: mockKnowledgeStore as any,
+      deltaCache: mockDeltaCache as any,
     };
 
     diagnosticManager = new DiagnosticManager(dependencies);
@@ -95,6 +105,13 @@ describe('diagnostics module', () => {
       { key: 'key1', timestamp: Date.now(), ttl: 1000, dataType: 'string', isExpired: false },
       { key: 'key2', timestamp: Date.now(), ttl: 2000, dataType: 'object', isExpired: false },
     ]);
+    mockKnowledgeStore.getStats.mockReturnValue({ entryCount: 0, entries: {} });
+    mockDeltaCache.getStats.mockReturnValue({
+      deltaHits: 0,
+      deltaMisses: 0,
+      mergeOperations: 0,
+      knowledgeGapEvents: 0,
+    });
   });
 
   describe('DiagnosticManager', () => {
@@ -291,6 +308,49 @@ describe('diagnostics module', () => {
           } finally {
             process.env = originalEnv;
           }
+        });
+      });
+
+      describe('delta diagnostics', () => {
+        it('should include delta metrics when dependencies are provided', async () => {
+          mockKnowledgeStore.getStats.mockReturnValue({
+            entryCount: 2,
+            entries: { 'accounts:list:budget-1': 1000, 'transactions:list:budget-1': 1500 },
+          });
+          mockDeltaCache.getStats.mockReturnValue({
+            deltaHits: 5,
+            deltaMisses: 3,
+            mergeOperations: 7,
+            knowledgeGapEvents: 1,
+          });
+
+          await diagnosticManager.collectDiagnostics({});
+
+          expect(mockResponseFormatter.format).toHaveBeenCalledWith(
+            expect.objectContaining({
+              delta: expect.objectContaining({
+                knowledge_entries: 2,
+                cache_entries_with_knowledge: 2,
+                delta_hits: 5,
+                delta_misses: 3,
+                delta_hit_rate: Number((5 / 8).toFixed(4)),
+                merge_operations: 7,
+                knowledge_gap_events: 1,
+              }),
+            }),
+          );
+          expect(mockDeltaCache.getStats).toHaveBeenCalled();
+        });
+
+        it('should skip delta metrics when include_delta is false', async () => {
+          await diagnosticManager.collectDiagnostics({ include_delta: false });
+
+          expect(mockResponseFormatter.format).toHaveBeenCalledWith(
+            expect.not.objectContaining({
+              delta: expect.anything(),
+            }),
+          );
+          expect(mockDeltaCache.getStats).not.toHaveBeenCalled();
         });
       });
 

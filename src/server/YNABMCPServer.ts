@@ -81,7 +81,7 @@ import {
   ListMonthsSchema,
 } from '../tools/monthTools.js';
 import { handleGetUser, handleConvertAmount, ConvertAmountSchema } from '../tools/utilityTools.js';
-import { cacheManager, CacheManager, CACHE_TTLS } from './cacheManager.js';
+import { cacheManager, CacheManager } from './cacheManager.js';
 import { responseFormatter } from './responseFormatter.js';
 import {
   ToolRegistry,
@@ -94,6 +94,9 @@ import { validateEnvironment } from './config.js';
 import { ResourceManager } from './resources.js';
 import { PromptManager } from './prompts.js';
 import { DiagnosticManager } from './diagnostics.js';
+import { ServerKnowledgeStore } from './serverKnowledgeStore.js';
+import { DeltaCache } from './deltaCache.js';
+import { DeltaFetcher } from '../tools/deltaFetcher.js';
 
 /**
  * YNAB MCP Server class that provides integration with You Need A Budget API
@@ -108,6 +111,9 @@ export class YNABMCPServer {
   private toolRegistry: ToolRegistry;
   private resourceManager: ResourceManager;
   private promptManager: PromptManager;
+  private serverKnowledgeStore: ServerKnowledgeStore;
+  private deltaCache: DeltaCache;
+  private deltaFetcher: DeltaFetcher;
   private diagnosticManager: DiagnosticManager;
   private errorHandler: ErrorHandler;
 
@@ -208,11 +214,17 @@ export class YNABMCPServer {
 
     this.promptManager = new PromptManager();
 
+    this.serverKnowledgeStore = new ServerKnowledgeStore();
+    this.deltaCache = new DeltaCache(cacheManager, this.serverKnowledgeStore);
+    this.deltaFetcher = new DeltaFetcher(this.ynabAPI, this.deltaCache);
+
     this.diagnosticManager = new DiagnosticManager({
       securityMiddleware: SecurityMiddleware,
       cacheManager,
       responseFormatter,
       serverVersion: this.serverVersion,
+      serverKnowledgeStore: this.serverKnowledgeStore,
+      deltaCache: this.deltaCache,
     });
 
     this.setupToolRegistry();
@@ -337,6 +349,29 @@ export class YNABMCPServer {
       async (_payload: ToolExecutionPayload<Record<string, unknown>>): Promise<CallToolResult> =>
         handler(this.ynabAPI);
 
+    const adaptWithDelta =
+      <TInput extends Record<string, unknown>>(
+        handler: (
+          ynabAPI: ynab.API,
+          deltaFetcher: DeltaFetcher,
+          params: TInput,
+        ) => Promise<CallToolResult>,
+      ) =>
+      async ({ input }: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
+        handler(this.ynabAPI, this.deltaFetcher, input);
+
+    const adaptWrite =
+      <TInput extends Record<string, unknown>>(
+        handler: (
+          ynabAPI: ynab.API,
+          deltaCache: DeltaCache,
+          knowledgeStore: ServerKnowledgeStore,
+          params: TInput,
+        ) => Promise<CallToolResult>,
+      ) =>
+      async ({ input }: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
+        handler(this.ynabAPI, this.deltaCache, this.serverKnowledgeStore, input);
+
     const resolveBudgetId = <
       TInput extends { budget_id?: string | undefined },
     >(): DefaultArgumentResolver<TInput> => {
@@ -362,6 +397,7 @@ export class YNABMCPServer {
         include_server: z.boolean().default(true),
         include_security: z.boolean().default(true),
         include_cache: z.boolean().default(true),
+        include_delta: z.boolean().default(true),
       })
       .strict();
     const setOutputFormatSchema = z
@@ -375,7 +411,7 @@ export class YNABMCPServer {
       name: 'list_budgets',
       description: "List all budgets associated with the user's account",
       inputSchema: emptyObjectSchema,
-      handler: adaptNoInput(handleListBudgets),
+      handler: adaptWithDelta(handleListBudgets),
     });
 
     register({
@@ -449,7 +485,7 @@ export class YNABMCPServer {
       name: 'list_accounts',
       description: 'List all accounts for a specific budget (uses default budget if not specified)',
       inputSchema: ListAccountsSchema,
-      handler: adapt(handleListAccounts),
+      handler: adaptWithDelta(handleListAccounts),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListAccountsSchema>>(),
     });
 
@@ -465,7 +501,7 @@ export class YNABMCPServer {
       name: 'create_account',
       description: 'Create a new account in the specified budget',
       inputSchema: CreateAccountSchema,
-      handler: adapt(handleCreateAccount),
+      handler: adaptWrite(handleCreateAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateAccountSchema>>(),
     });
 
@@ -473,7 +509,7 @@ export class YNABMCPServer {
       name: 'list_transactions',
       description: 'List transactions for a budget with optional filtering',
       inputSchema: ListTransactionsSchema,
-      handler: adapt(handleListTransactions),
+      handler: adaptWithDelta(handleListTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListTransactionsSchema>>(),
     });
 
@@ -499,7 +535,7 @@ export class YNABMCPServer {
       description:
         'Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).',
       inputSchema: ReconcileAccountSchema,
-      handler: adapt(handleReconcileAccount),
+      handler: adaptWithDelta(handleReconcileAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
     });
 
@@ -515,7 +551,7 @@ export class YNABMCPServer {
       name: 'create_transaction',
       description: 'Create a new transaction in the specified budget and account',
       inputSchema: CreateTransactionSchema,
-      handler: adapt(handleCreateTransaction),
+      handler: adaptWrite(handleCreateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionSchema>>(),
     });
 
@@ -524,7 +560,7 @@ export class YNABMCPServer {
       description:
         'Create multiple transactions in a single batch (1-100 items) with duplicate detection, dry-run validation, and automatic response size management with correlation metadata.',
       inputSchema: CreateTransactionsSchema,
-      handler: adapt(handleCreateTransactions),
+      handler: adaptWrite(handleCreateTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionsSchema>>(),
     });
 
@@ -533,7 +569,7 @@ export class YNABMCPServer {
       description:
         'Update multiple transactions in a single batch (1-100 items) with dry-run validation, automatic cache invalidation, and response size management. Supports optional original_account_id and original_date metadata for efficient cache invalidation.',
       inputSchema: UpdateTransactionsSchema,
-      handler: adapt(handleUpdateTransactions),
+      handler: adaptWrite(handleUpdateTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionsSchema>>(),
     });
 
@@ -541,7 +577,7 @@ export class YNABMCPServer {
       name: 'create_receipt_split_transaction',
       description: 'Create a split transaction from receipt items with proportional tax allocation',
       inputSchema: CreateReceiptSplitTransactionSchema,
-      handler: adapt(handleCreateReceiptSplitTransaction),
+      handler: adaptWrite(handleCreateReceiptSplitTransaction),
       defaultArgumentResolver:
         resolveBudgetId<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
     });
@@ -550,7 +586,7 @@ export class YNABMCPServer {
       name: 'update_transaction',
       description: 'Update an existing transaction',
       inputSchema: UpdateTransactionSchema,
-      handler: adapt(handleUpdateTransaction),
+      handler: adaptWrite(handleUpdateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionSchema>>(),
     });
 
@@ -558,7 +594,7 @@ export class YNABMCPServer {
       name: 'delete_transaction',
       description: 'Delete a transaction from the specified budget',
       inputSchema: DeleteTransactionSchema,
-      handler: adapt(handleDeleteTransaction),
+      handler: adaptWrite(handleDeleteTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof DeleteTransactionSchema>>(),
     });
 
@@ -566,7 +602,7 @@ export class YNABMCPServer {
       name: 'list_categories',
       description: 'List all categories for a specific budget',
       inputSchema: ListCategoriesSchema,
-      handler: adapt(handleListCategories),
+      handler: adaptWithDelta(handleListCategories),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListCategoriesSchema>>(),
     });
 
@@ -582,7 +618,7 @@ export class YNABMCPServer {
       name: 'update_category',
       description: 'Update the budgeted amount for a category in the current month',
       inputSchema: UpdateCategorySchema,
-      handler: adapt(handleUpdateCategory),
+      handler: adaptWrite(handleUpdateCategory),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateCategorySchema>>(),
     });
 
@@ -590,7 +626,7 @@ export class YNABMCPServer {
       name: 'list_payees',
       description: 'List all payees for a specific budget',
       inputSchema: ListPayeesSchema,
-      handler: adapt(handleListPayees),
+      handler: adaptWithDelta(handleListPayees),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListPayeesSchema>>(),
     });
 
@@ -614,7 +650,7 @@ export class YNABMCPServer {
       name: 'list_months',
       description: 'List all months summary data for a budget',
       inputSchema: ListMonthsSchema,
-      handler: adapt(handleListMonths),
+      handler: adaptWithDelta(handleListMonths),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListMonthsSchema>>(),
     });
 
@@ -799,32 +835,9 @@ export class YNABMCPServer {
     try {
       // Run all cache warming operations in parallel
       await Promise.all([
-        // Warm accounts cache
-        cacheManager.wrap(CacheManager.generateKey('accounts', 'list', budgetId), {
-          ttl: CACHE_TTLS.ACCOUNTS,
-          loader: async () => {
-            const response = await this.ynabAPI.accounts.getAccounts(budgetId);
-            return response.data.accounts;
-          },
-        }),
-
-        // Warm categories cache
-        cacheManager.wrap(CacheManager.generateKey('categories', 'list', budgetId), {
-          ttl: CACHE_TTLS.CATEGORIES,
-          loader: async () => {
-            const response = await this.ynabAPI.categories.getCategories(budgetId);
-            return response.data.category_groups;
-          },
-        }),
-
-        // Warm payees cache
-        cacheManager.wrap(CacheManager.generateKey('payees', 'list', budgetId), {
-          ttl: CACHE_TTLS.PAYEES,
-          loader: async () => {
-            const response = await this.ynabAPI.payees.getPayees(budgetId);
-            return response.data.payees;
-          },
-        }),
+        this.deltaFetcher.fetchAccounts(budgetId, { forceFullRefresh: true }),
+        this.deltaFetcher.fetchCategories(budgetId, { forceFullRefresh: true }),
+        this.deltaFetcher.fetchPayees(budgetId, { forceFullRefresh: true }),
       ]);
     } catch {
       // Cache warming failures should not affect the main operation

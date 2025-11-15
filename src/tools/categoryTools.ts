@@ -5,6 +5,10 @@ import { withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import { milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
+import type { DeltaFetcher } from './deltaFetcher.js';
+import type { DeltaCache } from '../server/deltaCache.js';
+import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
+import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.js';
 
 /**
  * Schema for ynab:list_categories tool parameters
@@ -49,8 +53,23 @@ export type UpdateCategoryParams = z.infer<typeof UpdateCategorySchema>;
  */
 export async function handleListCategories(
   ynabAPI: ynab.API,
+  deltaFetcher: DeltaFetcher,
   params: ListCategoriesParams,
+): Promise<CallToolResult>;
+export async function handleListCategories(
+  ynabAPI: ynab.API,
+  params: ListCategoriesParams,
+): Promise<CallToolResult>;
+export async function handleListCategories(
+  ynabAPI: ynab.API,
+  deltaFetcherOrParams: DeltaFetcher | ListCategoriesParams,
+  maybeParams?: ListCategoriesParams,
 ): Promise<CallToolResult> {
+  const { deltaFetcher, params } = resolveDeltaFetcherArgs(
+    ynabAPI,
+    deltaFetcherOrParams,
+    maybeParams,
+  );
   return await withToolErrorHandling(
     async () => {
       const useCache = process.env['NODE_ENV'] !== 'test';
@@ -101,16 +120,9 @@ export async function handleListCategories(
         };
       }
 
-      // Use enhanced CacheManager wrap method
-      const cacheKey = CacheManager.generateKey('categories', 'list', params.budget_id);
-      const wasCached = cacheManager.has(cacheKey);
-      const categoryGroups = await cacheManager.wrap<ynab.CategoryGroupWithCategories[]>(cacheKey, {
-        ttl: CACHE_TTLS.CATEGORIES,
-        loader: async () => {
-          const response = await ynabAPI.categories.getCategories(params.budget_id);
-          return response.data.category_groups;
-        },
-      });
+      const result = await deltaFetcher.fetchCategories(params.budget_id);
+      const categoryGroups = result.data;
+      const wasCached = result.wasCached;
 
       // Flatten categories from all category groups
       const allCategories = categoryGroups.flatMap((group) =>
@@ -147,7 +159,7 @@ export async function handleListCategories(
               })),
               cached: wasCached,
               cache_info: wasCached
-                ? 'Data retrieved from cache for improved performance'
+                ? `Data retrieved from cache for improved performance${result.usedDelta ? ' (delta merge applied)' : ''}`
                 : 'Fresh data retrieved from YNAB API',
             }),
           },
@@ -268,8 +280,25 @@ export async function handleGetCategory(
  */
 export async function handleUpdateCategory(
   ynabAPI: ynab.API,
+  deltaCache: DeltaCache,
+  knowledgeStore: ServerKnowledgeStore,
   params: UpdateCategoryParams,
+): Promise<CallToolResult>;
+export async function handleUpdateCategory(
+  ynabAPI: ynab.API,
+  params: UpdateCategoryParams,
+): Promise<CallToolResult>;
+export async function handleUpdateCategory(
+  ynabAPI: ynab.API,
+  deltaCacheOrParams: DeltaCache | UpdateCategoryParams,
+  knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateCategoryParams,
+  maybeParams?: UpdateCategoryParams,
 ): Promise<CallToolResult> {
+  const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
+    deltaCacheOrParams,
+    knowledgeStoreOrParams,
+    maybeParams,
+  );
   try {
     if (params.dry_run) {
       const currentDate = new Date();
@@ -326,6 +355,16 @@ export async function handleUpdateCategory(
     );
     cacheManager.delete(monthsListCacheKey);
     cacheManager.delete(currentMonthCacheKey);
+
+    deltaCache.invalidate(params.budget_id, 'categories');
+    deltaCache.invalidate(params.budget_id, 'months');
+    const serverKnowledge = response.data.server_knowledge;
+    if (typeof serverKnowledge === 'number') {
+      const categoryCacheKey = CacheManager.generateKey('categories', 'list', params.budget_id);
+      knowledgeStore.update(categoryCacheKey, serverKnowledge);
+      const monthListCacheKey = CacheManager.generateKey('months', 'list', params.budget_id);
+      knowledgeStore.update(monthListCacheKey, serverKnowledge);
+    }
 
     return {
       content: [

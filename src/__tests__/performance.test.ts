@@ -47,7 +47,7 @@ describe('Reconciliation Performance - Bulk vs Sequential', () => {
         transactionCount: 20,
         bulkDelay: 50,
       });
-      console.info(`Bulk benchmark (20 txns): ${duration}ms`);
+      console.warn(`Bulk benchmark (20 txns): ${duration}ms`);
       expect(duration).toBeLessThan(8000);
       expect(result.summary.transactions_created).toBe(20);
       expect(result.bulk_operation_details?.bulk_successes).toBe(1);
@@ -65,7 +65,7 @@ describe('Reconciliation Performance - Bulk vs Sequential', () => {
         sequentialDelay: 1050,
         multipleRuns: 20, // Run 20 times to simulate 20 sequential transactions
       });
-      console.info(`Pure sequential baseline (20 txns, 1 at a time): ${duration}ms`);
+      console.warn(`Pure sequential baseline (20 txns, 1 at a time): ${duration}ms`);
       expect(duration).toBeGreaterThan(20000);
       expect(result.summary.transactions_created).toBe(1);
       expect(result.bulk_operation_details).toBeUndefined(); // No bulk operations at all
@@ -82,7 +82,7 @@ describe('Reconciliation Performance - Bulk vs Sequential', () => {
         sequentialDelay: 1050,
         forceSequential: true,
       });
-      console.info(`Sequential fallback (20 txns): ${duration}ms`);
+      console.warn(`Sequential fallback (20 txns): ${duration}ms`);
       expect(duration).toBeGreaterThan(20000);
       expect(result.summary.transactions_created).toBe(20);
       expect(result.bulk_operation_details?.sequential_fallbacks).toBe(1);
@@ -106,7 +106,7 @@ describe('Reconciliation Performance - Bulk vs Sequential', () => {
         multipleRuns: 20,
       });
       const speedup = pureSequentialRun.duration / bulkRun.duration;
-      console.info(`Bulk vs pure sequential speedup: ${speedup.toFixed(2)}x faster`);
+      console.warn(`Bulk vs pure sequential speedup: ${speedup.toFixed(2)}x faster`);
       expect(speedup).toBeGreaterThanOrEqual(3);
     },
     120000,
@@ -119,7 +119,7 @@ describe('Reconciliation Performance - Bulk vs Sequential', () => {
         transactionCount: 150,
         bulkDelay: 60,
       });
-      console.info(`Chunking benchmark (150 txns): ${duration}ms`);
+      console.warn(`Chunking benchmark (150 txns): ${duration}ms`);
       expect(duration).toBeLessThan(15000);
       expect(result.summary.transactions_created).toBe(150);
       expect(result.bulk_operation_details?.chunks_processed).toBeGreaterThanOrEqual(2);

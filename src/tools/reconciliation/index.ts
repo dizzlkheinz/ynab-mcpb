@@ -17,6 +17,8 @@ import {
 } from './executor.js';
 import { responseFormatter } from '../../server/responseFormatter.js';
 import { extractDateRangeFromCSV, autoDetectCSVFormat } from '../compareTransactions/parser.js';
+import type { DeltaFetcher } from '../deltaFetcher.js';
+import { resolveDeltaFetcherArgs } from '../deltaSupport.js';
 
 // Re-export types for external use
 export type * from './types.js';
@@ -90,6 +92,7 @@ export const ReconcileAccountSchema = z
 
     // Response options
     include_structured_data: z.boolean().optional().default(false),
+    force_full_refresh: z.boolean().optional().default(true),
   })
   .refine((data) => data.csv_file_path || data.csv_data, {
     message: 'Either csv_file_path or csv_data must be provided',
@@ -107,8 +110,24 @@ export type ReconcileAccountRequest = z.infer<typeof ReconcileAccountSchema>;
  */
 export async function handleReconcileAccount(
   ynabAPI: ynab.API,
+  deltaFetcher: DeltaFetcher,
   params: ReconcileAccountRequest,
+): Promise<CallToolResult>;
+export async function handleReconcileAccount(
+  ynabAPI: ynab.API,
+  params: ReconcileAccountRequest,
+): Promise<CallToolResult>;
+export async function handleReconcileAccount(
+  ynabAPI: ynab.API,
+  deltaFetcherOrParams: DeltaFetcher | ReconcileAccountRequest,
+  maybeParams?: ReconcileAccountRequest,
 ): Promise<CallToolResult> {
+  const { deltaFetcher, params } = resolveDeltaFetcherArgs(
+    ynabAPI,
+    deltaFetcherOrParams,
+    maybeParams,
+  );
+  const forceFullRefresh = params.force_full_refresh ?? true;
   return await withToolErrorHandling(
     async () => {
       // Build matching configuration from parameters
@@ -120,15 +139,17 @@ export async function handleReconcileAccount(
         suggestionThreshold: params.suggestion_threshold,
       };
 
-      const accountsApi = ynabAPI.accounts as typeof ynabAPI.accounts & {
-        getAccount?: (budgetId: string, accountId: string) => Promise<ynab.AccountResponse>;
-      };
-      const accountResponse = accountsApi.getAccount
-        ? await accountsApi.getAccount(params.budget_id, params.account_id)
-        : await accountsApi.getAccountById(params.budget_id, params.account_id);
-      const accountData = accountResponse.data.account;
-      const accountName = accountData?.name;
-      const accountType = accountData?.type;
+      const accountResult = forceFullRefresh
+        ? await deltaFetcher.fetchAccountsFull(params.budget_id)
+        : await deltaFetcher.fetchAccounts(params.budget_id);
+      const accountData = accountResult.data.find((account) => account.id === params.account_id);
+      if (!accountData) {
+        throw new Error(
+          `Account ${params.account_id} not found in budget ${params.budget_id}`,
+        );
+      }
+      const accountName = accountData.name;
+      const accountType = accountData.type;
 
       // For liability accounts (credit cards, loans, debts), statement balance should be negative
       // A positive balance on a credit card statement means you OWE that amount
@@ -188,13 +209,45 @@ export async function handleReconcileAccount(
         }
       }
 
-      const transactionsResponse = await ynabAPI.transactions.getTransactionsByAccount(
-        params.budget_id,
-        params.account_id,
-        sinceDate.toISOString().split('T')[0],
-      );
+      const sinceDateString = sinceDate.toISOString().split('T')[0];
+      const transactionsResult = forceFullRefresh
+        ? await deltaFetcher.fetchTransactionsByAccountFull(
+            params.budget_id,
+            params.account_id,
+            sinceDateString,
+          )
+        : await deltaFetcher.fetchTransactionsByAccount(
+            params.budget_id,
+            params.account_id,
+            sinceDateString,
+          );
 
-      const ynabTransactions = transactionsResponse.data.transactions;
+      const ynabTransactions = transactionsResult.data;
+
+      const auditDataSource = forceFullRefresh
+        ? 'full_api_fetch_no_delta'
+        : transactionsResult.usedDelta
+          ? 'delta_fetch_with_merge'
+          : transactionsResult.wasCached
+            ? 'delta_fetch_cache_hit'
+            : 'delta_fetch_full_refresh';
+      const auditMetadata = {
+        data_freshness: forceFullRefresh
+          ? 'guaranteed_fresh'
+          : transactionsResult.wasCached
+            ? 'cache_validated_via_server_knowledge'
+            : 'fresh_via_delta_fetch',
+        data_source: auditDataSource,
+        server_knowledge: transactionsResult.serverKnowledge,
+        fetched_at: new Date().toISOString(),
+        accounts_count: accountResult.data.length,
+        transactions_count: transactionsResult.data.length,
+        cache_status: {
+          accounts_cached: accountResult.wasCached,
+          transactions_cached: transactionsResult.wasCached,
+          delta_merge_applied: transactionsResult.usedDelta,
+        },
+      };
 
       // Perform analysis
       const analysis = analyzeReconciliation(
@@ -243,6 +296,7 @@ export async function handleReconcileAccount(
         accountName,
         accountId: params.account_id,
         currencyCode,
+        auditMetadata,
       };
       if (csvFormatForPayload !== undefined) {
         adapterOptions.csvFormat = csvFormatForPayload;

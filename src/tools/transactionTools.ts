@@ -10,6 +10,10 @@ import { responseFormatter } from '../server/responseFormatter.js';
 import { amountToMilliunits, milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
 import { globalRequestLogger } from '../server/requestLogger.js';
+import type { DeltaFetcher } from './deltaFetcher.js';
+import type { DeltaCache } from '../server/deltaCache.js';
+import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
+import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.js';
 
 /**
  * Utility function to ensure transaction is not null/undefined
@@ -19,6 +23,116 @@ function ensureTransaction<T>(transaction: T | undefined, errorMessage: string):
     throw new Error(errorMessage);
   }
   return transaction;
+}
+
+const toMonthKey = (date: string): string => `${date.slice(0, 7)}-01`;
+
+interface CategorySource {
+  category_id?: string | null;
+  subtransactions?: { category_id?: string | null }[] | null | undefined;
+}
+
+function appendCategoryIds(source: CategorySource | undefined, target: Set<string>): void {
+  if (!source) {
+    return;
+  }
+  if (source.category_id) {
+    target.add(source.category_id);
+  }
+  if (Array.isArray(source.subtransactions)) {
+    for (const sub of source.subtransactions) {
+      if (sub?.category_id) {
+        target.add(sub.category_id);
+      }
+    }
+  }
+}
+
+function collectCategoryIdsFromSources(
+  ...sources: (CategorySource | undefined)[]
+): Set<string> {
+  const result = new Set<string>();
+  for (const source of sources) {
+    appendCategoryIds(source, result);
+  }
+  return result;
+}
+
+function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+  if (a.size !== b.size) {
+    return false;
+  }
+  for (const value of a) {
+    if (!b.has(value)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+interface TransactionCacheInvalidationOptions {
+  affectedCategoryIds?: Set<string>;
+  invalidateAllCategories?: boolean;
+  accountTotalsChanged?: boolean;
+  invalidateMonths?: boolean;
+}
+
+function invalidateTransactionCaches(
+  deltaCache: DeltaCache,
+  knowledgeStore: ServerKnowledgeStore,
+  budgetId: string,
+  serverKnowledge: number | undefined,
+  affectedAccountIds: Set<string>,
+  affectedMonths: Set<string>,
+  options: TransactionCacheInvalidationOptions = {},
+): void {
+  deltaCache.invalidate(budgetId, 'transactions');
+  cacheManager.delete(CacheManager.generateKey('transactions', 'list', budgetId));
+
+  for (const accountId of affectedAccountIds) {
+    const accountPrefix = CacheManager.generateKey('transactions', 'account', budgetId, accountId);
+    cacheManager.deleteByPrefix(accountPrefix);
+  }
+
+  const invalidateAccountsList = options.accountTotalsChanged ?? true;
+  if (invalidateAccountsList) {
+    cacheManager.delete(CacheManager.generateKey('accounts', 'list', budgetId));
+  }
+  for (const accountId of affectedAccountIds) {
+    cacheManager.delete(CacheManager.generateKey('account', 'get', budgetId, accountId));
+  }
+
+  const affectedCategoryIds = options.affectedCategoryIds ?? new Set<string>();
+  const shouldInvalidateCategories =
+    options.invalidateAllCategories || affectedCategoryIds.size > 0;
+  if (shouldInvalidateCategories) {
+    cacheManager.delete(CacheManager.generateKey('categories', 'list', budgetId));
+    for (const categoryId of affectedCategoryIds) {
+      cacheManager.delete(CacheManager.generateKey('category', 'get', budgetId, categoryId));
+    }
+  }
+
+  const shouldInvalidateMonths = options.invalidateMonths ?? affectedMonths.size > 0;
+  if (shouldInvalidateMonths && affectedMonths.size > 0) {
+    cacheManager.delete(CacheManager.generateKey('months', 'list', budgetId));
+    deltaCache.invalidate(budgetId, 'months');
+    for (const month of affectedMonths) {
+      cacheManager.delete(CacheManager.generateKey('month', 'get', budgetId, month));
+    }
+  }
+
+  if (serverKnowledge !== undefined) {
+    const transactionCacheKey = CacheManager.generateKey('transactions', 'list', budgetId);
+    knowledgeStore.update(transactionCacheKey, serverKnowledge);
+    if (invalidateAccountsList) {
+      const accountsCacheKey = CacheManager.generateKey('accounts', 'list', budgetId);
+      knowledgeStore.update(accountsCacheKey, serverKnowledge);
+    }
+    if (shouldInvalidateMonths && affectedMonths.size > 0) {
+      const monthsCacheKey = CacheManager.generateKey('months', 'list', budgetId);
+      knowledgeStore.update(monthsCacheKey, serverKnowledge);
+    }
+  }
 }
 
 /**
@@ -627,63 +741,107 @@ export type DeleteTransactionParams = z.infer<typeof DeleteTransactionSchema>;
  * Handles the ynab:list_transactions tool call
  * Lists transactions for a budget with optional filtering
  */
+
+export async function handleListTransactions(
+  ynabAPI: ynab.API,
+  deltaFetcher: DeltaFetcher,
+  params: ListTransactionsParams,
+): Promise<CallToolResult>;
 export async function handleListTransactions(
   ynabAPI: ynab.API,
   params: ListTransactionsParams,
+): Promise<CallToolResult>;
+export async function handleListTransactions(
+  ynabAPI: ynab.API,
+  deltaFetcherOrParams: DeltaFetcher | ListTransactionsParams,
+  maybeParams?: ListTransactionsParams,
 ): Promise<CallToolResult> {
+  const { deltaFetcher, params } = resolveDeltaFetcherArgs(
+    ynabAPI,
+    deltaFetcherOrParams,
+    maybeParams,
+  );
   return await withToolErrorHandling(
     async () => {
       const useCache = process.env['NODE_ENV'] !== 'test';
 
-      // Only cache when no filters are used (only budget_id is provided)
-      const shouldCache =
-        useCache && !params.account_id && !params.category_id && !params.since_date && !params.type;
-
-      let transactions: (ynab.TransactionDetail | ynab.HybridTransaction)[];
-      let cacheHit = false;
-
-      if (shouldCache) {
-        // Use enhanced CacheManager wrap method
-        const cacheKey = CacheManager.generateKey('transactions', 'list', params.budget_id);
-        cacheHit = cacheManager.has(cacheKey);
-        transactions = await cacheManager.wrap<(ynab.TransactionDetail | ynab.HybridTransaction)[]>(
-          cacheKey,
-          {
-            ttl: CACHE_TTLS.TRANSACTIONS,
-            loader: async () => {
-              const response = await ynabAPI.transactions.getTransactions(params.budget_id);
-              return response.data.transactions;
-            },
-          },
-        );
-      } else {
-        // Use conditional API calls based on filter parameters (no caching for filtered requests)
+      if (!useCache) {
         let response;
-
         if (params.account_id) {
-          // Get transactions for specific account
           response = await ynabAPI.transactions.getTransactionsByAccount(
             params.budget_id,
             params.account_id,
             params.since_date,
           );
         } else if (params.category_id) {
-          // Get transactions for specific category
           response = await ynabAPI.transactions.getTransactionsByCategory(
             params.budget_id,
             params.category_id,
             params.since_date,
           );
         } else {
-          // Get all transactions for budget
           response = await ynabAPI.transactions.getTransactions(
             params.budget_id,
             params.since_date,
             params.type,
           );
         }
+        const transactions = response.data.transactions;
 
+        return {
+          content: [
+            {
+              type: 'text',
+              text: responseFormatter.format({
+                transactions: transactions.map((transaction) => ({
+                  id: transaction.id,
+                  date: transaction.date,
+                  account_name: transaction.account_name,
+                  payee_name: transaction.payee_name,
+                  category_name: transaction.category_name,
+                  memo: transaction.memo,
+                  amount: milliunitsToAmount(transaction.amount),
+                  cleared: transaction.cleared,
+                  approved: transaction.approved,
+                  flag_color: transaction.flag_color,
+                })),
+                cached: false,
+                cache_info: 'Fresh data retrieved from YNAB API',
+              }),
+            },
+          ],
+        };
+      }
+
+      let transactions: (ynab.TransactionDetail | ynab.HybridTransaction)[];
+      let cacheHit = false;
+      let usedDelta = false;
+
+      if (params.account_id) {
+        const result = await deltaFetcher.fetchTransactionsByAccount(
+          params.budget_id,
+          params.account_id,
+          params.since_date,
+        );
+        transactions = result.data;
+        cacheHit = result.wasCached;
+        usedDelta = result.usedDelta;
+      } else if (params.category_id) {
+        const response = await ynabAPI.transactions.getTransactionsByCategory(
+          params.budget_id,
+          params.category_id,
+          params.since_date,
+        );
         transactions = response.data.transactions;
+      } else {
+        const result = await deltaFetcher.fetchTransactions(
+          params.budget_id,
+          params.since_date,
+          params.type as ynab.GetTransactionsTypeEnum | undefined,
+        );
+        transactions = result.data;
+        cacheHit = result.wasCached;
+        usedDelta = result.usedDelta;
       }
 
       // Check if response might be too large for MCP
@@ -725,7 +883,7 @@ export async function handleListTransactions(
               total_count: transactions.length,
               cached: cacheHit,
               cache_info: cacheHit
-                ? 'Data retrieved from cache for improved performance'
+                ? `Data retrieved from cache for improved performance${usedDelta ? ' (delta merge applied)' : ''}`
                 : 'Fresh data retrieved from YNAB API',
               transactions: transactions.map((transaction) => ({
                 id: transaction.id,
@@ -840,8 +998,25 @@ export async function handleGetTransaction(
  */
 export async function handleCreateTransaction(
   ynabAPI: ynab.API,
+  deltaCache: DeltaCache,
+  knowledgeStore: ServerKnowledgeStore,
   params: CreateTransactionParams,
+): Promise<CallToolResult>;
+export async function handleCreateTransaction(
+  ynabAPI: ynab.API,
+  params: CreateTransactionParams,
+): Promise<CallToolResult>;
+export async function handleCreateTransaction(
+  ynabAPI: ynab.API,
+  deltaCacheOrParams: DeltaCache | CreateTransactionParams,
+  knowledgeStoreOrParams?: ServerKnowledgeStore | CreateTransactionParams,
+  maybeParams?: CreateTransactionParams,
 ): Promise<CallToolResult> {
+  const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
+    deltaCacheOrParams,
+    knowledgeStoreOrParams,
+    maybeParams,
+  );
   try {
     if (params.dry_run) {
       return {
@@ -896,35 +1071,22 @@ export async function handleCreateTransaction(
 
     const transaction = ensureTransaction(response.data.transaction, 'Transaction creation failed');
 
-    // Invalidate transaction-related caches after successful creation
-    const transactionsListCacheKey = CacheManager.generateKey(
-      'transactions',
-      'list',
+    const affectedAccountIds = new Set<string>([transaction.account_id]);
+    const affectedMonths = new Set<string>([toMonthKey(transaction.date)]);
+    const affectedCategoryIds = collectCategoryIdsFromSources(transaction);
+    invalidateTransactionCaches(
+      deltaCache,
+      knowledgeStore,
       params.budget_id,
+      response.data.server_knowledge,
+      affectedAccountIds,
+      affectedMonths,
+      {
+        affectedCategoryIds,
+        accountTotalsChanged: true,
+        invalidateMonths: true,
+      },
     );
-    cacheManager.delete(transactionsListCacheKey);
-
-    // Invalidate account-related caches as the account balance has changed
-    const accountsListCacheKey = CacheManager.generateKey('accounts', 'list', params.budget_id);
-    const specificAccountCacheKey = CacheManager.generateKey(
-      'account',
-      'get',
-      params.budget_id,
-      transaction.account_id,
-    );
-    cacheManager.delete(accountsListCacheKey);
-    cacheManager.delete(specificAccountCacheKey);
-
-    // Invalidate month-related caches as transaction affects month summaries
-    const formatMonthKey = (date: string) => `${date.slice(0, 7)}-01`;
-    const monthKeys = new Set<string>([formatMonthKey(transaction.date)]);
-    cacheManager.delete(CacheManager.generateKey('months', 'list', params.budget_id));
-    for (const monthKey of monthKeys) {
-      cacheManager.delete(CacheManager.generateKey('month', 'get', params.budget_id, monthKey));
-    }
-
-    // Invalidate categories cache as transaction affects category activity
-    cacheManager.delete(CacheManager.generateKey('categories', 'list', params.budget_id));
 
     // Get the updated account balance
     const accountResponse = await ynabAPI.accounts.getAccountById(
@@ -1046,8 +1208,25 @@ function distributeTaxProportionally(
 
 export async function handleCreateReceiptSplitTransaction(
   ynabAPI: ynab.API,
+  deltaCache: DeltaCache,
+  knowledgeStore: ServerKnowledgeStore,
   params: CreateReceiptSplitTransactionParams,
+): Promise<CallToolResult>;
+export async function handleCreateReceiptSplitTransaction(
+  ynabAPI: ynab.API,
+  params: CreateReceiptSplitTransactionParams,
+): Promise<CallToolResult>;
+export async function handleCreateReceiptSplitTransaction(
+  ynabAPI: ynab.API,
+  deltaCacheOrParams: DeltaCache | CreateReceiptSplitTransactionParams,
+  knowledgeStoreOrParams?: ServerKnowledgeStore | CreateReceiptSplitTransactionParams,
+  maybeParams?: CreateReceiptSplitTransactionParams,
 ): Promise<CallToolResult> {
+  const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
+    deltaCacheOrParams,
+    knowledgeStoreOrParams,
+    maybeParams,
+  );
   const date = params.date ?? new Date().toISOString().slice(0, 10);
 
   const categoryCalculations: ReceiptCategoryCalculation[] = params.categories.map((category) => {
@@ -1181,7 +1360,12 @@ export async function handleCreateReceiptSplitTransaction(
     createTransactionParams.approved = params.approved;
   }
 
-  const baseResult = await handleCreateTransaction(ynabAPI, createTransactionParams);
+  const baseResult = await handleCreateTransaction(
+    ynabAPI,
+    deltaCache,
+    knowledgeStore,
+    createTransactionParams,
+  );
 
   const firstContent = baseResult.content?.[0];
   if (!firstContent || typeof firstContent.text !== 'string') {
@@ -1205,8 +1389,25 @@ export async function handleCreateReceiptSplitTransaction(
  */
 export async function handleUpdateTransaction(
   ynabAPI: ynab.API,
+  deltaCache: DeltaCache,
+  knowledgeStore: ServerKnowledgeStore,
   params: UpdateTransactionParams,
+): Promise<CallToolResult>;
+export async function handleUpdateTransaction(
+  ynabAPI: ynab.API,
+  params: UpdateTransactionParams,
+): Promise<CallToolResult>;
+export async function handleUpdateTransaction(
+  ynabAPI: ynab.API,
+  deltaCacheOrParams: DeltaCache | UpdateTransactionParams,
+  knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateTransactionParams,
+  maybeParams?: UpdateTransactionParams,
 ): Promise<CallToolResult> {
+  const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
+    deltaCacheOrParams,
+    knowledgeStoreOrParams,
+    maybeParams,
+  );
   try {
     if (params.dry_run) {
       return {
@@ -1278,27 +1479,18 @@ export async function handleUpdateTransaction(
 
     const transaction = ensureTransaction(response.data.transaction, 'Transaction update failed');
 
-    // Invalidate transaction-related caches after successful update
-    const transactionsListCacheKey = CacheManager.generateKey(
-      'transactions',
-      'list',
-      params.budget_id,
-    );
     const specificTransactionCacheKey = CacheManager.generateKey(
       'transaction',
       'get',
       params.budget_id,
       params.transaction_id,
     );
-    cacheManager.delete(transactionsListCacheKey);
     cacheManager.delete(specificTransactionCacheKey);
 
-    // Invalidate account-related caches for all affected accounts
-    const accountsListCacheKey = CacheManager.generateKey('accounts', 'list', params.budget_id);
-    cacheManager.delete(accountsListCacheKey);
-
-    // Collect all affected account IDs (original and new, if different)
-    const affectedAccountIds = new Set([originalTransaction.account_id, transaction.account_id]);
+    const affectedAccountIds = new Set<string>([
+      originalTransaction.account_id,
+      transaction.account_id,
+    ]);
 
     if (originalTransaction.transfer_account_id) {
       affectedAccountIds.add(originalTransaction.transfer_account_id);
@@ -1307,25 +1499,44 @@ export async function handleUpdateTransaction(
       affectedAccountIds.add(transaction.transfer_account_id);
     }
 
-    // Invalidate caches for all affected accounts
-    for (const accountId of affectedAccountIds) {
-      const specificAccountCacheKey = CacheManager.generateKey(
-        'account',
-        'get',
-        params.budget_id,
-        accountId,
-      );
-      cacheManager.delete(specificAccountCacheKey);
-    }
+    const affectedMonths = new Set<string>([
+      toMonthKey(originalTransaction.date),
+      toMonthKey(transaction.date),
+    ]);
+    const originalCategoryIds = collectCategoryIdsFromSources(originalTransaction);
+    const updatedCategoryIds = collectCategoryIdsFromSources(transaction);
+    const affectedCategoryIds = new Set<string>([
+      ...originalCategoryIds,
+      ...updatedCategoryIds,
+    ]);
+    const categoryChanged = !setsEqual(originalCategoryIds, updatedCategoryIds);
+    const amountChanged = transaction.amount !== originalTransaction.amount;
+    const accountChanged = transaction.account_id !== originalTransaction.account_id;
+    const clearedChanged = transaction.cleared !== originalTransaction.cleared;
+    const transferAccountChanged =
+      transaction.transfer_account_id !== originalTransaction.transfer_account_id;
+    const transferLinkChanged =
+      transaction.transfer_transaction_id !== originalTransaction.transfer_transaction_id;
+    const dateChanged = transaction.date !== originalTransaction.date;
 
-    // Invalidate month-related caches as transaction affects month summaries
-    const d = new Date();
-    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-    cacheManager.delete(CacheManager.generateKey('months', 'list', params.budget_id));
-    cacheManager.delete(CacheManager.generateKey('month', 'get', params.budget_id, monthKey));
-
-    // Invalidate categories cache as transaction affects category activity
-    cacheManager.delete(CacheManager.generateKey('categories', 'list', params.budget_id));
+    invalidateTransactionCaches(
+      deltaCache,
+      knowledgeStore,
+      params.budget_id,
+      response.data.server_knowledge,
+      affectedAccountIds,
+      affectedMonths,
+      {
+        affectedCategoryIds,
+        accountTotalsChanged:
+          amountChanged ||
+          accountChanged ||
+          clearedChanged ||
+          transferAccountChanged ||
+          transferLinkChanged,
+        invalidateMonths: amountChanged || categoryChanged || dateChanged,
+      },
+    );
 
     // Get the updated account balance
     const accountResponse = await ynabAPI.accounts.getAccountById(
@@ -1373,8 +1584,25 @@ export async function handleUpdateTransaction(
  */
 export async function handleDeleteTransaction(
   ynabAPI: ynab.API,
+  deltaCache: DeltaCache,
+  knowledgeStore: ServerKnowledgeStore,
   params: DeleteTransactionParams,
+): Promise<CallToolResult>;
+export async function handleDeleteTransaction(
+  ynabAPI: ynab.API,
+  params: DeleteTransactionParams,
+): Promise<CallToolResult>;
+export async function handleDeleteTransaction(
+  ynabAPI: ynab.API,
+  deltaCacheOrParams: DeltaCache | DeleteTransactionParams,
+  knowledgeStoreOrParams?: ServerKnowledgeStore | DeleteTransactionParams,
+  maybeParams?: DeleteTransactionParams,
 ): Promise<CallToolResult> {
+  const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
+    deltaCacheOrParams,
+    knowledgeStoreOrParams,
+    maybeParams,
+  );
   try {
     if (params.dry_run) {
       return {
@@ -1397,40 +1625,34 @@ export async function handleDeleteTransaction(
 
     const transaction = ensureTransaction(response.data.transaction, 'Transaction deletion failed');
 
-    // Invalidate transaction-related caches after successful deletion
-    const transactionsListCacheKey = CacheManager.generateKey(
-      'transactions',
-      'list',
-      params.budget_id,
-    );
     const specificTransactionCacheKey = CacheManager.generateKey(
       'transaction',
       'get',
       params.budget_id,
       params.transaction_id,
     );
-    cacheManager.delete(transactionsListCacheKey);
     cacheManager.delete(specificTransactionCacheKey);
 
-    // Invalidate account-related caches as the account balance has changed
-    const accountsListCacheKey = CacheManager.generateKey('accounts', 'list', params.budget_id);
-    const specificAccountCacheKey = CacheManager.generateKey(
-      'account',
-      'get',
+    const affectedAccountIds = new Set<string>([transaction.account_id]);
+    if (transaction.transfer_account_id) {
+      affectedAccountIds.add(transaction.transfer_account_id);
+    }
+
+    const affectedMonths = new Set<string>([toMonthKey(transaction.date)]);
+    const affectedCategoryIds = collectCategoryIdsFromSources(transaction);
+    invalidateTransactionCaches(
+      deltaCache,
+      knowledgeStore,
       params.budget_id,
-      transaction.account_id,
+      response.data.server_knowledge,
+      affectedAccountIds,
+      affectedMonths,
+      {
+        affectedCategoryIds,
+        accountTotalsChanged: true,
+        invalidateMonths: true,
+      },
     );
-    cacheManager.delete(accountsListCacheKey);
-    cacheManager.delete(specificAccountCacheKey);
-
-    // Invalidate month-related caches as transaction affects month summaries
-    const d = new Date();
-    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-    cacheManager.delete(CacheManager.generateKey('months', 'list', params.budget_id));
-    cacheManager.delete(CacheManager.generateKey('month', 'get', params.budget_id, monthKey));
-
-    // Invalidate categories cache as transaction affects category activity
-    cacheManager.delete(CacheManager.generateKey('categories', 'list', params.budget_id));
 
     // Get the updated account balance
     const accountResponse = await ynabAPI.accounts.getAccountById(
@@ -1462,8 +1684,25 @@ export async function handleDeleteTransaction(
 
 export async function handleCreateTransactions(
   ynabAPI: ynab.API,
+  deltaCache: DeltaCache,
+  knowledgeStore: ServerKnowledgeStore,
   params: CreateTransactionsParams,
+): Promise<CallToolResult>;
+export async function handleCreateTransactions(
+  ynabAPI: ynab.API,
+  params: CreateTransactionsParams,
+): Promise<CallToolResult>;
+export async function handleCreateTransactions(
+  ynabAPI: ynab.API,
+  deltaCacheOrParams: DeltaCache | CreateTransactionsParams,
+  knowledgeStoreOrParams?: ServerKnowledgeStore | CreateTransactionsParams,
+  maybeParams?: CreateTransactionsParams,
 ): Promise<CallToolResult> {
+  const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
+    deltaCacheOrParams,
+    knowledgeStoreOrParams,
+    maybeParams,
+  );
   return (await withToolErrorHandling(
     async () => {
       const validationResult = CreateTransactionsSchema.safeParse(params);
@@ -1628,33 +1867,25 @@ export async function handleCreateTransactions(
         message: `Processed ${summary.total_requested} transactions: ${summary.created} created, ${summary.duplicates} duplicates, ${summary.failed} failed.`,
       };
 
-      const cacheKeys = new Set<string>([
-        CacheManager.generateKey('transactions', 'list', budget_id),
-      ]);
-
-      const accountIds = new Set(transactions.map((transaction) => transaction.account_id));
-      for (const accountId of accountIds) {
-        cacheKeys.add(CacheManager.generateKey('account', 'get', budget_id, accountId));
+      const accountIds = new Set<string>(transactions.map((transaction) => transaction.account_id));
+      const affectedMonths = new Set<string>(transactions.map((transaction) => toMonthKey(transaction.date)));
+      const affectedCategoryIds = new Set<string>();
+      for (const created of responseData.transactions ?? []) {
+        appendCategoryIds(created, affectedCategoryIds);
       }
-
-      const monthKeys = new Set(
-        transactions.map(
-          (transaction) => `${transaction.date.slice(0, 7)}-01`,
-        ),
+      invalidateTransactionCaches(
+        deltaCache,
+        knowledgeStore,
+        budget_id,
+        responseData.server_knowledge,
+        accountIds,
+        affectedMonths,
+        {
+          affectedCategoryIds,
+          accountTotalsChanged: true,
+          invalidateMonths: true,
+        },
       );
-      for (const monthKey of monthKeys) {
-        cacheKeys.add(CacheManager.generateKey('month', 'get', budget_id, monthKey));
-      }
-
-      const keysToDelete = Array.from(cacheKeys);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (typeof (cacheManager as any).deleteMany === 'function') {
-        cacheManager.deleteMany(keysToDelete);
-      } else {
-        for (const key of keysToDelete) {
-          cacheManager.delete(key);
-        }
-      }
 
       const finalizedResponse = finalizeResponse(baseResponse);
 
@@ -1874,8 +2105,25 @@ function finalizeBulkUpdateResponse(response: BulkUpdateResponse): BulkUpdateRes
  */
 export async function handleUpdateTransactions(
   ynabAPI: ynab.API,
+  deltaCache: DeltaCache,
+  knowledgeStore: ServerKnowledgeStore,
   params: UpdateTransactionsParams,
+): Promise<CallToolResult>;
+export async function handleUpdateTransactions(
+  ynabAPI: ynab.API,
+  params: UpdateTransactionsParams,
+): Promise<CallToolResult>;
+export async function handleUpdateTransactions(
+  ynabAPI: ynab.API,
+  deltaCacheOrParams: DeltaCache | UpdateTransactionsParams,
+  knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateTransactionsParams,
+  maybeParams?: UpdateTransactionsParams,
 ): Promise<CallToolResult> {
+  const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
+    deltaCacheOrParams,
+    knowledgeStoreOrParams,
+    maybeParams,
+  );
   return (await withToolErrorHandling(
     async () => {
       const validationResult = UpdateTransactionsSchema.safeParse(params);
@@ -2159,59 +2407,73 @@ export async function handleUpdateTransactions(
         message: `Processed ${summary.total_requested} transactions: ${summary.updated} updated, ${summary.failed} failed.`,
       };
 
-      // Compute affected cache keys from resolved metadata and updated data
-      const cacheKeys = new Set<string>([
-        CacheManager.generateKey('transactions', 'list', budget_id),
-      ]);
-
-      // Add cache keys for each updated transaction
       for (const transaction of transactions) {
-        cacheKeys.add(
+        cacheManager.delete(
           CacheManager.generateKey('transaction', 'get', budget_id, transaction.id),
         );
       }
 
-      // Collect affected account IDs from metadata only (account moves not supported)
       const affectedAccountIds = new Set<string>();
+      const affectedMonthKeys = new Set<string>();
+      const affectedCategoryIds = new Set<string>();
+      let invalidateAllCategories = false;
+      let accountTotalsChanged = false;
+      let monthsImpacted = false;
+
       for (const transaction of transactions) {
         const meta = metadata.get(transaction.id);
-        if (meta) {
+        const amountChanged = transaction.amount !== undefined;
+        const clearedChanged = transaction.cleared !== undefined;
+        const categoryChanged = transaction.category_id !== undefined;
+        const dateChanged = transaction.date !== undefined;
+
+        if ((amountChanged || clearedChanged) && meta) {
           affectedAccountIds.add(meta.account_id);
         }
-      }
 
-      // Add account cache keys
-      for (const accountId of affectedAccountIds) {
-        cacheKeys.add(CacheManager.generateKey('account', 'get', budget_id, accountId));
-      }
-
-      // Collect affected month keys from metadata and updates
-      const affectedMonthKeys = new Set<string>();
-      for (const transaction of transactions) {
-        const meta = metadata.get(transaction.id);
-        if (meta) {
-          affectedMonthKeys.add(`${meta.date.slice(0, 7)}-01`);
+        if (amountChanged) {
+          monthsImpacted = true;
+          accountTotalsChanged = true;
+          invalidateAllCategories = true;
+          if (meta) {
+            affectedMonthKeys.add(toMonthKey(meta.date));
+          }
         }
-        if (transaction.date) {
-          affectedMonthKeys.add(`${transaction.date.slice(0, 7)}-01`);
+
+        if (categoryChanged) {
+          monthsImpacted = true;
+          invalidateAllCategories = true;
+          if (transaction.category_id) {
+            affectedCategoryIds.add(transaction.category_id);
+          }
+          if (meta) {
+            affectedMonthKeys.add(toMonthKey(meta.date));
+          }
         }
-      }
 
-      // Add month cache keys
-      for (const monthKey of affectedMonthKeys) {
-        cacheKeys.add(CacheManager.generateKey('month', 'get', budget_id, monthKey));
-      }
-
-      // Invalidate caches
-      const keysToDelete = Array.from(cacheKeys);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (typeof (cacheManager as any).deleteMany === 'function') {
-        cacheManager.deleteMany(keysToDelete);
-      } else {
-        for (const key of keysToDelete) {
-          cacheManager.delete(key);
+        if (dateChanged && meta) {
+          monthsImpacted = true;
+          affectedMonthKeys.add(toMonthKey(meta.date));
+        }
+        if (dateChanged && transaction.date) {
+          affectedMonthKeys.add(toMonthKey(transaction.date));
         }
       }
+
+      invalidateTransactionCaches(
+        deltaCache,
+        knowledgeStore,
+        budget_id,
+        responseData.server_knowledge,
+        affectedAccountIds,
+        affectedMonthKeys,
+        {
+          affectedCategoryIds,
+          invalidateAllCategories,
+          accountTotalsChanged,
+          invalidateMonths: monthsImpacted,
+        },
+      );
 
       const finalizedResponse = finalizeBulkUpdateResponse(baseResponse);
 

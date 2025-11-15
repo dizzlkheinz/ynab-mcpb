@@ -202,6 +202,8 @@ export class CacheManager {
     for (const key of this.cache.keys()) {
       if (key === normalizedPrefix || key.startsWith(prefixWithColon)) {
         this.cache.delete(key);
+        this.pendingFetches.delete(key);
+        this.pendingRefresh.delete(key);
         removed++;
       }
     }
@@ -213,7 +215,6 @@ export class CacheManager {
    * Matches keys containing the budget ID (e.g., '...:budget-123:...').
    *
    * @param budgetId - Budget identifier to match
-   * @returns Number of entries removed
    */
   deleteByBudgetId(budgetId: string): number {
     if (!budgetId) {
@@ -225,6 +226,8 @@ export class CacheManager {
       const segments = key.split(':');
       if (segments.some((segment) => segment === budgetId)) {
         this.cache.delete(key);
+        this.pendingFetches.delete(key);
+        this.pendingRefresh.delete(key);
         removed++;
       }
     }
@@ -473,6 +476,7 @@ export const CACHE_TTLS = {
   CATEGORIES: 5 * 60 * 1000, // 5 minutes - categories change infrequently
   PAYEES: 10 * 60 * 1000, // 10 minutes - payees are relatively stable
   TRANSACTIONS: 2 * 60 * 1000, // 2 minutes - transactions change more frequently
+  SCHEDULED_TRANSACTIONS: 5 * 60 * 1000, // 5 minutes - scheduled transactions rarely change rapidly
   USER_INFO: 30 * 60 * 1000, // 30 minutes - user info rarely changes
   MONTHS: 5 * 60 * 1000, // 5 minutes - month data changes with new transactions
 } as const;

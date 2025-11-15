@@ -664,6 +664,66 @@ describe('DeltaCache', () => {
     });
   });
 
+  describe('Stats tracking', () => {
+    it('increments deltaHits and mergeOperations when delta merge occurs', async () => {
+      cacheManagerSpies.get.mockReturnValue(createCacheEntry([{ id: 'snap' }], 1000));
+      knowledgeStoreSpies.get.mockReturnValue(1000);
+      const fetcher = createFetcher({ data: [{ id: 'delta' }], serverKnowledge: 1005 });
+      const merger = createMerger();
+
+      await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, merger, {
+        ttl: 5000,
+      });
+
+      expect(deltaCache.getStats()).toEqual({
+        deltaHits: 1,
+        deltaMisses: 0,
+        mergeOperations: 1,
+        knowledgeGapEvents: 0,
+      });
+    });
+
+    it('increments deltaMisses when full refresh is required', async () => {
+      cacheManagerSpies.get.mockReturnValue(null);
+      const fetcher = createFetcher({ data: [{ id: 'fresh' }], serverKnowledge: 50 });
+
+      await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), {
+        ttl: 5000,
+      });
+
+      expect(deltaCache.getStats()).toEqual({
+        deltaHits: 0,
+        deltaMisses: 1,
+        mergeOperations: 0,
+        knowledgeGapEvents: 0,
+      });
+    });
+
+    it('tracks knowledge gap events and treats them as misses', async () => {
+      cacheManagerSpies.get.mockReturnValue(createCacheEntry([{ id: 'snap' }], 1000));
+      knowledgeStoreSpies.get.mockReturnValue(1000);
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce({ data: [{ id: 'delta' }], serverKnowledge: 1205 })
+        .mockResolvedValueOnce({ data: [{ id: 'full' }], serverKnowledge: 1205 });
+
+      await deltaCache.fetchWithDelta(
+        'accounts:list:budget-1',
+        'budget-1',
+        fetcher,
+        createMerger(),
+        { ttl: 5000 },
+      );
+
+      expect(deltaCache.getStats()).toEqual({
+        deltaHits: 0,
+        deltaMisses: 1,
+        mergeOperations: 0,
+        knowledgeGapEvents: 1,
+      });
+    });
+  });
+
   describe('TTL Validation', () => {
     it('should throw when ttl is missing for fetchWithDelta', async () => {
       cacheManagerSpies.get.mockReturnValue(null);

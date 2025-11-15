@@ -1,11 +1,11 @@
-import type { MergeFn } from './deltaCache.js';
+import type { MergeFn, MergeOptions } from './deltaCache.js';
 import * as ynab from 'ynab';
 
-export const mergeFlatEntities: MergeFn<{ id: string; deleted?: boolean }> = (
-  snapshot,
-  delta,
-  options,
-) => {
+export function mergeFlatEntities<T extends { id: string; deleted?: boolean }>(
+  snapshot: T[],
+  delta: T[],
+  options?: MergeOptions,
+): T[] {
   const entityMap = new Map(snapshot.map((entity) => [entity.id, { ...entity }]));
 
   for (const entity of delta) {
@@ -18,7 +18,24 @@ export const mergeFlatEntities: MergeFn<{ id: string; deleted?: boolean }> = (
     entityMap.set(entity.id, { ...base, ...entity });
   }
 
-  return Array.from(entityMap.values());
+  return Array.from(entityMap.values()) as T[];
+}
+
+export const mergeMonths: MergeFn<ynab.MonthSummary> = (snapshot, delta, options) => {
+  const preserveDeleted = Boolean(options?.preserveDeleted);
+  const monthMap = new Map(snapshot.map((month) => [month.month, { ...month }]));
+
+  for (const month of delta) {
+    if (month.deleted && !preserveDeleted) {
+      monthMap.delete(month.month);
+      continue;
+    }
+
+    const base = monthMap.get(month.month) ?? {};
+    monthMap.set(month.month, { ...base, ...month });
+  }
+
+  return Array.from(monthMap.values());
 };
 
 export const mergeCategories: MergeFn<ynab.CategoryGroupWithCategories> = (

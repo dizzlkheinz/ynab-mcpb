@@ -5,6 +5,10 @@ import { withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import { milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
+import type { DeltaFetcher } from './deltaFetcher.js';
+import type { DeltaCache } from '../server/deltaCache.js';
+import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
+import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.js';
 
 /**
  * Schema for ynab:list_accounts tool parameters
@@ -58,8 +62,23 @@ export type CreateAccountParams = z.infer<typeof CreateAccountSchema>;
  */
 export async function handleListAccounts(
   ynabAPI: ynab.API,
+  deltaFetcher: DeltaFetcher,
   params: ListAccountsParams,
+): Promise<CallToolResult>;
+export async function handleListAccounts(
+  ynabAPI: ynab.API,
+  params: ListAccountsParams,
+): Promise<CallToolResult>;
+export async function handleListAccounts(
+  ynabAPI: ynab.API,
+  deltaFetcherOrParams: DeltaFetcher | ListAccountsParams,
+  maybeParams?: ListAccountsParams,
 ): Promise<CallToolResult> {
+  const { deltaFetcher, params } = resolveDeltaFetcherArgs(
+    ynabAPI,
+    deltaFetcherOrParams,
+    maybeParams,
+  );
   return await withToolErrorHandling(
     async () => {
       const useCache = process.env['NODE_ENV'] !== 'test';
@@ -96,16 +115,9 @@ export async function handleListAccounts(
         };
       }
 
-      // Use enhanced CacheManager wrap method
-      const cacheKey = CacheManager.generateKey('accounts', 'list', params.budget_id);
-      const wasCached = cacheManager.has(cacheKey);
-      const accounts = await cacheManager.wrap<ynab.Account[]>(cacheKey, {
-        ttl: CACHE_TTLS.ACCOUNTS,
-        loader: async () => {
-          const response = await ynabAPI.accounts.getAccounts(params.budget_id);
-          return response.data.accounts;
-        },
-      });
+      const result = await deltaFetcher.fetchAccounts(params.budget_id);
+      const accounts = result.data;
+      const wasCached = result.wasCached;
 
       return {
         content: [
@@ -128,7 +140,7 @@ export async function handleListAccounts(
               })),
               cached: wasCached,
               cache_info: wasCached
-                ? 'Data retrieved from cache for improved performance'
+                ? `Data retrieved from cache for improved performance${result.usedDelta ? ' (delta merge applied)' : ''}`
                 : 'Fresh data retrieved from YNAB API',
             }),
           },
@@ -242,8 +254,25 @@ export async function handleGetAccount(
  */
 export async function handleCreateAccount(
   ynabAPI: ynab.API,
+  deltaCache: DeltaCache,
+  knowledgeStore: ServerKnowledgeStore,
   params: CreateAccountParams,
+): Promise<CallToolResult>;
+export async function handleCreateAccount(
+  ynabAPI: ynab.API,
+  params: CreateAccountParams,
+): Promise<CallToolResult>;
+export async function handleCreateAccount(
+  ynabAPI: ynab.API,
+  deltaCacheOrParams: DeltaCache | CreateAccountParams,
+  knowledgeStoreOrParams?: ServerKnowledgeStore | CreateAccountParams,
+  maybeParams?: CreateAccountParams,
 ): Promise<CallToolResult> {
+  const { deltaCache, params } = resolveDeltaWriteArgs(
+    deltaCacheOrParams,
+    knowledgeStoreOrParams,
+    maybeParams,
+  );
   return await withToolErrorHandling(
     async () => {
       if (params.dry_run) {
@@ -280,6 +309,8 @@ export async function handleCreateAccount(
       // Invalidate accounts list cache after successful account creation
       const accountsListCacheKey = CacheManager.generateKey('accounts', 'list', params.budget_id);
       cacheManager.delete(accountsListCacheKey);
+
+      deltaCache.invalidate(params.budget_id, 'accounts');
 
       return {
         content: [

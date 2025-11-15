@@ -69,6 +69,13 @@ export interface DeltaCacheEntry<T> {
   staleWhileRevalidate?: number;
 }
 
+export interface DeltaCacheStats {
+  deltaHits: number;
+  deltaMisses: number;
+  mergeOperations: number;
+  knowledgeGapEvents: number;
+}
+
 type DeltaFetcher<T> = (lastKnowledge?: number) => Promise<{ data: T[]; serverKnowledge: number }>;
 
 /**
@@ -76,6 +83,11 @@ type DeltaFetcher<T> = (lastKnowledge?: number) => Promise<{ data: T[]; serverKn
  * The feature is gated by YNAB_MCP_ENABLE_DELTA for safe rollouts.
  */
 export class DeltaCache {
+  private deltaHits = 0;
+  private deltaMisses = 0;
+  private mergeOperations = 0;
+  private knowledgeGapEvents = 0;
+
   constructor(
     private readonly cacheManager: CacheManager,
     private readonly knowledgeStore: ServerKnowledgeStore,
@@ -91,7 +103,7 @@ export class DeltaCache {
    * @param options.staleWhileRevalidate - Optional stale-while-revalidate window in milliseconds.
    *                                        Allows serving stale cache entries while refreshing in background.
    */
-  async fetchWithDelta<T extends { id: string; deleted?: boolean }>(
+  async fetchWithDelta<T extends { deleted?: boolean }>(
     cacheKey: string,
     budgetId: string,
     fetcher: DeltaFetcher<T>,
@@ -113,8 +125,11 @@ export class DeltaCache {
       ? null
       : this.cacheManager.get<DeltaCacheEntry<T>>(cacheKey);
     const lastKnowledge = options.forceFullRefresh ? undefined : this.knowledgeStore.get(cacheKey);
-    const canUseDelta = Boolean(!options.forceFullRefresh && cachedEntry && lastKnowledge !== undefined);
+    const canUseDelta = Boolean(
+      !options.forceFullRefresh && cachedEntry && lastKnowledge !== undefined,
+    );
     const requestedKnowledge = canUseDelta ? lastKnowledge : undefined;
+    let fullRefreshPerformed = !canUseDelta;
 
     let response = await fetcher(requestedKnowledge);
     const knowledgeGap =
@@ -134,6 +149,8 @@ export class DeltaCache {
         recommendation: 'Consider forcing a full refresh to resync cache.',
       });
       forcedFullRefreshDueToGap = true;
+      this.knowledgeGapEvents++;
+      fullRefreshPerformed = true;
       response = await fetcher(undefined);
     }
 
@@ -146,6 +163,7 @@ export class DeltaCache {
     let usedDelta = false;
 
     if (receivedDelta && cachedEntry) {
+      this.mergeOperations++;
       finalSnapshot = merger(cachedEntry.snapshot, response.data, options.mergeOptions);
       usedDelta = true;
     } else if (cachedEntry && requestedKnowledge !== undefined && !forcedFullRefreshDueToGap) {
@@ -176,11 +194,27 @@ export class DeltaCache {
     this.cacheManager.set(cacheKey, cacheEntry, cacheOptions);
     this.knowledgeStore.update(cacheKey, response.serverKnowledge);
 
+    if (canUseDelta && receivedDelta) {
+      this.deltaHits++;
+      fullRefreshPerformed = false;
+    } else if (fullRefreshPerformed) {
+      this.deltaMisses++;
+    }
+
     return {
       data: finalSnapshot,
       wasCached: Boolean(cachedEntry),
       usedDelta,
       serverKnowledge: response.serverKnowledge,
+    };
+  }
+
+  getStats(): DeltaCacheStats {
+    return {
+      deltaHits: this.deltaHits,
+      deltaMisses: this.deltaMisses,
+      mergeOperations: this.mergeOperations,
+      knowledgeGapEvents: this.knowledgeGapEvents,
     };
   }
 
@@ -220,7 +254,7 @@ export class DeltaCache {
     }
   }
 
-  private async fetchWithoutDelta<T extends { id: string; deleted?: boolean }>(
+  private async fetchWithoutDelta<T extends { deleted?: boolean }>(
     cacheKey: string,
     _budgetId: string,
     fetcher: DeltaFetcher<T>,

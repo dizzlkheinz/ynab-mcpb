@@ -178,7 +178,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
       trackCreatedTransactions(result);
 
       const duration = Date.now() - start;
-      console.info(`Bulk mode (20 txns): ${duration}ms`);
+      console.warn(`Bulk mode (20 txns): ${duration}ms`);
       expect(duration).toBeLessThan(8000);
     },
     60000,

@@ -5,6 +5,8 @@ import { withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import { milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
+import type { DeltaFetcher } from './deltaFetcher.js';
+import { resolveDeltaFetcherArgs } from './deltaSupport.js';
 
 /**
  * Schema for ynab:get_month tool parameters
@@ -118,30 +120,40 @@ export async function handleGetMonth(
  */
 export async function handleListMonths(
   ynabAPI: ynab.API,
+  deltaFetcher: DeltaFetcher,
   params: ListMonthsParams,
+): Promise<CallToolResult>;
+export async function handleListMonths(
+  ynabAPI: ynab.API,
+  params: ListMonthsParams,
+): Promise<CallToolResult>;
+export async function handleListMonths(
+  ynabAPI: ynab.API,
+  deltaFetcherOrParams: DeltaFetcher | ListMonthsParams,
+  maybeParams?: ListMonthsParams,
 ): Promise<CallToolResult> {
+  const { deltaFetcher, params } = resolveDeltaFetcherArgs(
+    ynabAPI,
+    deltaFetcherOrParams,
+    maybeParams,
+  );
   return await withToolErrorHandling(
     async () => {
       const useCache = process.env['NODE_ENV'] !== 'test';
 
       let months: ynab.MonthSummary[];
       let wasCached = false;
+      let usedDelta = false;
 
-      if (useCache) {
-        // Use enhanced CacheManager wrap method
-        const cacheKey = CacheManager.generateKey('months', 'list', params.budget_id);
-        wasCached = cacheManager.has(cacheKey);
-        months = await cacheManager.wrap<ynab.MonthSummary[]>(cacheKey, {
-          ttl: CACHE_TTLS.MONTHS,
-          loader: async () => {
-            const response = await ynabAPI.months.getBudgetMonths(params.budget_id);
-            return response.data.months;
-          },
-        });
-      } else {
+      if (!useCache) {
         // Bypass cache in test environment
         const response = await ynabAPI.months.getBudgetMonths(params.budget_id);
         months = response.data.months;
+      } else {
+        const result = await deltaFetcher.fetchMonths(params.budget_id);
+        months = result.data;
+        wasCached = result.wasCached;
+        usedDelta = result.usedDelta;
       }
 
       return {
@@ -161,7 +173,7 @@ export async function handleListMonths(
               })),
               cached: wasCached,
               cache_info: wasCached
-                ? 'Data retrieved from cache for improved performance'
+                ? `Data retrieved from cache for improved performance${usedDelta ? ' (delta merge applied)' : ''}`
                 : 'Fresh data retrieved from YNAB API',
             }),
           },
