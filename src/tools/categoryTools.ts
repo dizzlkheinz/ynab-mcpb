@@ -72,26 +72,6 @@ export async function handleListCategories(
   );
   return await withToolErrorHandling(
     async () => {
-        );
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: responseFormatter.format({
-                categories: allCategories,
-                category_groups: categoryGroups.map((group) => ({
-                  id: group.id,
-                  name: group.name,
-                  hidden: group.hidden,
-                  deleted: group.deleted,
-                })),
-                cached: false,
-                cache_info: 'Fresh data retrieved from YNAB API',
-              }),
-            },
-          ],
-        };
       const result = await deltaFetcher.fetchCategories(params.budget_id);
       const categoryGroups = result.data;
       const wasCached = result.wasCached;
