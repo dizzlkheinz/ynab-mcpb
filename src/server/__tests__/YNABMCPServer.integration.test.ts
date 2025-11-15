@@ -7,20 +7,14 @@ import { responseFormatter } from '../../server/responseFormatter.js';
 
 /**
  * Real YNAB API tests using token from .env (YNAB_ACCESS_TOKEN)
+ * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
-const runRealIntegrationTests = process.env['SKIP_E2E_TESTS'] !== 'true';
-const describeIntegration = runRealIntegrationTests ? describe : describe.skip;
+const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const shouldSkip = process.env['SKIP_E2E_TESTS'] === 'true' || !hasToken;
+const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration('YNABMCPServer', () => {
   const originalEnv = process.env;
-
-  beforeAll(() => {
-    if (!process.env['YNAB_ACCESS_TOKEN']) {
-      throw new Error(
-        'YNAB_ACCESS_TOKEN is required. Set it in your .env file to run integration tests.',
-      );
-    }
-  });
 
   afterEach(() => {
     // Don't restore env completely, keep the API key loaded

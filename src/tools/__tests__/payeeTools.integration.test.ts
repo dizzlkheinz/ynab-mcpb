@@ -4,9 +4,11 @@ import { handleListPayees, handleGetPayee } from '../payeeTools.js';
 
 /**
  * Integration tests for payee tools using real YNAB API
+ * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
-const runIntegrationTests = process.env['SKIP_E2E_TESTS'] !== 'true';
-const describeIntegration = runIntegrationTests ? describe : describe.skip;
+const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const shouldSkip = process.env['SKIP_E2E_TESTS'] === 'true' || !hasToken;
+const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration('Payee Tools Integration', () => {
   let ynabAPI: ynab.API;
@@ -14,13 +16,7 @@ describeIntegration('Payee Tools Integration', () => {
   let testPayeeId: string;
 
   beforeAll(async () => {
-    const accessToken = process.env['YNAB_ACCESS_TOKEN'];
-    if (!accessToken) {
-      throw new Error(
-        'YNAB_ACCESS_TOKEN is required. Set it in your .env file to run integration tests.',
-      );
-    }
-
+    const accessToken = process.env['YNAB_ACCESS_TOKEN']!;
     ynabAPI = new ynab.API(accessToken);
     const budgetsResponse = await ynabAPI.budgets.getBudgets();
     testBudgetId = budgetsResponse.data.budgets[0].id;

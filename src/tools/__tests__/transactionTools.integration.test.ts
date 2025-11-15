@@ -13,8 +13,9 @@ import {
 const isSkip = ['true', '1', 'yes', 'y', 'on'].includes(
   (process.env['SKIP_E2E_TESTS'] || '').toLowerCase().trim(),
 );
-const runIntegrationTests = !isSkip;
-const describeIntegration = runIntegrationTests ? describe : describe.skip;
+const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const shouldSkip = isSkip || !hasToken;
+const describeIntegration = shouldSkip ? describe.skip : describe;
 type CreateTransactionsParams = z.infer<typeof CreateTransactionsSchema>;
 
 describeIntegration('Transaction Tools Integration', () => {
@@ -24,13 +25,7 @@ describeIntegration('Transaction Tools Integration', () => {
   let secondaryAccountId: string | undefined;
 
   beforeAll(async () => {
-    const accessToken = process.env['YNAB_ACCESS_TOKEN'];
-    if (!accessToken) {
-      throw new Error(
-        'YNAB_ACCESS_TOKEN is required. Set it in your .env file to run integration tests.',
-      );
-    }
-
+    const accessToken = process.env['YNAB_ACCESS_TOKEN']!;
     ynabAPI = new ynab.API(accessToken);
 
     // Get the first budget for testing

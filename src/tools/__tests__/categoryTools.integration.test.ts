@@ -5,8 +5,9 @@ import { handleListCategories, handleGetCategory, handleUpdateCategory } from '.
 /**
  * Integration tests for category tools using real YNAB API
  */
-const runIntegrationTests = process.env['SKIP_E2E_TESTS']?.toLowerCase() !== 'true';
-const describeIntegration = runIntegrationTests ? describe : describe.skip;
+const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const shouldSkip = process.env['SKIP_E2E_TESTS']?.toLowerCase() === 'true' || !hasToken;
+const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration('Category Tools Integration', () => {
   let ynabAPI: ynab.API;
@@ -15,13 +16,7 @@ describeIntegration('Category Tools Integration', () => {
   let originalBudgetedAmount: number;
 
   beforeAll(async () => {
-    const accessToken = process.env['YNAB_ACCESS_TOKEN'];
-    if (!accessToken) {
-      throw new Error(
-        'YNAB_ACCESS_TOKEN is required. Set it in your .env file to run integration tests.',
-      );
-    }
-
+    const accessToken = process.env['YNAB_ACCESS_TOKEN']!;
     ynabAPI = new ynab.API(accessToken);
 
     // Get first budget ID for testing

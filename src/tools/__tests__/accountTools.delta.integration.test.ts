@@ -11,7 +11,9 @@ import { DeltaFetcher } from '../deltaFetcher.js';
 const shouldSkip = ['true', '1', 'yes', 'y', 'on'].includes(
   (process.env['SKIP_E2E_TESTS'] || '').toLowerCase().trim(),
 );
-const describeIntegration = shouldSkip ? describe.skip : describe;
+const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const skipTests = shouldSkip || !hasToken;
+const describeIntegration = skipTests ? describe.skip : describe;
 
 describeIntegration('Delta-backed account tool handlers', () => {
   let ynabAPI: ynab.API;
@@ -21,13 +23,7 @@ describeIntegration('Delta-backed account tool handlers', () => {
   let previousNodeEnv: string | undefined;
 
   beforeAll(async () => {
-    const accessToken = process.env['YNAB_ACCESS_TOKEN'];
-    if (!accessToken) {
-      throw new Error(
-        'YNAB_ACCESS_TOKEN is required. Set it in your environment to run integration tests.',
-      );
-    }
-
+    const accessToken = process.env['YNAB_ACCESS_TOKEN']!;
     ynabAPI = new ynab.API(accessToken);
     const budgetsResponse = await ynabAPI.budgets.getBudgets();
     const budget = budgetsResponse.data.budgets[0];

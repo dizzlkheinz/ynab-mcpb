@@ -2,14 +2,19 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import * as ynab from 'ynab';
 import { handleGetUser, handleConvertAmount } from '../utilityTools.js';
 
-describe('Utility Tools Integration Tests', () => {
+/**
+ * Utility Tools Integration Tests
+ * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
+ */
+const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const shouldSkip = process.env['SKIP_E2E_TESTS'] === 'true' || !hasToken;
+const describeIntegration = shouldSkip ? describe.skip : describe;
+
+describeIntegration('Utility Tools Integration Tests', () => {
   let ynabAPI: ynab.API;
 
   beforeAll(() => {
-    const accessToken = process.env['YNAB_ACCESS_TOKEN'];
-    if (!accessToken) {
-      throw new Error('YNAB_ACCESS_TOKEN environment variable is required for integration tests');
-    }
+    const accessToken = process.env['YNAB_ACCESS_TOKEN']!;
     ynabAPI = new ynab.API(accessToken);
   });
 

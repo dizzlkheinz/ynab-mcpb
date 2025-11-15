@@ -5,24 +5,21 @@ import { skipOnRateLimit } from '../../__tests__/testUtils.js';
 
 /**
  * Integration tests for budget tools using real YNAB API
+ * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
 const isSkip = ['true', '1', 'yes', 'y', 'on'].includes(
   (process.env['SKIP_E2E_TESTS'] || '').toLowerCase().trim(),
 );
-const runIntegrationTests = !isSkip;
-const describeIntegration = runIntegrationTests ? describe : describe.skip;
+const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const shouldSkip = isSkip || !hasToken;
+const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration('Budget Tools Integration', () => {
   let ynabAPI: ynab.API;
   let testBudgetId: string;
 
   beforeAll(() => {
-    const accessToken = process.env['YNAB_ACCESS_TOKEN'];
-    if (!accessToken) {
-      throw new Error(
-        'YNAB_ACCESS_TOKEN is required. Set it in your .env file to run integration tests.',
-      );
-    }
+    const accessToken = process.env['YNAB_ACCESS_TOKEN']!;
     ynabAPI = new ynab.API(accessToken);
   });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { YNABMCPServer } from '../YNABMCPServer';
 import { AuthenticationError, ConfigurationError } from '../../types/index';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -12,17 +12,14 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
  * - MCP server initialization
  * - Tool registration
  * - Transport connection setup
+ * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
-describe('Server Startup and Transport Integration', () => {
-  const originalEnv = process.env;
+const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const shouldSkip = process.env['SKIP_E2E_TESTS'] === 'true' || !hasToken;
+const describeIntegration = shouldSkip ? describe.skip : describe;
 
-  beforeAll(() => {
-    if (!process.env['YNAB_ACCESS_TOKEN']) {
-      throw new Error(
-        'YNAB_ACCESS_TOKEN is required. Set it in your .env file to run integration tests.',
-      );
-    }
-  });
+describeIntegration('Server Startup and Transport Integration', () => {
+  const originalEnv = process.env;
 
   afterEach(() => {
     // Restore environment but keep API key

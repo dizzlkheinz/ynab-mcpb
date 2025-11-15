@@ -13,8 +13,14 @@ import type { ReconciliationAnalysis } from '../types.js';
 import type { ReconcileAccountRequest } from '../index.js';
 import { getTestConfig, skipOnRateLimit } from '../../../__tests__/testUtils.js';
 
+/**
+ * Reconciliation Executor Integration Tests
+ * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
+ */
 const config = getTestConfig();
-const describeIntegration = config.skipE2ETests ? describe.skip : describe;
+const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const shouldSkip = config.skipE2ETests || !hasToken;
+const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
   let ynabAPI: ynab.API;
@@ -24,13 +30,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
   const createdTransactionIds: string[] = [];
 
   beforeAll(async () => {
-    if (!config.hasRealApiKey) {
-      throw new Error('YNAB_ACCESS_TOKEN is required for reconciliation integration tests');
-    }
-    const accessToken = process.env['YNAB_ACCESS_TOKEN'];
-    if (!accessToken) {
-      throw new Error('YNAB_ACCESS_TOKEN must be set to run integration tests');
-    }
+    const accessToken = process.env['YNAB_ACCESS_TOKEN']!;
     ynabAPI = new ynab.API(accessToken);
     budgetId = config.testBudgetId ?? (await resolveDefaultBudgetId(ynabAPI));
     accountId = config.testAccountId ?? (await resolveDefaultAccountId(ynabAPI, budgetId));
