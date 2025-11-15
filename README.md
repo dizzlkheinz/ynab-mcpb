@@ -22,6 +22,7 @@ Connect your YNAB budget to Claude Desktop and other AI assistants using the Mod
 
 - **Ask Questions**: "How much did I spend on groceries last month?" or "What's my credit card balance?"
 - **Manage Transactions**: Create, update, or delete transactions without opening YNAB
+- **Split Receipts**: Create itemized transactions from receipts with automatic tax allocation across items
 - **Reconcile Accounts**: Import and compare bank statements to find missing transactions
 - **Analyze Spending**: Get insights into spending patterns and budget performance
 - **Set Budgets**: Adjust category budgets and move money between categories
