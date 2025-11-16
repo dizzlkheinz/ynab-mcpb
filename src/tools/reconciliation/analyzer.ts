@@ -725,7 +725,7 @@ function mergeInsights(
  * @param currency - Currency code (default: USD)
  * @param accountId - Account ID for recommendation context
  * @param budgetId - Budget ID for recommendation context
- * @param isLiabilityAccount - Whether this is a credit card/liability account (inverts transaction signs)
+ * @param invertBankAmounts - Whether to invert bank transaction amounts (for banks that show charges as positive)
  */
 export function analyzeReconciliation(
   csvContent: string,
@@ -736,14 +736,15 @@ export function analyzeReconciliation(
   currency: string = 'USD',
   accountId?: string,
   budgetId?: string,
-  isLiabilityAccount: boolean = false,
+  invertBankAmounts: boolean = false,
 ): ReconciliationAnalysis {
   // Step 1: Parse bank CSV
   let bankTransactions = parseBankStatement(csvContent, csvFilePath);
 
-  // Step 1b: For liability accounts (credit cards), invert transaction amounts
-  // Bank statements show charges as negative, but YNAB shows them as positive
-  if (isLiabilityAccount) {
+  // Step 1b: Optionally invert bank transaction amounts
+  // Some banks show charges as positive (need inversion to match YNAB's negative convention)
+  // Other banks (e.g., Wealthsimple) show charges as negative already (no inversion needed)
+  if (invertBankAmounts) {
     bankTransactions = bankTransactions.map(txn => ({
       ...txn,
       amount: -txn.amount,
