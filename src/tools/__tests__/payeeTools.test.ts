@@ -6,6 +6,7 @@ import {
   ListPayeesSchema,
   GetPayeeSchema,
 } from '../payeeTools.js';
+import { createDeltaFetcherMock, createRejectingDeltaFetcherMock } from './deltaTestUtils.js';
 
 // Mock the cache manager
 vi.mock('../../server/cacheManager.js', () => ({
@@ -39,13 +40,29 @@ const { cacheManager, CacheManager, CACHE_TTLS } = await import('../../server/ca
 
 describe('Payee Tools', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     // Reset NODE_ENV to test to ensure cache bypassing in tests
     process.env['NODE_ENV'] = 'test';
+    // Mock cache.wrap to call the loader directly (bypass cache)
+    (cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
+      async (
+        _key: string,
+        options: {
+          loader: () => Promise<unknown>;
+        },
+      ) => {
+        return await options.loader();
+      },
+    );
+    (cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    (CacheManager.generateKey as ReturnType<typeof vi.fn>).mockImplementation(
+      (prefix: string, ...parts: (string | number | boolean | undefined)[]) =>
+        [prefix, ...parts.filter((part) => part !== undefined)].join(':'),
+    );
   });
 
   describe('handleListPayees', () => {
-    it('should bypass cache in test environment', async () => {
+    it('should include cache metadata from delta fetcher results', async () => {
       const mockPayees = [
         {
           id: 'payee-1',
@@ -60,20 +77,17 @@ describe('Payee Tools', () => {
           deleted: false,
         },
       ];
-
-      (mockYnabAPI.payees.getPayees as any).mockResolvedValue({
-        data: { payees: mockPayees },
+      const { fetcher, resolved } = createDeltaFetcherMock('fetchPayees', {
+        data: mockPayees,
+        wasCached: true,
+        usedDelta: true,
       });
 
-      const result = await handleListPayees(mockYnabAPI, { budget_id: 'budget-1' });
-
-      // In test environment, cache should be bypassed
-      expect(cacheManager.wrap).not.toHaveBeenCalled();
-      expect(mockYnabAPI.payees.getPayees).toHaveBeenCalledTimes(1);
+      const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.cached).toBe(false);
-      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
+      expect(parsedContent.cached).toBe(resolved.wasCached);
+      expect(parsedContent.cache_info).toContain('delta merge applied');
       expect(parsedContent.payees).toHaveLength(2);
     });
 
@@ -134,18 +148,20 @@ describe('Payee Tools', () => {
           deleted: false,
         },
       ];
-
-      (mockYnabAPI.payees.getPayees as any).mockResolvedValue({
-        data: { payees: mockPayees },
+      const { fetcher, resolved } = createDeltaFetcherMock('fetchPayees', {
+        data: mockPayees,
+        wasCached: false,
       });
 
-      const result = await handleListPayees(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
 
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.payees).toHaveLength(3);
+      expect(parsedContent.cached).toBe(resolved.wasCached);
+      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
       expect(parsedContent.payees[0]).toEqual({
         id: 'payee-1',
         name: 'Grocery Store',
@@ -160,52 +176,50 @@ describe('Payee Tools', () => {
       });
     });
 
-    it('should handle 401 authentication errors', async () => {
-      (mockYnabAPI.payees.getPayees as any).mockRejectedValue(new Error('401 Unauthorized'));
+    it('should handle authentication errors', async () => {
+      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('401 Unauthorized'));
 
-      const result = await handleListPayees(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.error.message).toBe('Invalid or expired YNAB access token');
     });
 
-    it('should handle 403 forbidden errors', async () => {
-      (mockYnabAPI.payees.getPayees as any).mockRejectedValue(new Error('403 Forbidden'));
+    it('should handle forbidden errors', async () => {
+      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('403 Forbidden'));
 
-      const result = await handleListPayees(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.error.message).toBe('Insufficient permissions to access YNAB data');
     });
 
-    it('should handle 404 not found errors', async () => {
-      (mockYnabAPI.payees.getPayees as any).mockRejectedValue(new Error('404 Not Found'));
+    it('should handle not found errors', async () => {
+      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('404 Not Found'));
 
-      const result = await handleListPayees(mockYnabAPI, { budget_id: 'invalid-budget' });
+      const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'invalid-budget' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.error.message).toBe('Budget or payee not found');
     });
 
-    it('should handle 429 rate limit errors', async () => {
-      (mockYnabAPI.payees.getPayees as any).mockRejectedValue(new Error('429 Too Many Requests'));
+    it('should handle rate limit errors', async () => {
+      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('429 Too Many Requests'));
 
-      const result = await handleListPayees(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.error.message).toBe('Rate limit exceeded. Please try again later');
     });
 
-    it('should handle 500 server errors', async () => {
-      (mockYnabAPI.payees.getPayees as any).mockRejectedValue(
-        new Error('500 Internal Server Error'),
-      );
+    it('should handle server errors', async () => {
+      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('500 Internal Server Error'));
 
-      const result = await handleListPayees(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
@@ -213,9 +227,9 @@ describe('Payee Tools', () => {
     });
 
     it('should handle generic errors', async () => {
-      (mockYnabAPI.payees.getPayees as any).mockRejectedValue(new Error('Network error'));
+      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('Network error'));
 
-      const result = await handleListPayees(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);

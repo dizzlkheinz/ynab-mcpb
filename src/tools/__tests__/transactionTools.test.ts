@@ -25,6 +25,7 @@ vi.mock('../../server/cacheManager.js', () => ({
     wrap: vi.fn(),
     has: vi.fn(),
     get: vi.fn(),
+    set: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     deleteByPrefix: vi.fn(),
@@ -58,7 +59,7 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { cacheManager, CacheManager, CACHE_TTLS } = await import('../../server/cacheManager.js');
+const { cacheManager, CacheManager } = await import('../../server/cacheManager.js');
 const { globalRequestLogger } = await import('../../server/requestLogger.js');
 
 describe('transactionTools', () => {
@@ -166,6 +167,7 @@ describe('transactionTools', () => {
         'budget-123',
         undefined,
         undefined,
+        undefined,
       );
 
       const parsedContent = JSON.parse(result.content[0].text);
@@ -229,6 +231,7 @@ describe('transactionTools', () => {
         'budget-123',
         undefined,
         undefined,
+        undefined,
       );
       expect(result.content[0].text).toContain('transaction-123');
       expect(result.content[0].text).toContain('-50');
@@ -252,6 +255,8 @@ describe('transactionTools', () => {
       expect(mockYnabAPI.transactions.getTransactionsByAccount).toHaveBeenCalledWith(
         'budget-123',
         'account-456',
+        undefined,
+        undefined,
         undefined,
       );
       expect(result.content[0].text).toContain('transaction-123');
@@ -300,6 +305,7 @@ describe('transactionTools', () => {
         'budget-123',
         '2024-01-01',
         'uncategorized',
+        undefined,
       );
     });
 
