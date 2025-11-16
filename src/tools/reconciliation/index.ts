@@ -116,6 +116,7 @@ export const ReconcileAccountSchema = z
     auto_update_cleared_status: z.boolean().optional().default(false),
     auto_unclear_missing: z.boolean().optional().default(true),
     auto_adjust_dates: z.boolean().optional().default(false),
+    invert_bank_amounts: z.boolean().optional(),
     dry_run: z.boolean().optional().default(true),
     balance_verification_mode: z
       .enum(['ANALYSIS_ONLY', 'GUIDED_RESOLUTION', 'AUTO_RESOLVE'])
@@ -188,7 +189,7 @@ export async function handleReconcileAccount(
 
       // For liability accounts (credit cards, loans, debts), statement balance should be negative
       // A positive balance on a credit card statement means you OWE that amount
-      const isLiabilityAccount =
+      const accountIsLiability =
         accountType === 'creditCard' ||
         accountType === 'lineOfCredit' ||
         accountType === 'mortgage' ||
@@ -199,8 +200,17 @@ export async function handleReconcileAccount(
         accountType === 'otherDebt' ||
         accountType === 'otherLiability';
 
+      // Determine whether to invert bank amounts
+      // If invert_bank_amounts is explicitly set, use that value
+      // Otherwise, default to true for liability accounts (legacy behavior)
+      // Note: Some banks (e.g., Wealthsimple) show charges as negative already, matching YNAB
+      const shouldInvertBankAmounts =
+        params.invert_bank_amounts !== undefined
+          ? params.invert_bank_amounts
+          : accountIsLiability;
+
       // Negate statement balance for liability accounts
-      const adjustedStatementBalance = isLiabilityAccount
+      const adjustedStatementBalance = accountIsLiability
         ? -Math.abs(params.statement_balance)
         : params.statement_balance;
 
@@ -283,7 +293,7 @@ export async function handleReconcileAccount(
         currencyCode,
         params.account_id,
         params.budget_id,
-        isLiabilityAccount,
+        shouldInvertBankAmounts,
       );
 
       const initialAccount: AccountSnapshot = {
