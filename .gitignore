@@ -166,3 +166,4 @@ test-results/**/*.csv
 
 # Generated PR description
 .pr-description.md
+test-exports/ynab_since_2025-11-01_account_4c18e9f0_minimal_14items_2025-11-16_10-07-10.json
