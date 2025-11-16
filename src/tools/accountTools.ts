@@ -16,6 +16,7 @@ import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.j
 export const ListAccountsSchema = z
   .object({
     budget_id: z.string().min(1, 'Budget ID is required'),
+    limit: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -82,8 +83,14 @@ export async function handleListAccounts(
   return await withToolErrorHandling(
     async () => {
       const result = await deltaFetcher.fetchAccounts(params.budget_id);
-      const accounts = result.data;
+      let accounts = result.data;
       const wasCached = result.wasCached;
+
+      // Apply limit if specified
+      const totalCount = accounts.length;
+      if (params.limit !== undefined) {
+        accounts = accounts.slice(0, params.limit);
+      }
 
       return {
         content: [
@@ -104,6 +111,8 @@ export async function handleListAccounts(
                 direct_import_linked: account.direct_import_linked,
                 direct_import_in_error: account.direct_import_in_error,
               })),
+              total_count: totalCount,
+              returned_count: accounts.length,
               cached: wasCached,
               cache_info: wasCached
                 ? `Data retrieved from cache for improved performance${result.usedDelta ? ' (delta merge applied)' : ''}`

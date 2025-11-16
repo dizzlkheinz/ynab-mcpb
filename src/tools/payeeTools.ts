@@ -13,6 +13,7 @@ import { resolveDeltaFetcherArgs } from './deltaSupport.js';
 export const ListPayeesSchema = z
   .object({
     budget_id: z.string().min(1, 'Budget ID is required'),
+    limit: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -56,8 +57,14 @@ export async function handleListPayees(
   return await withToolErrorHandling(
     async () => {
       const result = await deltaFetcher.fetchPayees(params.budget_id);
-      const payees = result.data;
+      let payees = result.data;
       const wasCached = result.wasCached;
+
+      // Apply limit if specified
+      const totalCount = payees.length;
+      if (params.limit !== undefined) {
+        payees = payees.slice(0, params.limit);
+      }
 
       return {
         content: [
@@ -70,6 +77,8 @@ export async function handleListPayees(
                 transfer_account_id: payee.transfer_account_id,
                 deleted: payee.deleted,
               })),
+              total_count: totalCount,
+              returned_count: payees.length,
               cached: wasCached,
               cache_info: wasCached
                 ? `Data retrieved from cache for improved performance${result.usedDelta ? ' (delta merge applied)' : ''}`

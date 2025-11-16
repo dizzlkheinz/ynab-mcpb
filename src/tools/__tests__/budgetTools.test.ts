@@ -205,10 +205,180 @@ describe('Budget Tools', () => {
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.budget.id).toBe('budget-1');
       expect(parsedContent.budget.name).toBe('My Budget');
-      expect(parsedContent.budget.accounts).toHaveLength(1);
-      expect(parsedContent.budget.categories).toHaveLength(1);
-      expect(parsedContent.budget.payees).toHaveLength(1);
-      expect(parsedContent.budget.months).toHaveLength(1);
+      expect(parsedContent.budget.accounts_count).toBe(1);
+      expect(parsedContent.budget.categories_count).toBe(1);
+      expect(parsedContent.budget.payees_count).toBe(1);
+      expect(parsedContent.budget.months_count).toBe(1);
+      // Ensure arrays are not included in response
+      expect(parsedContent.budget.accounts).toBeUndefined();
+      expect(parsedContent.budget.categories).toBeUndefined();
+      expect(parsedContent.budget.payees).toBeUndefined();
+      expect(parsedContent.budget.months).toBeUndefined();
+    });
+
+    it('should return zero counts for empty collections and exclude arrays', async () => {
+      const mockBudget = {
+        id: 'budget-2',
+        name: 'Empty Budget',
+        last_modified_on: '2024-01-01T00:00:00Z',
+        first_month: '2024-01-01',
+        last_month: '2024-12-01',
+        date_format: { format: 'MM/DD/YYYY' },
+        currency_format: { iso_code: 'USD', example_format: '$123.45' },
+        accounts: [],
+        categories: [],
+        payees: [],
+        months: [],
+      };
+
+      (mockYnabAPI.budgets.getBudgetById as any).mockResolvedValue({
+        data: { budget: mockBudget },
+      });
+
+      const result = await handleGetBudget(mockYnabAPI, { budget_id: 'budget-2' });
+
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe('text');
+
+      const parsedContent = JSON.parse(result.content[0].text);
+      expect(parsedContent.budget.id).toBe('budget-2');
+      expect(parsedContent.budget.name).toBe('Empty Budget');
+      // Assert all counts are 0
+      expect(parsedContent.budget.accounts_count).toBe(0);
+      expect(parsedContent.budget.categories_count).toBe(0);
+      expect(parsedContent.budget.payees_count).toBe(0);
+      expect(parsedContent.budget.months_count).toBe(0);
+      // Ensure arrays are not included in response
+      expect(parsedContent.budget.accounts).toBeUndefined();
+      expect(parsedContent.budget.categories).toBeUndefined();
+      expect(parsedContent.budget.payees).toBeUndefined();
+      expect(parsedContent.budget.months).toBeUndefined();
+    });
+
+    it('should return correct counts for multiple items and exclude arrays', async () => {
+      const mockBudget = {
+        id: 'budget-3',
+        name: 'Multi-Item Budget',
+        last_modified_on: '2024-01-01T00:00:00Z',
+        first_month: '2024-01-01',
+        last_month: '2024-12-01',
+        date_format: { format: 'MM/DD/YYYY' },
+        currency_format: { iso_code: 'USD', example_format: '$123.45' },
+        accounts: [
+          {
+            id: 'account-1',
+            name: 'Checking',
+            type: 'checking',
+            on_budget: true,
+            closed: false,
+            balance: 100000,
+            cleared_balance: 95000,
+            uncleared_balance: 5000,
+          },
+          {
+            id: 'account-2',
+            name: 'Savings',
+            type: 'savings',
+            on_budget: true,
+            closed: false,
+            balance: 200000,
+            cleared_balance: 200000,
+            uncleared_balance: 0,
+          },
+        ],
+        categories: [
+          {
+            id: 'category-1',
+            category_group_id: 'group-1',
+            name: 'Groceries',
+            hidden: false,
+            budgeted: 50000,
+            activity: -30000,
+            balance: 20000,
+          },
+          {
+            id: 'category-2',
+            category_group_id: 'group-1',
+            name: 'Dining',
+            hidden: false,
+            budgeted: 30000,
+            activity: -20000,
+            balance: 10000,
+          },
+          {
+            id: 'category-3',
+            category_group_id: 'group-2',
+            name: 'Entertainment',
+            hidden: false,
+            budgeted: 40000,
+            activity: -25000,
+            balance: 15000,
+          },
+        ],
+        payees: [
+          {
+            id: 'payee-1',
+            name: 'Grocery Store',
+            transfer_account_id: null,
+          },
+          {
+            id: 'payee-2',
+            name: 'Restaurant',
+            transfer_account_id: null,
+          },
+          {
+            id: 'payee-3',
+            name: 'Cinema',
+            transfer_account_id: null,
+          },
+          {
+            id: 'payee-4',
+            name: 'Transfer: Savings',
+            transfer_account_id: 'account-2',
+          },
+        ],
+        months: [
+          {
+            month: '2024-01-01',
+            note: 'January budget',
+            income: 500000,
+            budgeted: 450000,
+            activity: -400000,
+            to_be_budgeted: 50000,
+          },
+          {
+            month: '2024-02-01',
+            note: 'February budget',
+            income: 520000,
+            budgeted: 460000,
+            activity: -410000,
+            to_be_budgeted: 60000,
+          },
+        ],
+      };
+
+      (mockYnabAPI.budgets.getBudgetById as any).mockResolvedValue({
+        data: { budget: mockBudget },
+      });
+
+      const result = await handleGetBudget(mockYnabAPI, { budget_id: 'budget-3' });
+
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe('text');
+
+      const parsedContent = JSON.parse(result.content[0].text);
+      expect(parsedContent.budget.id).toBe('budget-3');
+      expect(parsedContent.budget.name).toBe('Multi-Item Budget');
+      // Assert counts reflect multiple items
+      expect(parsedContent.budget.accounts_count).toBe(2);
+      expect(parsedContent.budget.categories_count).toBe(3);
+      expect(parsedContent.budget.payees_count).toBe(4);
+      expect(parsedContent.budget.months_count).toBe(2);
+      // Ensure arrays are not included in response
+      expect(parsedContent.budget.accounts).toBeUndefined();
+      expect(parsedContent.budget.categories).toBeUndefined();
+      expect(parsedContent.budget.payees).toBeUndefined();
+      expect(parsedContent.budget.months).toBeUndefined();
     });
 
     it('should handle 404 not found errors', async () => {

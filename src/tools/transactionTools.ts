@@ -1319,7 +1319,7 @@ export async function handleCreateReceiptSplitTransaction(
   );
 
   const firstContent = baseResult.content?.[0];
-  if (!firstContent || typeof firstContent.text !== 'string') {
+  if (!firstContent || firstContent.type !== 'text') {
     return baseResult;
   }
 
