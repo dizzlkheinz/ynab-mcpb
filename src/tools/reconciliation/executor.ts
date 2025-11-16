@@ -452,16 +452,19 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
       if (!flags.needsClearedUpdate && !flags.needsDateUpdate) continue;
       if (!match.ynab_transaction) continue;
 
+      // Build minimal update payload - only include ID and fields that are changing
+      // Including unnecessary fields (like amount, payee_name, memo) can cause unexpected behavior
       const updatePayload: ynab.SaveTransactionWithIdOrImportId = {
         id: match.ynab_transaction.id,
-        account_id: accountId,
-        amount: match.ynab_transaction.amount,
-        date: flags.needsDateUpdate ? match.bank_transaction.date : match.ynab_transaction.date,
-        cleared: (flags.needsClearedUpdate ? 'cleared' : match.ynab_transaction.cleared) as ynab.TransactionClearedStatus,
-        payee_name: match.ynab_transaction.payee_name ?? null,
-        memo: match.ynab_transaction.memo ?? null,
-        approved: match.ynab_transaction.approved,
       };
+
+      // Only include fields that are actually changing
+      if (flags.needsDateUpdate) {
+        updatePayload.date = match.bank_transaction.date;
+      }
+      if (flags.needsClearedUpdate) {
+        updatePayload.cleared = 'cleared' as ynab.TransactionClearedStatus;
+      }
 
       if (params.dry_run) {
         summary.transactions_updated += 1;
@@ -540,6 +543,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           break;
         }
       } else {
+        // Minimal update payload - only include ID and the field we're changing
         transactionsToUnclear.push({
           id: ynabTxn.id,
           cleared: 'uncleared' as ynab.TransactionClearedStatus,
