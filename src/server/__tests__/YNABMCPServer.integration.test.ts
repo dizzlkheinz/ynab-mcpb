@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YNABMCPServer } from '../YNABMCPServer.js';
 import { AuthenticationError, ConfigurationError } from '../../types/index.js';
 import { ToolRegistry } from '../toolRegistry.js';

@@ -8,6 +8,7 @@ import {
   GetAccountSchema,
   CreateAccountSchema,
 } from '../accountTools.js';
+import { createDeltaFetcherMock, createRejectingDeltaFetcherMock } from './deltaTestUtils.js';
 
 // Mock the cache manager
 vi.mock('../../server/cacheManager.js', () => ({
@@ -48,6 +49,21 @@ describe('Account Tools', () => {
     vi.resetAllMocks();
     // Reset NODE_ENV to test to ensure cache bypassing in tests
     process.env['NODE_ENV'] = 'test';
+    (cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
+      async (
+        _key: string,
+        options: {
+          loader: () => Promise<unknown>;
+        },
+      ) => {
+        return await options.loader();
+      },
+    );
+    (cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    (CacheManager.generateKey as ReturnType<typeof vi.fn>).mockImplementation(
+      (prefix: string, ...parts: (string | number | boolean | undefined)[]) =>
+        [prefix, ...parts.filter((part) => part !== undefined)].join(':'),
+    );
   });
 
   afterAll(() => {
@@ -60,7 +76,7 @@ describe('Account Tools', () => {
   });
 
   describe('handleListAccounts', () => {
-    it('should bypass cache in test environment', async () => {
+    it('should include cache metadata from delta fetcher results', async () => {
       const mockAccounts = [
         {
           id: 'account-1',
@@ -77,25 +93,20 @@ describe('Account Tools', () => {
           direct_import_in_error: false,
         },
       ];
-
-      (mockYnabAPI.accounts.getAccounts as any).mockResolvedValue({
-        data: { accounts: mockAccounts },
+      const { fetcher, resolved } = createDeltaFetcherMock('fetchAccounts', {
+        data: mockAccounts,
+        wasCached: true,
+        usedDelta: true,
       });
 
-      const result = await handleListAccounts(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListAccounts(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
-      // In test environment, cache should be bypassed
-      expect(cacheManager.wrap).not.toHaveBeenCalled();
-      expect(mockYnabAPI.accounts.getAccounts).toHaveBeenCalledTimes(1);
+      const fetchAccountsMock = fetcher.fetchAccounts as ReturnType<typeof vi.fn>;
+      expect(fetchAccountsMock).toHaveBeenCalledWith('budget-1');
 
       const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.cached).toBe(false);
-      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
-    });
-
-    // NOTE: Caching is now handled by DeltaFetcher, tested separately in deltaFetcher.test.ts
-    it.skip('should use cache when NODE_ENV is not test', async () => {
-      // This test is obsolete - caching is now handled by DeltaFetcher
+      expect(parsedContent.cached).toBe(resolved.wasCached);
+      expect(parsedContent.cache_info).toContain('delta merge applied');
     });
 
     it('should return formatted account list on success', async () => {
@@ -129,12 +140,12 @@ describe('Account Tools', () => {
           direct_import_in_error: false,
         },
       ];
-
-      (mockYnabAPI.accounts.getAccounts as any).mockResolvedValue({
-        data: { accounts: mockAccounts },
+      const { fetcher, resolved } = createDeltaFetcherMock('fetchAccounts', {
+        data: mockAccounts,
+        wasCached: false,
       });
 
-      const result = await handleListAccounts(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListAccounts(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
@@ -155,12 +166,19 @@ describe('Account Tools', () => {
         direct_import_linked: false,
         direct_import_in_error: false,
       });
+      expect(parsedContent.cached).toBe(resolved.wasCached);
+      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
     });
 
     it('should handle 404 budget not found errors', async () => {
-      (mockYnabAPI.accounts.getAccounts as any).mockRejectedValue(new Error('404 Not Found'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchAccounts',
+        new Error('404 Not Found'),
+      );
 
-      const result = await handleListAccounts(mockYnabAPI, { budget_id: 'invalid-budget' });
+      const result = await handleListAccounts(mockYnabAPI, fetcher, {
+        budget_id: 'invalid-budget',
+      });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
@@ -170,9 +188,12 @@ describe('Account Tools', () => {
     });
 
     it('should handle 401 authentication errors', async () => {
-      (mockYnabAPI.accounts.getAccounts as any).mockRejectedValue(new Error('401 Unauthorized'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchAccounts',
+        new Error('401 Unauthorized'),
+      );
 
-      const result = await handleListAccounts(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListAccounts(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
@@ -180,9 +201,12 @@ describe('Account Tools', () => {
     });
 
     it('should handle generic errors', async () => {
-      (mockYnabAPI.accounts.getAccounts as any).mockRejectedValue(new Error('Network error'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchAccounts',
+        new Error('Network error'),
+      );
 
-      const result = await handleListAccounts(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListAccounts(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
@@ -191,10 +215,6 @@ describe('Account Tools', () => {
   });
 
   describe('handleGetAccount', () => {
-    // NOTE: Caching is now handled by DeltaFetcher, tested separately in deltaFetcher.test.ts
-    it.skip('should use cache when NODE_ENV is not test', async () => {
-      // This test is obsolete - caching is now handled by DeltaFetcher
-    });
 
     it('should return detailed account information on success', async () => {
       const mockAccount = {
@@ -239,6 +259,39 @@ describe('Account Tools', () => {
         direct_import_linked: false,
         direct_import_in_error: false,
       });
+      expect(parsedContent.cached).toBe(false);
+      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
+    });
+
+    it('should report cached responses when cache entries exist', async () => {
+      const mockAccount = {
+        id: 'account-1',
+        name: 'Checking Account',
+        type: 'checking',
+        on_budget: true,
+        closed: false,
+        note: 'Main checking account',
+        balance: 100000,
+        cleared_balance: 95000,
+        uncleared_balance: 5000,
+        transfer_payee_id: 'payee-1',
+        direct_import_linked: false,
+        direct_import_in_error: false,
+      };
+
+      (mockYnabAPI.accounts.getAccountById as any).mockResolvedValue({
+        data: { account: mockAccount },
+      });
+      (cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
+
+      const result = await handleGetAccount(mockYnabAPI, {
+        budget_id: 'budget-1',
+        account_id: 'account-1',
+      });
+
+      const parsedContent = JSON.parse(result.content[0].text);
+      expect(parsedContent.cached).toBe(true);
+      expect(parsedContent.cache_info).toBe('Data retrieved from cache for improved performance');
     });
 
     it('should handle 404 account not found errors', async () => {
@@ -427,9 +480,6 @@ describe('Account Tools', () => {
         data: { account: mockAccount },
       });
 
-      const mockCacheKey = 'accounts:list:budget-1:generated-key';
-      (CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-
       const result = await handleCreateAccount(mockYnabAPI, {
         budget_id: 'budget-1',
         name: 'New Account',
@@ -438,7 +488,7 @@ describe('Account Tools', () => {
 
       // Verify cache was invalidated for account list
       expect(CacheManager.generateKey).toHaveBeenCalledWith('accounts', 'list', 'budget-1');
-      expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
+      expect(cacheManager.delete).toHaveBeenCalledWith('accounts:list:budget-1');
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);

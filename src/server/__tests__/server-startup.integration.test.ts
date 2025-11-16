@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YNABMCPServer } from '../YNABMCPServer';
 import { AuthenticationError, ConfigurationError } from '../../types/index';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';

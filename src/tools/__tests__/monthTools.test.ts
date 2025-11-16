@@ -6,6 +6,7 @@ import {
   GetMonthSchema,
   ListMonthsSchema,
 } from '../monthTools.js';
+import { createDeltaFetcherMock, createRejectingDeltaFetcherMock } from './deltaTestUtils.js';
 
 // Mock the cache manager
 vi.mock('../../server/cacheManager.js', () => ({
@@ -39,9 +40,25 @@ const { cacheManager, CacheManager, CACHE_TTLS } = await import('../../server/ca
 
 describe('Month Tools', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     // Reset NODE_ENV to test to ensure cache bypassing in tests
     process.env['NODE_ENV'] = 'test';
+    // Mock cache.wrap to call the loader directly (bypass cache)
+    (cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
+      async (
+        _key: string,
+        options: {
+          loader: () => Promise<unknown>;
+        },
+      ) => {
+        return await options.loader();
+      },
+    );
+    (cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    (CacheManager.generateKey as ReturnType<typeof vi.fn>).mockImplementation(
+      (prefix: string, ...parts: (string | number | boolean | undefined)[]) =>
+        [prefix, ...parts.filter((part) => part !== undefined)].join(':'),
+    );
   });
 
   describe('handleGetMonth', () => {
@@ -67,8 +84,8 @@ describe('Month Tools', () => {
         month: '2024-01-01',
       });
 
-      // In test environment, cache should be bypassed
-      expect(cacheManager.wrap).not.toHaveBeenCalled();
+      // Verify the mock cache was called (and bypassed to call the loader)
+      expect(cacheManager.wrap).toHaveBeenCalled();
       expect(mockYnabAPI.months.getBudgetMonth).toHaveBeenCalledTimes(1);
 
       const parsedContent = JSON.parse(result.content[0].text);
@@ -268,7 +285,7 @@ describe('Month Tools', () => {
   });
 
   describe('handleListMonths', () => {
-    it('should bypass cache in test environment', async () => {
+    it('should include cache metadata from delta fetcher results', async () => {
       const mockMonths = [
         {
           month: '2024-01-01',
@@ -281,20 +298,17 @@ describe('Month Tools', () => {
           deleted: false,
         },
       ];
-
-      (mockYnabAPI.months.getBudgetMonths as any).mockResolvedValue({
-        data: { months: mockMonths },
+      const { fetcher, resolved } = createDeltaFetcherMock('fetchMonths', {
+        data: mockMonths,
+        wasCached: true,
+        usedDelta: true,
       });
 
-      const result = await handleListMonths(mockYnabAPI, { budget_id: 'budget-1' });
-
-      // In test environment, cache should be bypassed
-      expect(cacheManager.wrap).not.toHaveBeenCalled();
-      expect(mockYnabAPI.months.getBudgetMonths).toHaveBeenCalledTimes(1);
+      const result = await handleListMonths(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.cached).toBe(false);
-      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
+      expect(parsedContent.cached).toBe(resolved.wasCached);
+      expect(parsedContent.cache_info).toContain('delta merge applied');
       expect(parsedContent.months).toHaveLength(1);
     });
 
@@ -361,17 +375,19 @@ describe('Month Tools', () => {
           deleted: false,
         },
       ];
-
-      (mockYnabAPI.months.getBudgetMonths as any).mockResolvedValue({
-        data: { months: mockMonths },
+      const { fetcher, resolved } = createDeltaFetcherMock('fetchMonths', {
+        data: mockMonths,
+        wasCached: false,
       });
 
-      const result = await handleListMonths(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListMonths(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
 
       const parsedContent = JSON.parse(result.content[0].text);
+      expect(parsedContent.cached).toBe(resolved.wasCached);
+      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
       expect(parsedContent.months).toHaveLength(2);
       expect(parsedContent.months[0]).toEqual({
         month: '2024-01-01',
@@ -395,20 +411,20 @@ describe('Month Tools', () => {
       });
     });
 
-    it('should handle 401 authentication errors', async () => {
-      (mockYnabAPI.months.getBudgetMonths as any).mockRejectedValue(new Error('401 Unauthorized'));
+    it('should handle authentication errors', async () => {
+      const { fetcher } = createRejectingDeltaFetcherMock('fetchMonths', new Error('401 Unauthorized'));
 
-      const result = await handleListMonths(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListMonths(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.error.message).toBe('Invalid or expired YNAB access token');
     });
 
-    it('should handle 404 not found errors', async () => {
-      (mockYnabAPI.months.getBudgetMonths as any).mockRejectedValue(new Error('404 Not Found'));
+    it('should handle not found errors', async () => {
+      const { fetcher } = createRejectingDeltaFetcherMock('fetchMonths', new Error('404 Not Found'));
 
-      const result = await handleListMonths(mockYnabAPI, { budget_id: 'invalid-budget' });
+      const result = await handleListMonths(mockYnabAPI, fetcher, { budget_id: 'invalid-budget' });
 
       expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);

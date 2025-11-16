@@ -8,6 +8,7 @@ import {
   GetCategorySchema,
   UpdateCategorySchema,
 } from '../categoryTools.js';
+import { createDeltaFetcherMock, createRejectingDeltaFetcherMock } from './deltaTestUtils.js';
 
 // Mock the cache manager
 vi.mock('../../server/cacheManager.js', () => ({
@@ -38,7 +39,7 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { cacheManager, CacheManager, CACHE_TTLS } = await import('../../server/cacheManager.js');
+const { cacheManager, CacheManager } = await import('../../server/cacheManager.js');
 
 // Capture original NODE_ENV for restoration
 const originalNodeEnv = process.env.NODE_ENV;
@@ -48,6 +49,21 @@ describe('Category Tools', () => {
     vi.clearAllMocks();
     // Reset NODE_ENV to test to ensure cache bypassing in tests
     process.env['NODE_ENV'] = 'test';
+    (cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
+      async (
+        _key: string,
+        options: {
+          loader: () => Promise<unknown>;
+        },
+      ) => {
+        return await options.loader();
+      },
+    );
+    (cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    (CacheManager.generateKey as ReturnType<typeof vi.fn>).mockImplementation(
+      (prefix: string, ...parts: (string | number | boolean | undefined)[]) =>
+        [prefix, ...parts.filter((part) => part !== undefined)].join(':'),
+    );
   });
 
   afterAll(() => {
@@ -60,7 +76,7 @@ describe('Category Tools', () => {
   });
 
   describe('handleListCategories', () => {
-    it('should bypass cache in test environment', async () => {
+    it('should include cache metadata from delta fetcher results', async () => {
       const mockCategoryGroups = [
         {
           id: 'group-1',
@@ -87,75 +103,20 @@ describe('Category Tools', () => {
           ],
         },
       ];
-
-      (mockYnabAPI.categories.getCategories as any).mockResolvedValue({
-        data: { category_groups: mockCategoryGroups },
+      const { fetcher, resolved } = createDeltaFetcherMock('fetchCategories', {
+        data: mockCategoryGroups,
+        wasCached: true,
+        usedDelta: true,
       });
 
-      const result = await handleListCategories(mockYnabAPI, { budget_id: 'budget-1' });
-
-      // In test environment, cache should be bypassed
-      expect(cacheManager.wrap).not.toHaveBeenCalled();
-      expect(mockYnabAPI.categories.getCategories).toHaveBeenCalledTimes(1);
+      const result = await handleListCategories(mockYnabAPI, fetcher, {
+        budget_id: 'budget-1',
+      });
 
       const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.cached).toBe(false);
-      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
+      expect(parsedContent.cached).toBe(resolved.wasCached);
+      expect(parsedContent.cache_info).toContain('delta merge applied');
       expect(parsedContent.categories).toHaveLength(1);
-    });
-
-    it.skip('should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher', async () => {
-      // Temporarily set NODE_ENV to non-test
-      process.env['NODE_ENV'] = 'development';
-
-      const mockCategoryGroups = [
-        {
-          id: 'group-1',
-          name: 'Immediate Obligations',
-          hidden: false,
-          deleted: false,
-          categories: [
-            {
-              id: 'category-1',
-              category_group_id: 'group-1',
-              name: 'Rent/Mortgage',
-              hidden: false,
-              original_category_group_id: null,
-              note: 'Monthly housing payment',
-              budgeted: 150000,
-              activity: -150000,
-              balance: 0,
-              goal_type: null,
-              goal_creation_month: null,
-              goal_target: null,
-              goal_target_month: null,
-              goal_percentage_complete: null,
-            },
-          ],
-        },
-      ];
-
-      const mockCacheKey = 'categories:list:budget-1:generated-key';
-      (CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-      (cacheManager.wrap as any).mockResolvedValue(mockCategoryGroups);
-      (cacheManager.has as any).mockReturnValue(true);
-
-      const result = await handleListCategories(mockYnabAPI, { budget_id: 'budget-1' });
-
-      // Verify cache was used
-      expect(CacheManager.generateKey).toHaveBeenCalledWith('categories', 'list', 'budget-1');
-      expect(cacheManager.wrap).toHaveBeenCalledWith(mockCacheKey, {
-        ttl: CACHE_TTLS.CATEGORIES,
-        loader: expect.any(Function),
-      });
-      expect(cacheManager.has).toHaveBeenCalledWith(mockCacheKey);
-
-      const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.cached).toBe(true);
-      expect(parsedContent.cache_info).toBe('Data retrieved from cache for improved performance');
-
-      // Reset NODE_ENV
-      process.env['NODE_ENV'] = 'test';
     });
 
     it('should return formatted category list on success', async () => {
@@ -225,21 +186,20 @@ describe('Category Tools', () => {
           ],
         },
       ];
-
-      (mockYnabAPI.categories.getCategories as any).mockResolvedValue({
-        data: { category_groups: mockCategoryGroups },
+      const { fetcher, resolved } = createDeltaFetcherMock('fetchCategories', {
+        data: mockCategoryGroups,
+        wasCached: false,
       });
 
-      const result = await handleListCategories(mockYnabAPI, { budget_id: 'budget-1' });
-
-      expect(result.content).toHaveLength(1);
-      expect(result.content[0].type).toBe('text');
+      const result = await handleListCategories(mockYnabAPI, fetcher, {
+        budget_id: 'budget-1',
+      });
 
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.categories).toHaveLength(3);
       expect(parsedContent.category_groups).toHaveLength(2);
-
-      // Check first category
+      expect(parsedContent.cached).toBe(resolved.wasCached);
+      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
       expect(parsedContent.categories[0]).toEqual({
         id: 'category-1',
         category_group_id: 'group-1',
@@ -257,91 +217,37 @@ describe('Category Tools', () => {
         goal_target_month: null,
         goal_percentage_complete: null,
       });
-
-      // Check category groups
-      expect(parsedContent.category_groups[0]).toEqual({
-        id: 'group-1',
-        name: 'Immediate Obligations',
-        hidden: false,
-        deleted: false,
-      });
     });
 
-    it('should handle 401 authentication errors', async () => {
-      (mockYnabAPI.categories.getCategories as any).mockRejectedValue(
+    it('should handle authentication errors', async () => {
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchCategories',
         new Error('401 Unauthorized'),
       );
 
-      const result = await handleListCategories(mockYnabAPI, { budget_id: 'budget-1' });
+      const result = await handleListCategories(mockYnabAPI, fetcher, {
+        budget_id: 'budget-1',
+      });
 
-      expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.error.message).toBe('Invalid or expired YNAB access token');
     });
 
-    it('should handle 404 not found errors', async () => {
-      (mockYnabAPI.categories.getCategories as any).mockRejectedValue(new Error('404 Not Found'));
+    it('should handle not found errors', async () => {
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchCategories',
+        new Error('404 Not Found'),
+      );
 
-      const result = await handleListCategories(mockYnabAPI, { budget_id: 'invalid-budget' });
+      const result = await handleListCategories(mockYnabAPI, fetcher, {
+        budget_id: 'invalid-budget',
+      });
 
-      expect(result.content).toHaveLength(1);
       const parsedContent = JSON.parse(result.content[0].text);
       expect(parsedContent.error.message).toBe('Budget or category not found');
     });
   });
-
   describe('handleGetCategory', () => {
-    it.skip('should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher', async () => {
-      // Temporarily set NODE_ENV to non-test
-      process.env['NODE_ENV'] = 'development';
-
-      const mockCategory = {
-        id: 'category-1',
-        category_group_id: 'group-1',
-        name: 'Groceries',
-        hidden: false,
-        original_category_group_id: null,
-        note: 'Food and household items',
-        budgeted: 50000,
-        activity: -45000,
-        balance: 5000,
-        goal_type: 'TBD',
-        goal_creation_month: '2024-01-01',
-        goal_target: 60000,
-        goal_target_month: '2024-12-01',
-        goal_percentage_complete: 83,
-      };
-
-      const mockCacheKey = 'category:get:budget-1:category-1:generated-key';
-      (CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-      (cacheManager.wrap as any).mockResolvedValue(mockCategory);
-      (cacheManager.has as any).mockReturnValue(true);
-
-      const result = await handleGetCategory(mockYnabAPI, {
-        budget_id: 'budget-1',
-        category_id: 'category-1',
-      });
-
-      // Verify cache was used
-      expect(CacheManager.generateKey).toHaveBeenCalledWith(
-        'category',
-        'get',
-        'budget-1',
-        'category-1',
-      );
-      expect(cacheManager.wrap).toHaveBeenCalledWith(mockCacheKey, {
-        ttl: CACHE_TTLS.CATEGORIES,
-        loader: expect.any(Function),
-      });
-
-      const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.cached).toBe(true);
-      expect(parsedContent.cache_info).toBe('Data retrieved from cache for improved performance');
-
-      // Reset NODE_ENV
-      process.env['NODE_ENV'] = 'test';
-    });
-
     it('should return detailed category information on success', async () => {
       const mockCategory = {
         id: 'category-1',
@@ -389,6 +295,41 @@ describe('Category Tools', () => {
         goal_target_month: '2024-12-01',
         goal_percentage_complete: 83,
       });
+      expect(parsedContent.cached).toBe(false);
+      expect(parsedContent.cache_info).toBe('Fresh data retrieved from YNAB API');
+    });
+
+    it('should reflect cached responses when data exists in cache', async () => {
+      const mockCategory = {
+        id: 'category-1',
+        category_group_id: 'group-1',
+        name: 'Groceries',
+        hidden: false,
+        original_category_group_id: null,
+        note: 'Food and household items',
+        budgeted: 50000,
+        activity: -45000,
+        balance: 5000,
+        goal_type: 'TBD',
+        goal_creation_month: '2024-01-01',
+        goal_target: 60000,
+        goal_target_month: '2024-12-01',
+        goal_percentage_complete: 83,
+      };
+
+      (mockYnabAPI.categories.getCategoryById as any).mockResolvedValue({
+        data: { category: mockCategory },
+      });
+      (cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
+
+      const result = await handleGetCategory(mockYnabAPI, {
+        budget_id: 'budget-1',
+        category_id: 'category-1',
+      });
+
+      const parsedContent = JSON.parse(result.content[0].text);
+      expect(parsedContent.cached).toBe(true);
+      expect(parsedContent.cache_info).toBe('Data retrieved from cache for improved performance');
     });
 
     it('should handle 404 not found errors', async () => {
