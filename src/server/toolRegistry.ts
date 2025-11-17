@@ -1,5 +1,6 @@
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import { z, toJSONSchema } from 'zod/v4';
+import type { MCPToolAnnotations } from '../types/toolAnnotations.js';
 
 export type SecurityWrapperFactory = <T extends Record<string, unknown>>(
   namespace: string,
@@ -49,7 +50,7 @@ export interface ToolSecurityOptions {
 
 export interface ToolMetadataOptions {
   inputJsonSchema?: Record<string, unknown>;
-  annotations?: Record<string, unknown>;
+  annotations?: MCPToolAnnotations;
 }
 
 export interface ToolExecutionContext {

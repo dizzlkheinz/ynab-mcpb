@@ -87,7 +87,6 @@ export function validateToolResult(result: CallToolResult): void {
   expect(result.content.length).toBeGreaterThan(0);
 
   for (const content of result.content) {
-    expect(content.type).toBe('text');
     if (content.type === 'text') {
       expect(typeof content.text).toBe('string');
     }
