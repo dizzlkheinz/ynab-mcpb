@@ -19,7 +19,7 @@ import type { MCPToolAnnotations } from '../types/toolAnnotations.js';
  *   // ... other tool properties
  * });
  */
-export const ToolAnnotationPresets: Record<string, Omit<MCPToolAnnotations, 'title'>> = {
+export const ToolAnnotationPresets = {
   /**
    * Preset for read-only tools that query the YNAB API without modifications.
    *
@@ -122,13 +122,14 @@ export const ToolAnnotationPresets: Record<string, Omit<MCPToolAnnotations, 'tit
    * Examples:
    * - convert_amount: Converts between dollars and milliunits
    * - set_output_format: Configures local output formatting
-   * - get_user_info: Returns locally cached user information
+   * - diagnostic_info: Returns local server diagnostic information
+   * - clear_cache: Clears local in-memory cache
    *
    * Annotation rationale:
-   * - readOnlyHint: true - No data modifications (pure functions)
-   * - destructiveHint: false - No destructive operations
-   * - idempotentHint: true - Deterministic operations with same inputs
-   * - openWorldHint: false - No external API calls, purely local
+   * - readOnlyHint: true - No external/YNAB data modifications (may modify local server state/config)
+   * - destructiveHint: false - No destructive operations on external data
+   * - idempotentHint: true - Deterministic operations with same inputs (or safe to repeat)
+   * - openWorldHint: false - No external API calls, purely local operations
    */
   UTILITY_LOCAL: {
     readOnlyHint: true,
@@ -136,4 +137,4 @@ export const ToolAnnotationPresets: Record<string, Omit<MCPToolAnnotations, 'tit
     idempotentHint: true,
     openWorldHint: false,
   },
-};
+} as const satisfies Record<string, Omit<MCPToolAnnotations, 'title'>>;
