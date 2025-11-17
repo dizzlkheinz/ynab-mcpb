@@ -59,3 +59,6 @@ export {
   withSecurityWrapper,
   type SecurityContext,
 } from '../server/securityMiddleware.js';
+
+// Re-export tool annotation types
+export type { MCPToolAnnotations } from './toolAnnotations.js';

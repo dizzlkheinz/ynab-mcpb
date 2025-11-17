@@ -97,6 +97,7 @@ import { DiagnosticManager } from './diagnostics.js';
 import { ServerKnowledgeStore } from './serverKnowledgeStore.js';
 import { DeltaCache } from './deltaCache.js';
 import { DeltaFetcher } from '../tools/deltaFetcher.js';
+import { ToolAnnotationPresets } from '../tools/toolCategories.js';
 
 /**
  * YNAB MCP Server class that provides integration with You Need A Budget API
@@ -412,6 +413,12 @@ export class YNABMCPServer {
       description: "List all budgets associated with the user's account",
       inputSchema: emptyObjectSchema,
       handler: adaptWithDelta(handleListBudgets),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: List Budgets',
+        },
+      },
     });
 
     register({
@@ -419,6 +426,12 @@ export class YNABMCPServer {
       description: 'Get detailed information for a specific budget',
       inputSchema: GetBudgetSchema,
       handler: adapt(handleGetBudget),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Get Budget Details',
+        },
+      },
     });
 
     register({
@@ -448,6 +461,12 @@ export class YNABMCPServer {
             },
           ],
         };
+      },
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+          title: 'YNAB: Set Default Budget',
+        },
       },
     });
 
@@ -479,6 +498,12 @@ export class YNABMCPServer {
           );
         }
       },
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Get Default Budget',
+        },
+      },
     });
 
     register({
@@ -487,6 +512,12 @@ export class YNABMCPServer {
       inputSchema: ListAccountsSchema,
       handler: adaptWithDelta(handleListAccounts),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListAccountsSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: List Accounts',
+        },
+      },
     });
 
     register({
@@ -495,6 +526,12 @@ export class YNABMCPServer {
       inputSchema: GetAccountSchema,
       handler: adapt(handleGetAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetAccountSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Get Account Details',
+        },
+      },
     });
 
     register({
@@ -503,6 +540,12 @@ export class YNABMCPServer {
       inputSchema: CreateAccountSchema,
       handler: adaptWrite(handleCreateAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateAccountSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
+          title: 'YNAB: Create Account',
+        },
+      },
     });
 
     register({
@@ -511,6 +554,12 @@ export class YNABMCPServer {
       inputSchema: ListTransactionsSchema,
       handler: adaptWithDelta(handleListTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListTransactionsSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: List Transactions',
+        },
+      },
     });
 
     register({
@@ -519,6 +568,12 @@ export class YNABMCPServer {
       inputSchema: ExportTransactionsSchema,
       handler: adapt(handleExportTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ExportTransactionsSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Export Transactions',
+        },
+      },
     });
 
     register({
@@ -528,6 +583,12 @@ export class YNABMCPServer {
       inputSchema: CompareTransactionsSchema,
       handler: adapt(handleCompareTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CompareTransactionsSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Compare Transactions',
+        },
+      },
     });
 
     register({
@@ -537,6 +598,12 @@ export class YNABMCPServer {
       inputSchema: ReconcileAccountSchema,
       handler: adaptWithDelta(handleReconcileAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+          title: 'YNAB: Reconcile Account',
+        },
+      },
     });
 
     register({
@@ -545,6 +612,12 @@ export class YNABMCPServer {
       inputSchema: GetTransactionSchema,
       handler: adapt(handleGetTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetTransactionSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Get Transaction Details',
+        },
+      },
     });
 
     register({
@@ -553,6 +626,12 @@ export class YNABMCPServer {
       inputSchema: CreateTransactionSchema,
       handler: adaptWrite(handleCreateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
+          title: 'YNAB: Create Transaction',
+        },
+      },
     });
 
     register({
@@ -562,6 +641,12 @@ export class YNABMCPServer {
       inputSchema: CreateTransactionsSchema,
       handler: adaptWrite(handleCreateTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionsSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
+          title: 'YNAB: Create Multiple Transactions',
+        },
+      },
     });
 
     register({
@@ -571,6 +656,12 @@ export class YNABMCPServer {
       inputSchema: UpdateTransactionsSchema,
       handler: adaptWrite(handleUpdateTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionsSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+          title: 'YNAB: Update Multiple Transactions',
+        },
+      },
     });
 
     register({
@@ -580,6 +671,12 @@ export class YNABMCPServer {
       handler: adaptWrite(handleCreateReceiptSplitTransaction),
       defaultArgumentResolver:
         resolveBudgetId<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
+          title: 'YNAB: Create Split Transaction from Receipt',
+        },
+      },
     });
 
     register({
@@ -588,6 +685,12 @@ export class YNABMCPServer {
       inputSchema: UpdateTransactionSchema,
       handler: adaptWrite(handleUpdateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+          title: 'YNAB: Update Transaction',
+        },
+      },
     });
 
     register({
@@ -596,6 +699,12 @@ export class YNABMCPServer {
       inputSchema: DeleteTransactionSchema,
       handler: adaptWrite(handleDeleteTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof DeleteTransactionSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_DELETE,
+          title: 'YNAB: Delete Transaction',
+        },
+      },
     });
 
     register({
@@ -604,6 +713,12 @@ export class YNABMCPServer {
       inputSchema: ListCategoriesSchema,
       handler: adaptWithDelta(handleListCategories),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListCategoriesSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: List Categories',
+        },
+      },
     });
 
     register({
@@ -612,6 +727,12 @@ export class YNABMCPServer {
       inputSchema: GetCategorySchema,
       handler: adapt(handleGetCategory),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetCategorySchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Get Category Details',
+        },
+      },
     });
 
     register({
@@ -620,6 +741,12 @@ export class YNABMCPServer {
       inputSchema: UpdateCategorySchema,
       handler: adaptWrite(handleUpdateCategory),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateCategorySchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+          title: 'YNAB: Update Category Budget',
+        },
+      },
     });
 
     register({
@@ -628,6 +755,12 @@ export class YNABMCPServer {
       inputSchema: ListPayeesSchema,
       handler: adaptWithDelta(handleListPayees),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListPayeesSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: List Payees',
+        },
+      },
     });
 
     register({
@@ -636,6 +769,12 @@ export class YNABMCPServer {
       inputSchema: GetPayeeSchema,
       handler: adapt(handleGetPayee),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetPayeeSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Get Payee Details',
+        },
+      },
     });
 
     register({
@@ -644,6 +783,12 @@ export class YNABMCPServer {
       inputSchema: GetMonthSchema,
       handler: adapt(handleGetMonth),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetMonthSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Get Month Budget Data',
+        },
+      },
     });
 
     register({
@@ -652,6 +797,12 @@ export class YNABMCPServer {
       inputSchema: ListMonthsSchema,
       handler: adaptWithDelta(handleListMonths),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListMonthsSchema>>(),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: List Months',
+        },
+      },
     });
 
     register({
@@ -659,6 +810,12 @@ export class YNABMCPServer {
       description: 'Get information about the authenticated user',
       inputSchema: emptyObjectSchema,
       handler: adaptNoInput(handleGetUser),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          title: 'YNAB: Get User Information',
+        },
+      },
     });
 
     register({
@@ -666,6 +823,12 @@ export class YNABMCPServer {
       description: 'Convert between dollars and milliunits with integer arithmetic for precision',
       inputSchema: ConvertAmountSchema,
       handler: async ({ input }) => handleConvertAmount(input),
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.UTILITY_LOCAL,
+          title: 'YNAB: Convert Amount',
+        },
+      },
     });
 
     register({
@@ -674,6 +837,12 @@ export class YNABMCPServer {
       inputSchema: diagnosticInfoSchema,
       handler: async ({ input }) => {
         return this.diagnosticManager.collectDiagnostics(input);
+      },
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.UTILITY_LOCAL,
+          title: 'YNAB: Diagnostic Information',
+        },
       },
     });
 
@@ -686,6 +855,12 @@ export class YNABMCPServer {
         return {
           content: [{ type: 'text', text: responseFormatter.format({ success: true }) }],
         };
+      },
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.UTILITY_LOCAL,
+          title: 'YNAB: Clear Cache',
+        },
       },
     });
 
@@ -710,6 +885,12 @@ export class YNABMCPServer {
             },
           ],
         };
+      },
+      metadata: {
+        annotations: {
+          ...ToolAnnotationPresets.UTILITY_LOCAL,
+          title: 'YNAB: Set Output Format',
+        },
       },
     });
   }
