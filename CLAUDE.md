@@ -174,6 +174,95 @@ constructor(
 ) {}
 ```
 
+## Tool Annotations
+
+All tools include MCP-compliant annotations as advisory hints for AI clients. These annotations follow the Model Context Protocol specification and help AI assistants understand tool capabilities, safety characteristics, and expected behavior. The annotation system uses type-safe presets defined in `src/tools/toolCategories.ts` via the `ToolAnnotationPresets` constant.
+
+### Annotation Hints
+
+Each tool includes the following annotation fields:
+
+- **`title`** - Human-readable tool name for UI display (e.g., "YNAB: List Budgets")
+- **`readOnlyHint`** - Whether tool only reads data without modifications (boolean)
+- **`destructiveHint`** - Whether tool performs irreversible operations like deletion (boolean)
+- **`idempotentHint`** - Whether repeated identical calls are safe and produce same result (boolean)
+- **`openWorldHint`** - Whether tool calls external APIs (YNAB API) vs local operations (boolean)
+
+### Tool Categories
+
+The system defines 5 preset annotation patterns in `src/tools/toolCategories.ts`:
+
+- **READ_ONLY_EXTERNAL** - Read-only tools querying YNAB API
+  - Examples: `list_budgets`, `get_account`, `list_transactions`
+  - Characteristics: Read-only, idempotent, external API calls
+
+- **WRITE_EXTERNAL_CREATE** - Tools creating new resources, non-idempotent
+  - Examples: `create_transaction`, `create_account`
+  - Characteristics: Write operations, non-idempotent (repeated calls create duplicates), external API
+
+- **WRITE_EXTERNAL_UPDATE** - Tools updating existing resources, idempotent
+  - Examples: `update_transaction`, `set_default_budget`, `reconcile_account`
+  - Characteristics: Write operations, idempotent (repeated calls produce same result), external API
+
+- **WRITE_EXTERNAL_DELETE** - Destructive tools deleting resources
+  - Example: `delete_transaction` ⚠️
+  - Characteristics: Write operations, destructive, idempotent, external API
+
+- **UTILITY_LOCAL** - Local utility tools without external API calls
+  - Examples: `convert_amount`, `clear_cache`, `diagnostic_info`
+  - Characteristics: Local operations, no external API dependencies
+
+### Complete Tool Classification
+
+All 27 tools are classified into the following categories:
+
+**Read-Only External (15 tools):**
+- `list_budgets`, `get_budget`, `list_accounts`, `get_account`, `list_transactions`, `export_transactions`, `compare_transactions`, `get_transaction`, `list_categories`, `get_category`, `list_payees`, `get_payee`, `get_month`, `list_months`, `get_user`
+
+**Write External - Create (4 tools):**
+- `create_account`, `create_transaction`, `create_transactions`, `create_receipt_split_transaction`
+
+**Write External - Update (5 tools):**
+- `set_default_budget`, `reconcile_account`, `update_transaction`, `update_transactions`, `update_category`
+
+**Write External - Delete (1 tool):**
+- `delete_transaction` ⚠️
+
+**Utility Local (5 tools):**
+- `get_default_budget`, `convert_amount`, `diagnostic_info`, `clear_cache`, `set_output_format`
+
+### Expected Benefits
+
+The tool annotation system provides several advantages:
+
+- **Enhanced AI Client UX** - AI assistants like Claude can show warnings/confirmations for destructive tools
+- **Safer Workflows** - AI understands which tools are dangerous and can prompt for confirmation before execution
+- **Better Tool Discovery** - Annotations help AI clients understand tool capabilities and constraints
+- **Future-Proof Integration** - As more MCP clients emerge, they'll respect these standard annotations
+- **Self-Documenting API** - Metadata provides clear documentation of tool behavior without reading implementation
+- **Zero Breaking Changes** - Fully backward compatible, annotations are advisory only and don't affect tool execution
+
+### Usage Example
+
+Tool annotations are applied during tool registration using preset patterns:
+
+```typescript
+import { ToolAnnotationPresets } from '../tools/toolCategories.js';
+
+register({
+  name: 'delete_transaction',
+  description: 'Delete a transaction',
+  inputSchema: DeleteTransactionSchema,
+  handler: adaptWrite(handleDeleteTransaction),
+  metadata: {
+    annotations: {
+      ...ToolAnnotationPresets.WRITE_EXTERNAL_DELETE,
+      title: 'YNAB: Delete Transaction',
+    },
+  },
+});
+```
+
 ## Amount Handling (Critical!)
 
 YNAB uses **milliunits** internally (1 dollar = 1000 milliunits):

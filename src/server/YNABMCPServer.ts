@@ -500,7 +500,10 @@ export class YNABMCPServer {
       },
       metadata: {
         annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+          // Intentionally categorized as UTILITY_LOCAL (not READ_ONLY_EXTERNAL) because
+          // this tool only reads local server state without making any YNAB API calls.
+          // Compare with set_default_budget which calls ynabAPI.budgets.getBudgetById().
+          ...ToolAnnotationPresets.UTILITY_LOCAL,
           title: 'YNAB: Get Default Budget',
         },
       },
