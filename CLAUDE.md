@@ -214,7 +214,7 @@ The system defines 5 preset annotation patterns in `src/tools/toolCategories.ts`
 
 ### Complete Tool Classification
 
-All 27 tools are classified into the following categories:
+All 30 tools are classified into the following categories:
 
 **Read-Only External (15 tools):**
 - `list_budgets`, `get_budget`, `list_accounts`, `get_account`, `list_transactions`, `export_transactions`, `compare_transactions`, `get_transaction`, `list_categories`, `get_category`, `list_payees`, `get_payee`, `get_month`, `list_months`, `get_user`
