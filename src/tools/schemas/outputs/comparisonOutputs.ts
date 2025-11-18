@@ -85,14 +85,13 @@ function isValidISODate(dateStr: string): boolean {
   // Verify that the parsed date components match the original string
   // This catches cases like "2024-02-31" which Date.parse might coerce to "2024-03-03"
   const date = new Date(parsed);
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   const reconstructed = `${year}-${month}-${day}`;
 
   return reconstructed === dateStr;
 }
-
 /**
  * Reusable Zod schema for validating ISO date strings (YYYY-MM-DD).
  * Validates both format and calendar validity.
