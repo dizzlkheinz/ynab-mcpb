@@ -558,4 +558,255 @@ describe('ToolRegistry', () => {
       expect(typeof errorHandler.createValidationError).toBe('function');
     });
   });
+
+  describe('Output Schema Validation', () => {
+    it('validates handler output against declared output schema', async () => {
+      const outputSchema = z.object({
+        success: z.boolean(),
+        data: z.object({
+          id: z.string(),
+          value: z.number(),
+        }),
+      });
+
+      const handler = vi.fn(async () =>
+        createResult(
+          JSON.stringify({
+            success: true,
+            data: { id: 'test-id', value: 42 },
+          }),
+        ),
+      );
+
+      registry.register({
+        name: 'validated_output_tool',
+        description: 'Has output schema',
+        inputSchema: z.object({ id: z.string() }),
+        outputSchema,
+        handler,
+      });
+
+      const result = await registry.executeTool({
+        name: 'validated_output_tool',
+        accessToken: 'token',
+        arguments: { id: 'test' },
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(result.content[0]?.text).toContain('success');
+      expect(result.content[0]?.text).toContain('test-id');
+    });
+
+    it('rejects handler output that does not match output schema', async () => {
+      const outputSchema = z.object({
+        success: z.boolean(),
+        data: z.object({
+          id: z.string(),
+          value: z.number(),
+        }),
+      });
+
+      const handler = vi.fn(async () =>
+        createResult(
+          JSON.stringify({
+            success: true,
+            data: { id: 'test-id', value: 'not-a-number' }, // Invalid: value should be number
+          }),
+        ),
+      );
+
+      registry.register({
+        name: 'invalid_output_tool',
+        description: 'Returns invalid output',
+        inputSchema: z.object({ id: z.string() }),
+        outputSchema,
+        handler,
+      });
+
+      const result = await registry.executeTool({
+        name: 'invalid_output_tool',
+        accessToken: 'token',
+        arguments: { id: 'test' },
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(dependencies.errorHandler.createValidationError).toHaveBeenCalled();
+      expect(result.content[0]?.text).toContain('Output validation failed');
+      expect(result.content[0]?.text).toContain('invalid_output_tool');
+    });
+
+    it('rejects handler output with missing required fields', async () => {
+      const outputSchema = z.object({
+        success: z.boolean(),
+        data: z.object({
+          id: z.string(),
+          value: z.number(),
+        }),
+      });
+
+      const handler = vi.fn(async () =>
+        createResult(
+          JSON.stringify({
+            success: true,
+            // Missing 'data' field
+          }),
+        ),
+      );
+
+      registry.register({
+        name: 'missing_field_tool',
+        description: 'Returns output missing required field',
+        inputSchema: z.object({ id: z.string() }),
+        outputSchema,
+        handler,
+      });
+
+      const result = await registry.executeTool({
+        name: 'missing_field_tool',
+        accessToken: 'token',
+        arguments: { id: 'test' },
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(dependencies.errorHandler.createValidationError).toHaveBeenCalled();
+      expect(result.content[0]?.text).toContain('Output validation failed');
+      expect(result.content[0]?.text).toContain('missing_field_tool');
+    });
+
+    it('rejects handler output with invalid JSON', async () => {
+      const outputSchema = z.object({
+        success: z.boolean(),
+      });
+
+      const handler = vi.fn(async () => createResult('not valid json {'));
+
+      registry.register({
+        name: 'invalid_json_tool',
+        description: 'Returns invalid JSON',
+        inputSchema: z.object({ id: z.string() }),
+        outputSchema,
+        handler,
+      });
+
+      const result = await registry.executeTool({
+        name: 'invalid_json_tool',
+        accessToken: 'token',
+        arguments: { id: 'test' },
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(dependencies.errorHandler.createValidationError).toHaveBeenCalled();
+      expect(result.content[0]?.text).toContain('Output validation failed');
+      expect(result.content[0]?.text).toContain('Invalid JSON');
+    });
+
+    it('rejects handler output with empty content', async () => {
+      const outputSchema = z.object({
+        success: z.boolean(),
+      });
+
+      const handler = vi.fn(async () => ({ content: [] }));
+
+      registry.register({
+        name: 'empty_content_tool',
+        description: 'Returns empty content',
+        inputSchema: z.object({ id: z.string() }),
+        outputSchema,
+        handler,
+      });
+
+      const result = await registry.executeTool({
+        name: 'empty_content_tool',
+        accessToken: 'token',
+        arguments: { id: 'test' },
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(dependencies.errorHandler.createValidationError).toHaveBeenCalled();
+      expect(result.content[0]?.text).toContain('Output validation failed');
+      expect(result.content[0]?.text).toContain('empty content');
+    });
+
+    it('rejects handler output with non-text content', async () => {
+      const outputSchema = z.object({
+        success: z.boolean(),
+      });
+
+      const handler = vi.fn(async () => ({
+        content: [{ type: 'image', data: 'base64...' }],
+      }));
+
+      registry.register({
+        name: 'non_text_tool',
+        description: 'Returns non-text content',
+        inputSchema: z.object({ id: z.string() }),
+        outputSchema,
+        handler,
+      });
+
+      const result = await registry.executeTool({
+        name: 'non_text_tool',
+        accessToken: 'token',
+        arguments: { id: 'test' },
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(dependencies.errorHandler.createValidationError).toHaveBeenCalled();
+      expect(result.content[0]?.text).toContain('Output validation failed');
+      expect(result.content[0]?.text).toContain('did not return text content');
+    });
+
+    it('skips validation when no output schema is defined', async () => {
+      const handler = vi.fn(async () => createResult('any output format'));
+
+      registry.register({
+        name: 'no_schema_tool',
+        description: 'Has no output schema',
+        inputSchema: z.object({ id: z.string() }),
+        // No outputSchema defined
+        handler,
+      });
+
+      const result = await registry.executeTool({
+        name: 'no_schema_tool',
+        accessToken: 'token',
+        arguments: { id: 'test' },
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(result.content[0]?.text).toBe('any output format');
+      // Error handler should not be called for validation
+      expect(dependencies.errorHandler.createValidationError).not.toHaveBeenCalled();
+    });
+
+    it('includes output schema in tool listing when defined', () => {
+      const outputSchema = z.object({
+        success: z.boolean(),
+        message: z.string(),
+      });
+
+      registry.register({
+        name: 'schema_listing_tool',
+        description: 'Has output schema',
+        inputSchema: z.object({ id: z.string() }),
+        outputSchema,
+        handler: vi.fn(async () => handlerResult),
+      });
+
+      const tools = registry.listTools();
+      const tool = tools.find((t) => t.name === 'schema_listing_tool');
+
+      expect(tool).toBeDefined();
+      expect(tool?.outputSchema).toBeDefined();
+      const schema = tool?.outputSchema as Record<string, unknown> | undefined;
+      expect(schema).toMatchObject({
+        type: 'object',
+        properties: expect.objectContaining({
+          success: expect.objectContaining({ type: 'boolean' }),
+          message: expect.objectContaining({ type: 'string' }),
+        }),
+        required: ['success', 'message'],
+      });
+    });
+  });
 });
