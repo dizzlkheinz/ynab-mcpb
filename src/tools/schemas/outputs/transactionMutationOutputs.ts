@@ -612,6 +612,21 @@ export const CreateReceiptSplitTransactionOutputSchema = z.union([
 export type CreateReceiptSplitTransactionOutput = z.infer<typeof CreateReceiptSplitTransactionOutputSchema>;
 
 /**
+ * Create account dry-run request schema.
+ * Documents the planned account creation operation before execution.
+ *
+ * @see src/tools/accountTools.ts:218-233 - create_account dry-run response construction
+ */
+export const CreateAccountDryRunRequestSchema = z.object({
+  budget_id: z.string(),
+  name: z.string(),
+  type: z.string(),
+  balance: z.number(),
+});
+
+export type CreateAccountDryRunRequest = z.infer<typeof CreateAccountDryRunRequestSchema>;
+
+/**
  * Account creation output.
  * Returns created account entity.
  *
@@ -634,14 +649,14 @@ export type CreateReceiptSplitTransactionOutput = z.infer<typeof CreateReceiptSp
  * {
  *   dry_run: true,
  *   action: "create_account",
- *   request: { name: "Savings Account", type: "savings" }
+ *   request: { budget_id: "budget-1", name: "Savings Account", type: "savings", balance: 0 }
  * }
  */
 export const CreateAccountOutputSchema = z.union([
   z.object({
     dry_run: z.literal(true),
     action: z.literal('create_account'),
-    request: z.record(z.string(), z.unknown()),
+    request: CreateAccountDryRunRequestSchema,
   }),
   z.object({
     account: AccountSchema,
@@ -649,6 +664,21 @@ export const CreateAccountOutputSchema = z.union([
 ]);
 
 export type CreateAccountOutput = z.infer<typeof CreateAccountOutputSchema>;
+
+/**
+ * Update category dry-run request schema.
+ * Documents the planned category update operation before execution.
+ *
+ * @see src/tools/categoryTools.ts:237-256 - update_category dry-run response construction
+ */
+export const UpdateCategoryDryRunRequestSchema = z.object({
+  budget_id: z.string(),
+  category_id: z.string(),
+  budgeted: z.number(),
+  month: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export type UpdateCategoryDryRunRequest = z.infer<typeof UpdateCategoryDryRunRequestSchema>;
 
 /**
  * Category budget update output.
@@ -674,14 +704,14 @@ export type CreateAccountOutput = z.infer<typeof CreateAccountOutputSchema>;
  * {
  *   dry_run: true,
  *   action: "update_category",
- *   request: { category_id: "cat-123", month: "2025-11-01", budgeted: 500.00 }
+ *   request: { budget_id: "budget-1", category_id: "cat-123", month: "2025-11-01", budgeted: 500.00 }
  * }
  */
 export const UpdateCategoryOutputSchema = z.union([
   z.object({
     dry_run: z.literal(true),
     action: z.literal('update_category'),
-    request: z.record(z.string(), z.unknown()),
+    request: UpdateCategoryDryRunRequestSchema,
   }),
   z.object({
     category: CategorySchema,

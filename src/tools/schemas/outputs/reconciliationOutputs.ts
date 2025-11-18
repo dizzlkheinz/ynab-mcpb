@@ -66,37 +66,49 @@ export const MoneyValueSchema = z.object({
 export type MoneyValue = z.infer<typeof MoneyValueSchema>;
 
 /**
- * Bank transaction from CSV import.
+ * Bank transaction from CSV import (output format with money formatting).
  * Represents a single transaction from the user's bank statement.
  *
- * @see src/tools/reconciliation/types.ts - BankTransaction interface
+ * @remarks
+ * The adapter adds `amount_money` field with formatted money value.
+ * Original `date` field is a Date object, but gets serialized as ISO string in output.
+ *
+ * @see src/tools/reconciliation/types.ts - BankTransaction interface (internal type)
+ * @see src/tools/reconcileAdapter.ts:77-80 - toBankTransactionView function
  */
 export const BankTransactionSchema = z.object({
   id: z.string().uuid(),
-  date: z.string().date(),
+  date: z.union([z.string(), z.date()]), // Date object or ISO string after serialization
   amount: z.number(),
   payee: z.string(),
   memo: z.string().optional(),
   original_csv_row: z.number(),
+  amount_money: MoneyValueSchema, // Added by adapter
 });
 
 export type BankTransaction = z.infer<typeof BankTransactionSchema>;
 
 /**
- * Simplified YNAB transaction for reconciliation matching.
+ * Simplified YNAB transaction for reconciliation matching (output format with money formatting).
  * Contains essential fields for transaction comparison.
  *
- * @see src/tools/reconciliation/types.ts - YNABTransaction interface
+ * @remarks
+ * The adapter adds `amount_money` field with formatted money value.
+ * Original `date` field is a Date object, but gets serialized as ISO string in output.
+ *
+ * @see src/tools/reconciliation/types.ts - YNABTransaction interface (internal type)
+ * @see src/tools/reconcileAdapter.ts:82-85 - toYNABTransactionView function
  */
 export const YNABTransactionSimpleSchema = z.object({
   id: z.string(),
-  date: z.string().date(),
+  date: z.union([z.string(), z.date()]), // Date object or ISO string after serialization
   amount: z.number(),
   payee_name: z.string().nullable(),
   category_name: z.string().nullable(),
   cleared: z.enum(['cleared', 'uncleared', 'reconciled']),
   approved: z.boolean(),
   memo: z.string().nullable().optional(),
+  amount_money: MoneyValueSchema, // Added by adapter
 });
 
 export type YNABTransactionSimple = z.infer<typeof YNABTransactionSimpleSchema>;
@@ -334,30 +346,104 @@ export const ActionableRecommendationSchema = z.discriminatedUnion('action_type'
 export type ActionableRecommendation = z.infer<typeof ActionableRecommendationSchema>;
 
 /**
+ * Account balance snapshot with money formatting.
+ * Used in execution result to show before/after balance states.
+ *
+ * @see src/tools/reconcileAdapter.ts:138-142 - convertAccountSnapshot function
+ */
+export const AccountSnapshotSchema = z.object({
+  balance: MoneyValueSchema,
+  cleared_balance: MoneyValueSchema,
+  uncleared_balance: MoneyValueSchema,
+});
+
+export type AccountSnapshot = z.infer<typeof AccountSnapshotSchema>;
+
+/**
+ * Execution action record with correlation tracking.
+ * Documents individual actions taken during reconciliation execution.
+ *
+ * @see src/tools/reconciliation/executor.ts:29-36 - ExecutionActionRecord interface
+ */
+export const ExecutionActionRecordSchema = z.object({
+  type: z.string(),
+  transaction: z.record(z.string(), z.unknown()).nullable(),
+  reason: z.string(),
+  bulk_chunk_index: z.number().optional(),
+  correlation_key: z.string().optional(),
+  duplicate: z.boolean().optional(),
+});
+
+export type ExecutionActionRecord = z.infer<typeof ExecutionActionRecordSchema>;
+
+/**
+ * Execution summary statistics.
+ * High-level overview of reconciliation execution results.
+ *
+ * @see src/tools/reconciliation/executor.ts:38-48 - ExecutionSummary interface
+ */
+export const ExecutionSummarySchema = z.object({
+  bank_transactions_count: z.number(),
+  ynab_transactions_count: z.number(),
+  matches_found: z.number(),
+  missing_in_ynab: z.number(),
+  missing_in_bank: z.number(),
+  transactions_created: z.number(),
+  transactions_updated: z.number(),
+  dates_adjusted: z.number(),
+  dry_run: z.boolean(),
+});
+
+export type ExecutionSummary = z.infer<typeof ExecutionSummarySchema>;
+
+/**
+ * Bulk operation metrics for reconciliation transaction creation.
+ * Tracks performance and correlation behavior during bulk transaction operations.
+ *
+ * @remarks
+ * Note on failure counters:
+ * - `transaction_failures` is the canonical counter for per-transaction failures
+ * - `failed_transactions` is maintained for backward compatibility and should always
+ *   mirror `transaction_failures` rather than represent an independent count
+ *
+ * @see src/tools/reconciliation/executor.ts:50-68 - BulkOperationDetails interface
+ */
+export const BulkOperationDetailsSchema = z.object({
+  chunks_processed: z.number(),
+  bulk_successes: z.number(),
+  sequential_fallbacks: z.number(),
+  duplicates_detected: z.number(),
+  failed_transactions: z.number(),
+  bulk_chunk_failures: z.number(),
+  transaction_failures: z.number(),
+  sequential_attempts: z.number().optional(),
+});
+
+export type BulkOperationDetails = z.infer<typeof BulkOperationDetailsSchema>;
+
+/**
  * Execution result (present if auto-execution enabled).
  * Documents actions taken and resulting balance changes.
  *
- * @see src/tools/reconciliation/executor.ts - LegacyReconciliationResult interface
+ * @remarks
+ * This schema matches the actual payload shape built by convertExecution()
+ * in reconcileAdapter.ts, which differs from the legacy ExecutionResult interface.
+ * The adapter converts the ExecutionResult to a structured payload with formatted
+ * money values and nested balance snapshots.
+ *
+ * @see src/tools/reconcileAdapter.ts:199-232 - convertExecution function
+ * @see src/tools/reconciliation/executor.ts:69-79 - ExecutionResult interface
  */
 export const ExecutionResultSchema = z.object({
-  executed: z.boolean(),
-  actions_taken: z.array(
-    z.object({
-      action_type: z.string(),
-      status: z.enum(['success', 'failed']),
-      transaction_id: z.string().optional(),
-      error: z.string().optional(),
-    })
-  ),
-  balance_after_execution: z
-    .object({
-      cleared: MoneyValueSchema,
-      uncleared: MoneyValueSchema,
-      total: MoneyValueSchema,
-    })
-    .optional(),
-  reconciliation_complete: z.boolean(),
-  remaining_discrepancy: MoneyValueSchema.optional(),
+  summary: ExecutionSummarySchema,
+  account_balance: z.object({
+    before: AccountSnapshotSchema,
+    after: AccountSnapshotSchema,
+  }),
+  actions_taken: z.array(ExecutionActionRecordSchema),
+  recommendations: z.array(z.string()),
+  balance_reconciliation: z.unknown().optional(),
+  bulk_operation_details: BulkOperationDetailsSchema.optional(),
 });
 
 export type ExecutionResult = z.infer<typeof ExecutionResultSchema>;
@@ -366,21 +452,27 @@ export type ExecutionResult = z.infer<typeof ExecutionResultSchema>;
  * Data freshness audit metadata.
  * Documents data sources, cache status, and staleness.
  *
+ * @remarks
+ * This schema uses `.catchall(z.unknown())` to support forward-compatible extensions
+ * through the AdapterOptions.auditMetadata pattern. Known keys are typed explicitly,
+ * but additional fields can be passed through without validation errors.
+ *
  * @see src/tools/reconciliation/index.ts:272-284 - Audit metadata construction
+ * @see src/tools/reconcileAdapter.ts:19-25 - AdapterOptions interface with extensible auditMetadata
  */
 export const AuditMetadataSchema = z.object({
   data_freshness: z.string(),
   data_source: z.string(),
   server_knowledge: z.number().optional(),
   fetched_at: z.string(),
-  accounts_count: z.number(),
-  transactions_count: z.number(),
+  accounts_count: z.number().optional(),
+  transactions_count: z.number().optional(),
   cache_status: z.object({
     accounts_cached: z.boolean(),
     transactions_cached: z.boolean(),
     delta_merge_applied: z.boolean(),
   }),
-});
+}).catchall(z.unknown());
 
 export type AuditMetadata = z.infer<typeof AuditMetadataSchema>;
 
@@ -481,23 +573,31 @@ export const ReconcileAccountOutputSchema = z.union([
   z.object({
     human: z.string(),
     structured: z.object({
-      success: z.boolean(),
-      phase: z.literal('analysis'),
+      version: z.string(),
+      schema_url: z.string(),
+      generated_at: z.string(),
+      account: z.object({
+        id: z.string().optional(),
+        name: z.string().optional(),
+      }),
       summary: ReconciliationSummarySchema,
-      auto_matches: z.array(TransactionMatchSchema),
-      suggested_matches: z.array(TransactionMatchSchema),
-      unmatched_bank: z.array(BankTransactionSchema),
-      unmatched_ynab: z.array(YNABTransactionSimpleSchema),
-      balance_info: BalanceInfoSchema,
-      next_steps: z.array(z.string()),
+      balance: BalanceInfoSchema.extend({
+        discrepancy_direction: z.enum(['balanced', 'ynab_higher', 'bank_higher']),
+      }),
       insights: z.array(ReconciliationInsightSchema),
+      next_steps: z.array(z.string()),
+      matches: z.object({
+        auto: z.array(TransactionMatchSchema),
+        suggested: z.array(TransactionMatchSchema),
+      }),
+      unmatched: z.object({
+        bank: z.array(BankTransactionSchema),
+        ynab: z.array(YNABTransactionSimpleSchema),
+      }),
       recommendations: z.array(ActionableRecommendationSchema).optional(),
-      execution_result: ExecutionResultSchema.optional(),
-      audit_metadata: AuditMetadataSchema,
-      account_name: z.string(),
-      account_id: z.string(),
-      currency_code: z.string(),
       csv_format: CsvFormatMetadataSchema.optional(),
+      execution: ExecutionResultSchema.optional(),
+      audit: AuditMetadataSchema.optional(),
     }),
   }),
 ]);
