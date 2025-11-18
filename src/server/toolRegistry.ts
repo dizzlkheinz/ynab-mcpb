@@ -271,8 +271,11 @@ export class ToolRegistry {
               context,
             });
             // Validate output against schema if present
-            return this.validateOutput(tool.name, handlerResult);
-          } catch (handlerError) {
+            // Skip validation if handler returned an error
+            if (handlerResult.isError) {
+              return handlerResult;
+            }
+            return this.validateOutput(tool.name, handlerResult);          } catch (handlerError) {
             return this.deps.errorHandler.handleError(
               handlerError,
               `executing ${tool.name} - ${tool.security.operation}`,
@@ -413,13 +416,36 @@ export class ToolRegistry {
       );
     }
 
-    const firstContent = output.content[0];
-    if (!firstContent || firstContent.type !== 'text' || typeof firstContent.text !== 'string') {
+    // Validate all content items (not just the first one)
+    const invalidItems: Array<{ index: number; reason: string }> = [];
+
+    for (let i = 0; i < output.content.length; i++) {
+      const item = output.content[i];
+      if (!item) {
+        invalidItems.push({ index: i, reason: 'item is null or undefined' });
+      } else if (item.type !== 'text') {
+        invalidItems.push({ index: i, reason: `type is "${item.type}" instead of "text"` });
+      } else if (typeof item.text !== 'string') {
+        invalidItems.push({ index: i, reason: `text property is ${typeof item.text} instead of string` });
+      }
+    }
+
+    if (invalidItems.length > 0) {
+      const invalidItemsDetails = invalidItems
+        .map((inv) => `  - Item ${inv.index}: ${inv.reason}`)
+        .join('\n');
+
       return this.deps.errorHandler.createValidationError(
         `Output validation failed for ${toolName}`,
-        'Handler did not return text content',
-        ['Ensure the handler returns text content in the response'],
+        `Handler returned invalid content items (${invalidItems.length} of ${output.content.length} failed):\n${invalidItemsDetails}`,
+        ['Ensure all content items have type="text" and a valid text property'],
       );
+    }
+
+    const firstContent = output.content[0]!;
+    // TypeScript: After validation above, we know firstContent.type === 'text'
+    if (firstContent.type !== 'text') {
+      throw new Error('Unexpected: firstContent is not text after validation');
     }
 
     let parsedOutput: unknown;
@@ -437,9 +463,11 @@ export class ToolRegistry {
     const result = validator.safeParse(parsedOutput);
     if (!result.success) {
       const validationErrors = result.error.issues
-        .map((err) => `${err.path.join('.')}: ${err.message}`)
+        .map((err) => {
+          const path = err.path.join('.');
+          return path ? `${path}: ${err.message}` : err.message;
+        })
         .join('; ');
-
       return this.deps.errorHandler.createValidationError(
         `Output validation failed for ${toolName}`,
         `Handler output does not match declared output schema: ${validationErrors}`,

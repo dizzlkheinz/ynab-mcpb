@@ -880,11 +880,24 @@ export class YNABMCPServer {
           options.prettySpaces = Math.max(0, Math.min(10, Math.floor(input.pretty_spaces)));
         }
         responseFormatter.configure(options);
+
+        // Build human-readable message describing the new configuration
+        const parts: string[] = [];
+        if (options.defaultMinify !== undefined) {
+          parts.push(`minify=${options.defaultMinify}`);
+        }
+        if (options.prettySpaces !== undefined) {
+          parts.push(`spaces=${options.prettySpaces}`);
+        }
+        const message = parts.length > 0
+          ? `Output format configured: ${parts.join(', ')}`
+          : 'Output format configured';
+
         return {
           content: [
             {
               type: 'text',
-              text: responseFormatter.format({ success: true, options }),
+              text: responseFormatter.format({ success: true, message, options }),
             },
           ],
         };
