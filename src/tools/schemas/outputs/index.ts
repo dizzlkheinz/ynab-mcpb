@@ -5,13 +5,10 @@
  * used throughout the YNAB MCP server. Import from this file rather than
  * individual schema files for convenience and consistency.
  *
- * This file will be extended in future phases with additional output schema files
- * (e.g., budgetOutputs.ts, accountOutputs.ts, transactionOutputs.ts, etc.) as
- * other engineers implement output schemas for their respective tool domains.
- *
  * @example
  * ```typescript
  * import { GetUserOutputSchema, type GetUserOutput } from './schemas/outputs/index.js';
+ * import { ListBudgetsOutputSchema, type ListBudgetsOutput } from './schemas/outputs/index.js';
  * ```
  */
 
@@ -52,3 +49,87 @@ export {
   CacheInfoSchema,
   DeltaInfoSchema,
 } from './utilityOutputs.js';
+
+// ============================================================================
+// BUDGET TOOL OUTPUT SCHEMAS
+// ============================================================================
+
+export {
+  ListBudgetsOutputSchema,
+  type ListBudgetsOutput,
+  BudgetSummarySchema,
+  type BudgetSummary,
+} from './budgetOutputs.js';
+
+// ============================================================================
+// ACCOUNT TOOL OUTPUT SCHEMAS
+// ============================================================================
+
+export {
+  ListAccountsOutputSchema,
+  type ListAccountsOutput,
+  GetAccountOutputSchema,
+  type GetAccountOutput,
+  AccountSchema,
+  type Account,
+} from './accountOutputs.js';
+
+// ============================================================================
+// TRANSACTION TOOL OUTPUT SCHEMAS
+// ============================================================================
+
+export {
+  ListTransactionsOutputSchema,
+  type ListTransactionsOutput,
+  GetTransactionOutputSchema,
+  type GetTransactionOutput,
+  TransactionSchema,
+  type Transaction,
+  TransactionPreviewSchema,
+  type TransactionPreview,
+} from './transactionOutputs.js';
+
+// ============================================================================
+// CATEGORY TOOL OUTPUT SCHEMAS
+// ============================================================================
+
+export {
+  ListCategoriesOutputSchema,
+  type ListCategoriesOutput,
+  GetCategoryOutputSchema,
+  type GetCategoryOutput,
+  CategorySchema,
+  type Category,
+  CategoryGroupSchema,
+  type CategoryGroup,
+} from './categoryOutputs.js';
+
+// ============================================================================
+// PAYEE TOOL OUTPUT SCHEMAS
+// ============================================================================
+
+export {
+  ListPayeesOutputSchema,
+  type ListPayeesOutput,
+  GetPayeeOutputSchema,
+  type GetPayeeOutput,
+  PayeeSchema,
+  type Payee,
+} from './payeeOutputs.js';
+
+// ============================================================================
+// MONTH TOOL OUTPUT SCHEMAS
+// ============================================================================
+
+export {
+  GetMonthOutputSchema,
+  type GetMonthOutput,
+  ListMonthsOutputSchema,
+  type ListMonthsOutput,
+  MonthDetailSchema,
+  type MonthDetail,
+  MonthSummarySchema,
+  type MonthSummary,
+  MonthCategorySchema,
+  type MonthCategory,
+} from './monthOutputs.js';
