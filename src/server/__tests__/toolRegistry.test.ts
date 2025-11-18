@@ -753,7 +753,46 @@ describe('ToolRegistry', () => {
       expect(handler).toHaveBeenCalledTimes(1);
       expect(dependencies.errorHandler.createValidationError).toHaveBeenCalled();
       expect(result.content[0]?.text).toContain('Output validation failed');
-      expect(result.content[0]?.text).toContain('did not return text content');
+      expect(result.content[0]?.text).toContain('Handler returned invalid content items');
+      expect(result.content[0]?.text).toContain('Item 0: type is "image" instead of "text"');
+    });
+
+    it('rejects handler output with multiple invalid content items', async () => {
+      const outputSchema = z.object({
+        success: z.boolean(),
+      });
+
+      const handler = vi.fn(async () => ({
+        content: [
+          { type: 'text', text: '{"success": true}' }, // Valid
+          { type: 'image', data: 'base64...' }, // Invalid: wrong type
+          { type: 'text', text: 123 }, // Invalid: text is not string
+          { type: 'text' }, // Invalid: missing text property
+        ],
+      }));
+
+      registry.register({
+        name: 'multi_invalid_tool',
+        description: 'Returns multiple content items with some invalid',
+        inputSchema: z.object({ id: z.string() }),
+        outputSchema,
+        handler,
+      });
+
+      const result = await registry.executeTool({
+        name: 'multi_invalid_tool',
+        accessToken: 'token',
+        arguments: { id: 'test' },
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(dependencies.errorHandler.createValidationError).toHaveBeenCalled();
+      expect(result.content[0]?.text).toContain('Output validation failed');
+      expect(result.content[0]?.text).toContain('Handler returned invalid content items');
+      expect(result.content[0]?.text).toContain('3 of 4 failed');
+      expect(result.content[0]?.text).toContain('Item 1: type is "image" instead of "text"');
+      expect(result.content[0]?.text).toContain('Item 2: text property is number instead of string');
+      expect(result.content[0]?.text).toContain('Item 3: text property is undefined instead of string');
     });
 
     it('skips validation when no output schema is defined', async () => {
