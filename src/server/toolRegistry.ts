@@ -417,7 +417,7 @@ export class ToolRegistry {
     }
 
     // Validate all content items (not just the first one)
-    const invalidItems: Array<{ index: number; reason: string }> = [];
+    const invalidItems: { index: number; reason: string }[] = [];
 
     for (let i = 0; i < output.content.length; i++) {
       const item = output.content[i];
