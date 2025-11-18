@@ -48,6 +48,27 @@ export const UpdateCategorySchema = z
 export type UpdateCategoryParams = z.infer<typeof UpdateCategorySchema>;
 
 /**
+ * Convert goal-related monetary fields from milliunits to dollars.
+ * Returns an object with the four converted goal fields.
+ */
+function convertGoalFields(category: ynab.Category) {
+  return {
+    goal_target: category.goal_target != null
+      ? milliunitsToAmount(category.goal_target)
+      : undefined,
+    goal_under_funded: category.goal_under_funded != null
+      ? milliunitsToAmount(category.goal_under_funded)
+      : undefined,
+    goal_overall_funded: category.goal_overall_funded != null
+      ? milliunitsToAmount(category.goal_overall_funded)
+      : undefined,
+    goal_overall_left: category.goal_overall_left != null
+      ? milliunitsToAmount(category.goal_overall_left)
+      : undefined,
+  };
+}
+
+/**
  * Handles the ynab:list_categories tool call
  * Lists all categories for a specific budget
  */
@@ -91,20 +112,9 @@ export async function handleListCategories(
           balance: milliunitsToAmount(category.balance),
           goal_type: category.goal_type,
           goal_creation_month: category.goal_creation_month,
-          goal_target: category.goal_target !== null && category.goal_target !== undefined
-            ? milliunitsToAmount(category.goal_target)
-            : undefined,
+          ...convertGoalFields(category),
           goal_target_month: category.goal_target_month,
           goal_percentage_complete: category.goal_percentage_complete,
-          goal_under_funded: category.goal_under_funded !== null && category.goal_under_funded !== undefined
-            ? milliunitsToAmount(category.goal_under_funded)
-            : undefined,
-          goal_overall_funded: category.goal_overall_funded !== null && category.goal_overall_funded !== undefined
-            ? milliunitsToAmount(category.goal_overall_funded)
-            : undefined,
-          goal_overall_left: category.goal_overall_left !== null && category.goal_overall_left !== undefined
-            ? milliunitsToAmount(category.goal_overall_left)
-            : undefined,
         })),
       );
 
@@ -180,20 +190,9 @@ export async function handleGetCategory(
                 balance: milliunitsToAmount(category.balance),
                 goal_type: category.goal_type,
                 goal_creation_month: category.goal_creation_month,
-                goal_target: category.goal_target !== null && category.goal_target !== undefined
-                  ? milliunitsToAmount(category.goal_target)
-                  : undefined,
+                ...convertGoalFields(category),
                 goal_target_month: category.goal_target_month,
                 goal_percentage_complete: category.goal_percentage_complete,
-                goal_under_funded: category.goal_under_funded !== null && category.goal_under_funded !== undefined
-                  ? milliunitsToAmount(category.goal_under_funded)
-                  : undefined,
-                goal_overall_funded: category.goal_overall_funded !== null && category.goal_overall_funded !== undefined
-                  ? milliunitsToAmount(category.goal_overall_funded)
-                  : undefined,
-                goal_overall_left: category.goal_overall_left !== null && category.goal_overall_left !== undefined
-                  ? milliunitsToAmount(category.goal_overall_left)
-                  : undefined,
               },
               cached: wasCached,
               cache_info: wasCached
@@ -316,20 +315,9 @@ export async function handleUpdateCategory(
               balance: milliunitsToAmount(category.balance),
               goal_type: category.goal_type,
               goal_creation_month: category.goal_creation_month,
-              goal_target: category.goal_target !== null && category.goal_target !== undefined
-                ? milliunitsToAmount(category.goal_target)
-                : undefined,
+              ...convertGoalFields(category),
               goal_target_month: category.goal_target_month,
               goal_percentage_complete: category.goal_percentage_complete,
-              goal_under_funded: category.goal_under_funded !== null && category.goal_under_funded !== undefined
-                ? milliunitsToAmount(category.goal_under_funded)
-                : undefined,
-              goal_overall_funded: category.goal_overall_funded !== null && category.goal_overall_funded !== undefined
-                ? milliunitsToAmount(category.goal_overall_funded)
-                : undefined,
-              goal_overall_left: category.goal_overall_left !== null && category.goal_overall_left !== undefined
-                ? milliunitsToAmount(category.goal_overall_left)
-                : undefined,
             },
             updated_month: currentMonth,
           }),

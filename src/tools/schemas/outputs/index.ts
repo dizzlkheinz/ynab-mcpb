@@ -166,8 +166,12 @@ export {
 export {
   SubtransactionSchema,
   type Subtransaction,
+  SubtransactionPreviewSchema,
+  type SubtransactionPreview,
   TransactionWithBalanceSchema,
   type TransactionWithBalance,
+  TransactionDryRunPreviewSchema,
+  type TransactionDryRunPreview,
   ReceiptItemSchema,
   type ReceiptItem,
   ReceiptCategoryBreakdownSchema,

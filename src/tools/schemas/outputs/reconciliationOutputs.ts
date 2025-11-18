@@ -60,6 +60,7 @@ export const MoneyValueSchema = z.object({
   amount: z.number(),
   currency: z.string(),
   formatted: z.string(),
+  memo: z.string().optional(),
 });
 
 export type MoneyValue = z.infer<typeof MoneyValueSchema>;
@@ -72,7 +73,7 @@ export type MoneyValue = z.infer<typeof MoneyValueSchema>;
  */
 export const BankTransactionSchema = z.object({
   id: z.string().uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().date(),
   amount: z.number(),
   payee: z.string(),
   memo: z.string().optional(),
@@ -116,10 +117,56 @@ export const MatchCandidateSchema = z.object({
 export type MatchCandidate = z.infer<typeof MatchCandidateSchema>;
 
 /**
+ * Derives the confidence enum value from a numeric confidence score.
+ * Used to enforce consistency between confidence and confidence_score fields.
+ *
+ * @param score - Numeric confidence score (0-100)
+ * @returns Corresponding confidence level enum value
+ *
+ * @remarks
+ * Export this function to use in application logic when constructing
+ * TransactionMatch objects to ensure consistency between the two fields.
+ *
+ * Thresholds:
+ * - 'high': score >= 90
+ * - 'medium': score >= 60
+ * - 'low': score >= 1
+ * - 'none': score === 0
+ *
+ * @example
+ * ```typescript
+ * const confidenceScore = 85;
+ * const transactionMatch = {
+ *   // ... other fields
+ *   confidence: deriveConfidenceFromScore(confidenceScore),
+ *   confidence_score: confidenceScore,
+ * };
+ * ```
+ */
+export function deriveConfidenceFromScore(score: number): 'high' | 'medium' | 'low' | 'none' {
+  if (score >= 90) return 'high';
+  if (score >= 60) return 'medium';
+  if (score >= 1) return 'low';
+  return 'none';
+}
+
+/**
  * Transaction match result with confidence and candidates.
  * Links a bank transaction to a YNAB transaction or suggests candidates.
  *
  * @see src/tools/reconciliation/types.ts - TransactionMatch interface
+ *
+ * @remarks
+ * This schema contains both `confidence` (enum) and `confidence_score` (0-100)
+ * for backwards compatibility. A validation rule enforces consistency between
+ * the two fields by deriving the expected enum value from the numeric score
+ * and rejecting mismatches.
+ *
+ * Confidence thresholds:
+ * - 'high': confidence_score >= 90
+ * - 'medium': confidence_score >= 60
+ * - 'low': confidence_score >= 1
+ * - 'none': confidence_score === 0
  */
 export const TransactionMatchSchema = z.object({
   bank_transaction: BankTransactionSchema,
@@ -131,7 +178,16 @@ export const TransactionMatchSchema = z.object({
   top_confidence: z.number().optional(),
   action_hint: z.string().optional(),
   recommendation: z.string().optional(),
-});
+}).refine(
+  (data) => {
+    const expectedConfidence = deriveConfidenceFromScore(data.confidence_score);
+    return data.confidence === expectedConfidence;
+  },
+  {
+    message: 'Confidence mismatch: confidence enum does not match confidence_score',
+    path: ['confidence'],
+  }
+);
 
 export type TransactionMatch = z.infer<typeof TransactionMatchSchema>;
 
@@ -295,9 +351,9 @@ export const ExecutionResultSchema = z.object({
   ),
   balance_after_execution: z
     .object({
-      cleared: z.number(),
-      uncleared: z.number(),
-      total: z.number(),
+      cleared: MoneyValueSchema,
+      uncleared: MoneyValueSchema,
+      total: MoneyValueSchema,
     })
     .optional(),
   reconciliation_complete: z.boolean(),
