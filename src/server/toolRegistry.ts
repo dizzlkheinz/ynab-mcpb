@@ -14,7 +14,7 @@ export type SecurityWrapperFactory = <T extends Record<string, unknown>>(
 
 export interface ErrorHandlerContract {
   handleError(error: unknown, context: string): CallToolResult;
-  createValidationError(message: string, details?: string): CallToolResult;
+  createValidationError(message: string, details?: string, suggestions?: string[]): CallToolResult;
 }
 
 export interface ResponseFormatterContract {
@@ -113,6 +113,7 @@ export class ToolRegistry {
     string,
     RegisteredTool<Record<string, unknown>, Record<string, unknown>>
   >();
+  private readonly outputValidators = new Map<string, z.ZodSchema<Record<string, unknown>>>();
 
   constructor(private readonly deps: ToolRegistryDependencies) {}
 
@@ -141,6 +142,14 @@ export class ToolRegistry {
       Record<string, unknown>
     >;
     this.tools.set(definition.name, registeredTool);
+
+    // Cache output validator if present
+    if (definition.outputSchema) {
+      this.outputValidators.set(
+        definition.name,
+        definition.outputSchema as z.ZodSchema<Record<string, unknown>>,
+      );
+    }
   }
 
   listTools(): Tool[] {
@@ -257,10 +266,12 @@ export class ToolRegistry {
             if (this.deps.cacheHelpers) {
               context.cache = this.deps.cacheHelpers;
             }
-            return await tool.handler({
+            const handlerResult = await tool.handler({
               input: validated,
               context,
             });
+            // Validate output against schema if present
+            return this.validateOutput(tool.name, handlerResult);
           } catch (handlerError) {
             return this.deps.errorHandler.handleError(
               handlerError,
@@ -379,5 +390,67 @@ export class ToolRegistry {
       console.warn(`Failed to generate JSON schema for tool: ${error}`);
       return { type: 'object', additionalProperties: true };
     }
+  }
+
+  /**
+   * Validates handler output against the tool's output schema if present
+   */
+  private validateOutput(toolName: string, output: CallToolResult): CallToolResult {
+    const validator = this.outputValidators.get(toolName);
+    if (!validator) {
+      // No output schema defined, skip validation
+      return output;
+    }
+
+    // Extract the actual data from the CallToolResult
+    // CallToolResult is { content: Array<{ type: string, text: string, ... }> }
+    // We need to parse the text content and validate it
+    if (!output.content || output.content.length === 0) {
+      return this.deps.errorHandler.createValidationError(
+        `Output validation failed for ${toolName}`,
+        'Handler returned empty content',
+        ['Ensure the handler returns valid content in the response'],
+      );
+    }
+
+    const firstContent = output.content[0];
+    if (!firstContent || firstContent.type !== 'text' || typeof firstContent.text !== 'string') {
+      return this.deps.errorHandler.createValidationError(
+        `Output validation failed for ${toolName}`,
+        'Handler did not return text content',
+        ['Ensure the handler returns text content in the response'],
+      );
+    }
+
+    let parsedOutput: unknown;
+    try {
+      parsedOutput = JSON.parse(firstContent.text);
+    } catch (parseError) {
+      return this.deps.errorHandler.createValidationError(
+        `Output validation failed for ${toolName}`,
+        `Invalid JSON in handler output: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+        ['Ensure the handler returns valid JSON'],
+      );
+    }
+
+    // Validate against schema
+    const result = validator.safeParse(parsedOutput);
+    if (!result.success) {
+      const validationErrors = result.error.issues
+        .map((err) => `${err.path.join('.')}: ${err.message}`)
+        .join('; ');
+
+      return this.deps.errorHandler.createValidationError(
+        `Output validation failed for ${toolName}`,
+        `Handler output does not match declared output schema: ${validationErrors}`,
+        [
+          'Check that the handler returns data matching the output schema',
+          'Review the tool definition output schema',
+        ],
+      );
+    }
+
+    // Validation passed, return original output
+    return output;
   }
 }
