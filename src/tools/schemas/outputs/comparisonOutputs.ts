@@ -47,6 +47,68 @@
 import { z } from 'zod';
 
 // ============================================================================
+// DATE VALIDATION HELPERS
+// ============================================================================
+
+/**
+ * Validates that a string is both correctly formatted as YYYY-MM-DD and represents
+ * a valid calendar date. Rejects invalid dates like "2024-02-31" or "2024-13-01".
+ *
+ * @param dateStr - ISO date string to validate
+ * @returns true if the date is valid, false otherwise
+ *
+ * @remarks
+ * This validation checks:
+ * 1. Format: YYYY-MM-DD (via regex)
+ * 2. Parseability: Date.parse() succeeds
+ * 3. Calendar validity: Parsed components match original string
+ * 4. Not NaN: The parsed date is a valid number
+ *
+ * @example
+ * isValidISODate("2024-02-29") // true (leap year)
+ * isValidISODate("2024-02-30") // false (February has max 29 days)
+ * isValidISODate("2024-13-01") // false (invalid month)
+ * isValidISODate("2024-02-31") // false (February doesn't have 31 days)
+ */
+function isValidISODate(dateStr: string): boolean {
+  // First check format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return false;
+  }
+
+  // Parse and validate
+  const parsed = Date.parse(dateStr);
+  if (isNaN(parsed)) {
+    return false;
+  }
+
+  // Verify that the parsed date components match the original string
+  // This catches cases like "2024-02-31" which Date.parse might coerce to "2024-03-03"
+  const date = new Date(parsed);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const reconstructed = `${year}-${month}-${day}`;
+
+  return reconstructed === dateStr;
+}
+
+/**
+ * Reusable Zod schema for validating ISO date strings (YYYY-MM-DD).
+ * Validates both format and calendar validity.
+ *
+ * @example
+ * const schema = z.object({ date: ISODateStringSchema });
+ * schema.parse({ date: "2024-02-29" }); // OK (leap year)
+ * schema.parse({ date: "2024-02-31" }); // Error: Invalid calendar date
+ */
+export const ISODateStringSchema = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+  .refine(isValidISODate, {
+    message: 'Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)',
+  });
+
+// ============================================================================
 // NESTED SCHEMAS FOR COMPOSITION
 // ============================================================================
 
@@ -57,7 +119,7 @@ import { z } from 'zod';
  * @see src/tools/compareTransactions/types.ts - BankTransaction interface
  */
 export const BankTransactionComparisonSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: ISODateStringSchema,
   amount: z.number(),
   description: z.string(),
   raw_amount: z.string(),
@@ -75,7 +137,7 @@ export type BankTransactionComparison = z.infer<typeof BankTransactionComparison
  */
 export const YNABTransactionComparisonSchema = z.object({
   id: z.string(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: ISODateStringSchema,
   amount: z.number(),
   payee_name: z.string().nullable(),
   memo: z.string().nullable(),
@@ -115,11 +177,32 @@ export type ComparisonParameters = z.infer<typeof ComparisonParametersSchema>;
 /**
  * Date range for comparison analysis.
  * Specifies the period covered by compared transactions.
+ *
+ * @remarks
+ * Validates that:
+ * 1. Both start and end are valid ISO dates (YYYY-MM-DD)
+ * 2. Start date is before or equal to end date
+ *
+ * @example
+ * DateRangeSchema.parse({ start: "2024-01-01", end: "2024-12-31" }) // OK
+ * DateRangeSchema.parse({ start: "2024-12-31", end: "2024-01-01" }) // Error: start date must be before or equal to end date
  */
 export const DateRangeSchema = z.object({
-  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-});
+  start: ISODateStringSchema,
+  end: ISODateStringSchema,
+}).refine(
+  (data) => {
+    // Parse both dates - we know they're valid ISO dates due to ISODateStringSchema
+    const startDate = Date.parse(data.start);
+    const endDate = Date.parse(data.end);
+
+    // Validate logical ordering: start must be <= end
+    return startDate <= endDate;
+  },
+  {
+    message: 'Start date must be before or equal to end date',
+  }
+);
 
 export type DateRange = z.infer<typeof DateRangeSchema>;
 
@@ -154,6 +237,7 @@ export type ExportInfo = z.infer<typeof ExportInfoSchema>;
 export const ExportedTransactionSchema = z.union([
   // Minimal mode (id, date, amount, payee_name, cleared only)
   z.object({
+    export_mode: z.literal('minimal'),
     id: z.string(),
     date: z.string(),
     amount: z.number(),
@@ -162,6 +246,7 @@ export const ExportedTransactionSchema = z.union([
   }),
   // Full mode (all transaction fields)
   z.object({
+    export_mode: z.literal('full'),
     id: z.string(),
     date: z.string(),
     amount: z.number(),
@@ -184,7 +269,6 @@ export const ExportedTransactionSchema = z.union([
 ]);
 
 export type ExportedTransaction = z.infer<typeof ExportedTransactionSchema>;
-
 // ============================================================================
 // MAIN OUTPUT SCHEMAS
 // ============================================================================

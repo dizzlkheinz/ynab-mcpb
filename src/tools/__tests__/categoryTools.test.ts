@@ -216,6 +216,12 @@ describe('Category Tools', () => {
         goal_target_month: null,
         goal_percentage_complete: null,
       });
+      // Verify goal_target conversion for category-3 (100000 cents -> 100 dollars)
+      expect(parsedContent.categories[2]).toMatchObject({
+        id: 'category-3',
+        name: 'Car Maintenance',
+        goal_target: 100,
+      });
     });
 
     it('should handle authentication errors', async () => {

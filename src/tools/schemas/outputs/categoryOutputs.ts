@@ -129,13 +129,13 @@ export const CategorySchema = z.object({
   /** Goal percentage complete (optional) */
   goal_percentage_complete: z.number().optional().describe('Goal percentage complete'),
 
-  /** Amount still needed in current month to stay on track (dollars, optional) */
+  /** Amount still needed in current month to stay on track with goal (dollars, optional) */
   goal_under_funded: z.number().optional().describe('Goal underfunded amount in dollars'),
 
-  /** Total amount funded towards goal in current period (dollars, optional) */
+  /** Total amount funded towards goal across entire goal period since creation (dollars, optional) */
   goal_overall_funded: z.number().optional().describe('Goal overall funded amount in dollars'),
 
-  /** Amount still needed to complete goal in current period (dollars, optional) */
+  /** Amount still needed to complete goal across entire goal period (dollars, optional) */
   goal_overall_left: z.number().optional().describe('Goal overall left amount in dollars'),
 });
 
