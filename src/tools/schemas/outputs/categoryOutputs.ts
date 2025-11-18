@@ -5,6 +5,10 @@
  * - `list_categories`: Returns all categories and category groups with cache metadata
  * - `get_category`: Returns a single category with cache metadata
  *
+ * All financial amounts (budgeted, activity, balance, goal_target, goal_under_funded,
+ * goal_overall_funded, goal_overall_left) are converted from YNAB API milliunits to
+ * dollars for consistency.
+ *
  * @see src/tools/categoryTools.ts:54-124 for list_categories handler
  * @see src/tools/categoryTools.ts:130-188 for get_category handler
  *
@@ -23,8 +27,11 @@
  *       activity: -145.50,
  *       balance: 204.50,
  *       goal_type: 'TB',
- *       goal_target: 150000,
- *       goal_percentage_complete: 100
+ *       goal_target: 150.00,
+ *       goal_percentage_complete: 100,
+ *       goal_under_funded: 0.00,
+ *       goal_overall_funded: 150.00,
+ *       goal_overall_left: 0.00
  *     }
  *   ],
  *   category_groups: [
@@ -53,7 +60,10 @@
  *     activity: -145.50,
  *     balance: 204.50,
  *     goal_type: 'TB',
- *     goal_target: 150000
+ *     goal_target: 150.00,
+ *     goal_under_funded: 0.00,
+ *     goal_overall_funded: 150.00,
+ *     goal_overall_left: 0.00
  *   },
  *   cached: false,
  *   cache_info: {
@@ -110,14 +120,23 @@ export const CategorySchema = z.object({
   /** Goal creation month (YYYY-MM-DD, optional) */
   goal_creation_month: z.string().optional().describe('Goal creation month'),
 
-  /** Goal target amount in milliunits (optional) */
-  goal_target: z.number().optional().describe('Goal target in milliunits'),
+  /** Goal target amount in dollars (converted from YNAB API milliunits, optional) */
+  goal_target: z.number().optional().describe('Goal target amount in dollars'),
 
   /** Goal target month (YYYY-MM-DD, optional) */
   goal_target_month: z.string().optional().describe('Goal target month'),
 
   /** Goal percentage complete (optional) */
   goal_percentage_complete: z.number().optional().describe('Goal percentage complete'),
+
+  /** Amount still needed in current month to stay on track (dollars, optional) */
+  goal_under_funded: z.number().optional().describe('Goal underfunded amount in dollars'),
+
+  /** Total amount funded towards goal in current period (dollars, optional) */
+  goal_overall_funded: z.number().optional().describe('Goal overall funded amount in dollars'),
+
+  /** Amount still needed to complete goal in current period (dollars, optional) */
+  goal_overall_left: z.number().optional().describe('Goal overall left amount in dollars'),
 });
 
 /**
