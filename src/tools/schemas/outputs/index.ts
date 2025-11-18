@@ -5,10 +5,15 @@
  * used throughout the YNAB MCP server. Import from this file rather than
  * individual schema files for convenience and consistency.
  *
+ * Includes schemas for: utilities, budgets, accounts, transactions (list/get),
+ * categories, payees, months, transaction mutations (create/update/delete),
+ * reconciliation analysis, and comparison/export operations.
+ *
  * @example
  * ```typescript
  * import { GetUserOutputSchema, type GetUserOutput } from './schemas/outputs/index.js';
  * import { ListBudgetsOutputSchema, type ListBudgetsOutput } from './schemas/outputs/index.js';
+ * import { CreateTransactionOutputSchema, type CreateTransactionOutput } from './schemas/outputs/index.js';
  * ```
  */
 
@@ -133,3 +138,112 @@ export {
   MonthCategorySchema,
   type MonthCategory,
 } from './monthOutputs.js';
+
+// ============================================================================
+// TRANSACTION MUTATION OUTPUT SCHEMAS
+// ============================================================================
+
+export {
+  CreateTransactionOutputSchema,
+  type CreateTransactionOutput,
+  CreateTransactionsOutputSchema,
+  type CreateTransactionsOutput,
+  UpdateTransactionOutputSchema,
+  type UpdateTransactionOutput,
+  UpdateTransactionsOutputSchema,
+  type UpdateTransactionsOutput,
+  DeleteTransactionOutputSchema,
+  type DeleteTransactionOutput,
+  CreateReceiptSplitTransactionOutputSchema,
+  type CreateReceiptSplitTransactionOutput,
+  CreateAccountOutputSchema,
+  type CreateAccountOutput,
+  UpdateCategoryOutputSchema,
+  type UpdateCategoryOutput,
+} from './transactionMutationOutputs.js';
+
+// Nested schemas for transaction mutations
+export {
+  SubtransactionSchema,
+  type Subtransaction,
+  TransactionWithBalanceSchema,
+  type TransactionWithBalance,
+  ReceiptItemSchema,
+  type ReceiptItem,
+  ReceiptCategoryBreakdownSchema,
+  type ReceiptCategoryBreakdown,
+  ReceiptSummarySchema,
+  type ReceiptSummary,
+  BulkOperationSummarySchema,
+  type BulkOperationSummary,
+  BulkResultSchema,
+  type BulkResult,
+  DryRunPreviewItemSchema,
+  type DryRunPreviewItem,
+  DryRunWarningSchema,
+  type DryRunWarning,
+} from './transactionMutationOutputs.js';
+
+// ============================================================================
+// RECONCILIATION OUTPUT SCHEMAS
+// ============================================================================
+
+export {
+  ReconcileAccountOutputSchema,
+  type ReconcileAccountOutput,
+} from './reconciliationOutputs.js';
+
+// Nested schemas for reconciliation
+export {
+  MoneyValueSchema,
+  type MoneyValue,
+  BankTransactionSchema,
+  type BankTransaction,
+  YNABTransactionSimpleSchema,
+  type YNABTransactionSimple,
+  MatchCandidateSchema,
+  type MatchCandidate,
+  TransactionMatchSchema,
+  type TransactionMatch,
+  BalanceInfoSchema,
+  type BalanceInfo,
+  ReconciliationSummarySchema,
+  type ReconciliationSummary,
+  ReconciliationInsightSchema,
+  type ReconciliationInsight,
+  ActionableRecommendationSchema,
+  type ActionableRecommendation,
+  ExecutionResultSchema,
+  type ExecutionResult,
+  AuditMetadataSchema,
+  type AuditMetadata,
+} from './reconciliationOutputs.js';
+
+// ============================================================================
+// COMPARISON AND EXPORT OUTPUT SCHEMAS
+// ============================================================================
+
+export {
+  CompareTransactionsOutputSchema,
+  type CompareTransactionsOutput,
+  ExportTransactionsOutputSchema,
+  type ExportTransactionsOutput,
+} from './comparisonOutputs.js';
+
+// Nested schemas for comparison and export
+export {
+  BankTransactionComparisonSchema,
+  type BankTransactionComparison,
+  YNABTransactionComparisonSchema,
+  type YNABTransactionComparison,
+  TransactionMatchComparisonSchema,
+  type TransactionMatchComparison,
+  ComparisonParametersSchema,
+  type ComparisonParameters,
+  DateRangeSchema,
+  type DateRange,
+  ExportInfoSchema,
+  type ExportInfo,
+  ExportedTransactionSchema,
+  type ExportedTransaction,
+} from './comparisonOutputs.js';

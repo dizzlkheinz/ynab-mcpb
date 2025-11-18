@@ -213,7 +213,6 @@ describe('Category Tools', () => {
         balance: 0,
         goal_type: null,
         goal_creation_month: null,
-        goal_target: null,
         goal_target_month: null,
         goal_percentage_complete: null,
       });
@@ -291,7 +290,7 @@ describe('Category Tools', () => {
         balance: 5,
         goal_type: 'TBD',
         goal_creation_month: '2024-01-01',
-        goal_target: 60000,
+        goal_target: 60,
         goal_target_month: '2024-12-01',
         goal_percentage_complete: 83,
       });
