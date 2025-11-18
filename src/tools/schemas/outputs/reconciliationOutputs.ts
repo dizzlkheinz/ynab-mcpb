@@ -90,7 +90,7 @@ export type BankTransaction = z.infer<typeof BankTransactionSchema>;
  */
 export const YNABTransactionSimpleSchema = z.object({
   id: z.string(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().date(),
   amount: z.number(),
   payee_name: z.string().nullable(),
   category_name: z.string().nullable(),
