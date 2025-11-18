@@ -196,19 +196,40 @@ const convertBalanceReconciliationLegacy = (
   return result;
 };
 
-const convertExecution = (execution: LegacyReconciliationResult, currency: string) => ({
-  summary: execution.summary,
-  account_balance: {
-    before: convertAccountSnapshot(execution.account_balance.before, currency),
-    after: convertAccountSnapshot(execution.account_balance.after, currency),
-  },
-  actions_taken: execution.actions_taken,
-  recommendations: execution.recommendations,
-  balance_reconciliation: convertBalanceReconciliationLegacy(
-    execution.balance_reconciliation,
-    currency,
-  ),
-});
+const convertExecution = (execution: LegacyReconciliationResult, currency: string) => {
+  const result: {
+    summary: typeof execution.summary;
+    account_balance: {
+      before: ReturnType<typeof convertAccountSnapshot>;
+      after: ReturnType<typeof convertAccountSnapshot>;
+    };
+    actions_taken: typeof execution.actions_taken;
+    recommendations: typeof execution.recommendations;
+    balance_reconciliation?: ReturnType<typeof convertBalanceReconciliationLegacy>;
+    bulk_operation_details?: typeof execution.bulk_operation_details;
+  } = {
+    summary: execution.summary,
+    account_balance: {
+      before: convertAccountSnapshot(execution.account_balance.before, currency),
+      after: convertAccountSnapshot(execution.account_balance.after, currency),
+    },
+    actions_taken: execution.actions_taken,
+    recommendations: execution.recommendations,
+  };
+
+  if (execution.balance_reconciliation) {
+    result.balance_reconciliation = convertBalanceReconciliationLegacy(
+      execution.balance_reconciliation,
+      currency,
+    );
+  }
+
+  if (execution.bulk_operation_details) {
+    result.bulk_operation_details = execution.bulk_operation_details;
+  }
+
+  return result;
+};
 
 // Helper functions for converting data structures (kept for structured output)
 
