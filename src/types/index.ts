@@ -62,3 +62,6 @@ export {
 
 // Re-export tool annotation types
 export type { MCPToolAnnotations } from './toolAnnotations.js';
+
+// Re-export tool registry types for convenience
+export type { ToolDefinition } from '../server/toolRegistry.js';

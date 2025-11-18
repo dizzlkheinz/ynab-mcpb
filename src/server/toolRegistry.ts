@@ -70,17 +70,24 @@ export type ToolHandler<TInput extends Record<string, unknown>> = (
   payload: ToolExecutionPayload<TInput>,
 ) => Promise<CallToolResult>;
 
-export interface ToolDefinition<TInput extends Record<string, unknown> = Record<string, unknown>> {
+export interface ToolDefinition<
+  TInput extends Record<string, unknown> = Record<string, unknown>,
+  TOutput extends Record<string, unknown> = Record<string, unknown>,
+> {
   name: string;
   description: string;
   inputSchema: z.ZodSchema<TInput>;
+  outputSchema?: z.ZodSchema<TOutput>;
   handler: ToolHandler<TInput>;
   security?: ToolSecurityOptions;
   metadata?: ToolMetadataOptions;
   defaultArgumentResolver?: DefaultArgumentResolver<TInput>;
 }
 
-interface RegisteredTool<TInput extends Record<string, unknown>> extends ToolDefinition<TInput> {
+interface RegisteredTool<
+  TInput extends Record<string, unknown>,
+  TOutput extends Record<string, unknown>,
+> extends ToolDefinition<TInput, TOutput> {
   readonly security: Required<ToolSecurityOptions>;
 }
 
@@ -102,18 +109,24 @@ export interface ToolRegistryDependencies {
 const MINIFY_HINT_KEYS = ['minify', '_minify', '__minify'] as const;
 
 export class ToolRegistry {
-  private readonly tools = new Map<string, RegisteredTool<Record<string, unknown>>>();
+  private readonly tools = new Map<
+    string,
+    RegisteredTool<Record<string, unknown>, Record<string, unknown>>
+  >();
 
   constructor(private readonly deps: ToolRegistryDependencies) {}
 
-  register<TInput extends Record<string, unknown>>(definition: ToolDefinition<TInput>): void {
+  register<
+    TInput extends Record<string, unknown>,
+    TOutput extends Record<string, unknown>,
+  >(definition: ToolDefinition<TInput, TOutput>): void {
     this.assertValidDefinition(definition);
 
     if (this.tools.has(definition.name)) {
       throw new Error(`Tool '${definition.name}' is already registered`);
     }
 
-    const resolved: RegisteredTool<TInput> = {
+    const resolved: RegisteredTool<TInput, TOutput> = {
       ...definition,
       security: {
         namespace: definition.security?.namespace ?? 'ynab',
@@ -121,9 +134,12 @@ export class ToolRegistry {
       },
     };
 
-    // Type assertion is safe here because TInput extends Record<string, unknown>
-    // and RegisteredTool is covariant in its input parameter for storage purposes
-    const registeredTool = resolved as RegisteredTool<Record<string, unknown>>;
+    // Type assertion is safe here because TInput/TOutput extend Record<string, unknown>
+    // and RegisteredTool is covariant in its type parameters for storage purposes
+    const registeredTool = resolved as RegisteredTool<
+      Record<string, unknown>,
+      Record<string, unknown>
+    >;
     this.tools.set(definition.name, registeredTool);
   }
 
@@ -137,6 +153,10 @@ export class ToolRegistry {
         description: tool.description,
         inputSchema,
       };
+      if (tool.outputSchema) {
+        const outputSchema = this.generateJsonSchema(tool.outputSchema) as Tool['outputSchema'];
+        result.outputSchema = outputSchema;
+      }
       if (tool.metadata?.annotations) {
         result.annotations = tool.metadata.annotations;
       }
@@ -153,6 +173,9 @@ export class ToolRegistry {
         handler: tool.handler,
         security: tool.security,
       };
+      if (tool.outputSchema) {
+        definition.outputSchema = tool.outputSchema;
+      }
       if (tool.metadata) {
         definition.metadata = tool.metadata;
       }
@@ -271,7 +294,7 @@ export class ToolRegistry {
 
   private normalizeSecurityError(
     error: unknown,
-    tool: RegisteredTool<Record<string, unknown>>,
+    tool: RegisteredTool<Record<string, unknown>, Record<string, unknown>>,
   ): CallToolResult {
     if (error instanceof z.ZodError) {
       return this.deps.errorHandler.createValidationError(
@@ -311,9 +334,10 @@ export class ToolRegistry {
     return undefined;
   }
 
-  private assertValidDefinition<TInput extends Record<string, unknown>>(
-    definition: ToolDefinition<TInput>,
-  ): void {
+  private assertValidDefinition<
+    TInput extends Record<string, unknown>,
+    TOutput extends Record<string, unknown>,
+  >(definition: ToolDefinition<TInput, TOutput>): void {
     if (!definition || typeof definition !== 'object') {
       throw new Error('Tool definition must be an object');
     }
@@ -328,6 +352,10 @@ export class ToolRegistry {
 
     if (!definition.inputSchema || typeof definition.inputSchema.parse !== 'function') {
       throw new Error(`Tool '${definition.name}' requires a valid Zod schema`);
+    }
+
+    if (definition.outputSchema && typeof definition.outputSchema.parse !== 'function') {
+      throw new Error(`Tool '${definition.name}' outputSchema must be a valid Zod schema when provided`);
     }
 
     if (typeof definition.handler !== 'function') {
