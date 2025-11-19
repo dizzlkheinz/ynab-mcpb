@@ -188,6 +188,12 @@ export type MatchItem = z.infer<typeof MatchItemSchema>;
  * Bank transaction (internal type, used during matching).
  * Not part of the formatted output; see MissingInYNABItemSchema for output format.
  *
+ * @remarks
+ * **WARNING:** This is an internal schema used during the matching algorithm.
+ * It is NOT part of the public tool output contract and may change without
+ * maintaining backward compatibility. Do not rely on this schema for stable
+ * integrations - use CompareTransactionsOutputSchema instead.
+ *
  * @see src/tools/compareTransactions/types.ts - BankTransaction interface
  * @internal
  */
@@ -205,6 +211,12 @@ export type BankTransactionComparison = z.infer<typeof BankTransactionComparison
 /**
  * YNAB transaction (internal type, used during matching).
  * Not part of the formatted output; see MissingInBankItemSchema for output format.
+ *
+ * @remarks
+ * **WARNING:** This is an internal schema used during the matching algorithm.
+ * It is NOT part of the public tool output contract and may change without
+ * maintaining backward compatibility. Do not rely on this schema for stable
+ * integrations - use CompareTransactionsOutputSchema instead.
  *
  * @see src/tools/compareTransactions/types.ts - YNABTransaction interface
  * @internal
@@ -225,6 +237,12 @@ export type YNABTransactionComparison = z.infer<typeof YNABTransactionComparison
 /**
  * Matched transaction pair (internal type, used during matching).
  * Not part of the formatted output; see MatchItemSchema for output format.
+ *
+ * @remarks
+ * **WARNING:** This is an internal schema used during the matching algorithm.
+ * It is NOT part of the public tool output contract and may change without
+ * maintaining backward compatibility. Do not rely on this schema for stable
+ * integrations - use CompareTransactionsOutputSchema instead.
  *
  * @see src/tools/compareTransactions/types.ts - TransactionMatch interface
  * @internal
@@ -301,7 +319,6 @@ export const ExportInfoSchema = z.object({
     category_id: z.string().nullable(),
     since_date: z.string().nullable(),
     type: z.string().nullable(),
-    minimal: z.boolean(),
   }),
 });
 
@@ -312,15 +329,20 @@ export type ExportInfo = z.infer<typeof ExportInfoSchema>;
  * The actual JSON file does not include an export_mode field on each transaction.
  *
  * @remarks
+ * IMPORTANT: `amount` is the raw YNAB amount in **milliunits** (not dollar amounts).
+ * These values come directly from the YNAB API and represent 1/1000th of the currency unit.
+ * For example, $25.50 is represented as 25500 milliunits.
+ *
  * Minimal mode includes: id, date, amount, payee_name, cleared
  * Full mode includes: all transaction fields
  *
  * @see src/tools/exportTransactions.ts:198-232 - Transaction export logic
+ * @see src/tools/exportTransactions.ts:204 - Amount field directly from transaction.amount (milliunits)
  */
 export const ExportedTransactionMinimalSchema = z.object({
   id: z.string(),
   date: z.string(),
-  amount: z.number(),
+  amount: z.number(), // Raw YNAB milliunits
   payee_name: z.string().nullable(),
   cleared: z.string(),
 });
@@ -328,7 +350,7 @@ export const ExportedTransactionMinimalSchema = z.object({
 export const ExportedTransactionFullSchema = z.object({
   id: z.string(),
   date: z.string(),
-  amount: z.number(),
+  amount: z.number(), // Raw YNAB milliunits
   memo: z.string().nullable(),
   cleared: z.string(),
   approved: z.boolean(),
@@ -380,7 +402,7 @@ export type ExportedTransaction = z.infer<typeof ExportedTransactionSchema>;
  *     }
  *   },
  *   transactions: [
- *     { id: "txn-1", date: "2025-11-15", amount: -25500, payee_name: "Grocery Store", cleared: "cleared" },
+ *     { id: "txn-1", date: "2025-11-15", amount: -25500, payee_name: "Grocery Store", cleared: "cleared" }, // amount is milliunits
  *     ...
  *   ]
  * }
@@ -398,7 +420,7 @@ export type ExportedTransaction = z.infer<typeof ExportedTransactionSchema>;
  *     {
  *       id: "txn-1",
  *       date: "2025-11-15",
- *       amount: -25500,
+ *       amount: -25500, // Raw milliunits: -$25.50
  *       memo: "Weekly groceries",
  *       cleared: "cleared",
  *       approved: true,
@@ -555,7 +577,7 @@ export const ExportTransactionsOutputSchema = z.object({
     z.object({
       id: z.string(),
       date: z.string(),
-      amount: z.number(),
+      amount: z.number(), // Raw YNAB milliunits
       memo: z.string().nullable().optional(),
       payee_name: z.string().nullable().optional(),
       category_name: z.string().nullable().optional(),

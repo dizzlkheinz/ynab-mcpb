@@ -192,7 +192,6 @@ export async function handleExportTransactions(
             category_id: params.category_id || null,
             since_date: params.since_date || null,
             type: params.type || null,
-            minimal: params.minimal !== false,
           },
         },
         transactions: transactions.map((transaction) => {

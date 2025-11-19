@@ -196,18 +196,23 @@ const convertBalanceReconciliationLegacy = (
   return result;
 };
 
-const convertExecution = (execution: LegacyReconciliationResult, currency: string) => {
-  const result: {
-    summary: typeof execution.summary;
-    account_balance: {
-      before: ReturnType<typeof convertAccountSnapshot>;
-      after: ReturnType<typeof convertAccountSnapshot>;
-    };
-    actions_taken: typeof execution.actions_taken;
-    recommendations: typeof execution.recommendations;
-    balance_reconciliation?: ReturnType<typeof convertBalanceReconciliationLegacy>;
-    bulk_operation_details?: typeof execution.bulk_operation_details;
-  } = {
+interface ConvertedExecutionResult {
+  summary: LegacyReconciliationResult['summary'];
+  account_balance: {
+    before: ReturnType<typeof convertAccountSnapshot>;
+    after: ReturnType<typeof convertAccountSnapshot>;
+  };
+  actions_taken: LegacyReconciliationResult['actions_taken'];
+  recommendations: LegacyReconciliationResult['recommendations'];
+  balance_reconciliation?: ReturnType<typeof convertBalanceReconciliationLegacy>;
+  bulk_operation_details?: LegacyReconciliationResult['bulk_operation_details'];
+}
+
+const convertExecution = (
+  execution: LegacyReconciliationResult,
+  currency: string,
+): ConvertedExecutionResult => {
+  const result: ConvertedExecutionResult = {
     summary: execution.summary,
     account_balance: {
       before: convertAccountSnapshot(execution.account_balance.before, currency),

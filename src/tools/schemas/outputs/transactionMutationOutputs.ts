@@ -14,8 +14,8 @@
  *     id: "txn-123",
  *     date: "2025-11-18",
  *     amount: -25500,
- *     account_balance: 150000,
- *     account_cleared_balance: 100000
+ *     account_balance: 1500000, // Raw milliunits: $1,500.00
+ *     account_cleared_balance: 1000000 // Raw milliunits: $1,000.00
  *   }
  * }
  *
@@ -73,12 +73,17 @@ export type Subtransaction = z.infer<typeof SubtransactionSchema>;
  * Transaction with account balance information.
  * Extends base transaction schema with balance tracking.
  *
+ * @remarks
+ * IMPORTANT: `account_balance` and `account_cleared_balance` are **raw YNAB milliunits** (not user-facing dollar amounts).
+ * These values come directly from the YNAB API Account object and represent 1/1000th of the currency unit.
+ * For example, $1,250.50 is represented as 1250500 milliunits.
+ *
  * @see src/tools/transactionTools.ts:950-1094 - create_transaction handler
  * @see src/tools/transactionTools.ts:1336-1530 - update_transaction handler
  */
 export const TransactionWithBalanceSchema = TransactionSchema.extend({
-  account_balance: z.number().optional(),
-  account_cleared_balance: z.number().optional(),
+  account_balance: z.number().optional(), // Raw YNAB milliunits
+  account_cleared_balance: z.number().optional(), // Raw YNAB milliunits
   subtransactions: z.array(SubtransactionSchema).optional(),
 });
 
@@ -152,6 +157,19 @@ export type BulkOperationSummary = z.infer<typeof BulkOperationSummarySchema>;
  * Individual result in bulk operation.
  * Tracks status and correlation for each transaction in bulk create/update.
  *
+ * @remarks
+ * This schema uses `.passthrough()` to allow forward-compatible extension with additional
+ * correlation metadata fields (e.g., `import_id`, `hash`, `batch_id`, `execution_id`)
+ * that may be added in future versions without breaking existing validation.
+ *
+ * Core fields guaranteed to be present:
+ * - request_index: Position in the original request array
+ * - status: Operation outcome (created/duplicate/updated/failed)
+ * - transaction_id: YNAB transaction ID (if operation succeeded)
+ * - correlation_key: Key used to correlate request with response (import_id or hash)
+ * - error_code: Machine-readable error code (if operation failed)
+ * - error: Human-readable error message (if operation failed)
+ *
  * @see src/tools/transactionTools.ts:1636-1855 - create_transactions handler
  * @see src/tools/transactionTools.ts:2057-2462 - update_transactions handler
  */
@@ -162,7 +180,7 @@ export const BulkResultSchema = z.object({
   correlation_key: z.string(),
   error_code: z.string().optional(),
   error: z.string().optional(),
-});
+}).passthrough(); // Allow additional correlation metadata fields
 
 export type BulkResult = z.infer<typeof BulkResultSchema>;
 
@@ -235,8 +253,8 @@ export type DryRunWarning = z.infer<typeof DryRunWarningSchema>;
  *     id: "txn-123",
  *     date: "2025-11-18",
  *     amount: -25500,
- *     account_balance: 150000,
- *     account_cleared_balance: 100000
+ *     account_balance: 1500000, // Raw milliunits: $1,500.00
+ *     account_cleared_balance: 1000000 // Raw milliunits: $1,000.00
  *   }
  * }
  *
@@ -320,6 +338,7 @@ export type CreateTransactionPreview = z.infer<typeof CreateTransactionPreviewSc
  * }
  */
 export const CreateTransactionsOutputSchema = z.union([
+  // Dry-run mode: Strict schema for preview validation
   z.object({
     dry_run: z.literal(true),
     action: z.literal('create_transactions'),
@@ -336,7 +355,8 @@ export const CreateTransactionsOutputSchema = z.union([
     }),
     transactions_preview: z.array(CreateTransactionPreviewSchema),
     note: z.string(),
-  }),
+  }).strict(), // Strict for dry-run to prevent malformed previews
+  // Execution mode: Allow passthrough for correlation metadata extension
   z.object({
     success: z.boolean(),
     server_knowledge: z.number().optional(),
@@ -346,7 +366,7 @@ export const CreateTransactionsOutputSchema = z.union([
     duplicate_import_ids: z.array(z.string()).optional(),
     message: z.string().optional(),
     mode: z.enum(['full', 'summary', 'ids_only']).optional(),
-  }),
+  }).passthrough(), // Allow top-level metadata like batch_id, execution_id
 ]);
 
 export type CreateTransactionsOutput = z.infer<typeof CreateTransactionsOutputSchema>;
@@ -361,8 +381,8 @@ export type CreateTransactionsOutput = z.infer<typeof CreateTransactionsOutputSc
  * // Normal execution
  * {
  *   transaction: { id: "txn-123", amount: -30000, ... },
- *   updated_balance: 145000,
- *   updated_cleared_balance: 95000
+ *   updated_balance: 1450000, // Raw milliunits: $1,450.00
+ *   updated_cleared_balance: 950000 // Raw milliunits: $950.00
  * }
  *
  * @example
@@ -381,8 +401,8 @@ export const UpdateTransactionOutputSchema = z.union([
   }),
   z.object({
     transaction: TransactionWithBalanceSchema,
-    updated_balance: z.number(),
-    updated_cleared_balance: z.number(),
+    updated_balance: z.number(), // Raw YNAB milliunits
+    updated_cleared_balance: z.number(), // Raw YNAB milliunits
   }),
 ]);
 
@@ -431,6 +451,7 @@ export type UpdateTransactionOutput = z.infer<typeof UpdateTransactionOutputSche
  * }
  */
 export const UpdateTransactionsOutputSchema = z.union([
+  // Dry-run mode: Strict schema for preview validation
   z.object({
     dry_run: z.literal(true),
     action: z.literal('update_transactions'),
@@ -443,7 +464,8 @@ export const UpdateTransactionsOutputSchema = z.union([
     transactions_preview: z.array(DryRunPreviewItemSchema),
     warnings: z.array(DryRunWarningSchema).optional(),
     note: z.string(),
-  }),
+  }).strict(), // Strict for dry-run to prevent malformed previews
+  // Execution mode: Allow passthrough for correlation metadata extension
   z.object({
     success: z.boolean(),
     server_knowledge: z.number().optional(),
@@ -452,7 +474,7 @@ export const UpdateTransactionsOutputSchema = z.union([
     transactions: z.array(TransactionSchema).optional(),
     message: z.string().optional(),
     mode: z.enum(['full', 'summary', 'ids_only']).optional(),
-  }),
+  }).passthrough(), // Allow top-level metadata like batch_id, execution_id
 ]);
 
 export type UpdateTransactionsOutput = z.infer<typeof UpdateTransactionsOutputSchema>;
@@ -492,8 +514,8 @@ export const DeleteTransactionOutputSchema = z.union([
       id: z.string(),
       deleted: z.boolean(),
     }),
-    updated_balance: z.number(),
-    updated_cleared_balance: z.number(),
+    updated_balance: z.number(), // Raw YNAB milliunits
+    updated_cleared_balance: z.number(), // Raw YNAB milliunits
   }),
 ]);
 

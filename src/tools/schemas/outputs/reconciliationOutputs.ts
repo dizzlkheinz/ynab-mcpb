@@ -71,14 +71,15 @@ export type MoneyValue = z.infer<typeof MoneyValueSchema>;
  *
  * @remarks
  * The adapter adds `amount_money` field with formatted money value.
- * Original `date` field is a Date object, but gets serialized as ISO string in output.
+ * Date field is always serialized as an ISO 8601 date string (YYYY-MM-DD) in tool output,
+ * even though the internal type may use Date objects during analysis.
  *
  * @see src/tools/reconciliation/types.ts - BankTransaction interface (internal type)
  * @see src/tools/reconcileAdapter.ts:77-80 - toBankTransactionView function
  */
 export const BankTransactionSchema = z.object({
   id: z.string().uuid(),
-  date: z.union([z.string(), z.date()]), // Date object or ISO string after serialization
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)'),
   amount: z.number(),
   payee: z.string(),
   memo: z.string().optional(),
@@ -94,14 +95,15 @@ export type BankTransaction = z.infer<typeof BankTransactionSchema>;
  *
  * @remarks
  * The adapter adds `amount_money` field with formatted money value.
- * Original `date` field is a Date object, but gets serialized as ISO string in output.
+ * Date field is always serialized as an ISO 8601 date string (YYYY-MM-DD) in tool output,
+ * even though the internal type may use Date objects during analysis.
  *
  * @see src/tools/reconciliation/types.ts - YNABTransaction interface (internal type)
  * @see src/tools/reconcileAdapter.ts:82-85 - toYNABTransactionView function
  */
 export const YNABTransactionSimpleSchema = z.object({
   id: z.string(),
-  date: z.union([z.string(), z.date()]), // Date object or ISO string after serialization
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)'),
   amount: z.number(),
   payee_name: z.string().nullable(),
   category_name: z.string().nullable(),
@@ -360,19 +362,123 @@ export const AccountSnapshotSchema = z.object({
 export type AccountSnapshot = z.infer<typeof AccountSnapshotSchema>;
 
 /**
+ * Transaction data shapes for different execution action types.
+ * Provides stronger typing than generic Record<string, unknown>.
+ */
+
+/**
+ * Created transaction from YNAB API response.
+ * Used when a transaction is successfully created.
+ */
+export const CreatedTransactionSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  amount: z.number(),
+  memo: z.string().nullable().optional(),
+  cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
+  approved: z.boolean().optional(),
+  payee_name: z.string().nullable().optional(),
+  category_name: z.string().nullable().optional(),
+  import_id: z.string().nullable().optional(),
+}).passthrough(); // Allow additional YNAB API fields
+
+/**
+ * Transaction creation payload.
+ * Used when documenting what would be created (dry run) or what failed to create.
+ */
+export const TransactionCreationPayloadSchema = z.object({
+  account_id: z.string(),
+  date: z.string(),
+  amount: z.number(),
+  payee_name: z.string().optional(),
+  memo: z.string().optional(),
+  cleared: z.enum(['cleared', 'uncleared']).optional(),
+  approved: z.boolean().optional(),
+  import_id: z.string().optional(),
+});
+
+/**
+ * Transaction update payload.
+ * Used when documenting status or date changes.
+ */
+export const TransactionUpdatePayloadSchema = z.object({
+  transaction_id: z.string(),
+  new_date: z.string().optional(),
+  cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
+});
+
+/**
+ * Duplicate detection payload.
+ * Used when a transaction creation is skipped due to duplicate detection.
+ */
+export const DuplicateDetectionPayloadSchema = z.object({
+  transaction_id: z.string().nullable(),
+  import_id: z.string().optional(),
+});
+
+/**
  * Execution action record with correlation tracking.
  * Documents individual actions taken during reconciliation execution.
  *
+ * Uses discriminated union based on action type for stronger type safety.
+ * Each action type has its own transaction payload schema.
+ *
  * @see src/tools/reconciliation/executor.ts:29-36 - ExecutionActionRecord interface
+ * @see src/tools/reconciliation/executor.ts:226-238 - create_transaction action
+ * @see src/tools/reconciliation/executor.ts:278-290 - create_transaction_failed action
+ * @see src/tools/reconciliation/executor.ts:339-351 - create_transaction_duplicate action
+ * @see src/tools/reconciliation/executor.ts:472-480 - update_transaction action (dry run)
+ * @see src/tools/reconciliation/executor.ts:515-520 - update_transaction action (real)
  */
-export const ExecutionActionRecordSchema = z.object({
-  type: z.string(),
-  transaction: z.record(z.string(), z.unknown()).nullable(),
-  reason: z.string(),
-  bulk_chunk_index: z.number().optional(),
-  correlation_key: z.string().optional(),
-  duplicate: z.boolean().optional(),
-});
+export const ExecutionActionRecordSchema = z.discriminatedUnion('type', [
+  // Successful transaction creation
+  z.object({
+    type: z.literal('create_transaction'),
+    transaction: CreatedTransactionSchema.nullable(),
+    reason: z.string(),
+    bulk_chunk_index: z.number().optional(),
+    correlation_key: z.string().optional(),
+  }),
+  // Failed transaction creation
+  z.object({
+    type: z.literal('create_transaction_failed'),
+    transaction: TransactionCreationPayloadSchema,
+    reason: z.string(),
+    bulk_chunk_index: z.number().optional(),
+    correlation_key: z.string().optional(),
+  }),
+  // Duplicate transaction detected
+  z.object({
+    type: z.literal('create_transaction_duplicate'),
+    transaction: DuplicateDetectionPayloadSchema,
+    reason: z.string(),
+    bulk_chunk_index: z.number(),
+    correlation_key: z.string().optional(),
+    duplicate: z.literal(true),
+  }),
+  // Transaction update (status/date change)
+  z.object({
+    type: z.literal('update_transaction'),
+    transaction: z.union([
+      CreatedTransactionSchema.nullable(), // Real execution
+      TransactionUpdatePayloadSchema,      // Dry run
+    ]),
+    reason: z.string(),
+  }),
+  // Balance alignment checkpoint
+  z.object({
+    type: z.literal('balance_checkpoint'),
+    transaction: z.null(),
+    reason: z.string(),
+  }),
+  // Bulk create fallback to sequential
+  z.object({
+    type: z.literal('bulk_create_fallback'),
+    transaction: z.null(),
+    reason: z.string(),
+    bulk_chunk_index: z.number(),
+  }),
+]);
 
 export type ExecutionActionRecord = z.infer<typeof ExecutionActionRecordSchema>;
 
@@ -417,7 +523,12 @@ export const BulkOperationDetailsSchema = z.object({
   bulk_chunk_failures: z.number(),
   transaction_failures: z.number(),
   sequential_attempts: z.number().optional(),
-});
+}).refine(
+  (data) => data.failed_transactions === data.transaction_failures,
+  {
+    message: 'Inconsistent failure counters: failed_transactions must equal transaction_failures (failed_transactions is a backward-compatible alias and must mirror the canonical transaction_failures counter)',
+  }
+);
 
 export type BulkOperationDetails = z.infer<typeof BulkOperationDetailsSchema>;
 
@@ -564,42 +675,77 @@ export const CsvFormatMetadataSchema = z.object({
 
 export type CsvFormatMetadata = z.infer<typeof CsvFormatMetadataSchema>;
 
-export const ReconcileAccountOutputSchema = z.union([
-  // Human narrative only (default mode)
-  z.object({
-    human: z.string(),
+// Define the structured data schema without refinement first
+const StructuredReconciliationDataBaseSchema = z.object({
+  version: z.string(),
+  schema_url: z.string(),
+  generated_at: z.string(),
+  account: z.object({
+    id: z.string().optional(),
+    name: z.string().optional(),
   }),
-  // Human + structured data (when include_structured_data=true)
-  z.object({
-    human: z.string(),
-    structured: z.object({
-      version: z.string(),
-      schema_url: z.string(),
-      generated_at: z.string(),
-      account: z.object({
-        id: z.string().optional(),
-        name: z.string().optional(),
-      }),
-      summary: ReconciliationSummarySchema,
-      balance: BalanceInfoSchema.extend({
-        discrepancy_direction: z.enum(['balanced', 'ynab_higher', 'bank_higher']),
-      }),
-      insights: z.array(ReconciliationInsightSchema),
-      next_steps: z.array(z.string()),
-      matches: z.object({
-        auto: z.array(TransactionMatchSchema),
-        suggested: z.array(TransactionMatchSchema),
-      }),
-      unmatched: z.object({
-        bank: z.array(BankTransactionSchema),
-        ynab: z.array(YNABTransactionSimpleSchema),
-      }),
-      recommendations: z.array(ActionableRecommendationSchema).optional(),
-      csv_format: CsvFormatMetadataSchema.optional(),
-      execution: ExecutionResultSchema.optional(),
-      audit: AuditMetadataSchema.optional(),
+  summary: ReconciliationSummarySchema,
+  balance: BalanceInfoSchema.extend({
+    discrepancy_direction: z.enum(['balanced', 'ynab_higher', 'bank_higher']),
+  }),
+  insights: z.array(ReconciliationInsightSchema),
+  next_steps: z.array(z.string()),
+  matches: z.object({
+    auto: z.array(TransactionMatchSchema),
+    suggested: z.array(TransactionMatchSchema),
+  }),
+  unmatched: z.object({
+    bank: z.array(BankTransactionSchema),
+    ynab: z.array(YNABTransactionSimpleSchema),
+  }),
+  recommendations: z.array(ActionableRecommendationSchema).optional(),
+  csv_format: CsvFormatMetadataSchema.optional(),
+  execution: ExecutionResultSchema.optional(),
+  audit: AuditMetadataSchema.optional(),
+});
+
+export const ReconcileAccountOutputSchema = z
+  .union([
+    // Human + structured data (when include_structured_data=true) - check this FIRST
+    z.object({
+      human: z.string(),
+      structured: StructuredReconciliationDataBaseSchema,
     }),
-  }),
-]);
+    // Human narrative only (default mode) - check this SECOND
+    z.object({
+      human: z.string(),
+    }),
+  ])
+  .refine(
+    (data) => {
+      // Only validate if this is the structured variant (has 'structured' property)
+      if ('structured' in data && data.structured) {
+        const discrepancyAmount = data.structured.balance.discrepancy.amount;
+        const direction = data.structured.balance.discrepancy_direction;
+
+        // If absolute discrepancy < 0.01, direction must be 'balanced'
+        if (Math.abs(discrepancyAmount) < 0.01) {
+          return direction === 'balanced';
+        }
+
+        // If discrepancy > 0, direction must be 'ynab_higher'
+        if (discrepancyAmount > 0) {
+          return direction === 'ynab_higher';
+        }
+
+        // If discrepancy < 0, direction must be 'bank_higher'
+        if (discrepancyAmount < 0) {
+          return direction === 'bank_higher';
+        }
+      }
+
+      // Human-only variant always passes validation
+      return true;
+    },
+    {
+      message: 'Discrepancy direction mismatch: direction must match the numeric discrepancy amount',
+      path: ['balance', 'discrepancy_direction'],
+    }
+  );
 
 export type ReconcileAccountOutput = z.infer<typeof ReconcileAccountOutputSchema>;
