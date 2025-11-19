@@ -94,7 +94,7 @@ describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () =
     });
   });
 
-  describe('ynab_higher direction (amount > 0)', () => {
+  describe('ynab_higher direction (amount >= 0.01)', () => {
     it('should accept direction "ynab_higher" when amount is 25.50', () => {
       const output = createMinimalStructuredOutput(25.50, 'ynab_higher');
       const result = ReconcileAccountOutputSchema.safeParse(output);
@@ -127,7 +127,7 @@ describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () =
     });
   });
 
-  describe('bank_higher direction (amount < 0)', () => {
+  describe('bank_higher direction (amount <= -0.01)', () => {
     it('should accept direction "bank_higher" when amount is -25.50', () => {
       const output = createMinimalStructuredOutput(-25.50, 'bank_higher');
       const result = ReconcileAccountOutputSchema.safeParse(output);

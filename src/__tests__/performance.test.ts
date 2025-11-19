@@ -10,6 +10,47 @@ import type { ReconciliationAnalysis } from '../tools/reconciliation/types.js';
 import type { ReconcileAccountRequest } from '../tools/reconciliation/index.js';
 import type * as ynab from 'ynab';
 
+/**
+ * Helper function to validate tool responses and extract array data
+ * Handles error checking and validates that the response contains a non-empty array
+ *
+ * @param result - Raw result from executeToolCall
+ * @param fieldSelector - Function to select the array field from parsed.data
+ * @returns The validated array data
+ * @throws Error if response contains errors or invalid data
+ */
+function validateToolResponse<T>(
+  result: any,
+  fieldSelector: (data: any) => T[] | undefined,
+): T[] {
+  const parsed = parseToolResult(result);
+
+  // Check for errors in the response
+  const hasError = parsed.error || parsed.data?.error;
+  if (hasError) {
+    throw new Error(
+      `Tool returned error: ${JSON.stringify(hasError, null, 2)}\nFull response: ${JSON.stringify(parsed, null, 2)}`,
+    );
+  }
+
+  // Ensure data exists
+  if (!parsed.data) {
+    throw new Error(
+      `Tool returned no data. Full response: ${JSON.stringify(parsed, null, 2)}`,
+    );
+  }
+
+  // Select the specific array field
+  const arrayData = fieldSelector(parsed.data);
+
+  // Validate it's a non-empty array
+  expect(arrayData).toBeDefined();
+  expect(Array.isArray(arrayData)).toBe(true);
+  expect(arrayData!.length).toBeGreaterThan(0);
+
+  return arrayData!;
+}
+
 // Mock the YNAB SDK for performance tests
 vi.mock('ynab', () => {
   const mockAPI = {
@@ -435,20 +476,10 @@ describe('YNAB MCP Server - Performance Tests', () => {
       expect(result).toBeDefined();
       expect(responseTime).toBeLessThan(2000); // Should handle large lists within 2 seconds
 
-      const transactions = parseToolResult(result);
-      // Check that we got a successful response, not an error
-      const hasError = transactions.error || transactions.data?.error;
-      if (hasError) {
-        throw new Error(`Tool returned error: ${JSON.stringify(hasError, null, 2)}\nFull response: ${JSON.stringify(transactions, null, 2)}`);
-      }
-      if (!transactions.data) {
-        throw new Error(`Tool returned no data. Full response: ${JSON.stringify(transactions, null, 2)}`);
-      }
-      // Check for either transactions or preview_transactions depending on response size
-      const txnList = transactions.data.transactions || transactions.data.preview_transactions;
-      expect(txnList).toBeDefined();
-      expect(Array.isArray(txnList)).toBe(true);
-      expect(txnList.length).toBeGreaterThan(0);
+      // Validate response structure
+      validateToolResponse(result, (data) =>
+        data.transactions || data.preview_transactions,
+      );
     });
 
     it('should handle concurrent requests efficiently', async () => {
@@ -525,18 +556,8 @@ describe('YNAB MCP Server - Performance Tests', () => {
           budget_id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID
         });
 
-        const categories = parseToolResult(result);
-        // Check that we got a successful response, not an error
-        const hasError = categories.error || categories.data?.error;
-        if (hasError) {
-          throw new Error(`Tool returned error: ${JSON.stringify(hasError, null, 2)}\nFull response: ${JSON.stringify(categories, null, 2)}`);
-        }
-        if (!categories.data) {
-          throw new Error(`Tool returned no data. Full response: ${JSON.stringify(categories, null, 2)}`);
-        }
-        expect(categories.data.category_groups).toBeDefined();
-        expect(Array.isArray(categories.data.category_groups)).toBe(true);
-        expect(categories.data.category_groups.length).toBeGreaterThan(0);
+        // Validate response structure
+        validateToolResponse(result, (data) => data.category_groups);
 
         // Force garbage collection if available
         if (global.gc) {
@@ -693,13 +714,17 @@ describe('YNAB MCP Server - Performance Tests', () => {
         data: { accounts: [{ id: 'account-1', name: 'Test Account' }] },
       });
 
-      mockYnabAPI.transactions.getTransactions.mockResolvedValue({
-        data: { transactions: [] },
-      });
+      mockYnabAPI.transactions.getTransactions.mockImplementation(() =>
+        Promise.resolve({
+          data: { transactions: [] },
+        })
+      );
 
-      mockYnabAPI.categories.getCategories.mockResolvedValue({
-        data: { category_groups: [] },
-      });
+      mockYnabAPI.categories.getCategories.mockImplementation(() =>
+        Promise.resolve({
+          data: { category_groups: [] },
+        })
+      );
 
       const startTime = Date.now();
 
