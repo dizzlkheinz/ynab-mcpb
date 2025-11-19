@@ -98,6 +98,38 @@ import { ServerKnowledgeStore } from './serverKnowledgeStore.js';
 import { DeltaCache } from './deltaCache.js';
 import { DeltaFetcher } from '../tools/deltaFetcher.js';
 import { ToolAnnotationPresets } from '../tools/toolCategories.js';
+import {
+  GetUserOutputSchema,
+  ConvertAmountOutputSchema,
+  GetDefaultBudgetOutputSchema,
+  SetDefaultBudgetOutputSchema,
+  ClearCacheOutputSchema,
+  SetOutputFormatOutputSchema,
+  DiagnosticInfoOutputSchema,
+  GetBudgetOutputSchema,
+  ListBudgetsOutputSchema,
+  ListAccountsOutputSchema,
+  GetAccountOutputSchema,
+  CreateAccountOutputSchema,
+  ListTransactionsOutputSchema,
+  GetTransactionOutputSchema,
+  ExportTransactionsOutputSchema,
+  CompareTransactionsOutputSchema,
+  CreateTransactionOutputSchema,
+  CreateTransactionsOutputSchema,
+  UpdateTransactionOutputSchema,
+  UpdateTransactionsOutputSchema,
+  DeleteTransactionOutputSchema,
+  CreateReceiptSplitTransactionOutputSchema,
+  ListCategoriesOutputSchema,
+  GetCategoryOutputSchema,
+  UpdateCategoryOutputSchema,
+  ListPayeesOutputSchema,
+  GetPayeeOutputSchema,
+  GetMonthOutputSchema,
+  ListMonthsOutputSchema,
+  ReconcileAccountOutputSchema,
+} from '../tools/schemas/outputs/index.js';
 
 /**
  * YNAB MCP Server class that provides integration with You Need A Budget API
@@ -412,6 +444,7 @@ export class YNABMCPServer {
       name: 'list_budgets',
       description: "List all budgets associated with the user's account",
       inputSchema: emptyObjectSchema,
+      outputSchema: ListBudgetsOutputSchema,
       handler: adaptWithDelta(handleListBudgets),
       metadata: {
         annotations: {
@@ -425,6 +458,7 @@ export class YNABMCPServer {
       name: 'get_budget',
       description: 'Get detailed information for a specific budget',
       inputSchema: GetBudgetSchema,
+      outputSchema: GetBudgetOutputSchema,
       handler: adapt(handleGetBudget),
       metadata: {
         annotations: {
@@ -438,6 +472,7 @@ export class YNABMCPServer {
       name: 'set_default_budget',
       description: 'Set the default budget for subsequent operations',
       inputSchema: setDefaultBudgetSchema,
+      outputSchema: SetDefaultBudgetOutputSchema,
       handler: async ({ input }) => {
         const { budget_id } = input;
         await this.ynabAPI.budgets.getBudgetById(budget_id);
@@ -474,6 +509,7 @@ export class YNABMCPServer {
       name: 'get_default_budget',
       description: 'Get the currently set default budget',
       inputSchema: emptyObjectSchema,
+      outputSchema: GetDefaultBudgetOutputSchema,
       handler: async () => {
         try {
           const defaultBudget = this.getDefaultBudget();
@@ -513,6 +549,7 @@ export class YNABMCPServer {
       name: 'list_accounts',
       description: 'List all accounts for a specific budget (uses default budget if not specified)',
       inputSchema: ListAccountsSchema,
+      outputSchema: ListAccountsOutputSchema,
       handler: adaptWithDelta(handleListAccounts),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListAccountsSchema>>(),
       metadata: {
@@ -527,6 +564,7 @@ export class YNABMCPServer {
       name: 'get_account',
       description: 'Get detailed information for a specific account',
       inputSchema: GetAccountSchema,
+      outputSchema: GetAccountOutputSchema,
       handler: adapt(handleGetAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetAccountSchema>>(),
       metadata: {
@@ -541,6 +579,7 @@ export class YNABMCPServer {
       name: 'create_account',
       description: 'Create a new account in the specified budget',
       inputSchema: CreateAccountSchema,
+      outputSchema: CreateAccountOutputSchema,
       handler: adaptWrite(handleCreateAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateAccountSchema>>(),
       metadata: {
@@ -555,6 +594,7 @@ export class YNABMCPServer {
       name: 'list_transactions',
       description: 'List transactions for a budget with optional filtering',
       inputSchema: ListTransactionsSchema,
+      outputSchema: ListTransactionsOutputSchema,
       handler: adaptWithDelta(handleListTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListTransactionsSchema>>(),
       metadata: {
@@ -569,6 +609,7 @@ export class YNABMCPServer {
       name: 'export_transactions',
       description: 'Export all transactions to a JSON file with descriptive filename',
       inputSchema: ExportTransactionsSchema,
+      outputSchema: ExportTransactionsOutputSchema,
       handler: adapt(handleExportTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ExportTransactionsSchema>>(),
       metadata: {
@@ -584,6 +625,7 @@ export class YNABMCPServer {
       description:
         'Compare bank transactions from CSV with YNAB transactions to find missing entries',
       inputSchema: CompareTransactionsSchema,
+      outputSchema: CompareTransactionsOutputSchema,
       handler: adapt(handleCompareTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CompareTransactionsSchema>>(),
       metadata: {
@@ -599,6 +641,7 @@ export class YNABMCPServer {
       description:
         'Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).',
       inputSchema: ReconcileAccountSchema,
+      outputSchema: ReconcileAccountOutputSchema,
       handler: adaptWithDelta(handleReconcileAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
       metadata: {
@@ -613,6 +656,7 @@ export class YNABMCPServer {
       name: 'get_transaction',
       description: 'Get detailed information for a specific transaction',
       inputSchema: GetTransactionSchema,
+      outputSchema: GetTransactionOutputSchema,
       handler: adapt(handleGetTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetTransactionSchema>>(),
       metadata: {
@@ -627,6 +671,7 @@ export class YNABMCPServer {
       name: 'create_transaction',
       description: 'Create a new transaction in the specified budget and account',
       inputSchema: CreateTransactionSchema,
+      outputSchema: CreateTransactionOutputSchema,
       handler: adaptWrite(handleCreateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionSchema>>(),
       metadata: {
@@ -642,6 +687,7 @@ export class YNABMCPServer {
       description:
         'Create multiple transactions in a single batch (1-100 items) with duplicate detection, dry-run validation, and automatic response size management with correlation metadata.',
       inputSchema: CreateTransactionsSchema,
+      outputSchema: CreateTransactionsOutputSchema,
       handler: adaptWrite(handleCreateTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionsSchema>>(),
       metadata: {
@@ -657,6 +703,7 @@ export class YNABMCPServer {
       description:
         'Update multiple transactions in a single batch (1-100 items) with dry-run validation, automatic cache invalidation, and response size management. Supports optional original_account_id and original_date metadata for efficient cache invalidation.',
       inputSchema: UpdateTransactionsSchema,
+      outputSchema: UpdateTransactionsOutputSchema,
       handler: adaptWrite(handleUpdateTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionsSchema>>(),
       metadata: {
@@ -671,6 +718,7 @@ export class YNABMCPServer {
       name: 'create_receipt_split_transaction',
       description: 'Create a split transaction from receipt items with proportional tax allocation',
       inputSchema: CreateReceiptSplitTransactionSchema,
+      outputSchema: CreateReceiptSplitTransactionOutputSchema,
       handler: adaptWrite(handleCreateReceiptSplitTransaction),
       defaultArgumentResolver:
         resolveBudgetId<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
@@ -686,6 +734,7 @@ export class YNABMCPServer {
       name: 'update_transaction',
       description: 'Update an existing transaction',
       inputSchema: UpdateTransactionSchema,
+      outputSchema: UpdateTransactionOutputSchema,
       handler: adaptWrite(handleUpdateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionSchema>>(),
       metadata: {
@@ -700,6 +749,7 @@ export class YNABMCPServer {
       name: 'delete_transaction',
       description: 'Delete a transaction from the specified budget',
       inputSchema: DeleteTransactionSchema,
+      outputSchema: DeleteTransactionOutputSchema,
       handler: adaptWrite(handleDeleteTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof DeleteTransactionSchema>>(),
       metadata: {
@@ -714,6 +764,7 @@ export class YNABMCPServer {
       name: 'list_categories',
       description: 'List all categories for a specific budget',
       inputSchema: ListCategoriesSchema,
+      outputSchema: ListCategoriesOutputSchema,
       handler: adaptWithDelta(handleListCategories),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListCategoriesSchema>>(),
       metadata: {
@@ -728,6 +779,7 @@ export class YNABMCPServer {
       name: 'get_category',
       description: 'Get detailed information for a specific category',
       inputSchema: GetCategorySchema,
+      outputSchema: GetCategoryOutputSchema,
       handler: adapt(handleGetCategory),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetCategorySchema>>(),
       metadata: {
@@ -742,6 +794,7 @@ export class YNABMCPServer {
       name: 'update_category',
       description: 'Update the budgeted amount for a category in the current month',
       inputSchema: UpdateCategorySchema,
+      outputSchema: UpdateCategoryOutputSchema,
       handler: adaptWrite(handleUpdateCategory),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateCategorySchema>>(),
       metadata: {
@@ -756,6 +809,7 @@ export class YNABMCPServer {
       name: 'list_payees',
       description: 'List all payees for a specific budget',
       inputSchema: ListPayeesSchema,
+      outputSchema: ListPayeesOutputSchema,
       handler: adaptWithDelta(handleListPayees),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListPayeesSchema>>(),
       metadata: {
@@ -770,6 +824,7 @@ export class YNABMCPServer {
       name: 'get_payee',
       description: 'Get detailed information for a specific payee',
       inputSchema: GetPayeeSchema,
+      outputSchema: GetPayeeOutputSchema,
       handler: adapt(handleGetPayee),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetPayeeSchema>>(),
       metadata: {
@@ -784,6 +839,7 @@ export class YNABMCPServer {
       name: 'get_month',
       description: 'Get budget data for a specific month',
       inputSchema: GetMonthSchema,
+      outputSchema: GetMonthOutputSchema,
       handler: adapt(handleGetMonth),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetMonthSchema>>(),
       metadata: {
@@ -798,6 +854,7 @@ export class YNABMCPServer {
       name: 'list_months',
       description: 'List all months summary data for a budget',
       inputSchema: ListMonthsSchema,
+      outputSchema: ListMonthsOutputSchema,
       handler: adaptWithDelta(handleListMonths),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListMonthsSchema>>(),
       metadata: {
@@ -812,6 +869,7 @@ export class YNABMCPServer {
       name: 'get_user',
       description: 'Get information about the authenticated user',
       inputSchema: emptyObjectSchema,
+      outputSchema: GetUserOutputSchema,
       handler: adaptNoInput(handleGetUser),
       metadata: {
         annotations: {
@@ -825,6 +883,7 @@ export class YNABMCPServer {
       name: 'convert_amount',
       description: 'Convert between dollars and milliunits with integer arithmetic for precision',
       inputSchema: ConvertAmountSchema,
+      outputSchema: ConvertAmountOutputSchema,
       handler: async ({ input }) => handleConvertAmount(input),
       metadata: {
         annotations: {
@@ -838,6 +897,7 @@ export class YNABMCPServer {
       name: 'diagnostic_info',
       description: 'Get comprehensive diagnostic information about the MCP server',
       inputSchema: diagnosticInfoSchema,
+      outputSchema: DiagnosticInfoOutputSchema,
       handler: async ({ input }) => {
         return this.diagnosticManager.collectDiagnostics(input);
       },
@@ -853,6 +913,7 @@ export class YNABMCPServer {
       name: 'clear_cache',
       description: 'Clear the in-memory cache (safe, no YNAB data is modified)',
       inputSchema: emptyObjectSchema,
+      outputSchema: ClearCacheOutputSchema,
       handler: async () => {
         cacheManager.clear();
         return {
@@ -871,6 +932,7 @@ export class YNABMCPServer {
       name: 'set_output_format',
       description: 'Configure default JSON output formatting (minify or pretty spaces)',
       inputSchema: setOutputFormatSchema,
+      outputSchema: SetOutputFormatOutputSchema,
       handler: async ({ input }) => {
         const options: { defaultMinify?: boolean; prettySpaces?: number } = {};
         if (typeof input.default_minify === 'boolean') {

@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { ReconcileAccountOutputSchema } from '../reconciliationOutputs.js';
+import { ReconcileAccountOutputSchema, MoneyValueSchema } from '../reconciliationOutputs.js';
 
 /**
  * Test suite for discrepancy_direction validation refinement.
  *
  * The schema enforces that discrepancy_direction matches the numeric discrepancy.amount:
  * - If |amount| < 0.01: direction must be 'balanced'
- * - If amount > 0: direction must be 'ynab_higher'
- * - If amount < 0: direction must be 'bank_higher'
+ * - If amount >= 0.01: direction must be 'ynab_higher'
+ * - If amount <= -0.01: direction must be 'bank_higher'
  */
 describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () => {
   const createMinimalStructuredOutput = (discrepancyAmount: number, direction: 'balanced' | 'ynab_higher' | 'bank_higher') => ({
@@ -192,6 +192,77 @@ describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () =
         human: 'Reconciliation complete - everything balanced',
       };
       const result = ReconcileAccountOutputSchema.safeParse(output);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('MoneyValueSchema - non-finite value validation', () => {
+    it('should reject NaN amount', () => {
+      const invalid = {
+        amount: NaN,
+        currency: 'USD',
+        formatted: '$NaN',
+      };
+      const result = MoneyValueSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.path).toEqual(['amount']);
+      }
+    });
+
+    it('should reject positive Infinity amount', () => {
+      const invalid = {
+        amount: Infinity,
+        currency: 'USD',
+        formatted: '$Infinity',
+      };
+      const result = MoneyValueSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.path).toEqual(['amount']);
+      }
+    });
+
+    it('should reject negative Infinity amount', () => {
+      const invalid = {
+        amount: -Infinity,
+        currency: 'USD',
+        formatted: '-$Infinity',
+      };
+      const result = MoneyValueSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.path).toEqual(['amount']);
+      }
+    });
+
+    it('should accept finite positive amounts', () => {
+      const valid = {
+        amount: 25.50,
+        currency: 'USD',
+        formatted: '$25.50',
+      };
+      const result = MoneyValueSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept finite negative amounts', () => {
+      const valid = {
+        amount: -25.50,
+        currency: 'USD',
+        formatted: '-$25.50',
+      };
+      const result = MoneyValueSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept zero', () => {
+      const valid = {
+        amount: 0,
+        currency: 'USD',
+        formatted: '$0.00',
+      };
+      const result = MoneyValueSchema.safeParse(valid);
       expect(result.success).toBe(true);
     });
   });

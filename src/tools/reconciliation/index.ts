@@ -338,23 +338,25 @@ export async function handleReconcileAccount(
 
       const payload = buildReconciliationPayload(analysis, adapterOptions, executionData);
 
-      // Build response content - always include human narrative
-      const content: { type: 'text'; text: string }[] = [
-        {
-          type: 'text',
-          text: payload.human,
-        },
-      ];
+      // Build response payload matching ReconcileAccountOutputSchema
+      // Schema expects: { human: string } OR { human: string, structured: object }
+      const responseData: Record<string, unknown> = {
+        human: payload.human,
+      };
 
       // Only include structured data if requested (can be very large)
       if (params.include_structured_data) {
-        content.push({
-          type: 'text',
-          text: responseFormatter.format(payload.structured),
-        });
+        responseData['structured'] = payload.structured;
       }
 
-      return { content };
+      return {
+        content: [
+          {
+            type: 'text',
+            text: responseFormatter.format(responseData),
+          },
+        ],
+      };
     },
     'ynab:reconcile_account',
     'analyzing account reconciliation',
