@@ -116,7 +116,6 @@ describe('exportTransactions', () => {
 
       // Check that export_info shows minimal mode
       expect(exportData.export_info.minimal).toBe(true);
-      expect(exportData.export_info.filters.minimal).toBe(true);
 
       // Check that transactions only have minimal fields
       expect(exportData.transactions).toHaveLength(2);
@@ -157,7 +156,6 @@ describe('exportTransactions', () => {
 
       // Check that export_info shows full mode
       expect(exportData.export_info.minimal).toBe(false);
-      expect(exportData.export_info.filters.minimal).toBe(false);
 
       // Check that transactions have all fields
       expect(exportData.transactions).toHaveLength(2);

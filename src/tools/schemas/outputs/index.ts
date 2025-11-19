@@ -234,14 +234,31 @@ export {
   type ExportTransactionsOutput,
 } from './comparisonOutputs.js';
 
-// Nested schemas for comparison and export
+/**
+ * Nested schemas for comparison and export.
+ *
+ * @remarks
+ * Some of these schemas are for internal processing and not guaranteed to be stable:
+ * - **Internal-only (may change):** BankTransactionComparisonSchema, YNABTransactionComparisonSchema,
+ *   TransactionMatchComparisonSchema - Used during matching algorithm, not in final output
+ * - **Public contracts (stable):** ComparisonParametersSchema, DateRangeSchema, ExportInfoSchema,
+ *   ExportedTransactionSchema - Part of durable tool output format
+ *
+ * Internal schemas are exported for testing and advanced use cases, but should not be relied upon
+ * for backward compatibility. Use the main output schemas (CompareTransactionsOutputSchema,
+ * ExportTransactionsOutputSchema) for stable contracts.
+ */
 export {
+  /** @internal - Used during matching algorithm, not part of public output */
   BankTransactionComparisonSchema,
   type BankTransactionComparison,
+  /** @internal - Used during matching algorithm, not part of public output */
   YNABTransactionComparisonSchema,
   type YNABTransactionComparison,
+  /** @internal - Used during matching algorithm, not part of public output */
   TransactionMatchComparisonSchema,
   type TransactionMatchComparison,
+  // Public contracts below - part of stable tool output
   ComparisonParametersSchema,
   type ComparisonParameters,
   DateRangeSchema,
