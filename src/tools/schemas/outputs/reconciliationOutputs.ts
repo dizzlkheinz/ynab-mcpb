@@ -57,7 +57,7 @@ import { z } from 'zod';
  * @see src/utils/money.ts - MoneyValue type definition
  */
 export const MoneyValueSchema = z.object({
-  amount: z.number(),
+  amount: z.number().finite(),
   currency: z.string(),
   formatted: z.string(),
   memo: z.string().optional(),
@@ -79,7 +79,27 @@ export type MoneyValue = z.infer<typeof MoneyValueSchema>;
  */
 export const BankTransactionSchema = z.object({
   id: z.string().uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)'),
+  date: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
+    .refine(
+      (dateStr) => {
+        const parsed = Date.parse(dateStr);
+        if (isNaN(parsed)) {
+          return false;
+        }
+        // Verify that the parsed date components match the original string
+        // This catches cases like "2025-02-31" which Date.parse might coerce to "2025-03-03"
+        const date = new Date(parsed);
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const reconstructed = `${year}-${month}-${day}`;
+        return reconstructed === dateStr;
+      },
+      {
+        message: 'Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)',
+      }
+    ),
   amount: z.number(),
   payee: z.string(),
   memo: z.string().optional(),
@@ -103,7 +123,27 @@ export type BankTransaction = z.infer<typeof BankTransactionSchema>;
  */
 export const YNABTransactionSimpleSchema = z.object({
   id: z.string(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)'),
+  date: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
+    .refine(
+      (dateStr) => {
+        const parsed = Date.parse(dateStr);
+        if (isNaN(parsed)) {
+          return false;
+        }
+        // Verify that the parsed date components match the original string
+        // This catches cases like "2025-02-31" which Date.parse might coerce to "2025-03-03"
+        const date = new Date(parsed);
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const reconstructed = `${year}-${month}-${day}`;
+        return reconstructed === dateStr;
+      },
+      {
+        message: 'Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)',
+      }
+    ),
   amount: z.number(),
   payee_name: z.string().nullable(),
   category_name: z.string().nullable(),
@@ -526,7 +566,7 @@ export const BulkOperationDetailsSchema = z.object({
 }).refine(
   (data) => data.failed_transactions === data.transaction_failures,
   {
-    message: 'Inconsistent failure counters: failed_transactions must equal transaction_failures (failed_transactions is a backward-compatible alias and must mirror the canonical transaction_failures counter)',
+    message: 'failed_transactions must equal transaction_failures',
   }
 );
 

@@ -1,5 +1,7 @@
 NUL
 .code/
+.chunkhound.json
+.chunkhound/
 
 # Dependencies
 node_modules/

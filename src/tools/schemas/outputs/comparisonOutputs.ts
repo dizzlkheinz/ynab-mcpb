@@ -87,7 +87,8 @@ function isValidISODate(dateStr: string): boolean {
   const date = new Date(parsed);
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');  const reconstructed = `${year}-${month}-${day}`;
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const reconstructed = `${year}-${month}-${day}`;
 
   return reconstructed === dateStr;
 }
