@@ -14,6 +14,21 @@ test-results.json
 test-results/
 README.md
 
+# Sensitive credential files
+.chunkhound.json
+.mcp.json
+.env*
+
+# Build metadata
+meta.json
+bundle-analysis.html
+
+# Development-only markdown files
+AGENTS.md
+TESTING_NOTES.md
+CODEREVIEW_RESPONSE.md
+SCHEMA_IMPROVEMENT_SUMMARY.md
+
 # Test files and data
 test_*.js
 test_*.mjs
@@ -30,4 +45,13 @@ fix-types.sh
 NUL
 package-lock.json
 
-# keep dist/, manifest.json, docs/
+# Development plans (keep user-facing docs)
+docs/plans/
+docs/bulk-transaction-operations-plan.md
+docs/delta-request-plan.md
+docs/reconciliation-flow.md
+
+# Scripts (not needed for distribution)
+scripts/
+
+# keep dist/, manifest.json, CHANGELOG.md, CLAUDE.md, LICENSE, docs/ (except plans)

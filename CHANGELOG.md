@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2025-11-19
+
+### Added
+
+- **Structured Output Schemas** - Comprehensive Zod-based output validation for all 30 MCP tools
+  - Output schemas defined for every tool enabling type-safe responses with TypeScript inference
+  - Automatic validation in ToolRegistry preventing malformed outputs (toolRegistry.ts:401-483)
+  - Schema organization in `src/tools/schemas/outputs/` with centralized exports from index.ts
+  - Runtime validation using `z.safeParse()` with detailed error reporting
+  - Self-documenting API contracts improving AI model parsing and integration reliability
+- **Comprehensive Unit Test Coverage** - Full test suite for all output schemas
+  - Budget output schemas (`budgetOutputs.test.ts`)
+  - Account output schemas (`accountOutputs.test.ts`)
+  - Transaction output schemas (`transactionOutputs.test.ts`) including preview mode validation
+  - Category output schemas (`categoryOutputs.test.ts`) with goal field testing
+  - Payee output schemas (`payeeOutputs.test.ts`) including transfer payee validation
+  - Month output schemas (`monthOutputs.test.ts`) with category nesting
+  - Comparison and export schemas (`comparisonOutputs.test.ts`) with date validation
+- **E2E Schema Validation** - Integration testing with schema validation
+  - `validateOutputSchema()` helper function in testUtils.ts for automated schema testing
+  - Schema validation added to key workflow tests (budget, account, transaction management)
+  - New "Output Schema Validation" describe block with dedicated tests for all major tools
+  - Validation errors logged with detailed error messages for debugging
+
+### Changed
+
+- Tool registry now validates handler responses against declared output schemas (lines 401-483 in toolRegistry.ts)
+- MCP Tool objects now include `outputSchema` field in `listTools()` responses
+- All tool handlers return schema-compliant responses validated at runtime
+
+### Documentation
+
+- Updated TOOLS.md with "Structured Output Support" section explaining benefits and usage
+- Added TypeScript usage examples showing schema validation with `safeParse()`
+- Documented schema organization by tool domain with file references
+- Added comprehensive unit tests for all output schemas (7 new test files)
+- Migration note: Non-breaking change—existing clients continue to work; output schemas optional
+
+**Migration Notes**: This is a non-breaking change. Existing integrations continue to work as before since output schemas are optional and validation only affects new integrations that rely on schema contracts. Tools without output schemas will function normally but won't benefit from automatic validation.
+
 ## [0.11.0] - 2025-01-14
 
 ### Added

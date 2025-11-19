@@ -129,6 +129,9 @@ export const CategorySchema = z.object({
   /** Goal percentage complete (optional) */
   goal_percentage_complete: z.number().optional().describe('Goal percentage complete'),
 
+  /** Number of months to budget for goal (optional) */
+  goal_months_to_budget: z.number().optional().describe('Goal months to budget'),
+
   /** Amount still needed in current month to stay on track with goal (dollars, optional) */
   goal_under_funded: z.number().optional().describe('Goal underfunded amount in dollars'),
 
@@ -137,6 +140,9 @@ export const CategorySchema = z.object({
 
   /** Amount still needed to complete goal across entire goal period (dollars, optional) */
   goal_overall_left: z.number().optional().describe('Goal overall left amount in dollars'),
+
+  /** Whether category is deleted (optional, may not be present in API responses) */
+  deleted: z.boolean().optional().describe('Deleted flag'),
 });
 
 /**

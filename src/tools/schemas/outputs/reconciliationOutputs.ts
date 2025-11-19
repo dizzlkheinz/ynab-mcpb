@@ -66,6 +66,45 @@ export const MoneyValueSchema = z.object({
 export type MoneyValue = z.infer<typeof MoneyValueSchema>;
 
 /**
+ * ISO 8601 date string with calendar validation.
+ * Ensures dates are in YYYY-MM-DD format and represent valid calendar dates.
+ *
+ * @remarks
+ * This schema validates both format (regex) and calendar validity (refinement).
+ * It catches invalid dates like "2025-02-31" which Date.parse might coerce to "2025-03-03".
+ *
+ * @example
+ * ```typescript
+ * IsoDateWithCalendarValidationSchema.parse("2025-01-15"); // ✓ Valid
+ * IsoDateWithCalendarValidationSchema.parse("2025-02-31"); // ✗ Invalid (no Feb 31st)
+ * IsoDateWithCalendarValidationSchema.parse("2025-13-01"); // ✗ Invalid (month > 12)
+ * IsoDateWithCalendarValidationSchema.parse("2025-1-15");  // ✗ Invalid (must be zero-padded)
+ * ```
+ */
+export const IsoDateWithCalendarValidationSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
+  .refine(
+    (dateStr) => {
+      const parsed = Date.parse(dateStr);
+      if (isNaN(parsed)) {
+        return false;
+      }
+      // Verify that the parsed date components match the original string
+      // This catches cases like "2025-02-31" which Date.parse might coerce to "2025-03-03"
+      const date = new Date(parsed);
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      const reconstructed = `${year}-${month}-${day}`;
+      return reconstructed === dateStr;
+    },
+    {
+      message: 'Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)',
+    }
+  );
+
+/**
  * Bank transaction from CSV import (output format with money formatting).
  * Represents a single transaction from the user's bank statement.
  *
@@ -79,27 +118,7 @@ export type MoneyValue = z.infer<typeof MoneyValueSchema>;
  */
 export const BankTransactionSchema = z.object({
   id: z.string().uuid(),
-  date: z.string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
-    .refine(
-      (dateStr) => {
-        const parsed = Date.parse(dateStr);
-        if (isNaN(parsed)) {
-          return false;
-        }
-        // Verify that the parsed date components match the original string
-        // This catches cases like "2025-02-31" which Date.parse might coerce to "2025-03-03"
-        const date = new Date(parsed);
-        const year = date.getUTCFullYear();
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        const reconstructed = `${year}-${month}-${day}`;
-        return reconstructed === dateStr;
-      },
-      {
-        message: 'Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)',
-      }
-    ),
+  date: IsoDateWithCalendarValidationSchema,
   amount: z.number(),
   payee: z.string(),
   memo: z.string().optional(),
@@ -123,27 +142,7 @@ export type BankTransaction = z.infer<typeof BankTransactionSchema>;
  */
 export const YNABTransactionSimpleSchema = z.object({
   id: z.string(),
-  date: z.string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
-    .refine(
-      (dateStr) => {
-        const parsed = Date.parse(dateStr);
-        if (isNaN(parsed)) {
-          return false;
-        }
-        // Verify that the parsed date components match the original string
-        // This catches cases like "2025-02-31" which Date.parse might coerce to "2025-03-03"
-        const date = new Date(parsed);
-        const year = date.getUTCFullYear();
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        const reconstructed = `${year}-${month}-${day}`;
-        return reconstructed === dateStr;
-      },
-      {
-        message: 'Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)',
-      }
-    ),
+  date: IsoDateWithCalendarValidationSchema,
   amount: z.number(),
   payee_name: z.string().nullable(),
   category_name: z.string().nullable(),

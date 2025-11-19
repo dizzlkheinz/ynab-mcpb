@@ -15,6 +15,62 @@ Quick reference guide for all available tools. For detailed documentation, see t
 
 **Total: 30 tools**
 
+## Structured Output Support
+
+All 30 tools now include **Zod-based output schemas** for type-safe response validation, improving AI model parsing and integration reliability. Output schemas are automatically validated by the tool registry before returning responses to clients.
+
+### Output Schema Benefits
+
+1. **Type-safe responses** - TypeScript type inference with `z.infer<typeof Schema>`
+2. **Runtime validation** - Prevents malformed data from reaching clients
+3. **Self-documenting API** - Schema definitions serve as contracts for tool outputs
+4. **Improved AI parsing** - Structured data helps AI models understand responses
+
+### Usage Example
+
+```typescript
+import { ListBudgetsOutputSchema } from './src/tools/schemas/outputs/index.js';
+
+// Type inference from schema
+type ListBudgetsOutput = z.infer<typeof ListBudgetsOutputSchema>;
+
+// Runtime validation
+const result = await callTool('list_budgets', {});
+const validation = ListBudgetsOutputSchema.safeParse(result);
+
+if (validation.success) {
+  // Validated data with type safety
+  const budgets = validation.data.budgets;
+  const cached = validation.data.cached;
+} else {
+  // Handle validation errors
+  console.error('Schema validation failed:', validation.error);
+}
+```
+
+### Schema Organization
+
+Output schemas are organized by tool domain in `src/tools/schemas/outputs/`:
+
+- `budgetOutputs.ts` - Budget management tool outputs
+- `accountOutputs.ts` - Account management tool outputs
+- `transactionOutputs.ts` - Transaction tool outputs
+- `categoryOutputs.ts` - Category tool outputs
+- `payeeOutputs.ts` - Payee tool outputs
+- `monthOutputs.ts` - Monthly data tool outputs
+- `utilityOutputs.ts` - Utility tool outputs
+- `transactionMutationOutputs.ts` - Transaction creation/update outputs
+- `reconciliationOutputs.ts` - Account reconciliation outputs
+- `comparisonOutputs.ts` - Transaction comparison and export outputs
+
+All schemas are centrally exported from `src/tools/schemas/outputs/index.ts`.
+
+### Automatic Validation
+
+The tool registry (lines 401-483 in `src/server/toolRegistry.ts`) automatically validates handler responses against declared schemas. Validation errors are returned as standard error responses, ensuring clients always receive schema-compliant data or clear error messages.
+
+**Note**: Output schemas are optional but recommended. Tools without schemas will continue to work as before, but won't benefit from automatic validation and type safety.
+
 ---
 
 ## Budget Management

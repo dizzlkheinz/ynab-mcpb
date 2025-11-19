@@ -123,19 +123,19 @@ export const TransactionSchema = z.object({
   account_id: z.string().describe('Account ID'),
 
   /** Optional payee ID */
-  payee_id: z.string().optional().describe('Payee ID'),
+  payee_id: z.string().nullish().describe('Payee ID'),
 
   /** Optional category ID */
-  category_id: z.string().optional().describe('Category ID'),
+  category_id: z.string().nullish().describe('Category ID'),
 
   /** Optional transfer account ID (for transfer transactions) */
-  transfer_account_id: z.string().optional().describe('Transfer account ID'),
+  transfer_account_id: z.string().nullish().describe('Transfer account ID'),
 
   /** Optional transfer transaction ID (for transfer transactions) */
-  transfer_transaction_id: z.string().optional().describe('Transfer transaction ID'),
+  transfer_transaction_id: z.string().nullish().describe('Transfer transaction ID'),
 
   /** Optional matched transaction ID (for imported transactions) */
-  matched_transaction_id: z.string().optional().describe('Matched transaction ID'),
+  matched_transaction_id: z.string().nullish().describe('Matched transaction ID'),
 
   /** Optional import ID */
   import_id: z.string().optional().describe('Import ID'),

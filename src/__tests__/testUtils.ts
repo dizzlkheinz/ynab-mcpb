@@ -5,6 +5,7 @@
 import { expect } from 'vitest';
 import { YNABMCPServer } from '../server/YNABMCPServer.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
 
 /**
  * Test environment configuration
@@ -216,6 +217,99 @@ export function parseToolResult<T = any>(result: CallToolResult): T {
   } catch (error) {
     throw new Error(`Failed to parse tool result as JSON: ${error}`);
   }
+}
+
+/**
+ * Validates a tool result against its registered output schema.
+ *
+ * This helper enables e2e tests to verify that tool responses match their
+ * declared output schemas without duplicating schema definitions.
+ *
+ * @param server - The YNAB MCP server instance
+ * @param toolName - Name of the tool to validate
+ * @param result - The CallToolResult from the tool execution
+ * @returns Validation result object containing valid flag, hasSchema flag, errors array, and parsed data
+ *
+ * @example
+ * ```typescript
+ * const result = await executeToolCall(server, 'list_budgets', {});
+ * const validation = validateOutputSchema(server, 'list_budgets', result);
+ * expect(validation.hasSchema).toBe(true);
+ * expect(validation.valid).toBe(true);
+ * if (!validation.valid) {
+ *   console.error('Schema validation errors:', validation.errors);
+ * }
+ * ```
+ */
+export function validateOutputSchema(
+  server: YNABMCPServer,
+  toolName: string,
+  result: CallToolResult,
+): { valid: boolean; hasSchema: boolean; errors?: string[]; data?: unknown; note?: string } {
+  // Get tool definitions from registry
+  const registry = server.getToolRegistry();
+  const toolDefinitions = registry.getToolDefinitions();
+  const toolDef = toolDefinitions.find((t) => t.name === toolName);
+
+  if (!toolDef) {
+    return {
+      valid: false,
+      hasSchema: false,
+      errors: [`Tool '${toolName}' not found in registry for schema validation`],
+    };
+  }
+
+  if (!toolDef.outputSchema) {
+    return {
+      valid: true,
+      hasSchema: false,
+      note: `Tool '${toolName}' does not define an outputSchema (schemas are optional)`,
+    };
+  }
+
+  // Parse JSON response from result's text content
+  let parsedData: unknown;
+  try {
+    const textContent = result.content.find((c) => c.type === 'text');
+    if (!textContent || textContent.type !== 'text') {
+      return {
+        valid: false,
+        hasSchema: true,
+        errors: ['Result does not contain text content'],
+      };
+    }
+    parsedData = JSON.parse(textContent.text);
+  } catch (error) {
+    return {
+      valid: false,
+      hasSchema: true,
+      errors: [`Failed to parse result as JSON: ${error}`],
+    };
+  }
+
+  // Validate against output schema
+  const validationResult = toolDef.outputSchema.safeParse(parsedData);
+
+  if (!validationResult.success) {
+    // Extract detailed error messages from Zod errors
+    const zodError = validationResult.error as z.ZodError;
+    const errors = zodError.issues.map((err: z.ZodIssue) => {
+      const path = err.path.join('.');
+      return `${path ? path + ': ' : ''}${err.message}`;
+    });
+
+    return {
+      valid: false,
+      hasSchema: true,
+      errors,
+    };
+  }
+
+  return {
+    valid: true,
+    hasSchema: true,
+    data: validationResult.data,
+  };
 }
 
 /**

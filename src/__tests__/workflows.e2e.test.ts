@@ -16,6 +16,7 @@ import {
   TestData,
   TestDataCleanup,
   YNABAssertions,
+  validateOutputSchema,
 } from './testUtils.js';
 import { testEnv } from './setup.js';
 
@@ -90,7 +91,20 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
 
       // List all budgets
       const budgetsResult = await executeToolCall(server, 'ynab:list_budgets');
+
+      // Validate output schema
+      const budgetsValidation = validateOutputSchema(server, 'list_budgets', budgetsResult);
+      expect(budgetsValidation.valid).toBe(true);
+      if (!budgetsValidation.valid) {
+        console.error('list_budgets schema validation errors:', budgetsValidation.errors);
+      }
+
       const budgets = parseToolResult(budgetsResult);
+
+      // Verify backward compatibility contract: parseToolResult returns {success: true, data: ...}
+      expect(budgets).toHaveProperty('success');
+      expect(budgets.success).toBe(true);
+      expect(budgets).toHaveProperty('data');
 
       expect(budgets.data).toBeDefined();
       expect(budgets.data.budgets).toBeDefined();
@@ -104,6 +118,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       const budgetResult = await executeToolCall(server, 'ynab:get_budget', {
         budget_id: testBudgetId,
       });
+
+      // Validate output schema
+      const budgetValidation = validateOutputSchema(server, 'get_budget', budgetResult);
+      expect(budgetValidation.valid).toBe(true);
+      if (!budgetValidation.valid) {
+        console.error('get_budget schema validation errors:', budgetValidation.errors);
+      }
+
       const budget = parseToolResult(budgetResult);
 
       expect(budget.data).toBeDefined();
@@ -132,7 +154,20 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       const accountsResult = await executeToolCall(server, 'ynab:list_accounts', {
         budget_id: testBudgetId,
       });
+
+      // Validate output schema
+      const accountsValidation = validateOutputSchema(server, 'list_accounts', accountsResult);
+      expect(accountsValidation.valid).toBe(true);
+      if (!accountsValidation.valid) {
+        console.error('list_accounts schema validation errors:', accountsValidation.errors);
+      }
+
       const accounts = parseToolResult(accountsResult);
+
+      // Verify backward compatibility contract: parseToolResult returns {success: true, data: ...}
+      expect(accounts).toHaveProperty('success');
+      expect(accounts.success).toBe(true);
+      expect(accounts).toHaveProperty('data');
 
       expect(accounts.data).toBeDefined();
       expect(accounts.data.accounts).toBeDefined();
@@ -147,12 +182,34 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         account_id: testAccountId,
       });
+
+      // Validate output schema
+      const accountValidation = validateOutputSchema(server, 'get_account', accountResult);
+      expect(accountValidation.valid).toBe(true);
+      if (!accountValidation.valid) {
+        console.error('get_account schema validation errors:', accountValidation.errors);
+      }
+
       const account = parseToolResult(accountResult);
 
       expect(account.data).toBeDefined();
       expect(account.data.account).toBeDefined();
       YNABAssertions.assertAccount(account.data.account);
       expect(account.data.account.id).toBe(testAccountId);
+
+      // Reconcile account as part of account management workflow
+      const reconcileResult = await executeToolCall(server, 'ynab:reconcile_account', {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+        cleared_balance: account.data.account.cleared_balance,
+      });
+
+      // Validate reconcile_account output schema
+      const reconcileValidation = validateOutputSchema(server, 'reconcile_account', reconcileResult);
+      expect(reconcileValidation.valid).toBe(true);
+      if (!reconcileValidation.valid) {
+        console.error('reconcile_account schema validation errors:', reconcileValidation.errors);
+      }
     });
 
     it('should create a new account', async () => {
@@ -166,6 +223,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         type: 'checking',
         balance: 10000, // $10.00
       });
+
+      // Validate output schema
+      const createValidation = validateOutputSchema(server, 'create_account', createResult);
+      expect(createValidation.valid).toBe(true);
+      if (!createValidation.valid) {
+        console.error('create_account schema validation errors:', createValidation.errors);
+      }
+
       const createdAccount = parseToolResult(createResult);
 
       expect(createdAccount.data).toBeDefined();
@@ -223,7 +288,20 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         ...transactionData,
       });
+
+      // Validate create_transaction output schema
+      const createValidation = validateOutputSchema(server, 'create_transaction', createResult);
+      expect(createValidation.valid).toBe(true);
+      if (!createValidation.valid) {
+        console.error('create_transaction schema validation errors:', createValidation.errors);
+      }
+
       const createdTransaction = parseToolResult(createResult);
+
+      // Verify backward compatibility contract: parseToolResult returns {success: true, data: ...}
+      expect(createdTransaction).toHaveProperty('success');
+      expect(createdTransaction.success).toBe(true);
+      expect(createdTransaction).toHaveProperty('data');
 
       expect(createdTransaction.data).toBeDefined();
       expect(createdTransaction.data.transaction).toBeDefined();
@@ -237,6 +315,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         transaction_id: testTransactionId,
       });
+
+      // Validate get_transaction output schema
+      const getValidation = validateOutputSchema(server, 'get_transaction', getResult);
+      expect(getValidation.valid).toBe(true);
+      if (!getValidation.valid) {
+        console.error('get_transaction schema validation errors:', getValidation.errors);
+      }
+
       const retrievedTransaction = parseToolResult(getResult);
 
       expect(retrievedTransaction.data).toBeDefined();
@@ -251,6 +337,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         transaction_id: testTransactionId,
         memo: updatedMemo,
       });
+
+      // Validate update_transaction output schema
+      const updateValidation = validateOutputSchema(server, 'update_transaction', updateResult);
+      expect(updateValidation.valid).toBe(true);
+      if (!updateValidation.valid) {
+        console.error('update_transaction schema validation errors:', updateValidation.errors);
+      }
+
       const updatedTransaction = parseToolResult(updateResult);
 
       expect(updatedTransaction.data).toBeDefined();
@@ -262,6 +356,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         account_id: testAccountId,
       });
+
+      // Validate list_transactions output schema
+      const listValidation = validateOutputSchema(server, 'list_transactions', listResult);
+      expect(listValidation.valid).toBe(true);
+      if (!listValidation.valid) {
+        console.error('list_transactions schema validation errors:', listValidation.errors);
+      }
+
       const transactions = parseToolResult(listResult);
 
       expect(transactions.data).toBeDefined();
@@ -279,6 +381,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         transaction_id: testTransactionId,
       });
+
+      // Validate delete_transaction output schema
+      const deleteValidation = validateOutputSchema(server, 'delete_transaction', deleteResult);
+      expect(deleteValidation.valid).toBe(true);
+      if (!deleteValidation.valid) {
+        console.error('delete_transaction schema validation errors:', deleteValidation.errors);
+      }
+
       const deleteResponse = parseToolResult(deleteResult);
 
       expect(deleteResponse.data).toBeDefined();
@@ -326,6 +436,181 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         expect(txn.account_id).toBe(testAccountId);
       });
     });
+
+    it('should export and compare transactions', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      // Export transactions as part of transaction management workflow
+      const exportResult = await executeToolCall(server, 'ynab:export_transactions', {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+      });
+
+      // Validate export_transactions output schema
+      const exportValidation = validateOutputSchema(server, 'export_transactions', exportResult);
+      expect(exportValidation.valid).toBe(true);
+      if (!exportValidation.valid) {
+        console.error('export_transactions schema validation errors:', exportValidation.errors);
+      }
+
+      const exportData = parseToolResult(exportResult);
+      expect(exportData.data).toBeDefined();
+
+      // Compare transactions as part of transaction management workflow
+      const csvData = `Date,Payee,Amount\n2025-01-15,Test Comparison Payee,-25.00`;
+      const compareResult = await executeToolCall(server, 'ynab:compare_transactions', {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+        csv_data: csvData,
+        start_date: '2025-01-01',
+        end_date: '2025-01-31',
+      });
+
+      // Validate compare_transactions output schema
+      const compareValidation = validateOutputSchema(server, 'compare_transactions', compareResult);
+      expect(compareValidation.valid).toBe(true);
+      if (!compareValidation.valid) {
+        console.error('compare_transactions schema validation errors:', compareValidation.errors);
+      }
+
+      const compareData = parseToolResult(compareResult);
+      expect(compareData.data).toBeDefined();
+    });
+
+    it('should create and update transactions in bulk', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      // Create multiple transactions as part of bulk workflow
+      const transactions = [
+        {
+          account_id: testAccountId,
+          date: new Date().toISOString().split('T')[0],
+          amount: -1500,
+          payee_name: `Bulk Workflow Payee 1 ${Date.now()}`,
+          memo: 'Bulk workflow test 1',
+          cleared: 'uncleared' as const,
+        },
+        {
+          account_id: testAccountId,
+          date: new Date().toISOString().split('T')[0],
+          amount: -2500,
+          payee_name: `Bulk Workflow Payee 2 ${Date.now()}`,
+          memo: 'Bulk workflow test 2',
+          cleared: 'uncleared' as const,
+        },
+      ];
+
+      const createBulkResult = await executeToolCall(server, 'ynab:create_transactions', {
+        budget_id: testBudgetId,
+        transactions,
+      });
+
+      // Validate create_transactions (bulk) output schema
+      const createBulkValidation = validateOutputSchema(
+        server,
+        'create_transactions',
+        createBulkResult,
+      );
+      expect(createBulkValidation.valid).toBe(true);
+      if (!createBulkValidation.valid) {
+        console.error('create_transactions schema validation errors:', createBulkValidation.errors);
+      }
+
+      const createdBulk = parseToolResult(createBulkResult);
+      expect(createdBulk.data?.transactions).toBeDefined();
+      expect(Array.isArray(createdBulk.data.transactions)).toBe(true);
+      expect(createdBulk.data.transactions.length).toBe(2);
+
+      // Track for cleanup
+      const transactionIds = createdBulk.data.transactions.map((txn: any) => txn.id);
+      transactionIds.forEach((id: string) => cleanup.trackTransaction(id));
+
+      // Update transactions in bulk as part of workflow
+      const updateBulkResult = await executeToolCall(server, 'ynab:update_transactions', {
+        budget_id: testBudgetId,
+        transactions: transactionIds.map((id: string, index: number) => ({
+          id,
+          memo: `Updated bulk memo ${index + 1}`,
+        })),
+      });
+
+      // Validate update_transactions (bulk) output schema
+      const updateBulkValidation = validateOutputSchema(
+        server,
+        'update_transactions',
+        updateBulkResult,
+      );
+      expect(updateBulkValidation.valid).toBe(true);
+      if (!updateBulkValidation.valid) {
+        console.error('update_transactions schema validation errors:', updateBulkValidation.errors);
+      }
+
+      const updatedBulk = parseToolResult(updateBulkResult);
+      expect(updatedBulk.data?.transactions).toBeDefined();
+      expect(Array.isArray(updatedBulk.data.transactions)).toBe(true);
+    });
+
+    it('should create receipt split transaction', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      // Get categories for the receipt split
+      const categoriesResult = await executeToolCall(server, 'ynab:list_categories', {
+        budget_id: testBudgetId,
+      });
+      const categories = parseToolResult(categoriesResult);
+
+      // Find a non-hidden category
+      let testCategoryName: string | undefined;
+      for (const group of categories.data.category_groups) {
+        const availableCategory = group.categories?.find((cat: any) => !cat.hidden);
+        if (availableCategory) {
+          testCategoryName = availableCategory.name;
+          break;
+        }
+      }
+
+      if (!testCategoryName) {
+        console.warn('No available categories found for receipt split test');
+        return;
+      }
+
+      // Create receipt split transaction as part of transaction workflow
+      const receiptResult = await executeToolCall(server, 'ynab:create_receipt_split_transaction', {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+        date: new Date().toISOString().split('T')[0],
+        payee_name: `Receipt Workflow ${Date.now()}`,
+        tax_amount: 150,
+        receipt_items: [
+          {
+            category_name: testCategoryName,
+            amount: 2000,
+          },
+        ],
+      });
+
+      // Validate create_receipt_split_transaction output schema
+      const receiptValidation = validateOutputSchema(
+        server,
+        'create_receipt_split_transaction',
+        receiptResult,
+      );
+      expect(receiptValidation.valid).toBe(true);
+      if (!receiptValidation.valid) {
+        console.error(
+          'create_receipt_split_transaction schema validation errors:',
+          receiptValidation.errors,
+        );
+      }
+
+      const receiptData = parseToolResult(receiptResult);
+      expect(receiptData.data?.transaction).toBeDefined();
+
+      // Track for cleanup
+      if (receiptData.data.transaction.id) {
+        cleanup.trackTransaction(receiptData.data.transaction.id);
+      }
+    });
   });
 
   describe('Complete Category Management Workflow', () => {
@@ -336,6 +621,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       const categoriesResult = await executeToolCall(server, 'ynab:list_categories', {
         budget_id: testBudgetId,
       });
+
+      // Validate list_categories output schema
+      const listValidation = validateOutputSchema(server, 'list_categories', categoriesResult);
+      expect(listValidation.valid).toBe(true);
+      if (!listValidation.valid) {
+        console.error('list_categories schema validation errors:', listValidation.errors);
+      }
+
       const categories = parseToolResult(categoriesResult);
 
       expect(categories.data).toBeDefined();
@@ -366,6 +659,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         category_id: testCategoryId,
       });
+
+      // Validate get_category output schema
+      const getValidation = validateOutputSchema(server, 'get_category', categoryResult);
+      expect(getValidation.valid).toBe(true);
+      if (!getValidation.valid) {
+        console.error('get_category schema validation errors:', getValidation.errors);
+      }
+
       const category = parseToolResult(categoryResult);
 
       expect(category.data).toBeDefined();
@@ -380,6 +681,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         category_id: testCategoryId,
         budgeted: newBudgetAmount,
       });
+
+      // Validate update_category output schema
+      const updateValidation = validateOutputSchema(server, 'update_category', updateResult);
+      expect(updateValidation.valid).toBe(true);
+      if (!updateValidation.valid) {
+        console.error('update_category schema validation errors:', updateValidation.errors);
+      }
+
       const updatedCategory = parseToolResult(updateResult);
 
       expect(updatedCategory.data).toBeDefined();
@@ -396,6 +705,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       const payeesResult = await executeToolCall(server, 'ynab:list_payees', {
         budget_id: testBudgetId,
       });
+
+      // Validate list_payees output schema
+      const listValidation = validateOutputSchema(server, 'list_payees', payeesResult);
+      expect(listValidation.valid).toBe(true);
+      if (!listValidation.valid) {
+        console.error('list_payees schema validation errors:', listValidation.errors);
+      }
+
       const payees = parseToolResult(payeesResult);
 
       expect(payees.data).toBeDefined();
@@ -412,6 +729,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
           budget_id: testBudgetId,
           payee_id: testPayeeId,
         });
+
+        // Validate get_payee output schema
+        const getValidation = validateOutputSchema(server, 'get_payee', payeeResult);
+        expect(getValidation.valid).toBe(true);
+        if (!getValidation.valid) {
+          console.error('get_payee schema validation errors:', getValidation.errors);
+        }
+
         const payee = parseToolResult(payeeResult);
 
         expect(payee.data).toBeDefined();
@@ -430,6 +755,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       const monthsResult = await executeToolCall(server, 'ynab:list_months', {
         budget_id: testBudgetId,
       });
+
+      // Validate list_months output schema
+      const listValidation = validateOutputSchema(server, 'list_months', monthsResult);
+      expect(listValidation.valid).toBe(true);
+      if (!listValidation.valid) {
+        console.error('list_months schema validation errors:', listValidation.errors);
+      }
+
       const months = parseToolResult(monthsResult);
 
       expect(months.data).toBeDefined();
@@ -443,6 +776,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         month: currentMonth,
       });
+
+      // Validate get_month output schema
+      const getValidation = validateOutputSchema(server, 'get_month', monthResult);
+      expect(getValidation.valid).toBe(true);
+      if (!getValidation.valid) {
+        console.error('get_month schema validation errors:', getValidation.errors);
+      }
+
       const month = parseToolResult(monthResult);
 
       expect(month.data).toBeDefined();
@@ -575,6 +916,14 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
             type: 'checking',
             balance: 10000,
           });
+
+          // Validate output schema
+          const createValidation = validateOutputSchema(server, 'create_account', createResult);
+          expect(createValidation.valid).toBe(true);
+          if (!createValidation.valid) {
+            console.error('create_account schema validation errors:', createValidation.errors);
+          }
+
           const createdAccount = parseToolResult(createResult);
           cleanup.trackAccount(createdAccount.data.account.id);
 
@@ -690,6 +1039,11 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
           expect(tool.name).toBeDefined();
           expect(tool.description).toBeDefined();
           expect(tool.inputSchema).toBeDefined();
+
+          // Verify that all tools define outputSchema (as guaranteed by CHANGELOG.md and docs/reference/TOOLS.md)
+          // Note: Some utility tools like diagnostic_info or clear_cache may not define structured outputs,
+          // but most data-retrieval and CRUD tools should have output schemas.
+          expect(tool.outputSchema, `Tool '${tool.name}' should define an outputSchema`).toBeDefined();
         }
       });
     });
@@ -869,7 +1223,17 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       expect(isErrorResult(result)).toBe(true);
       expect(result.content).toBeDefined();
       expect(result.content.length).toBeGreaterThan(0);
-      // Error should be handled gracefully without exposing sensitive information
+
+      // Verify error response contract: error responses should not have success: true
+      const textContent = result.content.find((c) => c.type === 'text');
+      if (textContent && textContent.type === 'text') {
+        const parsed = JSON.parse(textContent.text);
+        expect(parsed).toHaveProperty('error');
+        // If success property exists, it should be false for errors
+        if ('success' in parsed) {
+          expect(parsed.success).toBe(false);
+        }
+      }
     });
 
     it('should handle invalid account ID gracefully', async () => {
@@ -882,6 +1246,16 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       expect(isErrorResult(result)).toBe(true);
       expect(result.content).toBeDefined();
       expect(result.content.length).toBeGreaterThan(0);
+
+      // Verify error response contract
+      const textContent = result.content.find((c) => c.type === 'text');
+      if (textContent && textContent.type === 'text') {
+        const parsed = JSON.parse(textContent.text);
+        expect(parsed).toHaveProperty('error');
+        if ('success' in parsed) {
+          expect(parsed.success).toBe(false);
+        }
+      }
     });
 
     it('should handle invalid transaction ID gracefully', async () => {
@@ -894,6 +1268,401 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       expect(isErrorResult(result)).toBe(true);
       expect(result.content).toBeDefined();
       expect(result.content.length).toBeGreaterThan(0);
+
+      // Verify error response contract
+      const textContent = result.content.find((c) => c.type === 'text');
+      if (textContent && textContent.type === 'text') {
+        const parsed = JSON.parse(textContent.text);
+        expect(parsed).toHaveProperty('error');
+        if ('success' in parsed) {
+          expect(parsed.success).toBe(false);
+        }
+      }
+    });
+  });
+
+  describe('Output Schema Validation', () => {
+    it('should validate list_budgets output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:list_budgets');
+      const validation = validateOutputSchema(server, 'list_budgets', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate list_accounts output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:list_accounts', {
+        budget_id: testBudgetId,
+      });
+      const validation = validateOutputSchema(server, 'list_accounts', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate list_transactions output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:list_transactions', {
+        budget_id: testBudgetId,
+        since_date: '2025-01-01',
+      });
+      const validation = validateOutputSchema(server, 'list_transactions', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate list_categories output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:list_categories', {
+        budget_id: testBudgetId,
+      });
+      const validation = validateOutputSchema(server, 'list_categories', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate list_payees output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:list_payees', {
+        budget_id: testBudgetId,
+      });
+      const validation = validateOutputSchema(server, 'list_payees', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate list_months output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:list_months', {
+        budget_id: testBudgetId,
+      });
+      const validation = validateOutputSchema(server, 'list_months', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate get_month output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const currentMonth = getCurrentMonth();
+      const result = await executeToolCall(server, 'ynab:get_month', {
+        budget_id: testBudgetId,
+        month: currentMonth,
+      });
+      const validation = validateOutputSchema(server, 'get_month', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate get_user output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:get_user');
+      const validation = validateOutputSchema(server, 'get_user', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate diagnostic_info output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:diagnostic_info');
+      const validation = validateOutputSchema(server, 'diagnostic_info', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate set_default_budget output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:set_default_budget', {
+        budget_id: testBudgetId,
+      });
+      const validation = validateOutputSchema(server, 'set_default_budget', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate get_default_budget output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      // Ensure default budget is set
+      await executeToolCall(server, 'ynab:set_default_budget', {
+        budget_id: testBudgetId,
+      });
+
+      const result = await executeToolCall(server, 'ynab:get_default_budget');
+      const validation = validateOutputSchema(server, 'get_default_budget', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate clear_cache output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:clear_cache');
+      const validation = validateOutputSchema(server, 'clear_cache', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate set_output_format output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:set_output_format', {
+        minify: false,
+      });
+      const validation = validateOutputSchema(server, 'set_output_format', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+
+      // Reset to default
+      await executeToolCall(server, 'ynab:set_output_format', {
+        minify: true,
+      });
+    });
+
+    it('should validate reconcile_account output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:reconcile_account', {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+        cleared_balance: 0,
+      });
+      const validation = validateOutputSchema(server, 'reconcile_account', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate create_transactions (bulk) output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      // Create multiple transactions
+      const transactions = [
+        {
+          account_id: testAccountId,
+          date: new Date().toISOString().split('T')[0],
+          amount: -1000,
+          payee_name: `Test Payee 1 ${Date.now()}`,
+          memo: 'Bulk test 1',
+          cleared: 'uncleared' as const,
+        },
+        {
+          account_id: testAccountId,
+          date: new Date().toISOString().split('T')[0],
+          amount: -2000,
+          payee_name: `Test Payee 2 ${Date.now()}`,
+          memo: 'Bulk test 2',
+          cleared: 'uncleared' as const,
+        },
+      ];
+
+      const result = await executeToolCall(server, 'ynab:create_transactions', {
+        budget_id: testBudgetId,
+        transactions,
+      });
+      const validation = validateOutputSchema(server, 'create_transactions', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+
+      // Track transactions for cleanup
+      const parsed = parseToolResult(result);
+      if (parsed.data?.transactions) {
+        parsed.data.transactions.forEach((txn: any) => {
+          cleanup.trackTransaction(txn.id);
+        });
+      }
+    });
+
+    it('should validate update_transactions (bulk) output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      // First create a transaction to update
+      const createResult = await executeToolCall(server, 'ynab:create_transaction', {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+        date: new Date().toISOString().split('T')[0],
+        amount: -3000,
+        payee_name: `Test Update Payee ${Date.now()}`,
+        memo: 'Before update',
+        cleared: 'uncleared',
+      });
+      const created = parseToolResult(createResult);
+      const transactionId = created.data.transaction.id;
+      cleanup.trackTransaction(transactionId);
+
+      // Update the transaction
+      const result = await executeToolCall(server, 'ynab:update_transactions', {
+        budget_id: testBudgetId,
+        transactions: [
+          {
+            id: transactionId,
+            memo: 'After update',
+          },
+        ],
+      });
+      const validation = validateOutputSchema(server, 'update_transactions', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate compare_transactions output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      // Create a minimal CSV for comparison
+      const csvData = `Date,Payee,Amount\n2025-01-15,Test Payee,-10.00`;
+
+      const result = await executeToolCall(server, 'ynab:compare_transactions', {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+        csv_data: csvData,
+        start_date: '2025-01-01',
+        end_date: '2025-01-31',
+      });
+      const validation = validateOutputSchema(server, 'compare_transactions', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate convert_amount output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:convert_amount', {
+        amount: 100,
+        to_milliunits: true,
+      });
+      const validation = validateOutputSchema(server, 'convert_amount', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate export_transactions output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      const result = await executeToolCall(server, 'ynab:export_transactions', {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+      });
+      const validation = validateOutputSchema(server, 'export_transactions', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+    });
+
+    it('should validate create_receipt_split_transaction output schema', async () => {
+      if (testConfig.skipE2ETests) return;
+
+      // Get categories to find a valid one
+      const categoriesResult = await executeToolCall(server, 'ynab:list_categories', {
+        budget_id: testBudgetId,
+      });
+      const categories = parseToolResult(categoriesResult);
+
+      // Find a non-hidden category
+      let testCategoryName: string | undefined;
+      for (const group of categories.data.category_groups) {
+        const availableCategory = group.categories?.find((cat: any) => !cat.hidden);
+        if (availableCategory) {
+          testCategoryName = availableCategory.name;
+          break;
+        }
+      }
+
+      if (!testCategoryName) {
+        console.warn('No available categories found for create_receipt_split_transaction test');
+        return;
+      }
+
+      // Create a minimal receipt split transaction
+      const result = await executeToolCall(server, 'ynab:create_receipt_split_transaction', {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+        date: new Date().toISOString().split('T')[0],
+        payee_name: `Test Receipt ${Date.now()}`,
+        tax_amount: 100,
+        receipt_items: [
+          {
+            category_name: testCategoryName,
+            amount: 1000,
+          },
+        ],
+      });
+
+      const validation = validateOutputSchema(server, 'create_receipt_split_transaction', result);
+      expect(validation.hasSchema).toBe(true);
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) {
+        console.error('Schema validation errors:', validation.errors);
+      }
+
+      // Track the created transaction for cleanup
+      const parsed = parseToolResult(result);
+      if (parsed.data?.transaction?.id) {
+        cleanup.trackTransaction(parsed.data.transaction.id);
+      }
     });
   });
 });
