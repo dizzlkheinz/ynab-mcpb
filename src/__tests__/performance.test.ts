@@ -382,6 +382,8 @@ describe('YNAB MCP Server - Performance Tests', () => {
     mockYnabAPI = new (API as any)();
 
     vi.clearAllMocks();
+    // Clear cache to ensure mocks are called in each test
+    await executeToolCall(server, 'ynab:clear_cache');
   });
 
   describe('Response Time Performance', () => {

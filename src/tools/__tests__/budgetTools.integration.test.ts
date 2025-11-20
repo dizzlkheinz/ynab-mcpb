@@ -35,6 +35,12 @@ describeIntegration('Budget Tools Integration', () => {
           expect(result.content[0].type).toBe('text');
 
           const parsedContent = JSON.parse(result.content[0].text);
+
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (parsedContent.error) {
+            throw new Error(JSON.stringify(parsedContent.error));
+          }
+
           expect(parsedContent.budgets).toBeDefined();
           expect(Array.isArray(parsedContent.budgets)).toBe(true);
           expect(parsedContent.budgets.length).toBeGreaterThan(0);
@@ -62,26 +68,46 @@ describeIntegration('Budget Tools Integration', () => {
       { meta: { tier: 'core', domain: 'budgets' } },
       async (ctx) => {
         await skipOnRateLimit(async () => {
-          // Use the budget ID from the previous test
-          const result = await handleGetBudget(ynabAPI, { budget_id: testBudgetId });
+          // Get a budget ID if not set by previous test
+          let budgetId = testBudgetId;
+          if (!budgetId) {
+            const listResult = await handleListBudgets(ynabAPI);
+            const listContent = JSON.parse(listResult.content[0].text);
+            if (listContent.error) {
+              throw new Error(JSON.stringify(listContent.error));
+            }
+            budgetId = listContent.budgets[0]?.id;
+            if (!budgetId) {
+              throw new Error('No budgets available for testing');
+            }
+          }
+
+          // Use the budget ID
+          const result = await handleGetBudget(ynabAPI, { budget_id: budgetId });
 
           expect(result.content).toHaveLength(1);
           expect(result.content[0].type).toBe('text');
 
           const parsedContent = JSON.parse(result.content[0].text);
+
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (parsedContent.error) {
+            throw new Error(JSON.stringify(parsedContent.error));
+          }
+
           expect(parsedContent.budget).toBeDefined();
 
           const budget = parsedContent.budget;
-          expect(budget.id).toBe(testBudgetId);
+          expect(budget.id).toBe(budgetId);
           expect(budget.name).toBeDefined();
-          expect(budget.accounts).toBeDefined();
-          expect(Array.isArray(budget.accounts)).toBe(true);
-          expect(budget.categories).toBeDefined();
-          expect(Array.isArray(budget.categories)).toBe(true);
+          expect(budget.accounts_count).toBeDefined();
+          expect(typeof budget.accounts_count).toBe('number');
+          expect(budget.categories_count).toBeDefined();
+          expect(typeof budget.categories_count).toBe('number');
 
           console.warn(`✅ Successfully retrieved budget: ${budget.name}`);
-          console.warn(`   - ${budget.accounts.length} accounts`);
-          console.warn(`   - ${budget.categories.length} categories`);
+          console.warn(`   - ${budget.accounts_count} accounts`);
+          console.warn(`   - ${budget.categories_count} categories`);
         }, ctx);
       },
     );
@@ -89,17 +115,19 @@ describeIntegration('Budget Tools Integration', () => {
     it(
       'should handle invalid budget ID gracefully',
       { meta: { tier: 'domain', domain: 'budgets' } },
-      async () => {
-        const result = await handleGetBudget(ynabAPI, { budget_id: 'invalid-budget-id' });
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const result = await handleGetBudget(ynabAPI, { budget_id: 'invalid-budget-id' });
 
-        expect(result.content).toHaveLength(1);
-        expect(result.content[0].type).toBe('text');
+          expect(result.content).toHaveLength(1);
+          expect(result.content[0].type).toBe('text');
 
-        const parsedContent = JSON.parse(result.content[0].text);
-        expect(parsedContent.error).toBeDefined();
-        expect(parsedContent.error.message).toBeDefined();
+          const parsedContent = JSON.parse(result.content[0].text);
+          expect(parsedContent.error).toBeDefined();
+          expect(parsedContent.error.message).toBeDefined();
 
-        console.warn(`✅ Correctly handled invalid budget ID: ${parsedContent.error.message}`);
+          console.warn(`✅ Correctly handled invalid budget ID: ${parsedContent.error.message}`);
+        }, ctx);
       },
     );
   });

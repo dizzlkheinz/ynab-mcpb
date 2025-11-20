@@ -4,6 +4,7 @@ import { AuthenticationError, ConfigurationError } from '../../types/index.js';
 import { ToolRegistry } from '../toolRegistry.js';
 import { cacheManager } from '../../server/cacheManager.js';
 import { responseFormatter } from '../../server/responseFormatter.js';
+import { skipOnRateLimit } from '../../__tests__/testUtils.js';
 
 /**
  * Real YNAB API tests using token from .env (YNAB_ACCESS_TOKEN)
@@ -113,41 +114,47 @@ describeIntegration('YNABMCPServer', () => {
     it(
       'should successfully validate real YNAB token',
       { meta: { tier: 'core', domain: 'server' } },
-      async () => {
-        const isValid = await server.validateToken();
-        expect(isValid).toBe(true);
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const isValid = await server.validateToken();
+          expect(isValid).toBe(true);
+        }, ctx);
       },
     );
 
     it(
       'should successfully get user information',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        // Verify we can get user info
-        const ynabAPI = server.getYNABAPI();
-        const userResponse = await ynabAPI.user.getUser();
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          // Verify we can get user info
+          const ynabAPI = server.getYNABAPI();
+          const userResponse = await ynabAPI.user.getUser();
 
-        expect(userResponse.data.user).toBeDefined();
-        expect(userResponse.data.user.id).toBeDefined();
-        console.warn(`✅ Connected to YNAB user: ${userResponse.data.user.id}`);
+          expect(userResponse.data.user).toBeDefined();
+          expect(userResponse.data.user.id).toBeDefined();
+          console.warn(`✅ Connected to YNAB user: ${userResponse.data.user.id}`);
+        }, ctx);
       },
     );
 
     it(
       'should successfully get budgets',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const ynabAPI = server.getYNABAPI();
-        const budgetsResponse = await ynabAPI.budgets.getBudgets();
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const ynabAPI = server.getYNABAPI();
+          const budgetsResponse = await ynabAPI.budgets.getBudgets();
 
-        expect(budgetsResponse.data.budgets).toBeDefined();
-        expect(Array.isArray(budgetsResponse.data.budgets)).toBe(true);
-        expect(budgetsResponse.data.budgets.length).toBeGreaterThan(0);
+          expect(budgetsResponse.data.budgets).toBeDefined();
+          expect(Array.isArray(budgetsResponse.data.budgets)).toBe(true);
+          expect(budgetsResponse.data.budgets.length).toBeGreaterThan(0);
 
-        console.warn(`✅ Found ${budgetsResponse.data.budgets.length} budget(s)`);
-        budgetsResponse.data.budgets.forEach((budget) => {
-          console.warn(`   - ${budget.name} (${budget.id})`);
-        });
+          console.warn(`✅ Found ${budgetsResponse.data.budgets.length} budget(s)`);
+          budgetsResponse.data.budgets.forEach((budget) => {
+            console.warn(`   - ${budget.name} (${budget.id})`);
+          });
+        }, ctx);
       },
     );
 
@@ -171,42 +178,50 @@ describeIntegration('YNABMCPServer', () => {
     it(
       'should successfully start and connect MCP server',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        // This test verifies the full server startup process
-        // Note: We can't fully test the stdio connection in a test environment,
-        // but we can verify the server initializes without errors
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          // This test verifies the full server startup process
+          // Note: We can't fully test the stdio connection in a test environment,
+          // but we can verify the server initializes without errors
 
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-          // Mock implementation for testing
-        });
+          // Validate token first (this may skip if rate limited)
+          const isValid = await server.validateToken();
+          expect(isValid).toBe(true);
 
-        try {
-          // The run method will validate the token and attempt to connect
-          // In a test environment, the stdio connection will fail, but token validation should succeed
-          await server.run();
-        } catch (error) {
-          // Expected to fail on stdio connection in test environment
-          // But should not fail on token validation
-          expect(error).not.toBeInstanceOf(AuthenticationError);
-          expect(error).not.toBeInstanceOf(ConfigurationError);
-        }
+          // If we get here, token is valid - now test transport connection
+          const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+            // Mock implementation for testing
+          });
 
-        consoleSpy.mockRestore();
+          try {
+            // The run method will attempt to connect
+            // In a test environment, the stdio connection will fail, but that's expected
+            await server.run();
+          } catch (error) {
+            // Expected to fail on stdio connection in test environment
+            // Token was already validated above, so this error should be transport-related
+            expect(error).not.toBeInstanceOf(ConfigurationError);
+          }
+
+          consoleSpy.mockRestore();
+        }, ctx);
       },
     );
 
     it(
       'should handle multiple rapid API calls without rate limiting issues',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        // Make multiple validation calls to test rate limiting behavior
-        const promises = Array(3)
-          .fill(null)
-          .map(() => server.validateToken());
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          // Make multiple validation calls to test rate limiting behavior
+          const promises = Array(3)
+            .fill(null)
+            .map(() => server.validateToken());
 
-        // All should succeed (YNAB API is generally permissive for user info calls)
-        const results = await Promise.all(promises);
-        results.forEach((result) => expect(result).toBe(true));
+          // All should succeed (YNAB API is generally permissive for user info calls)
+          const results = await Promise.all(promises);
+          results.forEach((result) => expect(result).toBe(true));
+        }, ctx);
       },
     );
   });
@@ -243,44 +258,60 @@ describeIntegration('YNABMCPServer', () => {
     it(
       'should execute get_user tool via the registry',
       { meta: { tier: 'core', domain: 'server' } },
-      async () => {
-        const result = await registry.executeTool({
-          name: 'get_user',
-          accessToken: accessToken(),
-          arguments: {},
-        });
-        const payload = JSON.parse(result.content?.[0]?.text ?? '{}');
-        expect(payload.user?.id).toBeDefined();
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const result = await registry.executeTool({
+            name: 'get_user',
+            accessToken: accessToken(),
+            arguments: {},
+          });
+          const payload = JSON.parse(result.content?.[0]?.text ?? '{}');
+
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (payload.error) {
+            throw new Error(JSON.stringify(payload.error));
+          }
+
+          expect(payload.user?.id).toBeDefined();
+        }, ctx);
       },
     );
 
     it(
       'should set and retrieve default budget using tools',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const budgetsResult = await registry.executeTool({
-          name: 'list_budgets',
-          accessToken: accessToken(),
-          arguments: {},
-        });
-        const budgetsPayload = JSON.parse(budgetsResult.content?.[0]?.text ?? '{}');
-        const firstBudget = budgetsPayload.budgets?.[0];
-        expect(firstBudget).toBeDefined();
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const budgetsResult = await registry.executeTool({
+            name: 'list_budgets',
+            accessToken: accessToken(),
+            arguments: {},
+          });
+          const budgetsPayload = JSON.parse(budgetsResult.content?.[0]?.text ?? '{}');
 
-        await registry.executeTool({
-          name: 'set_default_budget',
-          accessToken: accessToken(),
-          arguments: { budget_id: firstBudget.id },
-        });
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (budgetsPayload.error) {
+            throw new Error(JSON.stringify(budgetsPayload.error));
+          }
 
-        const defaultResult = await registry.executeTool({
-          name: 'get_default_budget',
-          accessToken: accessToken(),
-          arguments: {},
-        });
-        const defaultPayload = JSON.parse(defaultResult.content?.[0]?.text ?? '{}');
-        expect(defaultPayload.default_budget_id).toBe(firstBudget.id);
-        expect(defaultPayload.has_default).toBe(true);
+          const firstBudget = budgetsPayload.budgets?.[0];
+          expect(firstBudget).toBeDefined();
+
+          await registry.executeTool({
+            name: 'set_default_budget',
+            accessToken: accessToken(),
+            arguments: { budget_id: firstBudget.id },
+          });
+
+          const defaultResult = await registry.executeTool({
+            name: 'get_default_budget',
+            accessToken: accessToken(),
+            arguments: {},
+          });
+          const defaultPayload = JSON.parse(defaultResult.content?.[0]?.text ?? '{}');
+          expect(defaultPayload.default_budget_id).toBe(firstBudget.id);
+          expect(defaultPayload.has_default).toBe(true);
+        }, ctx);
       },
     );
 
@@ -443,53 +474,60 @@ describeIntegration('YNABMCPServer', () => {
     it(
       'should include enhanced cache metrics in real diagnostic collection',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        // Generate some real cache activity
-        await registry.executeTool({
-          name: 'list_budgets',
-          accessToken: accessToken(),
-          arguments: {},
-        });
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          // Generate some real cache activity
+          await registry.executeTool({
+            name: 'list_budgets',
+            accessToken: accessToken(),
+            arguments: {},
+          });
 
-        await registry.executeTool({
-          name: 'get_user',
-          accessToken: accessToken(),
-          arguments: {},
-        });
+          await registry.executeTool({
+            name: 'get_user',
+            accessToken: accessToken(),
+            arguments: {},
+          });
 
-        // Call diagnostics tool with cache enabled
-        const result = await registry.executeTool({
-          name: 'diagnostic_info',
-          accessToken: accessToken(),
-          arguments: {
-            include_server: false,
-            include_memory: false,
-            include_environment: false,
-            include_security: false,
-            include_cache: true,
-          },
-        });
+          // Call diagnostics tool with cache enabled
+          const result = await registry.executeTool({
+            name: 'diagnostic_info',
+            accessToken: accessToken(),
+            arguments: {
+              include_server: false,
+              include_memory: false,
+              include_environment: false,
+              include_security: false,
+              include_cache: true,
+            },
+          });
 
-        const diagnostics = JSON.parse(result.content?.[0]?.text ?? '{}');
+          const diagnostics = JSON.parse(result.content?.[0]?.text ?? '{}');
 
-        expect(diagnostics.cache).toBeDefined();
-        expect(diagnostics.cache.entries).toEqual(expect.any(Number));
-        expect(diagnostics.cache.estimated_size_kb).toEqual(expect.any(Number));
-        expect(diagnostics.cache.keys).toEqual(expect.any(Array));
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (diagnostics.error) {
+            throw new Error(JSON.stringify(diagnostics.error));
+          }
 
-        // Enhanced metrics should be present
-        expect(diagnostics.cache.hits).toEqual(expect.any(Number));
-        expect(diagnostics.cache.misses).toEqual(expect.any(Number));
-        expect(diagnostics.cache.evictions).toEqual(expect.any(Number));
-        expect(diagnostics.cache.maxEntries).toEqual(expect.any(Number));
-        expect(diagnostics.cache.hitRate).toEqual(expect.stringMatching(/^\d+\.\d{2}%$/));
-        expect(diagnostics.cache.performance_summary).toEqual(expect.stringContaining('Hit rate'));
+          expect(diagnostics.cache).toBeDefined();
+          expect(diagnostics.cache.entries).toEqual(expect.any(Number));
+          expect(diagnostics.cache.estimated_size_kb).toEqual(expect.any(Number));
+          expect(diagnostics.cache.keys).toEqual(expect.any(Array));
 
-        // lastCleanup can be null or a timestamp
-        expect(
-          diagnostics.cache.lastCleanup === null ||
-            typeof diagnostics.cache.lastCleanup === 'string',
-        ).toBe(true);
+          // Enhanced metrics should be present
+          expect(diagnostics.cache.hits).toEqual(expect.any(Number));
+          expect(diagnostics.cache.misses).toEqual(expect.any(Number));
+          expect(diagnostics.cache.evictions).toEqual(expect.any(Number));
+          expect(diagnostics.cache.maxEntries).toEqual(expect.any(Number));
+          expect(diagnostics.cache.hitRate).toEqual(expect.stringMatching(/^\d+\.\d{2}%$/));
+          expect(diagnostics.cache.performance_summary).toEqual(expect.stringContaining('Hit rate'));
+
+          // lastCleanup can be null or a timestamp
+          expect(
+            diagnostics.cache.lastCleanup === null ||
+              typeof diagnostics.cache.lastCleanup === 'string',
+          ).toBe(true);
+        }, ctx);
       },
     );
 
@@ -555,49 +593,69 @@ describeIntegration('YNABMCPServer', () => {
     it(
       'should maintain real API functionality after modular refactoring',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        // Test that the key integration points work with real API calls
-        // This verifies that resource manager, diagnostic manager, and other modules
-        // properly integrate with the real YNAB API
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          // Test that the key integration points work with real API calls
+          // This verifies that resource manager, diagnostic manager, and other modules
+          // properly integrate with the real YNAB API
 
-        // Test 1: User info via API (tests core YNAB integration)
-        const userResult = await registry.executeTool({
-          name: 'get_user',
-          accessToken: accessToken(),
-          arguments: {},
-        });
-        const userPayload = JSON.parse(userResult.content?.[0]?.text ?? '{}');
-        expect(userPayload.user).toBeDefined();
-        expect(userPayload.user.id).toBeDefined();
+          // Test 1: User info via API (tests core YNAB integration)
+          const userResult = await registry.executeTool({
+            name: 'get_user',
+            accessToken: accessToken(),
+            arguments: {},
+          });
+          const userPayload = JSON.parse(userResult.content?.[0]?.text ?? '{}');
 
-        // Test 2: Budget listing (tests resource-like functionality)
-        const budgetsResult = await registry.executeTool({
-          name: 'list_budgets',
-          accessToken: accessToken(),
-          arguments: {},
-        });
-        const budgetsPayload = JSON.parse(budgetsResult.content?.[0]?.text ?? '{}');
-        expect(budgetsPayload.budgets).toBeDefined();
-        expect(Array.isArray(budgetsPayload.budgets)).toBe(true);
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (userPayload.error) {
+            throw new Error(JSON.stringify(userPayload.error));
+          }
 
-        // Test 3: Diagnostic info (tests diagnostic manager integration)
-        const diagResult = await registry.executeTool({
-          name: 'diagnostic_info',
-          accessToken: accessToken(),
-          arguments: {
-            include_server: true,
-            include_memory: false,
-            include_environment: false,
-            include_security: true,
-            include_cache: true,
-          },
-        });
-        const diagnostics = JSON.parse(diagResult.content?.[0]?.text ?? '{}');
-        expect(diagnostics.timestamp).toBeDefined();
-        expect(diagnostics.server).toBeDefined();
-        expect(diagnostics.server.name).toBe('ynab-mcp-server');
-        expect(diagnostics.security).toBeDefined();
-        expect(diagnostics.cache).toBeDefined();
+          expect(userPayload.user).toBeDefined();
+          expect(userPayload.user.id).toBeDefined();
+
+          // Test 2: Budget listing (tests resource-like functionality)
+          const budgetsResult = await registry.executeTool({
+            name: 'list_budgets',
+            accessToken: accessToken(),
+            arguments: {},
+          });
+          const budgetsPayload = JSON.parse(budgetsResult.content?.[0]?.text ?? '{}');
+
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (budgetsPayload.error) {
+            throw new Error(JSON.stringify(budgetsPayload.error));
+          }
+
+          expect(budgetsPayload.budgets).toBeDefined();
+          expect(Array.isArray(budgetsPayload.budgets)).toBe(true);
+
+          // Test 3: Diagnostic info (tests diagnostic manager integration)
+          const diagResult = await registry.executeTool({
+            name: 'diagnostic_info',
+            accessToken: accessToken(),
+            arguments: {
+              include_server: true,
+              include_memory: false,
+              include_environment: false,
+              include_security: true,
+              include_cache: true,
+            },
+          });
+          const diagnostics = JSON.parse(diagResult.content?.[0]?.text ?? '{}');
+
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (diagnostics.error) {
+            throw new Error(JSON.stringify(diagnostics.error));
+          }
+
+          expect(diagnostics.timestamp).toBeDefined();
+          expect(diagnostics.server).toBeDefined();
+          expect(diagnostics.server.name).toBe('ynab-mcp-server');
+          expect(diagnostics.security).toBeDefined();
+          expect(diagnostics.cache).toBeDefined();
+        }, ctx);
       },
     );
 
@@ -642,6 +700,12 @@ describeIntegration('YNABMCPServer', () => {
         arguments: {},
       });
       const payload = JSON.parse(result.content?.[0]?.text ?? '{}');
+
+      // If response contains an error, throw it so skipOnRateLimit can catch it
+      if (payload.error) {
+        throw new Error(JSON.stringify(payload.error));
+      }
+
       const firstBudget = payload.budgets?.[0];
       expect(firstBudget?.id).toBeDefined();
       return firstBudget.id as string;
@@ -696,121 +760,141 @@ describeIntegration('YNABMCPServer', () => {
     it(
       'should complete end-to-end workflow with real YNAB API after setting default budget',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        // Step 1: Verify error with no default budget for a tool that requires budget_id
-        let result = await registry.executeTool({
-          name: 'list_accounts',
-          accessToken: accessToken(),
-          arguments: {}, // No budget_id provided, should use default budget
-        });
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          // Step 1: Verify error with no default budget for a tool that requires budget_id
+          let result = await registry.executeTool({
+            name: 'list_accounts',
+            accessToken: accessToken(),
+            arguments: {}, // No budget_id provided, should use default budget
+          });
 
-        let payload = JSON.parse(result.content?.[0]?.text ?? '{}');
-        expect(payload.error).toBeDefined();
-        expect(payload.error.code).toBe('VALIDATION_ERROR');
+          let payload = JSON.parse(result.content?.[0]?.text ?? '{}');
+          expect(payload.error).toBeDefined();
+          expect(payload.error.code).toBe('VALIDATION_ERROR');
 
-        // Step 2: Get a valid budget ID and set as default
-        const budgetId = await getFirstAvailableBudgetId();
-        await registry.executeTool({
-          name: 'set_default_budget',
-          accessToken: accessToken(),
-          arguments: { budget_id: budgetId },
-        });
+          // Step 2: Get a valid budget ID and set as default
+          const budgetId = await getFirstAvailableBudgetId();
+          await registry.executeTool({
+            name: 'set_default_budget',
+            accessToken: accessToken(),
+            arguments: { budget_id: budgetId },
+          });
 
-        // Step 3: Verify list_accounts now works with real API using default budget
-        result = await registry.executeTool({
-          name: 'list_accounts',
-          accessToken: accessToken(),
-          arguments: {}, // No budget_id provided, should use default budget now
-        });
+          // Step 3: Verify list_accounts now works with real API using default budget
+          result = await registry.executeTool({
+            name: 'list_accounts',
+            accessToken: accessToken(),
+            arguments: {}, // No budget_id provided, should use default budget now
+          });
 
-        payload = JSON.parse(result.content?.[0]?.text ?? '{}');
-        expect(payload.error).toBeUndefined();
-        expect(payload).toHaveProperty('accounts');
-        expect(Array.isArray(payload.accounts)).toBe(true);
+          payload = JSON.parse(result.content?.[0]?.text ?? '{}');
+
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (payload.error) {
+            throw new Error(JSON.stringify(payload.error));
+          }
+
+          expect(payload.error).toBeUndefined();
+          expect(payload).toHaveProperty('accounts');
+          expect(Array.isArray(payload.accounts)).toBe(true);
+        }, ctx);
       },
     );
 
     it(
       'should handle real API errors properly with budget resolution',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        // Use a UUID that is valid format but doesn't exist in YNAB
-        const nonExistentButValidUuid = '123e4567-e89b-12d3-a456-426614174000';
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          // Use a UUID that is valid format but doesn't exist in YNAB
+          const nonExistentButValidUuid = '123e4567-e89b-12d3-a456-426614174000';
 
-        const result = await registry.executeTool({
-          name: 'list_accounts',
-          accessToken: accessToken(),
-          arguments: { budget_id: nonExistentButValidUuid },
-        });
+          const result = await registry.executeTool({
+            name: 'list_accounts',
+            accessToken: accessToken(),
+            arguments: { budget_id: nonExistentButValidUuid },
+          });
 
-        const payload = JSON.parse(result.content?.[0]?.text ?? '{}');
-        // Should get a YNAB API error (404) not a validation error
-        expect(payload.error).toBeDefined();
-        expect(payload.error.code).toBe(404); // YNAB NOT_FOUND error
+          const payload = JSON.parse(result.content?.[0]?.text ?? '{}');
+          // Should get a YNAB API error (404) not a validation error
+          expect(payload.error).toBeDefined();
+          expect(payload.error.code).toBe(404); // YNAB NOT_FOUND error
+        }, ctx);
       },
     );
 
     it(
       'should maintain performance with real API calls and budget resolution',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const budgetId = await getFirstAvailableBudgetId();
-        await registry.executeTool({
-          name: 'set_default_budget',
-          accessToken: accessToken(),
-          arguments: { budget_id: budgetId },
-        });
-
-        const startTime = Date.now();
-
-        // Make multiple concurrent calls that use budget resolution
-        const promises = [
-          registry.executeTool({
-            name: 'list_accounts',
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const budgetId = await getFirstAvailableBudgetId();
+          await registry.executeTool({
+            name: 'set_default_budget',
             accessToken: accessToken(),
-            arguments: {},
-          }),
-          registry.executeTool({
-            name: 'list_categories',
-            accessToken: accessToken(),
-            arguments: {},
-          }),
-          registry.executeTool({
-            name: 'list_payees',
-            accessToken: accessToken(),
-            arguments: {},
-          }),
-        ];
+            arguments: { budget_id: budgetId },
+          });
 
-        const results = await Promise.all(promises);
-        const endTime = Date.now();
+          const startTime = Date.now();
 
-        // All should succeed
-        results.forEach((result) => {
-          const payload = JSON.parse(result.content?.[0]?.text ?? '{}');
-          expect(payload.error).toBeUndefined();
-        });
+          // Make multiple concurrent calls that use budget resolution
+          const promises = [
+            registry.executeTool({
+              name: 'list_accounts',
+              accessToken: accessToken(),
+              arguments: {},
+            }),
+            registry.executeTool({
+              name: 'list_categories',
+              accessToken: accessToken(),
+              arguments: {},
+            }),
+            registry.executeTool({
+              name: 'list_payees',
+              accessToken: accessToken(),
+              arguments: {},
+            }),
+          ];
 
-        // Should complete reasonably quickly (accounting for network latency)
-        expect(endTime - startTime).toBeLessThan(10000); // 10 seconds max for 3 API calls
+          const results = await Promise.all(promises);
+          const endTime = Date.now();
+
+          // All should succeed
+          results.forEach((result) => {
+            const payload = JSON.parse(result.content?.[0]?.text ?? '{}');
+
+            // If response contains an error, throw it so skipOnRateLimit can catch it
+            if (payload.error) {
+              throw new Error(JSON.stringify(payload.error));
+            }
+
+            expect(payload.error).toBeUndefined();
+          });
+
+          // Should complete reasonably quickly (accounting for network latency)
+          expect(endTime - startTime).toBeLessThan(10000); // 10 seconds max for 3 API calls
+        }, ctx);
       },
     );
 
     it(
       'should handle security middleware with budget resolution errors',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        // Test that security middleware still works with budget resolution
-        const result = await registry.executeTool({
-          name: 'list_accounts',
-          accessToken: 'invalid-token',
-          arguments: {},
-        });
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          // Test that security middleware still works with budget resolution
+          const result = await registry.executeTool({
+            name: 'list_accounts',
+            accessToken: 'invalid-token',
+            arguments: {},
+          });
 
-        const payload = JSON.parse(result.content?.[0]?.text ?? '{}');
-        expect(payload.error).toBeDefined();
-        // Should get authentication error, not budget resolution error
-        expect(payload.error.code).toBe(401);
+          const payload = JSON.parse(result.content?.[0]?.text ?? '{}');
+          expect(payload.error).toBeDefined();
+          // Should get authentication error, not budget resolution error
+          expect(payload.error.code).toBe(401);
+        }, ctx);
       },
     );
   });

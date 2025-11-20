@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YNABMCPServer } from '../YNABMCPServer';
 import { AuthenticationError, ConfigurationError } from '../../types/index';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { skipOnRateLimit } from '../../__tests__/testUtils.js';
 // StdioServerTransport import removed as it's not used in tests
 
 /**
@@ -92,49 +93,55 @@ describeIntegration('Server Startup and Transport Integration', () => {
     it(
       'should validate YNAB token during startup',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const isValid = await server.validateToken();
-        expect(isValid).toBe(true);
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const isValid = await server.validateToken();
+          expect(isValid).toBe(true);
+        }, ctx);
       },
     );
 
     it(
       'should handle invalid token gracefully during startup',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const originalToken = process.env['YNAB_ACCESS_TOKEN'];
-        process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token-12345';
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const originalToken = process.env['YNAB_ACCESS_TOKEN'];
+          process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token-12345';
 
-        try {
-          const invalidServer = new YNABMCPServer(false);
-          await expect(invalidServer.validateToken()).rejects.toThrow(AuthenticationError);
-        } finally {
-          process.env['YNAB_ACCESS_TOKEN'] = originalToken;
-        }
+          try {
+            const invalidServer = new YNABMCPServer(false);
+            await expect(invalidServer.validateToken()).rejects.toThrow(AuthenticationError);
+          } finally {
+            process.env['YNAB_ACCESS_TOKEN'] = originalToken;
+          }
+        }, ctx);
       },
     );
 
     it(
       'should provide detailed error messages for authentication failures',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const originalToken = process.env['YNAB_ACCESS_TOKEN'];
-        process.env['YNAB_ACCESS_TOKEN'] = 'definitely-invalid-token';
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const originalToken = process.env['YNAB_ACCESS_TOKEN'];
+          process.env['YNAB_ACCESS_TOKEN'] = 'definitely-invalid-token';
 
-        try {
-          const invalidServer = new YNABMCPServer(false);
-          await expect(invalidServer.validateToken()).rejects.toThrow(AuthenticationError);
-
-          // Verify the error message contains relevant information
           try {
-            await invalidServer.validateToken();
-          } catch (error) {
-            expect(error).toBeInstanceOf(AuthenticationError);
-            expect(error.message).toContain('Token validation failed');
+            const invalidServer = new YNABMCPServer(false);
+            await expect(invalidServer.validateToken()).rejects.toThrow(AuthenticationError);
+
+            // Verify the error message contains relevant information
+            try {
+              await invalidServer.validateToken();
+            } catch (error) {
+              expect(error).toBeInstanceOf(AuthenticationError);
+              expect(error.message).toContain('Token validation failed');
+            }
+          } finally {
+            process.env['YNAB_ACCESS_TOKEN'] = originalToken;
           }
-        } finally {
-          process.env['YNAB_ACCESS_TOKEN'] = originalToken;
-        }
+        }, ctx);
       },
     );
   });
@@ -236,66 +243,74 @@ describeIntegration('Server Startup and Transport Integration', () => {
     it(
       'should attempt to connect with StdioServerTransport',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        // Mock console.error to capture startup messages
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-          // Mock implementation for testing
-        });
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          // Validate token first (this may skip if rate limited)
+          const isValid = await server.validateToken();
+          expect(isValid).toBe(true);
 
-        try {
-          // The run method should validate token and attempt stdio connection
-          await server.run();
+          // If we get here, token is valid - now test transport connection
+          const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+            // Mock implementation for testing
+          });
 
-          // In test environment, stdio connection will fail, but that's expected
-          // The important thing is that token validation succeeds
-        } catch (error) {
-          // Expected to fail on stdio connection in test environment
-          // But should not fail on authentication or configuration
-          expect(error).not.toBeInstanceOf(AuthenticationError);
-          expect(error).not.toBeInstanceOf(ConfigurationError);
-        }
+          try {
+            // The run method should attempt stdio connection
+            await server.run();
 
-        consoleSpy.mockRestore();
+            // In test environment, stdio connection will fail, but that's expected
+          } catch (error) {
+            // Expected to fail on stdio connection in test environment
+            // Token was already validated above, so this error should be transport-related
+            expect(error).not.toBeInstanceOf(ConfigurationError);
+          }
+
+          consoleSpy.mockRestore();
+        }, ctx);
       },
     );
 
     it(
       'should handle transport connection errors gracefully',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-          // Mock implementation for testing
-        });
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+            // Mock implementation for testing
+          });
 
-        try {
-          await server.run();
-        } catch (error) {
-          // Should handle transport errors without crashing
-          expect(error).toBeDefined();
-        }
+          try {
+            await server.run();
+          } catch (error) {
+            // Should handle transport errors without crashing
+            expect(error).toBeDefined();
+          }
 
-        consoleSpy.mockRestore();
+          consoleSpy.mockRestore();
+        }, ctx);
       },
     );
 
     it(
       'should validate token before attempting transport connection',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const validateTokenSpy = vi.spyOn(server, 'validateToken');
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-          // Mock implementation for testing
-        });
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const validateTokenSpy = vi.spyOn(server, 'validateToken');
+          const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+            // Mock implementation for testing
+          });
 
-        try {
-          await server.run();
-        } catch {
-          // Transport will fail in test environment, but token validation should be called
-          expect(validateTokenSpy).toHaveBeenCalled();
-        }
+          try {
+            await server.run();
+          } catch {
+            // Transport will fail in test environment, but token validation should be called
+            expect(validateTokenSpy).toHaveBeenCalled();
+          }
 
-        validateTokenSpy.mockRestore();
-        consoleSpy.mockRestore();
+          validateTokenSpy.mockRestore();
+          consoleSpy.mockRestore();
+        }, ctx);
       },
     );
   });
@@ -321,39 +336,43 @@ describeIntegration('Server Startup and Transport Integration', () => {
     it(
       'should report authentication errors clearly',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const originalToken = process.env['YNAB_ACCESS_TOKEN'];
-        process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token';
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const originalToken = process.env['YNAB_ACCESS_TOKEN'];
+          process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token';
 
-        try {
-          const server = new YNABMCPServer(false);
-          await expect(server.validateToken()).rejects.toThrow(AuthenticationError);
-        } finally {
-          process.env['YNAB_ACCESS_TOKEN'] = originalToken;
-        }
+          try {
+            const server = new YNABMCPServer(false);
+            await expect(server.validateToken()).rejects.toThrow(AuthenticationError);
+          } finally {
+            process.env['YNAB_ACCESS_TOKEN'] = originalToken;
+          }
+        }, ctx);
       },
     );
 
     it(
       'should handle startup errors without exposing sensitive information',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const originalToken = process.env['YNAB_ACCESS_TOKEN'];
-        process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token';
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const originalToken = process.env['YNAB_ACCESS_TOKEN'];
+          process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token';
 
-        try {
-          const server = new YNABMCPServer(false);
-          await expect(server.run()).rejects.toThrow();
-
-          // Verify error doesn't contain the actual token
           try {
-            await server.run();
-          } catch (error) {
-            expect(error.message).not.toContain('invalid-token');
+            const server = new YNABMCPServer(false);
+            await expect(server.run()).rejects.toThrow();
+
+            // Verify error doesn't contain the actual token
+            try {
+              await server.run();
+            } catch (error) {
+              expect(error.message).not.toContain('invalid-token');
+            }
+          } finally {
+            process.env['YNAB_ACCESS_TOKEN'] = originalToken;
           }
-        } finally {
-          process.env['YNAB_ACCESS_TOKEN'] = originalToken;
-        }
+        }, ctx);
       },
     );
   });
@@ -390,32 +409,34 @@ describeIntegration('Server Startup and Transport Integration', () => {
     it(
       'should complete full startup sequence successfully',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-          // Mock implementation for testing
-        });
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+            // Mock implementation for testing
+          });
 
-        try {
-          // Create server
-          const server = new YNABMCPServer(false);
-          expect(server).toBeDefined();
-
-          // Validate token
-          const isValid = await server.validateToken();
-          expect(isValid).toBe(true);
-
-          // Attempt to run (will fail on transport in test environment)
           try {
-            await server.run();
-          } catch {
-            // Expected to fail on stdio transport in test environment
-            // But authentication and initialization should succeed
-          }
+            // Create server
+            const server = new YNABMCPServer(false);
+            expect(server).toBeDefined();
 
-          console.warn('✅ Server startup workflow completed successfully');
-        } finally {
-          consoleSpy.mockRestore();
-        }
+            // Validate token
+            const isValid = await server.validateToken();
+            expect(isValid).toBe(true);
+
+            // Attempt to run (will fail on transport in test environment)
+            try {
+              await server.run();
+            } catch {
+              // Expected to fail on stdio transport in test environment
+              // But authentication and initialization should succeed
+            }
+
+            console.warn('✅ Server startup workflow completed successfully');
+          } finally {
+            consoleSpy.mockRestore();
+          }
+        }, ctx);
       },
     );
 
@@ -436,18 +457,20 @@ describeIntegration('Server Startup and Transport Integration', () => {
     it(
       'should fail fast on authentication errors',
       { meta: { tier: 'domain', domain: 'server' } },
-      async () => {
-        const originalToken = process.env['YNAB_ACCESS_TOKEN'];
-        process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token';
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const originalToken = process.env['YNAB_ACCESS_TOKEN'];
+          process.env['YNAB_ACCESS_TOKEN'] = 'invalid-token';
 
-        try {
-          const server = new YNABMCPServer(false);
+          try {
+            const server = new YNABMCPServer(false);
 
-          // Should fail on token validation, before transport setup
-          await expect(server.run()).rejects.toThrow(AuthenticationError);
-        } finally {
-          process.env['YNAB_ACCESS_TOKEN'] = originalToken;
-        }
+            // Should fail on token validation, before transport setup
+            await expect(server.run()).rejects.toThrow(AuthenticationError);
+          } finally {
+            process.env['YNAB_ACCESS_TOKEN'] = originalToken;
+          }
+        }, ctx);
       },
     );
   });

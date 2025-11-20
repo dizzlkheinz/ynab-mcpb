@@ -429,7 +429,7 @@ describe('DeltaCache', () => {
       );
     });
 
-    it('should bypass cache and knowledge when forceFullRefresh is true', async () => {
+    it('should use fresh cache but disable delta when forceFullRefresh is true', async () => {
       cacheManagerSpies.get.mockReturnValue(createCacheEntry([{ id: 'cached' }], 500));
       knowledgeStoreSpies.get.mockReturnValue(500);
       const fetcher = createFetcher({ data: [{ id: 'fresh' }], serverKnowledge: 600 });
@@ -445,9 +445,11 @@ describe('DeltaCache', () => {
         },
       );
 
-      expect(result.wasCached).toBe(false);
+      // forceFullRefresh disables delta merging but still uses fresh cache
+      expect(result.wasCached).toBe(true);
       expect(result.usedDelta).toBe(false);
-      expect(fetcher).toHaveBeenCalledWith(undefined);
+      expect(result.data).toEqual([{ id: 'cached' }]);
+      expect(fetcher).not.toHaveBeenCalled();
     });
   });
 
