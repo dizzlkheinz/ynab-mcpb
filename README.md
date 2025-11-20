@@ -1,8 +1,8 @@
 # YNAB MCP Server
 
 [![Download latest MCPB](https://img.shields.io/badge/Download-latest%20MCPB-blue?logo=github)](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
-[![npm version](https://img.shields.io/npm/v/@dizzlkheinz/ynab-mcp-server.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcp-server)
-[![npm downloads](https://img.shields.io/npm/dm/@dizzlkheinz/ynab-mcp-server.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcp-server)
+[![npm version](https://img.shields.io/npm/v/@dizzlkheinz/ynab-mcpb.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcpb)
+[![npm downloads](https://img.shields.io/npm/dm/@dizzlkheinz/ynab-mcpb.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcpb)
 
 [![Release](https://img.shields.io/github/v/release/dizzlkheinz/ynab-mcpb?sort=semver)](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
 [![Release MCPB](https://github.com/dizzlkheinz/ynab-mcpb/actions/workflows/release.yml/badge.svg)](https://github.com/dizzlkheinz/ynab-mcpb/actions/workflows/release.yml)
@@ -60,7 +60,7 @@ Add this to your Claude Desktop MCP settings file:
   "mcpServers": {
     "ynab": {
       "command": "npx",
-      "args": ["-y", "@dizzlkheinz/ynab-mcp-server"],
+      "args": ["-y", "@dizzlkheinz/ynab-mcpb"],
       "env": {
         "YNAB_ACCESS_TOKEN": "your-token-here"
       }
@@ -81,7 +81,7 @@ Add this to your Cline MCP settings:
   "mcpServers": {
     "ynab": {
       "command": "npx",
-      "args": ["-y", "@dizzlkheinz/ynab-mcp-server"],
+      "args": ["-y", "@dizzlkheinz/ynab-mcpb"],
       "env": {
         "YNAB_ACCESS_TOKEN": "your-token-here"
       }
@@ -98,7 +98,7 @@ Add this to your Cline MCP settings:
 For any MCP-compatible client, configure the server with:
 
 **Command:** `npx`
-**Arguments:** `["-y", "@dizzlkheinz/ynab-mcp-server"]`
+**Arguments:** `["-y", "@dizzlkheinz/ynab-mcpb"]`
 **Environment Variables:**
 
 - `YNAB_ACCESS_TOKEN`: Your YNAB Personal Access Token
@@ -133,7 +133,7 @@ Example:
   "mcpServers": {
     "ynab": {
       "command": "npx",
-      "args": ["-y", "@dizzlkheinz/ynab-mcp-server"],
+      "args": ["-y", "@dizzlkheinz/ynab-mcpb"],
       "env": {
         "YNAB_ACCESS_TOKEN": "your-token-here",
         "YNAB_EXPORT_PATH": "C:\\Users\\YourName\\Documents"
@@ -187,8 +187,8 @@ Want to contribute or build from source?
 Quick start for development:
 
 ```bash
-git clone <repository-url>
-cd ynab-mcp-server
+git clone https://github.com/dizzlkheinz/ynab-mcpb.git
+cd ynab-mcpb
 npm install
 npm run build
 npm test
