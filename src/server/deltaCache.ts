@@ -121,9 +121,23 @@ export class DeltaCache {
       return this.fetchWithoutDelta(cacheKey, budgetId, fetcher, options);
     }
 
-    const cachedEntry = options.forceFullRefresh
-      ? null
-      : this.cacheManager.get<DeltaCacheEntry<T>>(cacheKey);
+    // Always check cache, even with forceFullRefresh (which only disables delta merging)
+    const cachedEntry = this.cacheManager.get<DeltaCacheEntry<T>>(cacheKey);
+
+    // If forceFullRefresh is true but we have a fresh cache entry, return it
+    if (options.forceFullRefresh && cachedEntry) {
+      const age = Date.now() - cachedEntry.timestamp;
+      const isStale = age > cachedEntry.ttl;
+      if (!isStale) {
+        return {
+          data: cachedEntry.snapshot,
+          wasCached: true,
+          usedDelta: false,
+          serverKnowledge: cachedEntry.serverKnowledge,
+        };
+      }
+    }
+
     const lastKnowledge = options.forceFullRefresh ? undefined : this.knowledgeStore.get(cacheKey);
     const canUseDelta = Boolean(
       !options.forceFullRefresh && cachedEntry && lastKnowledge !== undefined,
@@ -259,16 +273,21 @@ export class DeltaCache {
   ): Promise<DeltaFetchResult<T>> {
     const effectiveTtl = this.assertFiniteTtl('fetchWithoutDelta', cacheKey, options.ttl);
 
-    const cachedEntry = options.forceFullRefresh
-      ? null
-      : this.cacheManager.get<DeltaCacheEntry<T>>(cacheKey);
+    // Always check cache, even with forceFullRefresh (which only disables delta merging)
+    const cachedEntry = this.cacheManager.get<DeltaCacheEntry<T>>(cacheKey);
+
+    // If we have a fresh cache entry, return it
     if (cachedEntry) {
-      return {
-        data: cachedEntry.snapshot,
-        wasCached: true,
-        usedDelta: false,
-        serverKnowledge: cachedEntry.serverKnowledge,
-      };
+      const age = Date.now() - cachedEntry.timestamp;
+      const isStale = age > cachedEntry.ttl;
+      if (!isStale || !options.forceFullRefresh) {
+        return {
+          data: cachedEntry.snapshot,
+          wasCached: true,
+          usedDelta: false,
+          serverKnowledge: cachedEntry.serverKnowledge,
+        };
+      }
     }
 
     const response = await fetcher(undefined);

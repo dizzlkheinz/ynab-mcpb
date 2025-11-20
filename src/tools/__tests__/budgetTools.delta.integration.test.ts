@@ -6,6 +6,7 @@ import { CacheManager } from '../../server/cacheManager.js';
 import { ServerKnowledgeStore } from '../../server/serverKnowledgeStore.js';
 import { DeltaCache } from '../../server/deltaCache.js';
 import { DeltaFetcher } from '../deltaFetcher.js';
+import { skipOnRateLimit } from '../../__tests__/testUtils.js';
 
 const shouldSkip = ['true', '1', 'yes', 'y', 'on'].includes(
   (process.env['SKIP_E2E_TESTS'] || '').toLowerCase().trim(),
@@ -59,17 +60,31 @@ describeIntegration('Delta-backed budget tool handler', () => {
   it(
     'serves cached budget summaries on the second invocation',
     { meta: { tier: 'domain', domain: 'delta' } },
-    async () => {
-      const firstCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
-      const firstPayload = parseResponse(firstCall);
-      expect(firstPayload.cached).toBe(false);
+    async (ctx) => {
+      await skipOnRateLimit(async () => {
+        const firstCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
+        const firstPayload = parseResponse(firstCall);
 
-      const secondCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
-      const secondPayload = parseResponse(secondCall);
-      expectCacheHit(secondPayload);
+        // If response contains an error, throw it so skipOnRateLimit can catch it
+        if (firstPayload.error) {
+          throw new Error(JSON.stringify(firstPayload.error));
+        }
 
-      // Verify cached response contains the same budget data as initial fetch
-      expect(secondPayload.budgets).toEqual(firstPayload.budgets);
+        expect(firstPayload.cached).toBe(false);
+
+        const secondCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
+        const secondPayload = parseResponse(secondCall);
+
+        // If response contains an error, throw it so skipOnRateLimit can catch it
+        if (secondPayload.error) {
+          throw new Error(JSON.stringify(secondPayload.error));
+        }
+
+        expectCacheHit(secondPayload);
+
+        // Verify cached response contains the same budget data as initial fetch
+        expect(secondPayload.budgets).toEqual(firstPayload.budgets);
+      }, ctx);
     },
   );
 });

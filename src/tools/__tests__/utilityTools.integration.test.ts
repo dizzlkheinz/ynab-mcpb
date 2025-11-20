@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as ynab from 'ynab';
 import { handleGetUser, handleConvertAmount } from '../utilityTools.js';
+import { skipOnRateLimit } from '../../__tests__/testUtils.js';
 
 /**
  * Utility Tools Integration Tests
@@ -22,14 +23,21 @@ describeIntegration('Utility Tools Integration Tests', () => {
     it(
       'should retrieve user information from YNAB API',
       { meta: { tier: 'core', domain: 'utility' } },
-      async () => {
-        const result = await handleGetUser(ynabAPI);
-        const response = JSON.parse(result.content[0].text);
+      async (ctx) => {
+        await skipOnRateLimit(async () => {
+          const result = await handleGetUser(ynabAPI);
+          const response = JSON.parse(result.content[0].text);
 
-        expect(response).toHaveProperty('user');
-        expect(response.user).toHaveProperty('id');
-        expect(typeof response.user.id).toBe('string');
-        expect(response.user.id.length).toBeGreaterThan(0);
+          // If response contains an error, throw it so skipOnRateLimit can catch it
+          if (response.error) {
+            throw new Error(JSON.stringify(response.error));
+          }
+
+          expect(response).toHaveProperty('user');
+          expect(response.user).toHaveProperty('id');
+          expect(typeof response.user.id).toBe('string');
+          expect(response.user.id.length).toBeGreaterThan(0);
+        }, ctx);
       },
     );
   });

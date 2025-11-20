@@ -112,7 +112,16 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
                 first_month: '2024-01-01',
                 last_month: '2024-12-01',
                 date_format: { format: 'MM/DD/YYYY' },
-                currency_format: { iso_code: 'USD', example_format: '$123.45' },
+                currency_format: {
+                  iso_code: 'USD',
+                  example_format: '$123.45',
+                  decimal_digits: 2,
+                  decimal_separator: '.',
+                  symbol_first: true,
+                  group_separator: ',',
+                  currency_symbol: '$',
+                  display_symbol: true,
+                },
               },
               {
                 id: 'budget-2',
@@ -121,7 +130,16 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
                 first_month: '2024-01-01',
                 last_month: '2024-12-01',
                 date_format: { format: 'MM/DD/YYYY' },
-                currency_format: { iso_code: 'USD', example_format: '$123.45' },
+                currency_format: {
+                  iso_code: 'USD',
+                  example_format: '$123.45',
+                  decimal_digits: 2,
+                  decimal_separator: '.',
+                  symbol_first: true,
+                  group_separator: ',',
+                  currency_symbol: '$',
+                  display_symbol: true,
+                },
               },
             ],
           },
@@ -148,7 +166,16 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
               first_month: '2024-01-01',
               last_month: '2024-12-01',
               date_format: { format: 'MM/DD/YYYY' },
-              currency_format: { iso_code: 'USD', example_format: '$123.45' },
+              currency_format: {
+                iso_code: 'USD',
+                example_format: '$123.45',
+                decimal_digits: 2,
+                decimal_separator: '.',
+                symbol_first: true,
+                group_separator: ',',
+                currency_symbol: '$',
+                display_symbol: true,
+              },
               accounts: [],
               payees: [],
               category_groups: [],
@@ -220,10 +247,10 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
                 type: 'checking',
                 on_budget: true,
                 closed: false,
-                note: null,
                 balance: 100000, // $100.00
                 cleared_balance: 95000,
                 uncleared_balance: 5000,
+                transfer_payee_id: 'payee-transfer-1',
               },
               {
                 id: 'account-2',
@@ -235,6 +262,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
                 balance: 500000, // $500.00
                 cleared_balance: 500000,
                 uncleared_balance: 0,
+                transfer_payee_id: 'payee-transfer-2',
               },
             ],
           },
@@ -281,10 +309,10 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
           type: 'checking',
           on_budget: true,
           closed: false,
-          note: null,
           balance: 0,
           cleared_balance: 0,
           uncleared_balance: 0,
+          transfer_payee_id: 'payee-transfer-3',
         };
 
         const mockCreateResponse = {
@@ -586,7 +614,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       'should handle complete category workflow',
       { meta: { tier: 'domain', domain: 'workflows' } },
       async () => {
-        const budgetId = 'test-budget';
+        const budgetId = TEST_BUDGET_UUID;
 
         // Mock categories response
         const mockCategories = {
@@ -596,6 +624,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
                 id: 'group-1',
                 name: 'Immediate Obligations',
                 hidden: false,
+                deleted: false,
                 categories: [
                   {
                     id: 'category-1',
@@ -605,7 +634,8 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
                     budgeted: 150000, // $150.00
                     activity: -150000,
                     balance: 0,
-                    goal_type: null,
+                    // goal_type omitted (undefined, not null)
+                    deleted: false,
                   },
                   {
                     id: 'category-2',
@@ -615,7 +645,8 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
                     budgeted: 10000, // $10.00
                     activity: -8500,
                     balance: 1500,
-                    goal_type: null,
+                    // goal_type omitted (undefined, not null)
+                    deleted: false,
                   },
                 ],
               },
@@ -863,7 +894,16 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
                 first_month: '2024-01-01',
                 last_month: '2024-12-01',
                 date_format: { format: 'MM/DD/YYYY' },
-                currency_format: { iso_code: 'USD', example_format: '$123.45' },
+                currency_format: {
+                iso_code: 'USD',
+                example_format: '$123.45',
+                decimal_digits: 2,
+                decimal_separator: '.',
+                symbol_first: true,
+                group_separator: ',',
+                currency_symbol: '$',
+                display_symbol: true,
+              },
               },
             ],
           },
@@ -1121,7 +1161,16 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
                 first_month: '2024-01-01',
                 last_month: '2024-12-01',
                 date_format: { format: 'MM/DD/YYYY' },
-                currency_format: { iso_code: 'USD', example_format: '$123.45' },
+                currency_format: {
+                iso_code: 'USD',
+                example_format: '$123.45',
+                decimal_digits: 2,
+                decimal_separator: '.',
+                symbol_first: true,
+                group_separator: ',',
+                currency_symbol: '$',
+                display_symbol: true,
+              },
               },
             ],
           },

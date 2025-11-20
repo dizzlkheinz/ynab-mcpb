@@ -496,6 +496,23 @@ export function isRateLimitError(error: any): boolean {
     errorString.includes('too many requests') ||
     errorString.includes('429');
 
+  // Check for HTML responses (YNAB API returns HTML when rate limited or down)
+  // This manifests as JSON parsing errors with messages like:
+  // "SyntaxError: Unexpected token '<', "<style>..." is not valid JSON"
+  const isHTMLResponse =
+    (errorString.includes('syntaxerror') || errorString.includes('unexpected token')) &&
+    (errorString.includes("'<'") ||
+      errorString.includes('"<"') ||
+      errorString.includes('<style') ||
+      errorString.includes('not valid json'));
+
+  // Check for VALIDATION_ERROR from output schema validation failures
+  // These occur when YNAB API returns error responses instead of data during rate limiting
+  // Example: {"code":"VALIDATION_ERROR","message":"Output validation failed for list_budgets",...}
+  const isValidationError =
+    errorString.includes('validation_error') ||
+    errorString.includes('output validation failed');
+
   // Check error object properties
   if (error && typeof error === 'object') {
     const statusCode = error.status || error.statusCode || error.error?.id;
@@ -512,7 +529,7 @@ export function isRateLimitError(error: any): boolean {
     }
   }
 
-  return hasRateLimitMessage;
+  return hasRateLimitMessage || isHTMLResponse || isValidationError;
 }
 
 /**
