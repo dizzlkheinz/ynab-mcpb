@@ -16,12 +16,10 @@ import * as ynab from 'ynab';
 import {
   AuthenticationError,
   ConfigurationError,
-  ServerConfig,
-  ErrorHandler,
-  YNABErrorCode,
-  ValidationError,
-} from '../types/index.js';
-import { createErrorHandler } from './errorHandler.js';
+} from '../utils/errors.js';
+import { YNABErrorCode, ValidationError } from '../types/index.js';
+import { config } from './config.js';
+import { createErrorHandler, ErrorHandler } from './errorHandler.js';
 import { BudgetResolver } from './budgetResolver.js';
 import { SecurityMiddleware, withSecurityWrapper } from './securityMiddleware.js';
 import { handleListBudgets, handleGetBudget, GetBudgetSchema } from '../tools/budgetTools.js';
@@ -87,7 +85,6 @@ import {
   type DefaultArgumentResolver,
   type ToolExecutionPayload,
 } from './toolRegistry.js';
-import { validateEnvironment } from './config.js';
 import { ResourceManager } from './resources.js';
 import { PromptManager } from './prompts.js';
 import { DiagnosticManager } from './diagnostics.js';
@@ -134,7 +131,6 @@ import {
 export class YNABMCPServer {
   private server: Server;
   private ynabAPI: ynab.API;
-  private config: ServerConfig;
   private exitOnError: boolean;
   private defaultBudgetId: string | undefined;
   private serverVersion: string;
@@ -149,14 +145,11 @@ export class YNABMCPServer {
 
   constructor(exitOnError: boolean = true) {
     this.exitOnError = exitOnError;
-    // Validate environment variables
-    this.config = validateEnvironment();
-    if (this.config.defaultBudgetId !== undefined) {
-      this.defaultBudgetId = this.config.defaultBudgetId;
-    }
+    // Config is now imported and validated at startup
+    this.defaultBudgetId = process.env.YNAB_DEFAULT_BUDGET_ID;
 
     // Initialize YNAB API
-    this.ynabAPI = new ynab.API(this.config.accessToken);
+    this.ynabAPI = new ynab.API(config.YNAB_ACCESS_TOKEN);
 
     // Determine server version (prefer package.json)
     this.serverVersion = this.readPackageVersion() ?? '0.0.0';
@@ -217,7 +210,7 @@ export class YNABMCPServer {
         },
       },
       validateAccessToken: (token: string) => {
-        const expected = this.config.accessToken.trim();
+        const expected = config.YNAB_ACCESS_TOKEN.trim();
         const provided = typeof token === 'string' ? token.trim() : '';
         if (!provided) {
           throw this.errorHandler.createYNABError(
@@ -345,7 +338,7 @@ export class YNABMCPServer {
         minifyOverride?: boolean;
       } = {
         name: request.params.name,
-        accessToken: this.config.accessToken,
+        accessToken: config.YNAB_ACCESS_TOKEN,
         arguments: sanitizedArgs ?? {},
       };
 

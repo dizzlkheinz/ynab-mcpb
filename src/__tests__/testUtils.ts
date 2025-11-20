@@ -510,8 +510,7 @@ export function isRateLimitError(error: any): boolean {
   // These occur when YNAB API returns error responses instead of data during rate limiting
   // Example: {"code":"VALIDATION_ERROR","message":"Output validation failed for list_budgets",...}
   const isValidationError =
-    errorString.includes('validation_error') ||
-    errorString.includes('output validation failed');
+    errorString.includes('validation_error') || errorString.includes('output validation failed');
 
   // Check error object properties
   if (error && typeof error === 'object') {

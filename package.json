@@ -72,7 +72,8 @@
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.1",
     "ynab": "^2.9.0",
-    "zod": "^4.1.11"
+    "zod": "^4.1.11",
+    "zod-validation-error": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",

@@ -8,6 +8,7 @@ import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.j
 import type { DeltaFetcher } from './deltaFetcher.js';
 import type { DeltaCache } from '../server/deltaCache.js';
 import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
+import { CacheKeys } from '../server/cacheKeys.js';
 import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.js';
 
 /**
@@ -139,7 +140,7 @@ export async function handleGetAccount(
     async () => {
       // Use enhanced CacheManager wrap method
       const cacheKey = CacheManager.generateKey(
-        'account',
+        CacheKeys.ACCOUNTS,
         'get',
         params.budget_id,
         params.account_id,
@@ -248,10 +249,10 @@ export async function handleCreateAccount(
       const account = response.data.account;
 
       // Invalidate accounts list cache after successful account creation
-      const accountsListCacheKey = CacheManager.generateKey('accounts', 'list', params.budget_id);
+      const accountsListCacheKey = CacheManager.generateKey(CacheKeys.ACCOUNTS, 'list', params.budget_id);
       cacheManager.delete(accountsListCacheKey);
 
-      deltaCache.invalidate(params.budget_id, 'accounts');
+      deltaCache.invalidate(params.budget_id, CacheKeys.ACCOUNTS);
 
       return {
         content: [

@@ -9,6 +9,7 @@ import { executeReconciliation, type AccountSnapshot } from '../tools/reconcilia
 import type { ReconciliationAnalysis } from '../tools/reconciliation/types.js';
 import type { ReconcileAccountRequest } from '../tools/reconciliation/index.js';
 import type * as ynab from 'ynab';
+import { SecurityErrorCode } from '../server/errorHandler.js';
 
 /**
  * Helper function to validate tool responses and extract array data
@@ -26,7 +27,8 @@ function validateToolResponse<T>(result: any, fieldSelector: (data: any) => T[] 
   const hasError = parsed.error || parsed.data?.error;
   if (hasError) {
     throw new Error(
-      `Tool returned error: ${JSON.stringify(hasError, null, 2)}\nFull response: ${JSON.stringify(parsed, null, 2)}`,
+      `Tool returned error: ${JSON.stringify(hasError, null, 2)}
+Full response: ${JSON.stringify(parsed, null, 2)}`,
     );
   }
 
@@ -375,11 +377,16 @@ describe('YNAB MCP Server - Performance Tests', () => {
   let mockYnabAPI: any;
 
   beforeEach(async () => {
-    process.env['YNAB_ACCESS_TOKEN'] = 'test-token';
+    // Ensure YNAB_ACCESS_TOKEN is set for all tests, even if just a placeholder
+    process.env['YNAB_ACCESS_TOKEN'] = 'test-token-performance';
+    // Clear modules to ensure fresh import of server with new env var
+    vi.resetModules();
+    const { YNABMCPServer } = await import('../server/YNABMCPServer.js');
     server = new YNABMCPServer();
 
+    // Mock the YNAB API constructor to ensure it receives the correct access token
     const { API } = await import('ynab');
-    mockYnabAPI = new (API as any)();
+    mockYnabAPI = new (API as any)('test-token-performance');
 
     vi.clearAllMocks();
     // Clear cache to ensure mocks are called in each test
@@ -645,8 +652,8 @@ describe('YNAB MCP Server - Performance Tests', () => {
       expect(parsed[0]).toBeDefined(); // Valid call should succeed
       const firstError = parsed[1].error ?? parsed[1].data?.error;
       const secondError = parsed[2].error ?? parsed[2].data?.error;
-      expect(firstError?.code).toBe('VALIDATION_ERROR'); // Invalid calls should fail
-      expect(secondError?.code).toBe('VALIDATION_ERROR');
+      expect(firstError?.code).toBe(SecurityErrorCode.VALIDATION_ERROR); // Invalid calls should fail
+      expect(secondError?.code).toBe(SecurityErrorCode.VALIDATION_ERROR);
       expect(totalTime).toBeLessThan(1000); // Validation should be fast
     });
   });

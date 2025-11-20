@@ -6,6 +6,7 @@ import { responseFormatter } from '../server/responseFormatter.js';
 import { milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
 import type { DeltaFetcher } from './deltaFetcher.js';
+import { CacheKeys } from '../server/cacheKeys.js';
 import { resolveDeltaFetcherArgs } from './deltaSupport.js';
 
 /**
@@ -42,7 +43,7 @@ export async function handleGetMonth(
   return await withToolErrorHandling(
     async () => {
       // Always use cache
-      const cacheKey = CacheManager.generateKey('month', 'get', params.budget_id, params.month);
+      const cacheKey = CacheManager.generateKey(CacheKeys.MONTHS, 'get', params.budget_id, params.month);
       const wasCached = cacheManager.has(cacheKey);
       const month = await cacheManager.wrap<ynab.MonthDetail>(cacheKey, {
         ttl: CACHE_TTLS.MONTHS,

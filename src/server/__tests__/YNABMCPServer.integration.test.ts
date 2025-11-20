@@ -520,7 +520,9 @@ describeIntegration('YNABMCPServer', () => {
           expect(diagnostics.cache.evictions).toEqual(expect.any(Number));
           expect(diagnostics.cache.maxEntries).toEqual(expect.any(Number));
           expect(diagnostics.cache.hitRate).toEqual(expect.stringMatching(/^\d+\.\d{2}%$/));
-          expect(diagnostics.cache.performance_summary).toEqual(expect.stringContaining('Hit rate'));
+          expect(diagnostics.cache.performance_summary).toEqual(
+            expect.stringContaining('Hit rate'),
+          );
 
           // lastCleanup can be null or a timestamp
           expect(

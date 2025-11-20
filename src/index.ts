@@ -4,7 +4,8 @@
 import 'dotenv/config';
 
 import { YNABMCPServer } from './server/YNABMCPServer.js';
-import { AuthenticationError, ConfigurationError } from './types/index.js';
+import { AuthenticationError, ConfigurationError, ValidationError } from './utils/errors.js';
+import { SecurityErrorCode } from './server/errorHandler.js';
 
 /**
  * Global server instance for graceful shutdown
@@ -36,13 +37,17 @@ async function gracefulShutdown(signal: string): Promise<void> {
  * Enhanced error reporting with specific error types
  */
 function reportError(error: unknown): void {
-  if (error instanceof ConfigurationError) {
-    console.error('❌ Configuration Error:', error.message);
-    console.error('Please check your environment variables and try again.');
+  if (error instanceof ValidationError) {
+    console.error('❌ Validation Error:', error.message);
+    console.error('Please check your inputs and try again.');
     process.exit(1);
   } else if (error instanceof AuthenticationError) {
     console.error('❌ Authentication Error:', error.message);
     console.error('Please verify your YNAB access token and try again.');
+    process.exit(1);
+  } else if (error instanceof ConfigurationError) {
+    console.error('❌ Configuration Error:', error.message);
+    console.error('Please check your environment variables and try again.');
     process.exit(1);
   } else if (error instanceof Error) {
     console.error('❌ Server Error:', error.message);
@@ -57,38 +62,11 @@ function reportError(error: unknown): void {
 }
 
 /**
- * Server startup validation
- */
-function validateStartupEnvironment(): void {
-  // Check Node.js version
-  const nodeVersion = process.version;
-  const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0] || '0');
-
-  if (majorVersion < 18) {
-    console.error('❌ Node.js version 18 or higher is required');
-    console.error(`Current version: ${nodeVersion}`);
-    process.exit(1);
-  }
-
-  // Validate environment
-  if (!process.env['YNAB_ACCESS_TOKEN']) {
-    console.error('❌ YNAB_ACCESS_TOKEN environment variable is required');
-    console.error('Please set your YNAB Personal Access Token and try again.');
-    process.exit(1);
-  }
-
-  console.error('✅ Environment validation passed');
-}
-
-/**
  * Main entry point for the YNAB MCP Server
  */
 async function main(): Promise<void> {
   try {
     console.error('🚀 Starting YNAB MCP Server...');
-
-    // Validate startup environment
-    validateStartupEnvironment();
 
     // Create and start server
     serverInstance = new YNABMCPServer();

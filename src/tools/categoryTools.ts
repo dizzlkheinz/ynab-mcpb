@@ -8,6 +8,7 @@ import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.j
 import type { DeltaFetcher } from './deltaFetcher.js';
 import type { DeltaCache } from '../server/deltaCache.js';
 import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
+import { CacheKeys } from '../server/cacheKeys.js';
 import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.js';
 
 /**
@@ -158,7 +159,7 @@ export async function handleGetCategory(
     async () => {
       // Use enhanced CacheManager wrap method
       const cacheKey = CacheManager.generateKey(
-        'category',
+        CacheKeys.CATEGORIES,
         'get',
         params.budget_id,
         params.category_id,
@@ -271,9 +272,9 @@ export async function handleUpdateCategory(
     const category = response.data.category;
 
     // Invalidate category-related caches after successful update
-    const categoriesListCacheKey = CacheManager.generateKey('categories', 'list', params.budget_id);
+    const categoriesListCacheKey = CacheManager.generateKey(CacheKeys.CATEGORIES, 'list', params.budget_id);
     const specificCategoryCacheKey = CacheManager.generateKey(
-      'category',
+      CacheKeys.CATEGORIES,
       'get',
       params.budget_id,
       params.category_id,
@@ -282,9 +283,9 @@ export async function handleUpdateCategory(
     cacheManager.delete(specificCategoryCacheKey);
 
     // Invalidate month-related caches as category budget changes affect month data
-    const monthsListCacheKey = CacheManager.generateKey('months', 'list', params.budget_id);
+    const monthsListCacheKey = CacheManager.generateKey(CacheKeys.MONTHS, 'list', params.budget_id);
     const currentMonthCacheKey = CacheManager.generateKey(
-      'month',
+      CacheKeys.MONTHS,
       'get',
       params.budget_id,
       currentMonth,
@@ -292,8 +293,8 @@ export async function handleUpdateCategory(
     cacheManager.delete(monthsListCacheKey);
     cacheManager.delete(currentMonthCacheKey);
 
-    deltaCache.invalidate(params.budget_id, 'categories');
-    deltaCache.invalidate(params.budget_id, 'months');
+    deltaCache.invalidate(params.budget_id, CacheKeys.CATEGORIES);
+    deltaCache.invalidate(params.budget_id, CacheKeys.MONTHS);
     const serverKnowledge = response.data.server_knowledge;
     if (typeof serverKnowledge === 'number') {
       knowledgeStore.update(categoriesListCacheKey, serverKnowledge);
@@ -364,3 +365,4 @@ function handleCategoryError(error: unknown, defaultMessage: string): CallToolRe
     ],
   };
 }
+
