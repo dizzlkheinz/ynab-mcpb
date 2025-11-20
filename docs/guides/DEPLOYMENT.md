@@ -104,15 +104,15 @@ docker run -d \
 
 ### Option 3: Claude Desktop Integration
 
-1. Build the .dxt package:
+1. Build the .mcpb package:
 ```bash
-npm run package:dxt
+npm run package:mcpb
 ```
 
 2. Extract and configure:
 ```bash
-# Extract the .dxt file
-Expand-Archive ynab-mcp-server-1.0.0.dxt
+# Extract the .mcpb file
+Expand-Archive ynab-mcp-server-1.0.0.mcpb
 
 # Add to Claude Desktop MCP configuration
 ```

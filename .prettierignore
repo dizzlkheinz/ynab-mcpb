@@ -1,7 +1,7 @@
 dist/
 node_modules/
 coverage/
-*.dxt
+*.mcpb
 *.log
 .git/
 .github/

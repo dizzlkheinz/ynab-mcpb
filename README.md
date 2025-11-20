@@ -1,20 +1,20 @@
 # YNAB MCP Server
 
-[![Download latest DXT](https://img.shields.io/badge/Download-latest%20DXT-blue?logo=github)](https://github.com/dizzlkheinz/mcp-for-ynab/releases/latest)
+[![Download latest MCPB](https://img.shields.io/badge/Download-latest%20MCPB-blue?logo=github)](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
 [![npm version](https://img.shields.io/npm/v/@dizzlkheinz/ynab-mcp-server.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcp-server)
 [![npm downloads](https://img.shields.io/npm/dm/@dizzlkheinz/ynab-mcp-server.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcp-server)
 
-[![Release](https://img.shields.io/github/v/release/dizzlkheinz/mcp-for-ynab?sort=semver)](https://github.com/dizzlkheinz/mcp-for-ynab/releases/latest)
-[![Release DXT](https://github.com/dizzlkheinz/mcp-for-ynab/actions/workflows/release.yml/badge.svg)](https://github.com/dizzlkheinz/mcp-for-ynab/actions/workflows/release.yml)
-[![Downloads](https://img.shields.io/github/downloads/dizzlkheinz/mcp-for-ynab/total.svg)](https://github.com/dizzlkheinz/mcp-for-ynab/releases)
+[![Release](https://img.shields.io/github/v/release/dizzlkheinz/ynab-mcpb?sort=semver)](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
+[![Release MCPB](https://github.com/dizzlkheinz/ynab-mcpb/actions/workflows/release.yml/badge.svg)](https://github.com/dizzlkheinz/ynab-mcpb/actions/workflows/release.yml)
+[![Downloads](https://img.shields.io/github/downloads/dizzlkheinz/ynab-mcpb/total.svg)](https://github.com/dizzlkheinz/ynab-mcpb/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io)
 [![lint: eslint](https://img.shields.io/badge/lint-eslint-green.svg)](https://eslint.org)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-brightgreen.svg)](#)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6.svg)](https://www.typescriptlang.org)
 [![SemVer](https://img.shields.io/badge/SemVer-0.y.z-yellow.svg)](https://semver.org/)
-[![Issues](https://img.shields.io/github/issues/dizzlkheinz/mcp-for-ynab)](https://github.com/dizzlkheinz/mcp-for-ynab/issues)
-[![PRs](https://img.shields.io/github/issues-pr/dizzlkheinz/mcp-for-ynab)](https://github.com/dizzlkheinz/mcp-for-ynab/pulls)
+[![Issues](https://img.shields.io/github/issues/dizzlkheinz/ynab-mcpb)](https://github.com/dizzlkheinz/ynab-mcpb/issues)
+[![PRs](https://img.shields.io/github/issues-pr/dizzlkheinz/ynab-mcpb)](https://github.com/dizzlkheinz/ynab-mcpb/pulls)
 
 Connect your YNAB budget to Claude Desktop and other AI assistants using the Model Context Protocol (MCP). Ask questions about your spending, create transactions, reconcile accounts, and manage your budget using natural language.
 
@@ -46,7 +46,7 @@ All monetary amounts are automatically converted to dollars (YNAB stores them in
 
 #### Option A: Download the Extension
 
-1. Download the latest `.dxt` file from [Releases](https://github.com/dizzlkheinz/mcp-for-ynab/releases/latest)
+1. Download the latest `.mcpb` file from [Releases](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
 2. Drag and drop it into Claude Desktop
 3. Paste your YNAB Access Token when prompted
 4. Restart Claude Desktop
@@ -147,7 +147,7 @@ For advanced configuration options (caching, output formatting), see the [Config
 
 ## What's Available
 
-The server gives Claude access to 28 tools organized by function. You don't need to know the tool names - just ask Claude in natural language and it will use the right tools.
+The server gives Claude access to 30 tools organized by function. You don't need to know the tool names - just ask Claude in natural language and it will use the right tools.
 
 **Budget & Account Info**
 
@@ -174,7 +174,7 @@ For the complete list with technical details, see the [API Reference](docs/refer
 
 - **[Troubleshooting Guide](docs/reference/TROUBLESHOOTING.md)** - Common issues and solutions
 - **[Full Documentation](docs/README.md)** - Complete guides and API reference
-- **[GitHub Issues](https://github.com/dizzlkheinz/mcp-for-ynab/issues)** - Report bugs or request features
+- **[GitHub Issues](https://github.com/dizzlkheinz/ynab-mcpb/issues)** - Report bugs or request features
 
 ## For Developers
 
@@ -202,7 +202,7 @@ Your YNAB access token is stored securely and never logged. All communication wi
 
 Contributions welcome! Please:
 
-1. [Open an issue](https://github.com/dizzlkheinz/mcp-for-ynab/issues) to discuss your idea
+1. [Open an issue](https://github.com/dizzlkheinz/ynab-mcpb/issues) to discuss your idea
 2. Fork the repository and make your changes
 3. Add tests for new features
 4. Submit a pull request

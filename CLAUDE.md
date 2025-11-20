@@ -46,8 +46,8 @@ npm run format:check       # Check formatting without modifying files
 ### Packaging & Distribution
 
 ```bash
-npm run package:dxt        # Build production DXT package for Claude Desktop
-npm run generate:dxt       # Generate DXT file from built bundle
+npm run package:mcpb        # Build production MCPB package for Claude Desktop
+npm run generate:mcpb       # Generate MCPB file from built bundle
 npm run bundle             # Bundle with esbuild (development)
 npm run bundle:prod        # Bundle with minification (production)
 ```
@@ -381,17 +381,17 @@ Service modules (like diagnostics, resources, prompts) follow a pattern:
 3. Register in `YNABMCPServer` constructor
 4. Add tests in `src/server/__tests__/`
 
-## DXT Packaging for Claude Desktop
+## MCPB Packaging for Claude Desktop
 
-The project builds a `.dxt` file (MCP extension for Claude Desktop):
+The project builds a `.mcpb` file (MCP extension for Claude Desktop):
 
 ```bash
-npm run package:dxt
+npm run package:mcpb
 ```
 
-Output: `dist/ynab-mcp-server-<version>.dxt`
+Output: `dist/ynab-mcp-server-<version>.mcpb`
 
-The DXT includes:
+The MCPB includes:
 
 - Bundled Node.js code (single file, no node_modules)
 - Manifest with extension metadata

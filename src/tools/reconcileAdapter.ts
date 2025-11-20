@@ -14,7 +14,7 @@ import {
 
 const OUTPUT_VERSION = '2.0';
 const SCHEMA_URL =
-  'https://raw.githubusercontent.com/dizzlkheinz/ynab-mcp-dxt/master/docs/schemas/reconciliation-v2.json';
+  'https://raw.githubusercontent.com/dizzlkheinz/ynab-mcp-mcpb/master/docs/schemas/reconciliation-v2.json';
 
 interface AdapterOptions {
   accountName?: string;

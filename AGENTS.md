@@ -10,7 +10,7 @@ Documentation stays in `docs/`, automation in `scripts/`, and compiled output in
 
 - `npm run dev` - incremental TypeScript build while coding.
 - `npm run build` - clean `dist/`, compile, then esbuild-bundle.
-- `npm run build:prod` / `npm run package:dxt` - production bundle with verification and DXT packing.
+- `npm run build:prod` / `npm run package:mcpb` - production bundle with verification and MCPB packing.
 - `npm start` or `npm run start:mcp` - launch compiled server with `.env`.
 - `npm run validate-env` - confirm required secrets before tool runs.
 

@@ -1,6 +1,6 @@
 {
   "name": "@dizzlkheinz/ynab-mcp-server",
-  "version": "0.11.3",
+  "version": "0.12.0",
   "description": "Model Context Protocol server for YNAB (You Need A Budget) integration",
   "main": "dist/index.js",
   "type": "module",
@@ -10,7 +10,7 @@
   "scripts": {
     "prebuild": "npm run clean",
     "build": "npm run build:prod",
-    "postbuild": "node scripts/run-generate-dxt.js",
+    "postbuild": "node scripts/run-generate-mcpb.js",
     "build:dev": "npm run clean && tsc && npm run bundle",
     "build:no-lint": "npm run clean && tsc && npm run bundle:prod",
     "build:prod": "npm run lint:fix && npm run prebuild && tsc --project tsconfig.prod.json && npm run bundle:prod && npm run verify-build",
@@ -48,10 +48,10 @@
     "test:comprehensive": "tsx src/__tests__/testRunner.ts",
     "test:all": "npm run test:unit && npm run test:integration:core && npm run test:e2e && npm run test:performance",
     "filter-test-results": "node -e \"const fs = require('fs'); try { const results = JSON.parse(fs.readFileSync('test-results.json', 'utf-8')); results.testResults = results.testResults.filter(r => r.status === 'fail'); fs.writeFileSync('test-results.json', JSON.stringify(results, null, 2)); } catch (e) { console.error('Failed to filter test results:', e); process.exit(1); }\"",
-    "generate:dxt": "node scripts/run-generate-dxt.js",
+    "generate:mcpb": "node scripts/run-generate-mcpb.js",
     "bundle": "node esbuild.config.mjs",
     "bundle:prod": "node esbuild.config.mjs --production",
-    "package:dxt": "npm run build:prod && npm run generate:dxt",
+    "package:mcpb": "npm run build:prod && npm run generate:mcpb",
     "pr:description": "node scripts/create-pr-description.js",
     "pr:create": "npm run pr:description && gh pr create --body-file .pr-description.md",
     "prepare": "npm run build:prod",
@@ -95,11 +95,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dizzlkheinz/ynab-mcp-dxt.git"
+    "url": "git+https://github.com/dizzlkheinz/ynab-mcpb.git"
   },
   "types": "./dist/index.d.ts",
   "bugs": {
-    "url": "https://github.com/dizzlkheinz/ynab-mcp-dxt/issues"
+    "url": "https://github.com/dizzlkheinz/ynab-mcpb/issues"
   },
-  "homepage": "https://github.com/dizzlkheinz/ynab-mcp-dxt#readme"
+  "homepage": "https://github.com/dizzlkheinz/ynab-mcpb#readme"
 }

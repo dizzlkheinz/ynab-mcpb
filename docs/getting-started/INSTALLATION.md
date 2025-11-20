@@ -8,7 +8,7 @@ Complete installation instructions for the YNAB MCP Server.
 - [Getting Your YNAB Access Token](#getting-your-ynab-access-token)
 - [Installation Options](#installation-options)
   - [Option A: From Source](#option-a-from-source)
-  - [Option B: From Release DXT](#option-b-from-release-dxt)
+  - [Option B: From Release MCPB](#option-b-from-release-mcpb)
 - [Claude Desktop Integration](#claude-desktop-integration)
 - [Verification](#verification)
 - [Troubleshooting](#troubleshooting)
@@ -117,18 +117,18 @@ npm start
 
 The server should start successfully and be ready to accept MCP connections.
 
-### Option B: From Release DXT
+### Option B: From Release MCPB
 
-Install a pre-built DXT package from GitHub Releases (recommended for most users).
+Install a pre-built MCPB package from GitHub Releases (recommended for most users).
 
-#### 1. Download the DXT
+#### 1. Download the MCPB
 
-Visit the [Latest Release](https://github.com/dizzlkheinz/mcp-for-ynab/releases/latest) and download the `.dxt` file.
+Visit the [Latest Release](https://github.com/dizzlkheinz/mcp-for-ynab/releases/latest) and download the `.mcpb` file.
 
 #### 2. Install in Claude Desktop
 
 1. Open Claude Desktop
-2. Drag and drop the `.dxt` file into the Claude Desktop window
+2. Drag and drop the `.mcpb` file into the Claude Desktop window
 3. Follow the installation prompts
 4. The extension will be installed automatically
 
@@ -161,14 +161,14 @@ If you built from source, configure Claude Desktop to use the local installation
   "name": "ynab-mcp-server",
   "command": "node",
   "args": ["dist/index.js"],
-  "cwd": "/absolute/path/to/ynab-mcp-dxt",
+  "cwd": "/absolute/path/to/ynab-mcp-mcpb",
   "env": {
     "YNAB_ACCESS_TOKEN": "your_token_here"
   }
 }
 ```
 
-**Important**: Replace `/absolute/path/to/ynab-mcp-dxt` with the actual absolute path to your installation directory.
+**Important**: Replace `/absolute/path/to/ynab-mcp-mcpb` with the actual absolute path to your installation directory.
 
 ### Verify Configuration
 

@@ -138,19 +138,20 @@ api_key.txt
 local/
 
 # Temporary build artifacts
-*.dxt
+*.mcpb
 manifest.json
 test-extract/
 
 # Old implementations
 ynab-mcp-python-old/
-ynab-mcp-dxt-updated/
+ynab-mcp-mcpb-updated/
 
 # IDE specific
 .kiro/
 
 # Claude Code specific
 .claude/
+.chunkhound/
 
 # MCP configuration (local development)
 .mcp.json

@@ -139,7 +139,7 @@
 - ✅ TypeScript type checking passes
 - ✅ All 1078 unit tests passing (47 test files)
 - ✅ Build successful
-- ✅ DXT package generated: `ynab-mcp-server-0.11.2.dxt`
+- ✅ MCPB package generated: `ynab-mcp-server-0.11.2.mcpb`
 - ✅ Bug fix release v0.11.2 tagged and pushed
 
 ## 🎯 Testing Summary

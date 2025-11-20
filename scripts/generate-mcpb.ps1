@@ -1,10 +1,10 @@
-# PowerShell script to generate a .dxt file using the official Anthropic DXT CLI
+# PowerShell script to generate a .mcpb file using the official Anthropic MCPB CLI
 
 param(
     [string]$OutputDir = "dist"
 )
 
-Write-Host "Generating YNAB MCP Server .dxt package using official CLI..." -ForegroundColor Green
+Write-Host "Generating YNAB MCP Server .mcpb package using official CLI..." -ForegroundColor Green
 
 # Configuration
 $PackageJson = Get-Content "package.json" | ConvertFrom-Json
@@ -21,15 +21,15 @@ if (-not (Test-Path "dist/index.js")) {
     }
 }
 
-# Check if official DXT CLI is installed
+# Check if official MCPB CLI is installed
 try {
-    $dxtVersion = & dxt --version
-    Write-Host "Using DXT CLI version: $dxtVersion" -ForegroundColor Green
+    $mcpbVersion = & mcpb --version
+    Write-Host "Using MCPB CLI version: $mcpbVersion" -ForegroundColor Green
 } catch {
-    Write-Host "DXT CLI not found. Installing..." -ForegroundColor Yellow
-    npm install -g @anthropic-ai/dxt
+    Write-Host "MCPB CLI not found. Installing..." -ForegroundColor Yellow
+    npm install -g @anthropic-ai/mcpb
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Failed to install DXT CLI!" -ForegroundColor Red
+        Write-Host "Failed to install MCPB CLI!" -ForegroundColor Red
         exit 1
     }
 }
@@ -37,7 +37,7 @@ try {
 # Ensure manifest.json exists and is valid
 if (-not (Test-Path "manifest.json")) {
     Write-Host "manifest.json not found. Creating one..." -ForegroundColor Yellow
-    & dxt init -y
+    & mcpb init -y
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Failed to create manifest!" -ForegroundColor Red
         exit 1
@@ -59,20 +59,20 @@ if ($Manifest.version -ne $Version) {
 
 # Validate the manifest
 Write-Host "Validating manifest..." -ForegroundColor Yellow
-& dxt validate manifest.json
+& mcpb validate manifest.json
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Manifest validation failed!" -ForegroundColor Red
     exit 1
 }
 
-# Pack the DXT using official CLI
-Write-Host "Packing DXT file..." -ForegroundColor Yellow
-$DxtFile = "$PackageName-$Version.dxt"
+# Pack the MCPB using official CLI
+Write-Host "Packing MCPB file..." -ForegroundColor Yellow
+$DxtFile = "$PackageName-$Version.mcpb"
 $OutputPath = Join-Path $OutputDir $DxtFile
 
-& dxt pack . $OutputPath
+& mcpb pack . $OutputPath
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "DXT packing failed!" -ForegroundColor Red
+    Write-Host "MCPB packing failed!" -ForegroundColor Red
     exit 1
 }
 
@@ -85,12 +85,12 @@ if (Test-Path $OutputPath) {
     Write-Host "Created $OutputPath" -ForegroundColor Green
     Write-Host "Size: $FileSizeKB KB ($FileSizeMB MB)" -ForegroundColor Cyan
 } else {
-    Write-Host "DXT file was not created!" -ForegroundColor Red
+    Write-Host "MCPB file was not created!" -ForegroundColor Red
     exit 1
 }
 
 Write-Host ""
 Write-Host "Installation Instructions:" -ForegroundColor Yellow
-Write-Host "1. Drag and drop the .dxt file into Claude Desktop" -ForegroundColor White
+Write-Host "1. Drag and drop the .mcpb file into Claude Desktop" -ForegroundColor White
 Write-Host "2. Set YNAB_ACCESS_TOKEN environment variable" -ForegroundColor White
 Write-Host "3. Restart Claude Desktop" -ForegroundColor White

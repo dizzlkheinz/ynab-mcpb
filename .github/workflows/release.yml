@@ -1,4 +1,4 @@
-name: Release DXT
+name: Release MCPB
 
 on:
   release:
@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-attach-dxt:
+  build-and-attach-mcpb:
     runs-on: ubuntu-latest
     env:
       # Provide a dummy token for build-time env validation.
@@ -60,24 +60,24 @@ jobs:
           YNAB_ACCESS_TOKEN: ${{ secrets.YNAB_ACCESS_TOKEN || env.YNAB_ACCESS_TOKEN }}
           SKIP_ENV_VALIDATION: true
 
-      - name: Install DXT CLI
-        run: npm i -g @anthropic-ai/dxt
+      - name: Install MCPB CLI
+        run: npm i -g @anthropic-ai/mcpb
 
       - name: Validate manifest
-        run: dxt validate manifest.json
+        run: mcpb validate manifest.json
 
       - name: Compute package metadata
         id: meta
         run: |
           NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
-          FILE="dist/${NAME}-${VERSION}.dxt"
+          FILE="dist/${NAME}-${VERSION}.mcpb"
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "file=$FILE" >> $GITHUB_OUTPUT
 
-      - name: Pack DXT
-        run: dxt pack . "${{ steps.meta.outputs.file }}"
+      - name: Pack MCPB
+        run: mcpb pack . "${{ steps.meta.outputs.file }}"
 
       - name: Upload or create release with asset
         uses: softprops/action-gh-release@v2
