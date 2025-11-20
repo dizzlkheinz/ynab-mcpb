@@ -118,6 +118,37 @@ describe('BudgetSummarySchema', () => {
     const result = BudgetSummarySchema.safeParse(invalidBudget);
     expect(result.success).toBe(false);
   });
+
+  it('should fail validation when date_format is missing required format field', () => {
+    const invalidBudget = {
+      id: 'budget-123',
+      name: 'Budget with malformed date_format',
+      date_format: {}, // Missing required 'format' field
+    };
+
+    const result = BudgetSummarySchema.safeParse(invalidBudget);
+    expect(result.success).toBe(false);
+  });
+
+  it('should fail validation when currency_format has invalid types', () => {
+    const invalidBudget = {
+      id: 'budget-123',
+      name: 'Budget with malformed currency_format',
+      currency_format: {
+        iso_code: 123, // Number instead of string
+        example_format: '$1,234.56',
+        decimal_digits: '2', // String instead of number
+        decimal_separator: '.',
+        symbol_first: true,
+        group_separator: ',',
+        currency_symbol: '$',
+        display_symbol: true,
+      },
+    };
+
+    const result = BudgetSummarySchema.safeParse(invalidBudget);
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('ListBudgetsOutputSchema', () => {

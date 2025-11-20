@@ -321,7 +321,7 @@ export const ActionableRecommendationSchema = z.discriminatedUnion('action_type'
     metadata: z.record(z.string(), z.unknown()).optional(),
     parameters: z.object({
       account_id: z.string(),
-      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      date: IsoDateWithCalendarValidationSchema,
       amount: z.number(),
       payee_name: z.string(),
       memo: z.string().optional(),
