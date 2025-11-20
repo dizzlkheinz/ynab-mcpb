@@ -108,7 +108,7 @@ Created comprehensive test suite (`reconciliationOutputs.test.ts`) with 26 passi
 - ✅ TypeScript compilation passes (`npm run type-check`)
 - ✅ All 26 new schema tests pass
 - ✅ Build succeeds (`npm run build`)
-- ✅ DXT package generation succeeds
+- ✅ MCPB package generation succeeds
 - ✅ No runtime changes to executor.ts needed (schemas match actual usage)
 
 ## Implementation Notes

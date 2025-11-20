@@ -293,7 +293,7 @@ export const DeltaInfoSchema = z.object({
  *   timestamp: "2025-01-17T12:34:56.789Z",
  *   server: {
  *     name: "ynab-mcp-server",
- *     version: "0.11.3",
+ *     version: "0.12.0",
  *     node_version: "v20.10.0",
  *     // ... other server info
  *   },

@@ -15,7 +15,7 @@ build/
 .nuxt/
 .vuepress/dist/
 *.tsbuildinfo
-*.dxt
+*.mcpb
 manifest.json
 
 # Environment variables
@@ -103,7 +103,7 @@ local/
 
 # Old implementations
 ynab-mcp-python-old/
-ynab-mcp-dxt-updated/
+ynab-mcp-mcpb-updated/
 
 # Generated files
 .pr-description.md

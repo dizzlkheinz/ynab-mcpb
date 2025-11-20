@@ -33,7 +33,7 @@ For details, see `docs/VERSIONING.md`.
 - Proposed version bump: `X.Y.Z` → `X.Y.Z`
 - [ ] Changelog entry prepared (Added/Changed/Fixed/Removed)
 - [ ] Tests and lint pass locally
-- [ ] Built DXT with `npm run package:dxt` and sanity‑checked
+- [ ] Built MCPB with `npm run package:mcpb` and sanity‑checked
 
 ## Screenshots / Logs (optional)
 

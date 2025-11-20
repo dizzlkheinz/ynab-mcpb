@@ -3,7 +3,7 @@ title: 'Automated Reconciliation Flow'
 status: 'active'
 last_updated: '2025-11-12'
 owners:
-  - '@ynab-dxt/tooling'
+  - '@ynab-mcpb/tooling'
 related_docs:
   - reference/API.md#reconcile_account
   - reference/TOOLS.md#reconcile_account

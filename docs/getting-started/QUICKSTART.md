@@ -47,7 +47,7 @@ npm run start
      - **Name**: `ynab-mcp-server`
      - **Command**: `node`
      - **Arguments**: `["dist/index.js"]`
-     - **Working Directory**: `/path/to/ynab-mcp-dxt`
+     - **Working Directory**: `/path/to/ynab-mcp-mcpb`
      - **Environment Variables**:
        ```json
        {
@@ -57,13 +57,13 @@ npm run start
 
 2. **Restart Claude Desktop** completely (close and reopen)
 
-### Option B: DXT Package (Alternative)
+### Option B: MCPB Package (Alternative)
 
 ```bash
-# Build DXT package
-npm run package:dxt
+# Build MCPB package
+npm run package:mcpb
 
-# The .dxt file will be created in dist/
+# The .mcpb file will be created in dist/
 # Drag and drop it into Claude Desktop
 # Configure YNAB_ACCESS_TOKEN in extension settings
 ```
