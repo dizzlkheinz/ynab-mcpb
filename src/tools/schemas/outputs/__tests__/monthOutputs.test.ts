@@ -250,14 +250,13 @@ describe('MonthSummarySchema', () => {
       budgeted: 4500.0,
       activity: -4200.0,
       to_be_budgeted: 300.0,
-      age_of_money: undefined,
+      age_of_money: null,
       deleted: false,
     };
 
     const result = MonthSummarySchema.safeParse(validSummary);
     expect(result.success).toBe(true);
   });
-
   it('should fail validation when missing required fields', () => {
     const invalidSummary = {
       month: '2025-11-01',
