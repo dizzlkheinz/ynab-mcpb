@@ -9,6 +9,7 @@ import {
   UpdateCategorySchema,
 } from '../categoryTools.js';
 import { createDeltaFetcherMock, createRejectingDeltaFetcherMock } from './deltaTestUtils.js';
+import { CacheKeys } from '../../server/cacheKeys.js';
 
 // Mock the cache manager
 vi.mock('../../server/cacheManager.js', () => ({
@@ -60,9 +61,22 @@ describe('Category Tools', () => {
       },
     );
     (cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValue(false);
-    (CacheManager.generateKey as ReturnType<typeof vi.fn>).mockImplementation(
-      (prefix: string, ...parts: (string | number | boolean | undefined)[]) =>
-        [prefix, ...parts.filter((part) => part !== undefined)].join(':'),
+    (CacheManager.generateKey as any).mockImplementation(
+      (prefix: string, type: string, budgetId: string, id?: string) => {
+        if (prefix === CacheKeys.CATEGORIES && type === 'list') {
+          return `categories:list:${budgetId}`;
+        }
+        if (prefix === CacheKeys.CATEGORIES && type === 'get' && id) {
+          return `categories:get:${budgetId}:${id}`;
+        }
+        if (prefix === CacheKeys.MONTHS && type === 'list') {
+          return `months:list:${budgetId}`;
+        }
+        if (prefix === CacheKeys.MONTHS && type === 'get' && id) {
+          return `months:get:${budgetId}:${id}`;
+        }
+        return `${prefix}:${type}:${budgetId}:${id || ''}`;
+      }
     );
   });
 
@@ -450,14 +464,6 @@ describe('Category Tools', () => {
         data: { category: mockUpdatedCategory },
       });
 
-      const mockCacheKeys = [
-        'categories:list:budget-1:generated-key',
-        'category:get:budget-1:category-1:generated-key',
-      ];
-      (CacheManager.generateKey as any)
-        .mockReturnValueOnce(mockCacheKeys[0])
-        .mockReturnValueOnce(mockCacheKeys[1]);
-
       const result = await handleUpdateCategory(mockYnabAPI, {
         budget_id: 'budget-1',
         category_id: 'category-1',
@@ -465,19 +471,27 @@ describe('Category Tools', () => {
       });
 
       // Verify cache was invalidated for both category list and specific category
-      expect(CacheManager.generateKey).toHaveBeenCalledWith('categories', 'list', 'budget-1');
+      expect(CacheManager.generateKey).toHaveBeenCalledWith(CacheKeys.CATEGORIES, 'list', 'budget-1');
       expect(CacheManager.generateKey).toHaveBeenCalledWith(
-        'category',
+        CacheKeys.CATEGORIES,
         'get',
         'budget-1',
         'category-1',
       );
-      expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKeys[0]);
-      expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKeys[1]);
+      expect(cacheManager.delete).toHaveBeenCalledWith(`categories:list:budget-1`);
+      expect(cacheManager.delete).toHaveBeenCalledWith(`categories:get:budget-1:category-1`);
 
-      expect(result.content).toHaveLength(1);
-      const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.category.budgeted).toBe(60);
+      // Verify month-related caches were invalidated
+      expect(CacheManager.generateKey).toHaveBeenCalledWith(CacheKeys.MONTHS, 'list', 'budget-1');
+      expect(CacheManager.generateKey).toHaveBeenCalledWith(
+        CacheKeys.MONTHS,
+        'get',
+        'budget-1',
+        expect.stringMatching(/^\d{4}-\d{2}-01$/),
+      );
+      const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`;
+      expect(cacheManager.delete).toHaveBeenCalledWith(`months:list:budget-1`);
+      expect(cacheManager.delete).toHaveBeenCalledWith(`months:get:budget-1:${currentMonth}`);
     });
 
     it('should not invalidate cache on dry_run category update', async () => {

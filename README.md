@@ -180,19 +180,41 @@ For the complete list with technical details, see the [API Reference](docs/refer
 
 Want to contribute or build from source?
 
+### Development Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/dizzlkheinz/ynab-mcpb.git
+   cd ynab-mcpb
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Create your environment file:**
+   Copy the example environment file to a new `.env` file:
+   ```bash
+   cp .env.example .env
+   ```
+   Open the `.env` file and add your YNAB Personal Access Token:
+   ```
+   YNAB_ACCESS_TOKEN="your-token-here"
+   ```
+
+4. **Build and test the project:**
+   ```bash
+   npm run build
+   npm test
+   ```
+
+### Additional Resources
+
 - **[Development Guide](docs/guides/DEVELOPMENT.md)** - Setup and best practices
 - **[Architecture Overview](docs/guides/ARCHITECTURE.md)** - How the code is organized
 - **[Testing Guide](docs/guides/TESTING.md)** - Running and writing tests
 
-Quick start for development:
-
-```bash
-git clone https://github.com/dizzlkheinz/ynab-mcpb.git
-cd ynab-mcpb
-npm install
-npm run build
-npm test
-```
 
 ## Security & Privacy
 

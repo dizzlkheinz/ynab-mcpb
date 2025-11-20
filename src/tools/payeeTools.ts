@@ -5,6 +5,7 @@ import { withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
 import type { DeltaFetcher } from './deltaFetcher.js';
+import { CacheKeys } from '../server/cacheKeys.js';
 import { resolveDeltaFetcherArgs } from './deltaSupport.js';
 
 /**
@@ -104,7 +105,7 @@ export async function handleGetPayee(
   return await withToolErrorHandling(
     async () => {
       // Use enhanced CacheManager wrap method
-      const cacheKey = CacheManager.generateKey('payee', 'get', params.budget_id, params.payee_id);
+      const cacheKey = CacheManager.generateKey(CacheKeys.PAYEES, 'get', params.budget_id, params.payee_id);
       const wasCached = cacheManager.has(cacheKey);
       const payee = await cacheManager.wrap<ynab.Payee>(cacheKey, {
         ttl: CACHE_TTLS.PAYEES,
