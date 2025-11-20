@@ -1,5 +1,5 @@
 {
-  "name": "@dizzlkheinz/ynab-mcp-server",
+  "name": "@dizzlkheinz/ynab-mcpb",
   "version": "0.12.1",
   "description": "Model Context Protocol server for YNAB (You Need A Budget) integration",
   "main": "dist/index.js",
