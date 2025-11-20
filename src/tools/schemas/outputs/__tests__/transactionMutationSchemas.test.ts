@@ -147,7 +147,7 @@ describe('Transaction Mutation Schema Type Safety', () => {
       };
 
       expect(() =>
-        CreateReceiptSplitTransactionOutputSchema.parse(validDryRunResponse)
+        CreateReceiptSplitTransactionOutputSchema.parse(validDryRunResponse),
       ).not.toThrow();
     });
 
@@ -172,7 +172,7 @@ describe('Transaction Mutation Schema Type Safety', () => {
       };
 
       expect(() =>
-        CreateReceiptSplitTransactionOutputSchema.parse(invalidDryRunResponse)
+        CreateReceiptSplitTransactionOutputSchema.parse(invalidDryRunResponse),
       ).toThrow();
     });
 
@@ -202,7 +202,7 @@ describe('Transaction Mutation Schema Type Safety', () => {
 
       // The schema will parse but ignore the extra fields
       const parsed = CreateReceiptSplitTransactionOutputSchema.parse(
-        dryRunWithInvalidSubtransactions
+        dryRunWithInvalidSubtransactions,
       );
       if (parsed.dry_run === true) {
         expect(parsed.subtransactions[0]).not.toHaveProperty('id');

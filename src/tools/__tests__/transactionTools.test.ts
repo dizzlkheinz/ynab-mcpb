@@ -1063,10 +1063,7 @@ describe('transactionTools', () => {
       expect(details).toHaveLength(1);
       expect(details[0].transaction_index).toBeNull();
       expect(details[0].errors).toEqual(
-        expect.arrayContaining([
-          'Budget ID is required',
-          'At least one transaction is required',
-        ]),
+        expect.arrayContaining(['Budget ID is required', 'At least one transaction is required']),
       );
     });
 
@@ -2322,9 +2319,7 @@ describe('transactionTools', () => {
         (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
           buildApiResponse(apiTransactions),
         );
-        const response = await parseResponse(
-          handleCreateTransactions(mockYnabAPI, buildParams()),
-        );
+        const response = await parseResponse(handleCreateTransactions(mockYnabAPI, buildParams()));
         expect(response.transactions).toBeDefined();
         expect(response.mode).toBe('full');
       });
@@ -2337,9 +2332,7 @@ describe('transactionTools', () => {
           buildApiResponse(apiTransactions),
         );
 
-        const response = await parseResponse(
-          handleCreateTransactions(mockYnabAPI, buildParams()),
-        );
+        const response = await parseResponse(handleCreateTransactions(mockYnabAPI, buildParams()));
 
         expect(response.transactions).toBeUndefined();
         expect(response.mode).toBe('summary');
@@ -2357,9 +2350,7 @@ describe('transactionTools', () => {
           buildApiResponse(apiTransactions),
         );
 
-        const response = await parseResponse(
-          handleCreateTransactions(mockYnabAPI, buildParams()),
-        );
+        const response = await parseResponse(handleCreateTransactions(mockYnabAPI, buildParams()));
 
         expect(response.mode).toBe('ids_only');
         expect(response.results[0].transaction_id).toBeDefined();
@@ -2413,9 +2404,7 @@ describe('transactionTools', () => {
         (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
           buildApiResponse([]),
         );
-        const response = await parseResponse(
-          handleCreateTransactions(mockYnabAPI, buildParams()),
-        );
+        const response = await parseResponse(handleCreateTransactions(mockYnabAPI, buildParams()));
         expect(response.results[0].status).toBe('failed');
         expect(response.results[0].error_code).toBe('correlation_failed');
         expect(logErrorSpy).toHaveBeenCalledWith(
@@ -2487,9 +2476,9 @@ describe('transactionTools', () => {
         expect(uniqueKeys.has('account:get:budget-123:repeat-account')).toBe(true);
         expect(uniqueKeys.has('month:get:budget-123:2024-05-01')).toBe(true);
         // The implementation naturally deduplicates via Set, so we should only see one delete call per key
-        expect(deleteCalls.filter((key) => key === 'account:get:budget-123:repeat-account').length).toBeGreaterThanOrEqual(
-          1,
-        );
+        expect(
+          deleteCalls.filter((key) => key === 'account:get:budget-123:repeat-account').length,
+        ).toBeGreaterThanOrEqual(1);
       });
 
       it('does not invalidate caches during dry runs', async () => {
@@ -2525,7 +2514,11 @@ describe('transactionTools', () => {
 
       it('supports transactions without payees or categories and special memo characters', async () => {
         const batch = [
-          buildTransaction({ memo: 'Special | memo', payee_name: undefined, category_id: undefined }),
+          buildTransaction({
+            memo: 'Special | memo',
+            payee_name: undefined,
+            category_id: undefined,
+          }),
         ];
         const apiTransactions = batch.map((txn) => buildApiTransaction(txn));
         (mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
@@ -3113,9 +3106,7 @@ describe('transactionTools', () => {
           },
         };
 
-        (mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue(
-          fetchedTransaction,
-        );
+        (mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue(fetchedTransaction);
 
         const apiTransaction = buildApiTransaction({ id: 'transaction-001' });
         (mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
@@ -3254,7 +3245,6 @@ describe('transactionTools', () => {
             };
           },
         );
-
 
         const result = await handleUpdateTransactions(mockYnabAPI, buildParams({ transactions }));
         const response = JSON.parse(result.content[0].text);

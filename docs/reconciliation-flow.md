@@ -28,7 +28,7 @@ Deterministic playbook for reconciling a YNAB account with a bank statement insi
 - **Audit snapshot** – `buildBalanceReconciliation` records `precision_calculations`, `discrepancy_analysis`, and `final_verification` booleans, ensuring downstream tooling can prove reconciliation outcomes without re-querying YNAB.
 
 ## Configuration Knobs (Schema Excerpts)
-- Matching tolerances: `date_tolerance_days` (0-7, default 2) and `amount_tolerance_cents` (default 1¢) gate candidate searches; `confidence_threshold` (0.8) controls risk when auto-clearing.
+- Matching tolerances: `date_tolerance_days` (0-7, default 5) and `amount_tolerance_cents` (default 1¢) gate candidate searches; `confidence_threshold` (0.8) controls risk when auto-clearing.
 - Automation toggles: `auto_create_transactions`, `auto_update_cleared_status`, `auto_adjust_dates`, `auto_unclear_missing`, `dry_run`, and `balance_verification_mode` (`ANALYSIS_ONLY`, `GUIDED_RESOLUTION`, `AUTO_RESOLVE`).
 - CSV format overrides: `csv_format.{date_column, amount_column, debit_column, credit_column, date_format, has_header, delimiter}` keep unusual exports usable without retooling the parser.
 - Safety rails: `require_exact_match` and `max_resolution_attempts` prevent runaway loops; `include_structured_data` controls whether assistants receive the payload blob.

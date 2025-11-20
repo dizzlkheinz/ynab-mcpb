@@ -239,14 +239,13 @@ export class DeltaFetcher {
 
   async fetchBudgets(options?: DeltaFetchOptions): Promise<DeltaFetchResult<ynab.BudgetSummary>> {
     const cacheKey = CacheManager.generateKey('budgets', 'list');
-    const result = await this.deltaCache.fetchWithDelta<
-      ynab.BudgetSummary & { deleted?: boolean }
-    >(
+    const result = await this.deltaCache.fetchWithDelta<ynab.BudgetSummary & { deleted?: boolean }>(
       cacheKey,
       'global',
       async () => {
         const response = await this.ynabAPI.budgets.getBudgets();
-        const serverKnowledge = (response.data as { server_knowledge?: number }).server_knowledge ?? 0;
+        const serverKnowledge =
+          (response.data as { server_knowledge?: number }).server_knowledge ?? 0;
         return {
           data: response.data.budgets,
           serverKnowledge,
@@ -271,7 +270,9 @@ export class DeltaFetcher {
   ): { ttl: number; forceFullRefresh?: boolean } {
     return {
       ttl: options?.ttl ?? defaultTtl,
-      ...(options?.forceFullRefresh !== undefined && { forceFullRefresh: options.forceFullRefresh }),
+      ...(options?.forceFullRefresh !== undefined && {
+        forceFullRefresh: options.forceFullRefresh,
+      }),
     };
   }
 }

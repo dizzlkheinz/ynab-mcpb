@@ -55,22 +55,26 @@ Implemented a **discriminated union** based on the `type` field, with each actio
 ### Helper Schemas
 
 **`CreatedTransactionSchema`**
+
 - Validates YNAB API transaction responses
 - Uses `.passthrough()` to allow additional API fields
 - Required: `id`, `date`, `amount`
 - Optional: `memo`, `cleared`, `approved`, `payee_name`, `category_name`, `import_id`
 
 **`TransactionCreationPayloadSchema`**
+
 - Validates transaction creation requests
 - Required: `account_id`, `date`, `amount`
 - Optional: `payee_name`, `memo`, `cleared`, `approved`, `import_id`
 
 **`TransactionUpdatePayloadSchema`**
+
 - Validates transaction update requests
 - Required: `transaction_id`
 - Optional: `new_date`, `cleared`
 
 **`DuplicateDetectionPayloadSchema`**
+
 - Validates duplicate detection metadata
 - Required: `transaction_id` (nullable)
 - Optional: `import_id`

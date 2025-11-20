@@ -117,10 +117,9 @@ export class ToolRegistry {
 
   constructor(private readonly deps: ToolRegistryDependencies) {}
 
-  register<
-    TInput extends Record<string, unknown>,
-    TOutput extends Record<string, unknown>,
-  >(definition: ToolDefinition<TInput, TOutput>): void {
+  register<TInput extends Record<string, unknown>, TOutput extends Record<string, unknown>>(
+    definition: ToolDefinition<TInput, TOutput>,
+  ): void {
     this.assertValidDefinition(definition);
 
     if (this.tools.has(definition.name)) {
@@ -275,7 +274,8 @@ export class ToolRegistry {
             if (handlerResult.isError) {
               return handlerResult;
             }
-            return this.validateOutput(tool.name, handlerResult);          } catch (handlerError) {
+            return this.validateOutput(tool.name, handlerResult);
+          } catch (handlerError) {
             return this.deps.errorHandler.handleError(
               handlerError,
               `executing ${tool.name} - ${tool.security.operation}`,
@@ -369,7 +369,9 @@ export class ToolRegistry {
     }
 
     if (definition.outputSchema && typeof definition.outputSchema.parse !== 'function') {
-      throw new Error(`Tool '${definition.name}' outputSchema must be a valid Zod schema when provided`);
+      throw new Error(
+        `Tool '${definition.name}' outputSchema must be a valid Zod schema when provided`,
+      );
     }
 
     if (typeof definition.handler !== 'function') {
@@ -426,7 +428,10 @@ export class ToolRegistry {
       } else if (item.type !== 'text') {
         invalidItems.push({ index: i, reason: `type is "${item.type}" instead of "text"` });
       } else if (typeof item.text !== 'string') {
-        invalidItems.push({ index: i, reason: `text property is ${typeof item.text} instead of string` });
+        invalidItems.push({
+          index: i,
+          reason: `text property is ${typeof item.text} instead of string`,
+        });
       }
     }
 

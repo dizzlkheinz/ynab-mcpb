@@ -15,8 +15,8 @@ const mockYnabAPI = {
           approved: true,
           flag_color: 'red',
           account_id: 'account-456',
-        }
-      }
+        },
+      },
     }),
   },
   accounts: {
@@ -26,10 +26,10 @@ const mockYnabAPI = {
           id: 'account-456',
           balance: 100000,
           cleared_balance: 95000,
-        }
-      }
-    })
-  }
+        },
+      },
+    }),
+  },
 };
 
 const params = {

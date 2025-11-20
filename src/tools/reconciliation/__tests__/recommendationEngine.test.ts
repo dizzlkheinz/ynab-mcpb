@@ -460,8 +460,16 @@ describe('recommendationEngine', () => {
 
       it('should create manual_review for combination match with multiple candidates', () => {
         const bankTxn = createBankTransaction({ amount: -100.0, payee: 'Split Payment' });
-        const ynabTxn1 = createYNABTransaction({ id: 'y1', amount: -50000, payee_name: 'Vendor A' });
-        const ynabTxn2 = createYNABTransaction({ id: 'y2', amount: -50000, payee_name: 'Vendor B' });
+        const ynabTxn1 = createYNABTransaction({
+          id: 'y1',
+          amount: -50000,
+          payee_name: 'Vendor A',
+        });
+        const ynabTxn2 = createYNABTransaction({
+          id: 'y2',
+          amount: -50000,
+          payee_name: 'Vendor B',
+        });
 
         const suggestedMatch: TransactionMatch = {
           bank_transaction: bankTxn,
@@ -805,7 +813,9 @@ describe('recommendationEngine', () => {
         }
 
         // Verify specific severities
-        const severities = recommendations.map(r => (r as ManualReviewRecommendation).metadata?.insight_severity);
+        const severities = recommendations.map(
+          (r) => (r as ManualReviewRecommendation).metadata?.insight_severity,
+        );
         expect(severities).toContain('warning');
         expect(severities).toContain('info');
         expect(severities).toContain('critical');

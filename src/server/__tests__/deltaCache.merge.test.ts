@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import * as ynab from 'ynab';
-import {
-  mergeCategories,
-  mergeFlatEntities,
-  mergeTransactions,
-} from '../deltaCache.merge.js';
+import { mergeCategories, mergeFlatEntities, mergeTransactions } from '../deltaCache.merge.js';
 
-const buildCategory = (
-  overrides: Partial<ynab.Category> = {},
-): ynab.Category => ({
+const buildCategory = (overrides: Partial<ynab.Category> = {}): ynab.Category => ({
   id: overrides.id ?? 'cat-1',
   category_group_id: overrides.category_group_id ?? 'group-1',
   category_group_name: overrides.category_group_name,
@@ -112,10 +106,7 @@ describe('mergeFlatEntities', () => {
   });
 
   it('should delete entities when delta marks them deleted', () => {
-    const snapshot = [
-      { id: '1' },
-      { id: '2' },
-    ];
+    const snapshot = [{ id: '1' }, { id: '2' }];
     const delta = [{ id: '1', deleted: true }];
 
     const result = mergeFlatEntities(snapshot, delta);
@@ -165,17 +156,11 @@ describe('mergeFlatEntities', () => {
   });
 
   it('should maintain insertion order for unchanged entities', () => {
-    const snapshot = [
-      { id: '1' },
-      { id: '2' },
-    ];
+    const snapshot = [{ id: '1' }, { id: '2' }];
     const delta = [{ id: '2', name: 'updated' }];
 
     const result = mergeFlatEntities(snapshot, delta);
-    expect(result).toEqual([
-      { id: '1' },
-      { id: '2', name: 'updated' },
-    ]);
+    expect(result).toEqual([{ id: '1' }, { id: '2', name: 'updated' }]);
   });
 
   it('should keep additional fields intact', () => {
@@ -205,10 +190,7 @@ describe('mergeCategories', () => {
   });
 
   it('should delete groups flagged as deleted', () => {
-    const snapshot = [
-      buildCategoryGroup({ id: 'group-1' }),
-      buildCategoryGroup({ id: 'group-2' }),
-    ];
+    const snapshot = [buildCategoryGroup({ id: 'group-1' }), buildCategoryGroup({ id: 'group-2' })];
     const delta = [buildCategoryGroup({ id: 'group-2', deleted: true })];
 
     const result = mergeCategories(snapshot, delta);
@@ -263,10 +245,7 @@ describe('mergeCategories', () => {
     const snapshot = [
       buildCategoryGroup({
         id: 'group-1',
-        categories: [
-          buildCategory({ id: 'cat-1' }),
-          buildCategory({ id: 'cat-2' }),
-        ],
+        categories: [buildCategory({ id: 'cat-1' }), buildCategory({ id: 'cat-2' })],
       }),
     ];
     const delta = [
@@ -405,10 +384,9 @@ describe('mergeCategories', () => {
     ];
 
     const result = mergeCategories(snapshot, delta);
-    expect(result.find((group) => group.id === 'group-1')?.categories.map((cat) => cat.id)).toEqual([
-      'cat-1',
-      'cat-3',
-    ]);
+    expect(result.find((group) => group.id === 'group-1')?.categories.map((cat) => cat.id)).toEqual(
+      ['cat-1', 'cat-3'],
+    );
     expect(result.find((group) => group.id === 'group-2')?.categories).toEqual([]);
   });
 
@@ -450,10 +428,7 @@ describe('mergeTransactions', () => {
   });
 
   it('should delete transactions marked as deleted', () => {
-    const snapshot = [
-      buildTransaction({ id: 'txn-1' }),
-      buildTransaction({ id: 'txn-2' }),
-    ];
+    const snapshot = [buildTransaction({ id: 'txn-1' }), buildTransaction({ id: 'txn-2' })];
     const delta = [buildTransaction({ id: 'txn-2', deleted: true })];
 
     const result = mergeTransactions(snapshot, delta);
@@ -690,9 +665,7 @@ describe('Merge Edge Cases', () => {
     const snapshot = [
       buildCategoryGroup({
         id: 'group-1',
-        categories: Array.from({ length: 10 }, (_, index) =>
-          buildCategory({ id: `cat-${index}` }),
-        ),
+        categories: Array.from({ length: 10 }, (_, index) => buildCategory({ id: `cat-${index}` })),
       }),
     ];
     const delta = [

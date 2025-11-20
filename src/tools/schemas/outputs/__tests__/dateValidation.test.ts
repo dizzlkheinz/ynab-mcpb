@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { ISODateStringSchema, BankTransactionComparisonSchema, DateRangeSchema } from '../comparisonOutputs.js';
+import {
+  ISODateStringSchema,
+  BankTransactionComparisonSchema,
+  DateRangeSchema,
+} from '../comparisonOutputs.js';
 
 describe('Date Validation in comparisonOutputs', () => {
   describe('ISODateStringSchema', () => {
@@ -30,11 +34,21 @@ describe('Date Validation in comparisonOutputs', () => {
     });
 
     it('should reject invalid format', () => {
-      expect(() => ISODateStringSchema.parse('24-01-15')).toThrow('Date must be in YYYY-MM-DD format');
-      expect(() => ISODateStringSchema.parse('2024/01/15')).toThrow('Date must be in YYYY-MM-DD format');
-      expect(() => ISODateStringSchema.parse('01-15-2024')).toThrow('Date must be in YYYY-MM-DD format');
-      expect(() => ISODateStringSchema.parse('2024-1-15')).toThrow('Date must be in YYYY-MM-DD format');
-      expect(() => ISODateStringSchema.parse('2024-01-5')).toThrow('Date must be in YYYY-MM-DD format');
+      expect(() => ISODateStringSchema.parse('24-01-15')).toThrow(
+        'Date must be in YYYY-MM-DD format',
+      );
+      expect(() => ISODateStringSchema.parse('2024/01/15')).toThrow(
+        'Date must be in YYYY-MM-DD format',
+      );
+      expect(() => ISODateStringSchema.parse('01-15-2024')).toThrow(
+        'Date must be in YYYY-MM-DD format',
+      );
+      expect(() => ISODateStringSchema.parse('2024-1-15')).toThrow(
+        'Date must be in YYYY-MM-DD format',
+      );
+      expect(() => ISODateStringSchema.parse('2024-01-5')).toThrow(
+        'Date must be in YYYY-MM-DD format',
+      );
     });
   });
 
@@ -62,7 +76,9 @@ describe('Date Validation in comparisonOutputs', () => {
         row_number: 1,
       };
 
-      expect(() => BankTransactionComparisonSchema.parse(invalidTransaction)).toThrow('Invalid calendar date');
+      expect(() => BankTransactionComparisonSchema.parse(invalidTransaction)).toThrow(
+        'Invalid calendar date',
+      );
     });
   });
 
@@ -109,7 +125,9 @@ describe('Date Validation in comparisonOutputs', () => {
         end: '2024-01-01',
       };
 
-      expect(() => DateRangeSchema.parse(invalidRange)).toThrow('Start date must be before or equal to end date');
+      expect(() => DateRangeSchema.parse(invalidRange)).toThrow(
+        'Start date must be before or equal to end date',
+      );
     });
 
     it('should reject date range where start is after end (same month)', () => {
@@ -118,7 +136,9 @@ describe('Date Validation in comparisonOutputs', () => {
         end: '2024-06-15',
       };
 
-      expect(() => DateRangeSchema.parse(invalidRange)).toThrow('Start date must be before or equal to end date');
+      expect(() => DateRangeSchema.parse(invalidRange)).toThrow(
+        'Start date must be before or equal to end date',
+      );
     });
 
     it('should reject date range where start is after end (consecutive days)', () => {
@@ -127,7 +147,9 @@ describe('Date Validation in comparisonOutputs', () => {
         end: '2024-06-15',
       };
 
-      expect(() => DateRangeSchema.parse(invalidRange)).toThrow('Start date must be before or equal to end date');
+      expect(() => DateRangeSchema.parse(invalidRange)).toThrow(
+        'Start date must be before or equal to end date',
+      );
     });
   });
 });

@@ -791,8 +791,12 @@ describe('ToolRegistry', () => {
       expect(result.content[0]?.text).toContain('Handler returned invalid content items');
       expect(result.content[0]?.text).toContain('3 of 4 failed');
       expect(result.content[0]?.text).toContain('Item 1: type is "image" instead of "text"');
-      expect(result.content[0]?.text).toContain('Item 2: text property is number instead of string');
-      expect(result.content[0]?.text).toContain('Item 3: text property is undefined instead of string');
+      expect(result.content[0]?.text).toContain(
+        'Item 2: text property is number instead of string',
+      );
+      expect(result.content[0]?.text).toContain(
+        'Item 3: text property is undefined instead of string',
+      );
     });
 
     it('skips validation when no output schema is defined', async () => {

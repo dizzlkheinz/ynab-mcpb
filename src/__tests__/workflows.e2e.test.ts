@@ -205,7 +205,11 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       });
 
       // Validate reconcile_account output schema
-      const reconcileValidation = validateOutputSchema(server, 'reconcile_account', reconcileResult);
+      const reconcileValidation = validateOutputSchema(
+        server,
+        'reconcile_account',
+        reconcileResult,
+      );
       expect(reconcileValidation.valid).toBe(true);
       if (!reconcileValidation.valid) {
         console.error('reconcile_account schema validation errors:', reconcileValidation.errors);
@@ -1043,7 +1047,10 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
           // Verify that all tools define outputSchema (as guaranteed by CHANGELOG.md and docs/reference/TOOLS.md)
           // Note: Some utility tools like diagnostic_info or clear_cache may not define structured outputs,
           // but most data-retrieval and CRUD tools should have output schemas.
-          expect(tool.outputSchema, `Tool '${tool.name}' should define an outputSchema`).toBeDefined();
+          expect(
+            tool.outputSchema,
+            `Tool '${tool.name}' should define an outputSchema`,
+          ).toBeDefined();
         }
       });
     });

@@ -115,12 +115,7 @@ async function main() {
       throw error;
     }
 
-    recordResult(
-      'transactions.getTransactions',
-      notes,
-      supported,
-      `server_knowledge=${knowledge}`,
-    );
+    recordResult('transactions.getTransactions', notes, supported, `server_knowledge=${knowledge}`);
   } catch (error) {
     recordResult(
       'transactions.getTransactions',

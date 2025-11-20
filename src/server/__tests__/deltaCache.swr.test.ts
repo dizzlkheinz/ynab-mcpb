@@ -81,29 +81,22 @@ describe('DeltaCache stale-while-revalidate', () => {
     delete process.env.YNAB_MCP_ENABLE_DELTA;
   });
 
-  const createFetcher = (
-    response: { data: TestEntity[]; serverKnowledge: number },
-  ) => vi.fn().mockResolvedValue(response);
+  const createFetcher = (response: { data: TestEntity[]; serverKnowledge: number }) =>
+    vi.fn().mockResolvedValue(response);
 
   const createMerger = () =>
-    vi.fn<[TestEntity[], TestEntity[], unknown?], TestEntity[]>().mockImplementation(
-      (snapshot: TestEntity[], delta: TestEntity[]) => [...snapshot, ...delta],
-    );
+    vi
+      .fn<[TestEntity[], TestEntity[], unknown?], TestEntity[]>()
+      .mockImplementation((snapshot: TestEntity[], delta: TestEntity[]) => [...snapshot, ...delta]);
 
   it('should pass staleWhileRevalidate to cache entry when set', async () => {
     const fetcher = createFetcher({ data: [{ id: 'test-1' }], serverKnowledge: 1000 });
     cacheManagerSpies.get.mockReturnValue(null);
 
-    await deltaCache.fetchWithDelta(
-      'accounts:list:budget-1',
-      'budget-1',
-      fetcher,
-      createMerger(),
-      {
-        ttl: 5000,
-        staleWhileRevalidate: 2000,
-      },
-    );
+    await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), {
+      ttl: 5000,
+      staleWhileRevalidate: 2000,
+    });
 
     expect(cacheManagerSpies.set).toHaveBeenCalledWith(
       'accounts:list:budget-1',
@@ -122,15 +115,9 @@ describe('DeltaCache stale-while-revalidate', () => {
     const fetcher = createFetcher({ data: [{ id: 'test-1' }], serverKnowledge: 1000 });
     cacheManagerSpies.get.mockReturnValue(null);
 
-    await deltaCache.fetchWithDelta(
-      'accounts:list:budget-1',
-      'budget-1',
-      fetcher,
-      createMerger(),
-      {
-        ttl: 5000,
-      },
-    );
+    await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), {
+      ttl: 5000,
+    });
 
     const [, entry, options] = cacheManagerSpies.set.mock.calls[0];
     expect(entry.staleWhileRevalidate).toBeUndefined();
@@ -142,16 +129,10 @@ describe('DeltaCache stale-while-revalidate', () => {
     const fetcher = createFetcher({ data: [{ id: 'test-1' }], serverKnowledge: 1000 });
     cacheManagerSpies.get.mockReturnValue(null);
 
-    await deltaCache.fetchWithDelta(
-      'accounts:list:budget-1',
-      'budget-1',
-      fetcher,
-      createMerger(),
-      {
-        ttl: 5000,
-        staleWhileRevalidate: 3000,
-      },
-    );
+    await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), {
+      ttl: 5000,
+      staleWhileRevalidate: 3000,
+    });
 
     expect(cacheManagerSpies.set).toHaveBeenCalledWith(
       'accounts:list:budget-1',

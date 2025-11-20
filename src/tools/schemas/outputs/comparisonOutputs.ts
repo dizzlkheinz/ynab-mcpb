@@ -101,7 +101,8 @@ function isValidISODate(dateStr: string): boolean {
  * schema.parse({ date: "2024-02-29" }); // OK (leap year)
  * schema.parse({ date: "2024-02-31" }); // Error: Invalid calendar date
  */
-export const ISODateStringSchema = z.string()
+export const ISODateStringSchema = z
+  .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
   .refine(isValidISODate, {
     message: 'Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)',
@@ -123,7 +124,9 @@ export const ISODateStringSchema = z.string()
  */
 export const MissingInYNABItemSchema = z.object({
   date: ISODateStringSchema,
-  amount: z.string().regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
+  amount: z
+    .string()
+    .regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
   description: z.string(),
   row_number: z.number(),
   suggested_payee_id: z.string().optional(),
@@ -146,7 +149,9 @@ export type MissingInYNABItem = z.infer<typeof MissingInYNABItemSchema>;
 export const MissingInBankItemSchema = z.object({
   id: z.string(),
   date: ISODateStringSchema,
-  amount: z.string().regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
+  amount: z
+    .string()
+    .regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
   payee_name: z.string().nullable(),
   memo: z.string().nullable(),
   cleared: z.string(),
@@ -166,10 +171,14 @@ export type MissingInBankItem = z.infer<typeof MissingInBankItemSchema>;
  */
 export const MatchItemSchema = z.object({
   bank_date: ISODateStringSchema,
-  bank_amount: z.string().regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
+  bank_amount: z
+    .string()
+    .regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
   bank_description: z.string(),
   ynab_date: ISODateStringSchema,
-  ynab_amount: z.string().regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
+  ynab_amount: z
+    .string()
+    .regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
   ynab_payee: z.string().nullable(),
   ynab_transaction: z.object({
     id: z.string(),
@@ -281,22 +290,24 @@ export type ComparisonParameters = z.infer<typeof ComparisonParametersSchema>;
  * DateRangeSchema.parse({ start: "2024-01-01", end: "2024-12-31" }) // OK
  * DateRangeSchema.parse({ start: "2024-12-31", end: "2024-01-01" }) // Error: start date must be before or equal to end date
  */
-export const DateRangeSchema = z.object({
-  start: ISODateStringSchema,
-  end: ISODateStringSchema,
-}).refine(
-  (data) => {
-    // Parse both dates - we know they're valid ISO dates due to ISODateStringSchema
-    const startDate = Date.parse(data.start);
-    const endDate = Date.parse(data.end);
+export const DateRangeSchema = z
+  .object({
+    start: ISODateStringSchema,
+    end: ISODateStringSchema,
+  })
+  .refine(
+    (data) => {
+      // Parse both dates - we know they're valid ISO dates due to ISODateStringSchema
+      const startDate = Date.parse(data.start);
+      const endDate = Date.parse(data.end);
 
-    // Validate logical ordering: start must be <= end
-    return startDate <= endDate;
-  },
-  {
-    message: 'Start date must be before or equal to end date',
-  }
-);
+      // Validate logical ordering: start must be <= end
+      return startDate <= endDate;
+    },
+    {
+      message: 'Start date must be before or equal to end date',
+    },
+  );
 
 export type DateRange = z.infer<typeof DateRangeSchema>;
 
@@ -582,7 +593,7 @@ export const ExportTransactionsOutputSchema = z.object({
       memo: z.string().nullable().optional(),
       payee_name: z.string().nullable().optional(),
       category_name: z.string().nullable().optional(),
-    })
+    }),
   ),
 });
 

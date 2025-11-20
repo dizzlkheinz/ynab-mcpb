@@ -274,7 +274,7 @@ describe('executeReconciliation (apply mode)', () => {
     const mockCreate = vi.fn().mockResolvedValue({ data: { transaction: { id: 'created-1' } } });
     const mockUpdate = vi.fn().mockResolvedValue({ data: { transaction: { id: 'updated-1' } } });
     const mockBatchUpdate = vi.fn().mockResolvedValue({
-      data: { transactions: [{ id: 'updated-1' }, { id: 'updated-2' }] }
+      data: { transactions: [{ id: 'updated-1' }, { id: 'updated-2' }] },
     });
     const mockGetAccount = vi.fn().mockResolvedValue({
       data: { account: { balance: -921240, cleared_balance: -921240, uncleared_balance: 0 } },
@@ -559,9 +559,9 @@ describe('executeReconciliation - bulk create mode', () => {
 
     expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
     expect(mocks.createTransaction).toHaveBeenCalledTimes(3);
-    expect(
-      result.actions_taken.some((action) => action.type === 'bulk_create_fallback'),
-    ).toBe(true);
+    expect(result.actions_taken.some((action) => action.type === 'bulk_create_fallback')).toBe(
+      true,
+    );
     expect(result.summary.transactions_created).toBe(3);
     expect(result.bulk_operation_details).toEqual(
       expect.objectContaining({
@@ -658,9 +658,7 @@ describe('executeReconciliation - bulk create mode', () => {
       currencyCode: 'USD',
     });
 
-    const duplicateActions = result.actions_taken.filter(
-      (action) => action.duplicate === true,
-    );
+    const duplicateActions = result.actions_taken.filter((action) => action.duplicate === true);
     expect(duplicateActions).toHaveLength(1);
     expect(result.bulk_operation_details?.duplicates_detected).toBe(1);
     expect(result.summary.transactions_created).toBe(2);
@@ -699,9 +697,7 @@ describe('executeReconciliation - bulk create mode', () => {
     expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
     const payload = mocks.createTransactions.mock.calls[0]?.[1];
     expect(payload?.transactions).toHaveLength(5);
-    expect(
-      result.actions_taken.some((action) => action.type === 'balance_checkpoint'),
-    ).toBe(true);
+    expect(result.actions_taken.some((action) => action.type === 'balance_checkpoint')).toBe(true);
   });
 
   it('processes multiple chunks and halts at chunk boundaries when balance aligns', async () => {
@@ -747,9 +743,7 @@ describe('executeReconciliation - bulk create mode', () => {
     expect(result.summary.transactions_created).toBeGreaterThan(0);
     // Only 1 chunk should be processed (not 2), since balance aligns before second chunk
     expect(chunkCallCount).toBe(1);
-    expect(
-      result.actions_taken.some((action) => action.type === 'balance_checkpoint'),
-    ).toBe(true);
+    expect(result.actions_taken.some((action) => action.type === 'balance_checkpoint')).toBe(true);
     expect(result.bulk_operation_details).toEqual(
       expect.objectContaining({
         chunks_processed: 1,

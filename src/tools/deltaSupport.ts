@@ -62,9 +62,7 @@ function resolveSharedDeltaFetcher(ynabAPI: ynab.API): DeltaFetcher {
     return sharedDeltaContext.deltaFetcher;
   }
 
-  const context: SharedDeltaSupportContext = sharedDeltaContext
-    ? { ...sharedDeltaContext }
-    : {};
+  const context: SharedDeltaSupportContext = sharedDeltaContext ? { ...sharedDeltaContext } : {};
   if (context.manuallyConfigured === undefined) {
     context.manuallyConfigured = false;
   }

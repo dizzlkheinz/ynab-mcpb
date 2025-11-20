@@ -10,7 +10,10 @@ import { ReconcileAccountOutputSchema, MoneyValueSchema } from '../reconciliatio
  * - If amount <= -0.01: direction must be 'bank_higher'
  */
 describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () => {
-  const createMinimalStructuredOutput = (discrepancyAmount: number, direction: 'balanced' | 'ynab_higher' | 'bank_higher') => ({
+  const createMinimalStructuredOutput = (
+    discrepancyAmount: number,
+    direction: 'balanced' | 'ynab_higher' | 'bank_higher',
+  ) => ({
     human: 'Reconciliation complete',
     structured: {
       version: '1.0.0',
@@ -29,16 +32,32 @@ describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () =
         unmatched_bank: 0,
         unmatched_ynab: 0,
         current_cleared_balance: { amount: 1000, currency: 'USD', formatted: '$1,000.00' },
-        target_statement_balance: { amount: 1000 + discrepancyAmount, currency: 'USD', formatted: `$${(1000 + discrepancyAmount).toFixed(2)}` },
-        discrepancy: { amount: discrepancyAmount, currency: 'USD', formatted: `$${discrepancyAmount.toFixed(2)}` },
+        target_statement_balance: {
+          amount: 1000 + discrepancyAmount,
+          currency: 'USD',
+          formatted: `$${(1000 + discrepancyAmount).toFixed(2)}`,
+        },
+        discrepancy: {
+          amount: discrepancyAmount,
+          currency: 'USD',
+          formatted: `$${discrepancyAmount.toFixed(2)}`,
+        },
         discrepancy_explanation: 'Test',
       },
       balance: {
         current_cleared: { amount: 1000, currency: 'USD', formatted: '$1,000.00' },
         current_uncleared: { amount: 0, currency: 'USD', formatted: '$0.00' },
         current_total: { amount: 1000, currency: 'USD', formatted: '$1,000.00' },
-        target_statement: { amount: 1000 + discrepancyAmount, currency: 'USD', formatted: `$${(1000 + discrepancyAmount).toFixed(2)}` },
-        discrepancy: { amount: discrepancyAmount, currency: 'USD', formatted: `$${discrepancyAmount.toFixed(2)}` },
+        target_statement: {
+          amount: 1000 + discrepancyAmount,
+          currency: 'USD',
+          formatted: `$${(1000 + discrepancyAmount).toFixed(2)}`,
+        },
+        discrepancy: {
+          amount: discrepancyAmount,
+          currency: 'USD',
+          formatted: `$${discrepancyAmount.toFixed(2)}`,
+        },
         on_track: Math.abs(discrepancyAmount) < 0.01,
         discrepancy_direction: direction,
       },
@@ -96,7 +115,7 @@ describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () =
 
   describe('ynab_higher direction (amount >= 0.01)', () => {
     it('should accept direction "ynab_higher" when amount is 25.50', () => {
-      const output = createMinimalStructuredOutput(25.50, 'ynab_higher');
+      const output = createMinimalStructuredOutput(25.5, 'ynab_higher');
       const result = ReconcileAccountOutputSchema.safeParse(output);
       expect(result.success).toBe(true);
     });
@@ -129,7 +148,7 @@ describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () =
 
   describe('bank_higher direction (amount <= -0.01)', () => {
     it('should accept direction "bank_higher" when amount is -25.50', () => {
-      const output = createMinimalStructuredOutput(-25.50, 'bank_higher');
+      const output = createMinimalStructuredOutput(-25.5, 'bank_higher');
       const result = ReconcileAccountOutputSchema.safeParse(output);
       expect(result.success).toBe(true);
     });
@@ -238,7 +257,7 @@ describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () =
 
     it('should accept finite positive amounts', () => {
       const valid = {
-        amount: 25.50,
+        amount: 25.5,
         currency: 'USD',
         formatted: '$25.50',
       };
@@ -248,7 +267,7 @@ describe('ReconcileAccountOutputSchema - discrepancy_direction validation', () =
 
     it('should accept finite negative amounts', () => {
       const valid = {
-        amount: -25.50,
+        amount: -25.5,
         currency: 'USD',
         formatted: '-$25.50',
       };

@@ -28,9 +28,7 @@ async function runSequentially(files) {
     const estimatedCalls = estimateCalls(filePath);
     await throttleIfNeeded(estimatedCalls);
     const relativePath = path.relative(projectRoot, filePath);
-    console.log(
-      `▶️  Running ${relativePath} (estimated ${estimatedCalls} API calls)`,
-    );
+    console.log(`▶️  Running ${relativePath} (estimated ${estimatedCalls} API calls)`);
     await runVitestFile(relativePath);
     requestHistory.push({ timestamp: Date.now(), calls: estimatedCalls });
   }

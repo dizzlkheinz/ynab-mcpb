@@ -7,11 +7,7 @@ export interface MockDeltaResult<T> {
   usedDelta?: boolean;
 }
 
-type DeltaFetcherMethod =
-  | 'fetchAccounts'
-  | 'fetchBudgets'
-  | 'fetchCategories'
-  | 'fetchMonths';
+type DeltaFetcherMethod = 'fetchAccounts' | 'fetchBudgets' | 'fetchCategories' | 'fetchMonths';
 
 export function createDeltaFetcherMock<T>(
   method: DeltaFetcherMethod,

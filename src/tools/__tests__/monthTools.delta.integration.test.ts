@@ -63,14 +63,18 @@ describeIntegration('Delta-backed month tool handler', () => {
     expect(payload.cache_info).toMatch(/cache/i);
   };
 
-  it('serves cached month summaries on the second invocation', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
-    const params = { budget_id: testBudgetId };
-    const firstCall = await handleListMonths(ynabAPI, deltaFetcher, params);
-    const firstPayload = parseResponse(firstCall);
-    expect(firstPayload.cached).toBe(false);
+  it(
+    'serves cached month summaries on the second invocation',
+    { meta: { tier: 'domain', domain: 'delta' } },
+    async () => {
+      const params = { budget_id: testBudgetId };
+      const firstCall = await handleListMonths(ynabAPI, deltaFetcher, params);
+      const firstPayload = parseResponse(firstCall);
+      expect(firstPayload.cached).toBe(false);
 
-    const secondCall = await handleListMonths(ynabAPI, deltaFetcher, params);
-    const secondPayload = parseResponse(secondCall);
-    expectCacheHit(secondPayload);
-  });
+      const secondCall = await handleListMonths(ynabAPI, deltaFetcher, params);
+      const secondPayload = parseResponse(secondCall);
+      expectCacheHit(secondPayload);
+    },
+  );
 });

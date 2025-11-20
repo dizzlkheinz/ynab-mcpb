@@ -5,7 +5,7 @@
   "data": {
     "balance_info": {
       "current_cleared": {
-        "value": 100.00,
+        "value": 100.0,
         "value_display": "$100.00",
         "currency": "USD",
         "direction": "debit"

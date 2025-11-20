@@ -152,7 +152,7 @@ function createSuggestedMatchRecommendation(
       reason: match.match_reason,
       estimated_impact: toMoneyValueFromDecimal(
         0,
-        context.analysis.balance_info.current_cleared.currency
+        context.analysis.balance_info.current_cleared.currency,
       ),
       account_id: context.account_id,
       metadata: {
@@ -198,7 +198,7 @@ function createSuggestedMatchRecommendation(
     reason: `This transaction exactly matches your discrepancy`,
     estimated_impact: toMoneyValueFromDecimal(
       bankTxn.amount,
-      context.analysis.balance_info.current_cleared.currency
+      context.analysis.balance_info.current_cleared.currency,
     ),
     account_id: context.account_id,
     metadata: {
@@ -220,17 +220,15 @@ function createCombinationReviewRecommendation(
   const candidateIds = match.candidates?.map((candidate) => candidate.ynab_transaction.id) ?? [];
 
   // Calculate total amount from candidates for context (convert from milliunits to decimal)
-  const candidateTotalAmount = match.candidates?.reduce(
-    (sum, candidate) => {
+  const candidateTotalAmount =
+    match.candidates?.reduce((sum, candidate) => {
       const amount = candidate.ynab_transaction.amount;
       if (!Number.isFinite(amount)) {
         console.warn(`Invalid candidate amount: ${amount}`);
         return sum;
       }
       return sum + fromMilli(amount);
-    },
-    0
-  ) ?? 0;
+    }, 0) ?? 0;
 
   return {
     id: randomUUID(),
@@ -251,11 +249,11 @@ function createCombinationReviewRecommendation(
       created_at: new Date().toISOString(),
       bank_transaction_amount: toMoneyValueFromDecimal(
         bankTxn.amount,
-        context.analysis.balance_info.current_cleared.currency
+        context.analysis.balance_info.current_cleared.currency,
       ),
       candidate_total_amount: toMoneyValueFromDecimal(
         candidateTotalAmount,
-        context.analysis.balance_info.current_cleared.currency
+        context.analysis.balance_info.current_cleared.currency,
       ),
       candidate_count: match.candidates?.length ?? 0,
     },
@@ -270,7 +268,9 @@ function createCombinationReviewRecommendation(
         ...candidateIds.map((id) => ({
           source: 'ynab' as const,
           id,
-          description: match.candidates?.find((c) => c.ynab_transaction.id === id)?.ynab_transaction.payee_name ?? 'Unknown',
+          description:
+            match.candidates?.find((c) => c.ynab_transaction.id === id)?.ynab_transaction
+              .payee_name ?? 'Unknown',
         })),
       ],
     },
@@ -293,7 +293,7 @@ function createNearMatchRecommendation(
     reason: insight.description,
     estimated_impact: toMoneyValueFromDecimal(
       0,
-      context.analysis.balance_info.current_cleared.currency
+      context.analysis.balance_info.current_cleared.currency,
     ),
     account_id: context.account_id,
     source_insight_id: insight.id,
@@ -327,7 +327,7 @@ function createRepeatAmountRecommendations(
       reason: insight.description,
       estimated_impact: toMoneyValueFromDecimal(
         0,
-        context.analysis.balance_info.current_cleared.currency
+        context.analysis.balance_info.current_cleared.currency,
       ),
       account_id: context.account_id,
       source_insight_id: insight.id,
@@ -360,7 +360,7 @@ function createManualReviewRecommendation(
     reason: insight.description,
     estimated_impact: toMoneyValueFromDecimal(
       0,
-      context.analysis.balance_info.current_cleared.currency
+      context.analysis.balance_info.current_cleared.currency,
     ),
     account_id: context.account_id,
     source_insight_id: insight.id,
@@ -379,9 +379,7 @@ function createManualReviewRecommendation(
 /**
  * Process unmatched transactions into recommendations
  */
-function processUnmatchedTransactions(
-  context: RecommendationContext,
-): ActionableRecommendation[] {
+function processUnmatchedTransactions(context: RecommendationContext): ActionableRecommendation[] {
   const recommendations: ActionableRecommendation[] = [];
 
   // Unmatched bank transactions → create_transaction
@@ -441,7 +439,7 @@ function createUnmatchedBankRecommendation(
     reason: 'Transaction appears on bank statement but not in YNAB',
     estimated_impact: toMoneyValueFromDecimal(
       txn.amount,
-      context.analysis.balance_info.current_cleared.currency
+      context.analysis.balance_info.current_cleared.currency,
     ),
     account_id: context.account_id,
     metadata: {
@@ -477,7 +475,7 @@ function createUpdateClearedRecommendation(
     reason: 'Transaction exists in YNAB but not yet cleared',
     estimated_impact: toMoneyValueFromDecimal(
       0,
-      context.analysis.balance_info.current_cleared.currency
+      context.analysis.balance_info.current_cleared.currency,
     ),
     account_id: context.account_id,
     metadata: {
@@ -494,7 +492,9 @@ function createUpdateClearedRecommendation(
 /**
  * Sort recommendations by priority and confidence
  */
-function sortRecommendations(recommendations: ActionableRecommendation[]): ActionableRecommendation[] {
+function sortRecommendations(
+  recommendations: ActionableRecommendation[],
+): ActionableRecommendation[] {
   return recommendations.sort((a, b) => {
     // Sort by priority first
     const priorityDiff = PRIORITY_ORDER[b.priority] - PRIORITY_ORDER[a.priority];

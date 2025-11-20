@@ -100,6 +100,7 @@ For any MCP-compatible client, configure the server with:
 **Command:** `npx`
 **Arguments:** `["-y", "@dizzlkheinz/ynab-mcp-server"]`
 **Environment Variables:**
+
 - `YNAB_ACCESS_TOKEN`: Your YNAB Personal Access Token
 
 Refer to your MCP client's documentation for specific configuration steps.
@@ -109,6 +110,7 @@ Refer to your MCP client's documentation for specific configuration steps.
 ### Step 3: Start Using It
 
 Ask your AI assistant questions like:
+
 - "What's my checking account balance?"
 - "How much have I spent on dining out this month?"
 - "List my recent transactions"
@@ -121,9 +123,11 @@ That's it! You're ready to manage your budget with AI.
 Most users won't need to change these settings, but they're available if you need them:
 
 **Export Location:**
+
 - `YNAB_EXPORT_PATH` — Where to save exported transaction files (defaults to Downloads folder)
 
 Example:
+
 ```json
 {
   "mcpServers": {
@@ -146,17 +150,20 @@ For advanced configuration options (caching, output formatting), see the [Config
 The server gives Claude access to 28 tools organized by function. You don't need to know the tool names - just ask Claude in natural language and it will use the right tools.
 
 **Budget & Account Info**
+
 - View budgets, accounts, categories, payees
 - Check balances and category budgets
 - See monthly spending summaries
 
 **Transactions**
+
 - List, create, update, or delete transactions
 - Import and reconcile bank statements
 - Export transactions to files
 - Create split transactions from receipts
 
 **Analysis**
+
 - Compare spending across time periods
 - Find missing transactions
 - Track budget performance
@@ -178,6 +185,7 @@ Want to contribute or build from source?
 - **[Testing Guide](docs/guides/TESTING.md)** - Running and writing tests
 
 Quick start for development:
+
 ```bash
 git clone <repository-url>
 cd ynab-mcp-server
@@ -193,6 +201,7 @@ Your YNAB access token is stored securely and never logged. All communication wi
 ## Contributing
 
 Contributions welcome! Please:
+
 1. [Open an issue](https://github.com/dizzlkheinz/mcp-for-ynab/issues) to discuss your idea
 2. Fork the repository and make your changes
 3. Add tests for new features
@@ -207,6 +216,7 @@ Licensed under [AGPL-3.0](LICENSE). Free to use and modify, but derivative works
 ---
 
 Built with:
+
 - [YNAB API](https://api.youneedabudget.com/) - Official YNAB REST API
 - [Model Context Protocol](https://modelcontextprotocol.io/) - AI integration standard
 - [Claude Desktop](https://claude.ai/download) - AI assistant with MCP support

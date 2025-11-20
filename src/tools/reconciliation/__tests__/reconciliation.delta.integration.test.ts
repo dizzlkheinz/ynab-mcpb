@@ -78,66 +78,74 @@ describeIntegration('Reconciliation delta isolation', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses full-fetch helpers and exposes audit metadata', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
-    const csvData = ['Date,Amount,Description', '2024-01-01,10,Coffee'].join('\n');
-    const params = {
-      budget_id: testBudgetId,
-      account_id: testAccountId,
-      csv_data: csvData,
-      statement_balance: 0,
-      include_structured_data: true,
-    };
+  it(
+    'uses full-fetch helpers and exposes audit metadata',
+    { meta: { tier: 'domain', domain: 'delta' } },
+    async () => {
+      const csvData = ['Date,Amount,Description', '2024-01-01,10,Coffee'].join('\n');
+      const params = {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+        csv_data: csvData,
+        statement_balance: 0,
+        include_structured_data: true,
+      };
 
-    const accountsFullSpy = vi.spyOn(deltaFetcher, 'fetchAccountsFull');
-    const txFullSpy = vi.spyOn(deltaFetcher, 'fetchTransactionsByAccountFull');
-    const txDeltaSpy = vi.spyOn(deltaFetcher, 'fetchTransactionsByAccount');
+      const accountsFullSpy = vi.spyOn(deltaFetcher, 'fetchAccountsFull');
+      const txFullSpy = vi.spyOn(deltaFetcher, 'fetchTransactionsByAccountFull');
+      const txDeltaSpy = vi.spyOn(deltaFetcher, 'fetchTransactionsByAccount');
 
-    const result = await handleReconcileAccount(ynabAPI, deltaFetcher, params);
+      const result = await handleReconcileAccount(ynabAPI, deltaFetcher, params);
 
-    expect(accountsFullSpy).toHaveBeenCalledWith(testBudgetId);
-    expect(txFullSpy).toHaveBeenCalledWith(testBudgetId, testAccountId, expect.any(String));
-    expect(txDeltaSpy).not.toHaveBeenCalled();
+      expect(accountsFullSpy).toHaveBeenCalledWith(testBudgetId);
+      expect(txFullSpy).toHaveBeenCalledWith(testBudgetId, testAccountId, expect.any(String));
+      expect(txDeltaSpy).not.toHaveBeenCalled();
 
-    const structuredPayload = parseStructuredPayload(result);
-    expect(structuredPayload.audit).toMatchObject({
-      data_freshness: 'guaranteed_fresh',
-      data_source: 'full_api_fetch_no_delta',
-    });
-    expect(structuredPayload.audit).toHaveProperty('server_knowledge');
-    expect(structuredPayload.audit).toHaveProperty('transactions_count');
-  });
+      const structuredPayload = parseStructuredPayload(result);
+      expect(structuredPayload.audit).toMatchObject({
+        data_freshness: 'guaranteed_fresh',
+        data_source: 'full_api_fetch_no_delta',
+      });
+      expect(structuredPayload.audit).toHaveProperty('server_knowledge');
+      expect(structuredPayload.audit).toHaveProperty('transactions_count');
+    },
+  );
 
-  it('can opt into delta-backed fetches when force_full_refresh is false', { meta: { tier: 'domain', domain: 'delta' } }, async () => {
-    const csvData = ['Date,Amount,Description', '2024-01-01,10,Coffee'].join('\n');
-    const params = {
-      budget_id: testBudgetId,
-      account_id: testAccountId,
-      csv_data: csvData,
-      statement_balance: 0,
-      include_structured_data: true,
-      force_full_refresh: false,
-    };
+  it(
+    'can opt into delta-backed fetches when force_full_refresh is false',
+    { meta: { tier: 'domain', domain: 'delta' } },
+    async () => {
+      const csvData = ['Date,Amount,Description', '2024-01-01,10,Coffee'].join('\n');
+      const params = {
+        budget_id: testBudgetId,
+        account_id: testAccountId,
+        csv_data: csvData,
+        statement_balance: 0,
+        include_structured_data: true,
+        force_full_refresh: false,
+      };
 
-    const accountsFullSpy = vi.spyOn(deltaFetcher, 'fetchAccountsFull');
-    const txFullSpy = vi.spyOn(deltaFetcher, 'fetchTransactionsByAccountFull');
-    const accountsDeltaSpy = vi.spyOn(deltaFetcher, 'fetchAccounts');
-    const txDeltaSpy = vi.spyOn(deltaFetcher, 'fetchTransactionsByAccount');
+      const accountsFullSpy = vi.spyOn(deltaFetcher, 'fetchAccountsFull');
+      const txFullSpy = vi.spyOn(deltaFetcher, 'fetchTransactionsByAccountFull');
+      const accountsDeltaSpy = vi.spyOn(deltaFetcher, 'fetchAccounts');
+      const txDeltaSpy = vi.spyOn(deltaFetcher, 'fetchTransactionsByAccount');
 
-    const result = await handleReconcileAccount(ynabAPI, deltaFetcher, params);
+      const result = await handleReconcileAccount(ynabAPI, deltaFetcher, params);
 
-    expect(accountsFullSpy).not.toHaveBeenCalled();
-    expect(txFullSpy).not.toHaveBeenCalled();
-    expect(accountsDeltaSpy).toHaveBeenCalledWith(testBudgetId);
-    expect(txDeltaSpy).toHaveBeenCalledWith(testBudgetId, testAccountId, expect.any(String));
+      expect(accountsFullSpy).not.toHaveBeenCalled();
+      expect(txFullSpy).not.toHaveBeenCalled();
+      expect(accountsDeltaSpy).toHaveBeenCalledWith(testBudgetId);
+      expect(txDeltaSpy).toHaveBeenCalledWith(testBudgetId, testAccountId, expect.any(String));
 
-    const structuredPayload = parseStructuredPayload(result);
-    expect(structuredPayload.audit).toMatchObject({
-      data_source: expect.stringMatching(/^delta_fetch_/),
-    });
-    expect(structuredPayload.audit.cache_status).toMatchObject({
-      accounts_cached: expect.any(Boolean),
-      transactions_cached: expect.any(Boolean),
-      delta_merge_applied: expect.any(Boolean),
-    });
-  });
+      const structuredPayload = parseStructuredPayload(result);
+      expect(structuredPayload.audit).toMatchObject({
+        data_source: expect.stringMatching(/^delta_fetch_/),
+      });
+      expect(structuredPayload.audit.cache_status).toMatchObject({
+        accounts_cached: expect.any(Boolean),
+        transactions_cached: expect.any(Boolean),
+        delta_merge_applied: expect.any(Boolean),
+      });
+    },
+  );
 });

@@ -273,8 +273,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           if (bulkOperationDetails) {
             bulkOperationDetails.transaction_failures += 1; // Canonical counter for per-transaction failures
           }
-          const failureReason =
-            error instanceof Error ? error.message : 'Unknown error occurred';
+          const failureReason = error instanceof Error ? error.message : 'Unknown error occurred';
           const failureAction: ExecutionActionRecord = {
             type: 'create_transaction_failed',
             transaction: entry.saveTransaction as unknown as Record<string, unknown>,
@@ -291,7 +290,8 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
       }
       // Update sequential_attempts metric if this was a fallback operation
       if (bulkOperationDetails && options.fallbackError && sequentialAttempts > 0) {
-        bulkOperationDetails.sequential_attempts = (bulkOperationDetails.sequential_attempts ?? 0) + sequentialAttempts;
+        bulkOperationDetails.sequential_attempts =
+          (bulkOperationDetails.sequential_attempts ?? 0) + sequentialAttempts;
       }
     };
 
@@ -307,7 +307,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
       const responseData = response.data;
       const duplicateImportIds = new Set(responseData.duplicate_import_ids ?? []);
       const correlationRequests = chunk.map((entry) =>
-        toCorrelationPayload(entry.saveTransaction)
+        toCorrelationPayload(entry.saveTransaction),
       ) as Parameters<typeof correlateResults>[0];
       const correlated = correlateResults(correlationRequests, responseData, duplicateImportIds);
       const transactionMap = new Map<string, ynab.TransactionDetail>();
@@ -321,7 +321,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
         if (!entry) continue;
         if (result.status === 'created') {
           const createdTransaction = result.transaction_id
-            ? transactionMap.get(result.transaction_id) ?? null
+            ? (transactionMap.get(result.transaction_id) ?? null)
             : null;
           recordCreateAction({
             entry,
@@ -355,8 +355,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
             type: 'create_transaction_failed',
             transaction: entry.saveTransaction as unknown as Record<string, unknown>,
             reason:
-              result.error ??
-              `Bulk create failed for ${entry.bankTransaction.payee ?? 'Unknown'}`,
+              result.error ?? `Bulk create failed for ${entry.bankTransaction.payee ?? 'Unknown'}`,
             bulk_chunk_index: chunkIndex,
             correlation_key: result.correlation_key,
           });
@@ -510,8 +509,12 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
       summary.transactions_updated += updatedTransactions.length;
 
       for (const updatedTransaction of updatedTransactions) {
-        const match = orderedAutoMatches.find(m => m.ynab_transaction?.id === updatedTransaction.id);
-        const flags = match ? computeUpdateFlags(match, params) : { needsClearedUpdate: false, needsDateUpdate: false };
+        const match = orderedAutoMatches.find(
+          (m) => m.ynab_transaction?.id === updatedTransaction.id,
+        );
+        const flags = match
+          ? computeUpdateFlags(match, params)
+          : { needsClearedUpdate: false, needsDateUpdate: false };
         actions_taken.push({
           type: 'update_transaction',
           transaction: updatedTransaction as unknown as Record<string, unknown> | null,
@@ -631,10 +634,7 @@ function formatDisplay(amount: number, currency: string): string {
   return toMoneyValueFromDecimal(amount, currency).value_display;
 }
 
-function computeUpdateFlags(
-  match: TransactionMatch,
-  params: ReconcileAccountRequest,
-): UpdateFlags {
+function computeUpdateFlags(match: TransactionMatch, params: ReconcileAccountRequest): UpdateFlags {
   const ynabTxn = match.ynab_transaction;
   const bankTxn = match.bank_transaction;
   if (!ynabTxn) {

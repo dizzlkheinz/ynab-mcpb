@@ -101,7 +101,7 @@ export const IsoDateWithCalendarValidationSchema = z
     },
     {
       message: 'Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)',
-    }
+    },
   );
 
 /**
@@ -221,26 +221,28 @@ export function deriveConfidenceFromScore(score: number): 'high' | 'medium' | 'l
  * - 'low': confidence_score >= 1
  * - 'none': confidence_score === 0
  */
-export const TransactionMatchSchema = z.object({
-  bank_transaction: BankTransactionSchema,
-  ynab_transaction: YNABTransactionSimpleSchema.optional(),
-  candidates: z.array(MatchCandidateSchema).optional(),
-  confidence: z.enum(['high', 'medium', 'low', 'none']),
-  confidence_score: z.number().min(0).max(100),
-  match_reason: z.string(),
-  top_confidence: z.number().optional(),
-  action_hint: z.string().optional(),
-  recommendation: z.string().optional(),
-}).refine(
-  (data) => {
-    const expectedConfidence = deriveConfidenceFromScore(data.confidence_score);
-    return data.confidence === expectedConfidence;
-  },
-  {
-    message: 'Confidence mismatch: confidence enum does not match confidence_score',
-    path: ['confidence'],
-  }
-);
+export const TransactionMatchSchema = z
+  .object({
+    bank_transaction: BankTransactionSchema,
+    ynab_transaction: YNABTransactionSimpleSchema.optional(),
+    candidates: z.array(MatchCandidateSchema).optional(),
+    confidence: z.enum(['high', 'medium', 'low', 'none']),
+    confidence_score: z.number().min(0).max(100),
+    match_reason: z.string(),
+    top_confidence: z.number().optional(),
+    action_hint: z.string().optional(),
+    recommendation: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      const expectedConfidence = deriveConfidenceFromScore(data.confidence_score);
+      return data.confidence === expectedConfidence;
+    },
+    {
+      message: 'Confidence mismatch: confidence enum does not match confidence_score',
+      path: ['confidence'],
+    },
+  );
 
 export type TransactionMatch = z.infer<typeof TransactionMatchSchema>;
 
@@ -409,17 +411,19 @@ export type AccountSnapshot = z.infer<typeof AccountSnapshotSchema>;
  * Created transaction from YNAB API response.
  * Used when a transaction is successfully created.
  */
-export const CreatedTransactionSchema = z.object({
-  id: z.string(),
-  date: z.string(),
-  amount: z.number(),
-  memo: z.string().nullable().optional(),
-  cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
-  approved: z.boolean().optional(),
-  payee_name: z.string().nullable().optional(),
-  category_name: z.string().nullable().optional(),
-  import_id: z.string().nullable().optional(),
-}).passthrough(); // Allow additional YNAB API fields
+export const CreatedTransactionSchema = z
+  .object({
+    id: z.string(),
+    date: z.string(),
+    amount: z.number(),
+    memo: z.string().nullable().optional(),
+    cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
+    approved: z.boolean().optional(),
+    payee_name: z.string().nullable().optional(),
+    category_name: z.string().nullable().optional(),
+    import_id: z.string().nullable().optional(),
+  })
+  .passthrough(); // Allow additional YNAB API fields
 
 /**
  * Transaction creation payload.
@@ -500,7 +504,7 @@ export const ExecutionActionRecordSchema = z.discriminatedUnion('type', [
     type: z.literal('update_transaction'),
     transaction: z.union([
       CreatedTransactionSchema.nullable(), // Real execution
-      TransactionUpdatePayloadSchema,      // Dry run
+      TransactionUpdatePayloadSchema, // Dry run
     ]),
     reason: z.string(),
   }),
@@ -553,21 +557,20 @@ export type ExecutionSummary = z.infer<typeof ExecutionSummarySchema>;
  *
  * @see src/tools/reconciliation/executor.ts:50-68 - BulkOperationDetails interface
  */
-export const BulkOperationDetailsSchema = z.object({
-  chunks_processed: z.number(),
-  bulk_successes: z.number(),
-  sequential_fallbacks: z.number(),
-  duplicates_detected: z.number(),
-  failed_transactions: z.number(),
-  bulk_chunk_failures: z.number(),
-  transaction_failures: z.number(),
-  sequential_attempts: z.number().optional(),
-}).refine(
-  (data) => data.failed_transactions === data.transaction_failures,
-  {
+export const BulkOperationDetailsSchema = z
+  .object({
+    chunks_processed: z.number(),
+    bulk_successes: z.number(),
+    sequential_fallbacks: z.number(),
+    duplicates_detected: z.number(),
+    failed_transactions: z.number(),
+    bulk_chunk_failures: z.number(),
+    transaction_failures: z.number(),
+    sequential_attempts: z.number().optional(),
+  })
+  .refine((data) => data.failed_transactions === data.transaction_failures, {
     message: 'failed_transactions must equal transaction_failures',
-  }
-);
+  });
 
 export type BulkOperationDetails = z.infer<typeof BulkOperationDetailsSchema>;
 
@@ -610,19 +613,21 @@ export type ExecutionResult = z.infer<typeof ExecutionResultSchema>;
  * @see src/tools/reconciliation/index.ts:272-284 - Audit metadata construction
  * @see src/tools/reconcileAdapter.ts:19-25 - AdapterOptions interface with extensible auditMetadata
  */
-export const AuditMetadataSchema = z.object({
-  data_freshness: z.string(),
-  data_source: z.string(),
-  server_knowledge: z.number().optional(),
-  fetched_at: z.string(),
-  accounts_count: z.number().optional(),
-  transactions_count: z.number().optional(),
-  cache_status: z.object({
-    accounts_cached: z.boolean(),
-    transactions_cached: z.boolean(),
-    delta_merge_applied: z.boolean(),
-  }),
-}).catchall(z.unknown());
+export const AuditMetadataSchema = z
+  .object({
+    data_freshness: z.string(),
+    data_source: z.string(),
+    server_knowledge: z.number().optional(),
+    fetched_at: z.string(),
+    accounts_count: z.number().optional(),
+    transactions_count: z.number().optional(),
+    cache_status: z.object({
+      accounts_cached: z.boolean(),
+      transactions_cached: z.boolean(),
+      delta_merge_applied: z.boolean(),
+    }),
+  })
+  .catchall(z.unknown());
 
 export type AuditMetadata = z.infer<typeof AuditMetadataSchema>;
 
@@ -782,9 +787,10 @@ export const ReconcileAccountOutputSchema = z
       return true;
     },
     {
-      message: 'Discrepancy direction mismatch: direction must match the numeric discrepancy amount',
+      message:
+        'Discrepancy direction mismatch: direction must match the numeric discrepancy amount',
       path: ['balance', 'discrepancy_direction'],
-    }
+    },
   );
 
 export type ReconcileAccountOutput = z.infer<typeof ReconcileAccountOutputSchema>;

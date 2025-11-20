@@ -173,14 +173,16 @@ export type BulkOperationSummary = z.infer<typeof BulkOperationSummarySchema>;
  * @see src/tools/transactionTools.ts:1636-1855 - create_transactions handler
  * @see src/tools/transactionTools.ts:2057-2462 - update_transactions handler
  */
-export const BulkResultSchema = z.object({
-  request_index: z.number(),
-  status: z.enum(['created', 'duplicate', 'updated', 'failed']),
-  transaction_id: z.string().optional(),
-  correlation_key: z.string(),
-  error_code: z.string().optional(),
-  error: z.string().optional(),
-}).passthrough(); // Allow additional correlation metadata fields
+export const BulkResultSchema = z
+  .object({
+    request_index: z.number(),
+    status: z.enum(['created', 'duplicate', 'updated', 'failed']),
+    transaction_id: z.string().optional(),
+    correlation_key: z.string(),
+    error_code: z.string().optional(),
+    error: z.string().optional(),
+  })
+  .passthrough(); // Allow additional correlation metadata fields
 
 export type BulkResult = z.infer<typeof BulkResultSchema>;
 
@@ -192,7 +194,10 @@ export type BulkResult = z.infer<typeof BulkResultSchema>;
  */
 export const TransactionDiffFieldsSchema = z.object({
   amount: z.number().optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   memo: z.string().optional(),
   payee_id: z.string().nullable().optional(),
   payee_name: z.string().nullable().optional(),
@@ -212,10 +217,7 @@ export type TransactionDiffFields = z.infer<typeof TransactionDiffFieldsSchema>;
  */
 export const DryRunPreviewItemSchema = z.object({
   transaction_id: z.string(),
-  before: z.union([
-    z.literal('unavailable'),
-    TransactionDiffFieldsSchema,
-  ]),
+  before: z.union([z.literal('unavailable'), TransactionDiffFieldsSchema]),
   after: TransactionDiffFieldsSchema,
 });
 
@@ -339,34 +341,40 @@ export type CreateTransactionPreview = z.infer<typeof CreateTransactionPreviewSc
  */
 export const CreateTransactionsOutputSchema = z.union([
   // Dry-run mode: Strict schema for preview validation
-  z.object({
-    dry_run: z.literal(true),
-    action: z.literal('create_transactions'),
-    validation: z.literal('passed'),
-    summary: z.object({
-      total_transactions: z.number(),
-      total_amount: z.number(),
-      accounts_affected: z.array(z.string()),
-      date_range: z.object({
-        earliest: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        latest: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      }).optional(),
-      categories_affected: z.array(z.string()),
-    }),
-    transactions_preview: z.array(CreateTransactionPreviewSchema),
-    note: z.string(),
-  }).strict(), // Strict for dry-run to prevent malformed previews
+  z
+    .object({
+      dry_run: z.literal(true),
+      action: z.literal('create_transactions'),
+      validation: z.literal('passed'),
+      summary: z.object({
+        total_transactions: z.number(),
+        total_amount: z.number(),
+        accounts_affected: z.array(z.string()),
+        date_range: z
+          .object({
+            earliest: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+            latest: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          })
+          .optional(),
+        categories_affected: z.array(z.string()),
+      }),
+      transactions_preview: z.array(CreateTransactionPreviewSchema),
+      note: z.string(),
+    })
+    .strict(), // Strict for dry-run to prevent malformed previews
   // Execution mode: Allow passthrough for correlation metadata extension
-  z.object({
-    success: z.boolean(),
-    server_knowledge: z.number().optional(),
-    summary: BulkOperationSummarySchema,
-    results: z.array(BulkResultSchema),
-    transactions: z.array(TransactionSchema).optional(),
-    duplicate_import_ids: z.array(z.string()).optional(),
-    message: z.string().optional(),
-    mode: z.enum(['full', 'summary', 'ids_only']).optional(),
-  }).passthrough(), // Allow top-level metadata like batch_id, execution_id
+  z
+    .object({
+      success: z.boolean(),
+      server_knowledge: z.number().optional(),
+      summary: BulkOperationSummarySchema,
+      results: z.array(BulkResultSchema),
+      transactions: z.array(TransactionSchema).optional(),
+      duplicate_import_ids: z.array(z.string()).optional(),
+      message: z.string().optional(),
+      mode: z.enum(['full', 'summary', 'ids_only']).optional(),
+    })
+    .passthrough(), // Allow top-level metadata like batch_id, execution_id
 ]);
 
 export type CreateTransactionsOutput = z.infer<typeof CreateTransactionsOutputSchema>;
@@ -452,29 +460,33 @@ export type UpdateTransactionOutput = z.infer<typeof UpdateTransactionOutputSche
  */
 export const UpdateTransactionsOutputSchema = z.union([
   // Dry-run mode: Strict schema for preview validation
-  z.object({
-    dry_run: z.literal(true),
-    action: z.literal('update_transactions'),
-    validation: z.literal('passed'),
-    summary: z.object({
-      total_transactions: z.number(),
-      accounts_affected: z.number(),
-      fields_to_update: z.array(z.string()),
-    }),
-    transactions_preview: z.array(DryRunPreviewItemSchema),
-    warnings: z.array(DryRunWarningSchema).optional(),
-    note: z.string(),
-  }).strict(), // Strict for dry-run to prevent malformed previews
+  z
+    .object({
+      dry_run: z.literal(true),
+      action: z.literal('update_transactions'),
+      validation: z.literal('passed'),
+      summary: z.object({
+        total_transactions: z.number(),
+        accounts_affected: z.number(),
+        fields_to_update: z.array(z.string()),
+      }),
+      transactions_preview: z.array(DryRunPreviewItemSchema),
+      warnings: z.array(DryRunWarningSchema).optional(),
+      note: z.string(),
+    })
+    .strict(), // Strict for dry-run to prevent malformed previews
   // Execution mode: Allow passthrough for correlation metadata extension
-  z.object({
-    success: z.boolean(),
-    server_knowledge: z.number().optional(),
-    summary: BulkOperationSummarySchema,
-    results: z.array(BulkResultSchema),
-    transactions: z.array(TransactionSchema).optional(),
-    message: z.string().optional(),
-    mode: z.enum(['full', 'summary', 'ids_only']).optional(),
-  }).passthrough(), // Allow top-level metadata like batch_id, execution_id
+  z
+    .object({
+      success: z.boolean(),
+      server_knowledge: z.number().optional(),
+      summary: BulkOperationSummarySchema,
+      results: z.array(BulkResultSchema),
+      transactions: z.array(TransactionSchema).optional(),
+      message: z.string().optional(),
+      mode: z.enum(['full', 'summary', 'ids_only']).optional(),
+    })
+    .passthrough(), // Allow top-level metadata like batch_id, execution_id
 ]);
 
 export type UpdateTransactionsOutput = z.infer<typeof UpdateTransactionsOutputSchema>;
@@ -631,7 +643,9 @@ export const CreateReceiptSplitTransactionOutputSchema = z.union([
   }),
 ]);
 
-export type CreateReceiptSplitTransactionOutput = z.infer<typeof CreateReceiptSplitTransactionOutputSchema>;
+export type CreateReceiptSplitTransactionOutput = z.infer<
+  typeof CreateReceiptSplitTransactionOutputSchema
+>;
 
 /**
  * Create account dry-run request schema.

@@ -412,7 +412,10 @@ describe('Month Tools', () => {
     });
 
     it('should handle authentication errors', async () => {
-      const { fetcher } = createRejectingDeltaFetcherMock('fetchMonths', new Error('401 Unauthorized'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchMonths',
+        new Error('401 Unauthorized'),
+      );
 
       const result = await handleListMonths(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
@@ -422,7 +425,10 @@ describe('Month Tools', () => {
     });
 
     it('should handle not found errors', async () => {
-      const { fetcher } = createRejectingDeltaFetcherMock('fetchMonths', new Error('404 Not Found'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchMonths',
+        new Error('404 Not Found'),
+      );
 
       const result = await handleListMonths(mockYnabAPI, fetcher, { budget_id: 'invalid-budget' });
 

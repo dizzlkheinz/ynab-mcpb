@@ -8,11 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  ListPayeesOutputSchema,
-  GetPayeeOutputSchema,
-  PayeeSchema,
-} from '../payeeOutputs.js';
+import { ListPayeesOutputSchema, GetPayeeOutputSchema, PayeeSchema } from '../payeeOutputs.js';
 
 describe('PayeeSchema', () => {
   it('should validate complete payee with all fields', () => {

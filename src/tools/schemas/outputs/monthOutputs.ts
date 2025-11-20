@@ -174,8 +174,8 @@ export const MonthDetailSchema = z.object({
   /** Amount to be budgeted in dollars */
   to_be_budgeted: z.number().describe('To be budgeted in dollars'),
 
-  /** Age of money in days (optional) */
-  age_of_money: z.number().optional().describe('Age of money in days'),
+  /** Age of money in days (optional, can be null if insufficient history) */
+  age_of_money: z.number().nullish().describe('Age of money in days'),
 
   /** Whether month is deleted */
   deleted: z.boolean().describe('Deleted flag'),
@@ -208,8 +208,8 @@ export const MonthSummarySchema = z.object({
   /** Amount to be budgeted in dollars */
   to_be_budgeted: z.number().describe('To be budgeted in dollars'),
 
-  /** Age of money in days (optional) */
-  age_of_money: z.number().optional().describe('Age of money in days'),
+  /** Age of money in days (optional, can be null if insufficient history) */
+  age_of_money: z.number().nullish().describe('Age of money in days'),
 
   /** Whether month is deleted */
   deleted: z.boolean().describe('Deleted flag'),

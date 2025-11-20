@@ -177,7 +177,10 @@ describe('Payee Tools', () => {
     });
 
     it('should handle authentication errors', async () => {
-      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('401 Unauthorized'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchPayees',
+        new Error('401 Unauthorized'),
+      );
 
       const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
@@ -187,7 +190,10 @@ describe('Payee Tools', () => {
     });
 
     it('should handle forbidden errors', async () => {
-      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('403 Forbidden'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchPayees',
+        new Error('403 Forbidden'),
+      );
 
       const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
@@ -197,7 +203,10 @@ describe('Payee Tools', () => {
     });
 
     it('should handle not found errors', async () => {
-      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('404 Not Found'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchPayees',
+        new Error('404 Not Found'),
+      );
 
       const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'invalid-budget' });
 
@@ -207,7 +216,10 @@ describe('Payee Tools', () => {
     });
 
     it('should handle rate limit errors', async () => {
-      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('429 Too Many Requests'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchPayees',
+        new Error('429 Too Many Requests'),
+      );
 
       const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
@@ -217,7 +229,10 @@ describe('Payee Tools', () => {
     });
 
     it('should handle server errors', async () => {
-      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('500 Internal Server Error'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchPayees',
+        new Error('500 Internal Server Error'),
+      );
 
       const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
@@ -227,7 +242,10 @@ describe('Payee Tools', () => {
     });
 
     it('should handle generic errors', async () => {
-      const { fetcher } = createRejectingDeltaFetcherMock('fetchPayees', new Error('Network error'));
+      const { fetcher } = createRejectingDeltaFetcherMock(
+        'fetchPayees',
+        new Error('Network error'),
+      );
 
       const result = await handleListPayees(mockYnabAPI, fetcher, { budget_id: 'budget-1' });
 
