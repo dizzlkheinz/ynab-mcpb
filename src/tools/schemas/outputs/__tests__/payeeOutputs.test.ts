@@ -19,7 +19,6 @@ describe('PayeeSchema', () => {
     const validPayee = {
       id: 'payee-123',
       name: 'Whole Foods',
-      transfer_account_id: undefined,
       deleted: false,
     };
 
@@ -74,20 +73,6 @@ describe('PayeeSchema', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.deleted).toBe(true);
-    }
-  });
-
-  it('should validate regular payee without transfer_account_id', () => {
-    const validPayee = {
-      id: 'payee-regular',
-      name: 'Gas Station',
-      deleted: false,
-    };
-
-    const result = PayeeSchema.safeParse(validPayee);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.transfer_account_id).toBeUndefined();
     }
   });
 

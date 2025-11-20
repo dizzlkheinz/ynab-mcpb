@@ -11,196 +11,152 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Structured Output Schemas** - Comprehensive Zod-based output validation for all 30 MCP tools
-  - Output schemas defined for every tool enabling type-safe responses with TypeScript inference
-  - Automatic validation in ToolRegistry preventing malformed outputs (toolRegistry.ts:401-483)
-  - Schema organization in `src/tools/schemas/outputs/` with centralized exports from index.ts
-  - Runtime validation using `z.safeParse()` with detailed error reporting
-  - Self-documenting API contracts improving AI model parsing and integration reliability
-- **Comprehensive Unit Test Coverage** - Full test suite for all output schemas
-  - Budget output schemas (`budgetOutputs.test.ts`)
-  - Account output schemas (`accountOutputs.test.ts`)
-  - Transaction output schemas (`transactionOutputs.test.ts`) including preview mode validation
-  - Category output schemas (`categoryOutputs.test.ts`) with goal field testing
-  - Payee output schemas (`payeeOutputs.test.ts`) including transfer payee validation
-  - Month output schemas (`monthOutputs.test.ts`) with category nesting
-  - Comparison and export schemas (`comparisonOutputs.test.ts`) with date validation
-- **E2E Schema Validation** - Integration testing with schema validation
-  - `validateOutputSchema()` helper function in testUtils.ts for automated schema testing
-  - Schema validation added to key workflow tests (budget, account, transaction management)
-  - New "Output Schema Validation" describe block with dedicated tests for all major tools
-  - Validation errors logged with detailed error messages for debugging
+- **Structured Output Schemas** - Zod-based output validation for all 30 tools
+  - Output schemas in `src/tools/schemas/outputs/` with centralized exports
+  - Automatic validation in ToolRegistry (toolRegistry.ts:401-483) using `z.safeParse()`
+  - Type-safe responses with TypeScript inference
+- **Unit Tests** - Full coverage for output schemas (7 test files)
+  - Budget, account, transaction, category, payee, month outputs
+  - Comparison and export schemas with specialized validations
+- **E2E Schema Validation**
+  - `validateOutputSchema()` helper in testUtils.ts
+  - Schema validation integrated into workflow tests
 
 ### Changed
 
-- Tool registry now validates handler responses against declared output schemas (lines 401-483 in toolRegistry.ts)
-- MCP Tool objects now include `outputSchema` field in `listTools()` responses
-- All tool handlers return schema-compliant responses validated at runtime
-
-### Documentation
-
-- Updated TOOLS.md with "Structured Output Support" section explaining benefits and usage
-- Added TypeScript usage examples showing schema validation with `safeParse()`
-- Documented schema organization by tool domain with file references
-- Added comprehensive unit tests for all output schemas (7 new test files)
-- Migration note: Non-breaking change—existing clients continue to work; output schemas optional
-
-**Migration Notes**: This is a non-breaking change. Existing integrations continue to work as before since output schemas are optional and validation only affects new integrations that rely on schema contracts. Tools without output schemas will function normally but won't benefit from automatic validation.
+- ToolRegistry validates handler responses against output schemas
+- `listTools()` includes `outputSchema` field in Tool objects
+- TOOLS.md updated with structured output documentation
 
 ## [0.11.0] - 2025-01-14
 
 ### Added
 
-- **Tiered Integration Testing Infrastructure** - Comprehensive three-tier testing system for improved reliability
-  - Core integration tests: Budget-agnostic tests for fundamental operations
-  - Domain integration tests: Budget-specific tests organized by functional domain
-  - Throttled execution with configurable delays to respect API rate limits
-  - Enhanced test isolation and parallel execution support
-- **Delta Request System** - Efficient incremental data fetching using YNAB's delta protocol
-  - `ServerKnowledgeStore`: Tracks server knowledge values for all delta-supported endpoints
-  - `DeltaCache`: Specialized caching layer for delta-backed data with conflict detection
-  - `DeltaFetcher`: Unified interface for delta-backed API calls with automatic cache management
+- **Tiered Integration Testing** - Three-tier test system
+  - Core: Budget-agnostic fundamental operations
+  - Domain: Budget-specific tests by functional domain
+  - Throttled execution respecting API rate limits
+- **Delta Request System** - Incremental data fetching via YNAB delta protocol
+  - `ServerKnowledgeStore`: Tracks server knowledge for delta endpoints
+  - `DeltaCache`: Specialized caching with conflict detection
+  - `DeltaFetcher`: Unified interface for delta-backed API calls
   - 70-90% reduction in API response size for cached data
-  - Automatic fallback to full refresh when conflicts detected
-- **Bulk Transaction Operations** - High-performance batch transaction handling
-  - `create_transactions`: Create up to 100 transactions in a single API call
-  - `update_transactions`: Update up to 100 transactions with automatic cache invalidation
-  - Duplicate detection via import_id with partial success reporting
-  - Correlation metadata for tracking individual transaction results
-  - Dry-run mode for safe validation before execution
-- **Enhanced Transaction Metadata** - Improved transaction tracking and cache management
-  - Optional `original_account_id` and `original_date` metadata for efficient cache invalidation
-  - Preview functionality for transaction updates before execution
-  - Automatic response size management for large batch operations
+- **Bulk Transaction Operations** - Batch handling for up to 100 transactions
+  - `create_transactions`: Batch create with duplicate detection via import_id
+  - `update_transactions`: Batch update with automatic cache invalidation
+  - Dry-run mode and correlation metadata
+- **Enhanced Transaction Metadata**
+  - Optional `original_account_id` and `original_date` for cache invalidation
+  - Preview functionality for updates
+  - Response size management for large batches
 
 ### Changed
 
-- Tool count increased from 28 to 30 with addition of bulk transaction operations
-- Delta-backed tools now use `DeltaFetcher` for automatic cache optimization
-- Write operations now support `DeltaCache` and `ServerKnowledgeStore` for better consistency
-- Integration tests reorganized into core and domain-specific suites for better coverage
+- Tool count: 28 → 30
+- Delta-backed tools use `DeltaFetcher` for cache optimization
+- Write operations support `DeltaCache` and `ServerKnowledgeStore`
 
 ### Fixed
 
-- Linting issues across codebase with comprehensive ESLint configuration
-- Cache invalidation now properly handles transaction updates across accounts
-- Response size management prevents oversized payloads in bulk operations
+- Cache invalidation for cross-account transaction updates
+- Response size management for bulk operations
 
 ## [0.10.0] - 2025-11-03
 
 ### Added
 
-- Reconciliation v2 now plumbs currency through analyzer/executor and emits MoneyValue objects.
-- Schema `docs/schemas/reconciliation-v2.json` exposes `csv_format` and SCHEMA_URL examples point to master.
-- Analyzer suggests and highlights 2–3 leg combination matches with new insights/tests.
-- Handler prefers `accounts.getAccount` with fallback and includes `csv_format` metadata in payloads.
-- Updated docs and targeted tests (schema URL, scenarios, apply-mode, registry mapping).
+- **Reconciliation v2** - Currency plumbing and MoneyValue objects
+  - Analyzer/executor emit structured MoneyValue objects
+  - Schema `docs/schemas/reconciliation-v2.json` with `csv_format` support
+  - 2-3 leg combination match suggestions with insights
+  - Handler uses `accounts.getAccount` with fallback
 
 ## [0.8.8] - 2025-10-13
 
 ### Changed
 
-- Renamed the package to `@dizzlkheinz/ynab-mcp-server` to match the published npm scope.
+- Renamed package to `@dizzlkheinz/ynab-mcp-server`
 
 ## [0.8.7] - 2025-10-13
 
 ### Changed
 
-- GitHub Actions now runs unit tests before publishing, with provenance enabled via `id-token` permissions.
+- GitHub Actions runs unit tests before publish with provenance enabled
 
 ## [0.8.6] - 2025-10-13
 
 ### Changed
 
-- Adjusted npm publish workflow to run unit tests only, preventing CI runs from requiring real YNAB credentials.
+- Npm publish workflow runs unit tests only (no YNAB credentials needed)
 
 ## [0.8.5] - 2025-10-13
 
 ### Fixed
 
-- Updated export transaction tests to parse JSON output instead of relying on spacing, keeping the suite stable in CI.
+- Export transaction tests parse JSON instead of relying on spacing
 
 ## [0.8.4] - 2025-10-13
 
 ### Changed
 
-- Made DXT generation optional via a cross-platform Node wrapper so CI publishing works without PowerShell.
+- DXT generation optional via cross-platform Node wrapper (CI compatible)
 
 ## [0.8.3] - 2025-10-13
 
 ### Changed
 
-- Added CLI launchers so `npx @dizzlkheinz/ynab-mcp-server` starts the server immediately.
-- Introduced a GitHub Actions workflow to publish releases to npm with provenance metadata.
+- CLI launchers: `npx @dizzlkheinz/ynab-mcp-server` starts server immediately
+- GitHub Actions workflow publishes to npm with provenance
 
 ## [0.8.2] - 2025-10-13
 
 ### Added
 
-- New `create_receipt_split_transaction` helper that converts categorized receipts into multi-line YNAB splits with proportional tax distribution and optional dry-run previews.
-
-### Changed
-
-- Expanded documentation and release artifacts to highlight the receipt workflow and ensure checklists cover the new tool.
+- `create_receipt_split_transaction` - Converts categorized receipts to YNAB splits
+  - Proportional tax distribution
+  - Optional dry-run previews
 
 ## [0.8.1] - 2025-10-02
 
 ### Added
 
-- Support for creating split transactions via the `create_transaction` tool, including schema validation and response formatting for subtransactions.
-
-### Changed
-
-- Updated transaction creation responses to include detailed subtransaction data alongside refreshed account balances.
-- Refreshed documentation and tests to cover split transaction workflows.
+- Split transaction support in `create_transaction`
+  - Schema validation and response formatting for subtransactions
+  - Detailed subtransaction data in responses
 
 ## [0.8.0] - 2025-09-28
 
 ### Fixed
 
-- Resolved a persistent TypeScript build error in the `compareTransactions` tool by inlining the `inWindow` date comparison logic, removing an unused import, and adding non-null assertions to address `noUncheckedIndexedAccess` compiler issues.
+- TypeScript build error in `compareTransactions` (inlined date comparison, non-null assertions)
 
 ## [0.7.0] - 2025-09-23
 
 ### Added
 
-- Automatic conversion of all monetary amounts from YNAB's internal milliunits to human-readable dollars
-- New utility functions for amount conversion (`milliunitsToAmount`, `amountToMilliunits`, `formatAmount`)
-- Comprehensive test coverage for amount conversion functionality
+- Automatic amount conversion: milliunits → dollars
+- Utility functions: `milliunitsToAmount`, `amountToMilliunits`, `formatAmount`
 
 ### Changed
 
-- **BREAKING**: All API responses now return monetary amounts in dollars instead of milliunits
-- Account balances, transaction amounts, and budget figures now display in standard dollar format
-- Enhanced developer and AI assistant experience with consistent amount formatting
+- **BREAKING**: All API responses return amounts in dollars (not milliunits)
+- Account balances, transactions, budgets now use dollar format
 
 ### Fixed
 
-- Eliminated confusion where amounts like `-1924370` milliunits were misinterpreted as `-$1,924,370` instead of the correct `-$1,924.37`
-- Updated all test expectations to match new dollar-based responses
-
-### Documentation
-
-- Updated README.md with v0.7.0 features and automatic amount conversion details
-- Enhanced API documentation with new monetary amount format specifications
-- Added examples showing before/after amount formatting
+- Amount confusion: `-1924370` milliunits → `-$1,924.37` (not `-$1,924,370`)
 
 ## [0.6.0] - 2025-09-16
 
 ### Added
 
-- Consolidated debug tools into single comprehensive `diagnostic_info` tool
-- Enhanced bank reconciliation with smart duplicate amount matching
-- Automatic date adjustment for transaction synchronization
-- Exact balance matching with zero tolerance reconciliation
-- Improved date range reporting for reconciliation visibility
-
-### Changed
-
-- Better tool organization with 80% reduction in debug tool clutter
-- Cleaner MCP interface for improved user experience
+- `diagnostic_info` tool consolidates debug tools (80% reduction in clutter)
+- Enhanced bank reconciliation
+  - Smart duplicate amount matching with chronological preference
+  - Automatic date adjustment for transaction sync
+  - Exact balance matching (zero tolerance)
+  - Improved date range reporting
 
 ### Fixed
 
-- Multiple identical transactions handling in reconciliation process
-- Chronological order preference for duplicate matching
+- Multiple identical transaction handling in reconciliation
