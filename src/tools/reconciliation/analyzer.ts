@@ -745,7 +745,7 @@ export function analyzeReconciliation(
   // Some banks show charges as positive (need inversion to match YNAB's negative convention)
   // Other banks (e.g., Wealthsimple) show charges as negative already (no inversion needed)
   if (invertBankAmounts) {
-    bankTransactions = bankTransactions.map(txn => ({
+    bankTransactions = bankTransactions.map((txn) => ({
       ...txn,
       amount: -txn.amount,
     }));

@@ -38,6 +38,7 @@ export default tseslint.config(
     files: ['**/*.test.ts', '**/__tests__/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off', // Allow 'any' in test mocks
+      'no-console': 'off', // Allow console.log in tests for debugging
     },
   },
   // Turn off formatting-related rules to defer to Prettier

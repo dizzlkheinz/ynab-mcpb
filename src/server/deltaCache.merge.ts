@@ -61,11 +61,15 @@ export const mergeCategories: MergeFn<ynab.CategoryGroupWithCategories> = (
     const mergedGroup: ynab.CategoryGroupWithCategories = {
       ...existingGroup,
       ...deltaGroup,
-      categories: existingGroup.categories ? existingGroup.categories.map((cat) => ({ ...cat })) : existingGroup.categories,
+      categories: existingGroup.categories
+        ? existingGroup.categories.map((cat) => ({ ...cat }))
+        : existingGroup.categories,
     };
 
     if (deltaGroup.categories) {
-      const categoryMap = new Map((existingGroup.categories ?? []).map((cat) => [cat.id, { ...cat }]));
+      const categoryMap = new Map(
+        (existingGroup.categories ?? []).map((cat) => [cat.id, { ...cat }]),
+      );
       for (const deltaCategory of deltaGroup.categories) {
         if (deltaCategory.deleted && !preserveDeleted) {
           categoryMap.delete(deltaCategory.id);
@@ -108,7 +112,9 @@ export const mergeTransactions: MergeFn<ynab.TransactionDetail> = (snapshot, del
     };
 
     if (deltaTxn.subtransactions) {
-      const subMap = new Map((existingTxn.subtransactions ?? []).map((sub) => [sub.id, { ...sub }]));
+      const subMap = new Map(
+        (existingTxn.subtransactions ?? []).map((sub) => [sub.id, { ...sub }]),
+      );
       for (const deltaSub of deltaTxn.subtransactions) {
         if (deltaSub.deleted && !preserveDeleted) {
           subMap.delete(deltaSub.id);
@@ -130,7 +136,9 @@ const cloneCategoryGroup = (
   group: ynab.CategoryGroupWithCategories,
 ): ynab.CategoryGroupWithCategories => ({
   ...group,
-  categories: group.categories ? group.categories.map((category) => ({ ...category })) : group.categories,
+  categories: group.categories
+    ? group.categories.map((category) => ({ ...category }))
+    : group.categories,
 });
 
 const cloneTransaction = (transaction: ynab.TransactionDetail): ynab.TransactionDetail => ({

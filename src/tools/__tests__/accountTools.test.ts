@@ -215,7 +215,6 @@ describe('Account Tools', () => {
   });
 
   describe('handleGetAccount', () => {
-
     it('should return detailed account information on success', async () => {
       const mockAccount = {
         id: 'account-1',

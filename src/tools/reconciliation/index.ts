@@ -106,7 +106,7 @@ export const ReconcileAccountSchema = z
     as_of_timezone: z.string().optional(),
 
     // Matching configuration (optional)
-    date_tolerance_days: z.number().min(0).max(7).optional().default(2),
+    date_tolerance_days: z.number().min(0).max(7).optional().default(5),
     amount_tolerance_cents: z.number().min(0).max(100).optional().default(1),
     auto_match_threshold: z.number().min(0).max(100).optional().default(90),
     suggestion_threshold: z.number().min(0).max(100).optional().default(60),
@@ -180,9 +180,7 @@ export async function handleReconcileAccount(
         : await deltaFetcher.fetchAccounts(params.budget_id);
       const accountData = accountResult.data.find((account) => account.id === params.account_id);
       if (!accountData) {
-        throw new Error(
-          `Account ${params.account_id} not found in budget ${params.budget_id}`,
-        );
+        throw new Error(`Account ${params.account_id} not found in budget ${params.budget_id}`);
       }
       const accountName = accountData.name;
       const accountType = accountData.type;
@@ -205,9 +203,7 @@ export async function handleReconcileAccount(
       // Otherwise, default to true for liability accounts (legacy behavior)
       // Note: Some banks (e.g., Wealthsimple) show charges as negative already, matching YNAB
       const shouldInvertBankAmounts =
-        params.invert_bank_amounts !== undefined
-          ? params.invert_bank_amounts
-          : accountIsLiability;
+        params.invert_bank_amounts !== undefined ? params.invert_bank_amounts : accountIsLiability;
 
       // Negate statement balance for liability accounts
       const adjustedStatementBalance = accountIsLiability

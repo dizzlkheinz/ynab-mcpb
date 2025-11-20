@@ -52,7 +52,7 @@ describe('ServerKnowledgeStore', () => {
   describe('Validation', () => {
     it('should throw error for negative server_knowledge values', () => {
       expect(() => store.update('key', -1)).toThrow(
-        'server_knowledge must be non-negative, got: -1'
+        'server_knowledge must be non-negative, got: -1',
       );
     });
 

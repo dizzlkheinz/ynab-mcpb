@@ -335,7 +335,10 @@ describe('diagnostics module', () => {
                 delta: expect.objectContaining({
                   enabled: true,
                   knowledge_entries: 2,
-                  knowledge_stats: { 'accounts:list:budget-1': 1000, 'transactions:list:budget-1': 1500 },
+                  knowledge_stats: {
+                    'accounts:list:budget-1': 1000,
+                    'transactions:list:budget-1': 1500,
+                  },
                   feature_flag: 'true',
                   delta_hits: 5,
                   delta_misses: 3,

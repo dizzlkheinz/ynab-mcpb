@@ -59,7 +59,11 @@ describe('deltaSupport runtime validation', () => {
 
       // Third arg should be params object, not DeltaFetcher
       expect(() => {
-        resolveDeltaFetcherArgs(ynabAPI, deltaFetcher, deltaFetcher as unknown as Record<string, unknown>);
+        resolveDeltaFetcherArgs(
+          ynabAPI,
+          deltaFetcher,
+          deltaFetcher as unknown as Record<string, unknown>,
+        );
       }).toThrow(
         'resolveDeltaFetcherArgs: When providing 3 arguments, the third argument must be a params object',
       );
@@ -68,15 +72,21 @@ describe('deltaSupport runtime validation', () => {
     it('should reject non-object params', () => {
       expect(() => {
         resolveDeltaFetcherArgs(ynabAPI, 'invalid' as unknown as Record<string, unknown>);
-      }).toThrow('resolveDeltaFetcherArgs: When providing 2 arguments, the second argument must be a params object');
+      }).toThrow(
+        'resolveDeltaFetcherArgs: When providing 2 arguments, the second argument must be a params object',
+      );
 
       expect(() => {
         resolveDeltaFetcherArgs(ynabAPI, 123 as unknown as Record<string, unknown>);
-      }).toThrow('resolveDeltaFetcherArgs: When providing 2 arguments, the second argument must be a params object');
+      }).toThrow(
+        'resolveDeltaFetcherArgs: When providing 2 arguments, the second argument must be a params object',
+      );
 
       expect(() => {
         resolveDeltaFetcherArgs(ynabAPI, null as unknown as Record<string, unknown>);
-      }).toThrow('resolveDeltaFetcherArgs: When providing 2 arguments, the second argument must be a params object');
+      }).toThrow(
+        'resolveDeltaFetcherArgs: When providing 2 arguments, the second argument must be a params object',
+      );
     });
   });
 
@@ -131,22 +141,14 @@ describe('deltaSupport runtime validation', () => {
 
       // First arg should be DeltaCache
       expect(() => {
-        resolveDeltaWriteArgs(
-          params as unknown as DeltaCache,
-          knowledgeStore,
-          params,
-        );
+        resolveDeltaWriteArgs(params as unknown as DeltaCache, knowledgeStore, params);
       }).toThrow(
         'resolveDeltaWriteArgs: When providing 3 arguments, the first argument must be a DeltaCache instance',
       );
 
       // Second arg should be ServerKnowledgeStore
       expect(() => {
-        resolveDeltaWriteArgs(
-          deltaCache,
-          params as unknown as ServerKnowledgeStore,
-          params,
-        );
+        resolveDeltaWriteArgs(deltaCache, params as unknown as ServerKnowledgeStore, params);
       }).toThrow(
         'resolveDeltaWriteArgs: When providing 3 arguments, the second argument must be a ServerKnowledgeStore instance',
       );
@@ -166,15 +168,21 @@ describe('deltaSupport runtime validation', () => {
     it('should reject non-object params', () => {
       expect(() => {
         resolveDeltaWriteArgs('invalid' as unknown as Record<string, unknown>);
-      }).toThrow('resolveDeltaWriteArgs: When providing only 1 argument, it must be a params object');
+      }).toThrow(
+        'resolveDeltaWriteArgs: When providing only 1 argument, it must be a params object',
+      );
 
       expect(() => {
         resolveDeltaWriteArgs(123 as unknown as Record<string, unknown>);
-      }).toThrow('resolveDeltaWriteArgs: When providing only 1 argument, it must be a params object');
+      }).toThrow(
+        'resolveDeltaWriteArgs: When providing only 1 argument, it must be a params object',
+      );
 
       expect(() => {
         resolveDeltaWriteArgs(null as unknown as Record<string, unknown>);
-      }).toThrow('resolveDeltaWriteArgs: When providing only 1 argument, it must be a params object');
+      }).toThrow(
+        'resolveDeltaWriteArgs: When providing only 1 argument, it must be a params object',
+      );
     });
   });
 });

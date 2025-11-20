@@ -56,10 +56,7 @@ import {
   handleCompareTransactions,
   CompareTransactionsSchema,
 } from '../tools/compareTransactions/index.js';
-import {
-  handleReconcileAccount,
-  ReconcileAccountSchema,
-} from '../tools/reconciliation/index.js';
+import { handleReconcileAccount, ReconcileAccountSchema } from '../tools/reconciliation/index.js';
 import {
   handleListCategories,
   handleGetCategory,
@@ -951,9 +948,10 @@ export class YNABMCPServer {
         if (options.prettySpaces !== undefined) {
           parts.push(`spaces=${options.prettySpaces}`);
         }
-        const message = parts.length > 0
-          ? `Output format configured: ${parts.join(', ')}`
-          : 'Output format configured';
+        const message =
+          parts.length > 0
+            ? `Output format configured: ${parts.join(', ')}`
+            : 'Output format configured';
 
         return {
           content: [

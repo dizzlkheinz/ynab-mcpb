@@ -28,9 +28,7 @@ export const getDecimalDigits = (
 /**
  * Extract ISO currency code from YNAB CurrencyFormat
  */
-export const getCurrencyCode = (
-  currencyFormat: ynab.CurrencyFormat | null | undefined,
-): string => {
+export const getCurrencyCode = (currencyFormat: ynab.CurrencyFormat | null | undefined): string => {
   return currencyFormat?.iso_code ?? DEFAULT_CURRENCY;
 };
 

@@ -48,9 +48,7 @@ function appendCategoryIds(source: CategorySource | undefined, target: Set<strin
   }
 }
 
-function collectCategoryIdsFromSources(
-  ...sources: (CategorySource | undefined)[]
-): Set<string> {
+function collectCategoryIdsFromSources(...sources: (CategorySource | undefined)[]): Set<string> {
   const result = new Set<string>();
   for (const source of sources) {
     appendCategoryIds(source, result);
@@ -228,7 +226,10 @@ const BulkTransactionInputSchemaBase = CreateTransactionSchema.pick({
   import_id: true,
 });
 
-type BulkTransactionInput = Omit<CreateTransactionParams, 'budget_id' | 'dry_run' | 'subtransactions'>;
+type BulkTransactionInput = Omit<
+  CreateTransactionParams,
+  'budget_id' | 'dry_run' | 'subtransactions'
+>;
 
 const BulkTransactionInputSchema = BulkTransactionInputSchemaBase.extend({
   subtransactions: z.any().optional(),
@@ -1456,10 +1457,7 @@ export async function handleUpdateTransaction(
     ]);
     const originalCategoryIds = collectCategoryIdsFromSources(originalTransaction);
     const updatedCategoryIds = collectCategoryIdsFromSources(transaction);
-    const affectedCategoryIds = new Set<string>([
-      ...originalCategoryIds,
-      ...updatedCategoryIds,
-    ]);
+    const affectedCategoryIds = new Set<string>([...originalCategoryIds, ...updatedCategoryIds]);
     const categoryChanged = !setsEqual(originalCategoryIds, updatedCategoryIds);
     const amountChanged = transaction.amount !== originalTransaction.amount;
     const accountChanged = transaction.account_id !== originalTransaction.account_id;
@@ -1657,7 +1655,7 @@ export async function handleCreateTransactions(
   return (await withToolErrorHandling(
     async () => {
       const validationResult = CreateTransactionsSchema.safeParse(params);
-        if (!validationResult.success) {
+      if (!validationResult.success) {
         type TransactionIssueIndex = number | null;
         const issuesByIndex = new Map<TransactionIssueIndex, string[]>();
         const validationIssues = validationResult.error.issues ?? [];
@@ -1819,7 +1817,9 @@ export async function handleCreateTransactions(
       };
 
       const accountIds = new Set<string>(transactions.map((transaction) => transaction.account_id));
-      const affectedMonths = new Set<string>(transactions.map((transaction) => toMonthKey(transaction.date)));
+      const affectedMonths = new Set<string>(
+        transactions.map((transaction) => toMonthKey(transaction.date)),
+      );
       const affectedCategoryIds = new Set<string>();
       for (const created of responseData.transactions ?? []) {
         appendCategoryIds(created, affectedCategoryIds);
@@ -2151,7 +2151,10 @@ export async function handleUpdateTransactions(
             before['memo'] = currentState.memo;
             after['memo'] = transaction.memo;
           }
-          if (transaction.payee_id !== undefined && transaction.payee_id !== currentState.payee_id) {
+          if (
+            transaction.payee_id !== undefined &&
+            transaction.payee_id !== currentState.payee_id
+          ) {
             before['payee_id'] = currentState.payee_id;
             after['payee_id'] = transaction.payee_id;
           }
@@ -2173,7 +2176,10 @@ export async function handleUpdateTransactions(
             before['cleared'] = currentState.cleared;
             after['cleared'] = transaction.cleared;
           }
-          if (transaction.approved !== undefined && transaction.approved !== currentState.approved) {
+          if (
+            transaction.approved !== undefined &&
+            transaction.approved !== currentState.approved
+          ) {
             before['approved'] = currentState.approved;
             after['approved'] = transaction.approved;
           }
@@ -2193,7 +2199,8 @@ export async function handleUpdateTransactions(
         }
 
         // Build warnings array
-        const warnings: { code: string; count: number; message: string; sample_ids?: string[] }[] = [];
+        const warnings: { code: string; count: number; message: string; sample_ids?: string[] }[] =
+          [];
         if (unavailablePreviewIds.length > 0 || unresolvedIds.length > 0) {
           const totalMissing = Math.max(unavailablePreviewIds.length, unresolvedIds.length);
           const sampleIds =
@@ -2209,7 +2216,9 @@ export async function handleUpdateTransactions(
         }
 
         // Collect summary statistics
-        const accountsAffected = Array.from(new Set(Array.from(metadata.values()).map((m) => m.account_id)));
+        const accountsAffected = Array.from(
+          new Set(Array.from(metadata.values()).map((m) => m.account_id)),
+        );
         const fieldsToUpdate = new Set<string>();
         for (const transaction of transactions) {
           if (transaction.amount !== undefined) fieldsToUpdate.add('amount');
@@ -2260,13 +2269,17 @@ export async function handleUpdateTransactions(
       if (missingMetadataRatio > METADATA_THRESHOLD) {
         throw new ValidationError(
           `METADATA_INCOMPLETE: ${(missingMetadataRatio * 100).toFixed(1)}% of transactions have missing metadata (threshold: ${(METADATA_THRESHOLD * 100).toFixed(0)}%)`,
-          JSON.stringify({
-            unresolved_count: unresolvedIds.length,
-            total_transactions: transactions.length,
-            ratio: (missingMetadataRatio * 100).toFixed(1) + '%',
-            threshold: (METADATA_THRESHOLD * 100).toFixed(0) + '%',
-            sample_unresolved_ids: unresolvedIds.slice(0, 5),
-          }, null, 2),
+          JSON.stringify(
+            {
+              unresolved_count: unresolvedIds.length,
+              total_transactions: transactions.length,
+              ratio: (missingMetadataRatio * 100).toFixed(1) + '%',
+              threshold: (METADATA_THRESHOLD * 100).toFixed(0) + '%',
+              sample_unresolved_ids: unresolvedIds.slice(0, 5),
+            },
+            null,
+            2,
+          ),
           [
             'Provide original_account_id and original_date for all transactions being updated',
             'Ensure transactions exist in YNAB before updating them',

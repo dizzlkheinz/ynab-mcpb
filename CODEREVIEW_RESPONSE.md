@@ -36,6 +36,7 @@ export const ExecutionActionRecordSchema = z.discriminatedUnion('type', [
 ```
 
 Each action type has its own specific schema:
+
 - `CreatedTransactionSchema` - for successful creations (line 371)
 - `TransactionCreationPayloadSchema` - for failed/dry-run creations (line 387)
 - `TransactionUpdatePayloadSchema` - for status/date changes (line 402)
@@ -74,6 +75,7 @@ const convertBalanceInfo = (analysis: ReconciliationAnalysis) => {
 ```
 
 This logic is:
+
 - **Simple and obvious**: Direct mapping from sign to direction
 - **Well-tested**: Part of the adapter layer
 - **Single point of truth**: Consistency enforced at construction time
@@ -120,6 +122,7 @@ But given the simplicity of the current implementation and existing test coverag
 ## Tests
 
 All existing tests pass:
+
 - ✅ `npm run type-check` - TypeScript compilation successful
 - ✅ `npm run test:unit -- reconciliationOutputs` - 26/26 tests passing
 - ✅ No regressions in related tests

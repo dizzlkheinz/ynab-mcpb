@@ -53,18 +53,20 @@ export type UpdateCategoryParams = z.infer<typeof UpdateCategorySchema>;
  */
 function convertGoalFields(category: ynab.Category) {
   return {
-    goal_target: category.goal_target != null
-      ? milliunitsToAmount(category.goal_target)
-      : undefined,
-    goal_under_funded: category.goal_under_funded != null
-      ? milliunitsToAmount(category.goal_under_funded)
-      : undefined,
-    goal_overall_funded: category.goal_overall_funded != null
-      ? milliunitsToAmount(category.goal_overall_funded)
-      : undefined,
-    goal_overall_left: category.goal_overall_left != null
-      ? milliunitsToAmount(category.goal_overall_left)
-      : undefined,
+    goal_target:
+      category.goal_target != null ? milliunitsToAmount(category.goal_target) : undefined,
+    goal_under_funded:
+      category.goal_under_funded != null
+        ? milliunitsToAmount(category.goal_under_funded)
+        : undefined,
+    goal_overall_funded:
+      category.goal_overall_funded != null
+        ? milliunitsToAmount(category.goal_overall_funded)
+        : undefined,
+    goal_overall_left:
+      category.goal_overall_left != null
+        ? milliunitsToAmount(category.goal_overall_left)
+        : undefined,
   };
 }
 

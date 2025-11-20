@@ -75,20 +75,17 @@ describe('DeltaCache', () => {
     delete process.env.YNAB_MCP_ENABLE_DELTA;
   });
 
-  const createFetcher = (
-    response: { data: TestEntity[]; serverKnowledge: number },
-  ) => vi.fn().mockResolvedValue(response);
+  const createFetcher = (response: { data: TestEntity[]; serverKnowledge: number }) =>
+    vi.fn().mockResolvedValue(response);
 
   const createMerger = () =>
-    vi.fn<[TestEntity[], TestEntity[], unknown?], TestEntity[]>().mockImplementation(
-      (snapshot: TestEntity[], delta: TestEntity[]) => [...snapshot, ...delta],
-    );
+    vi
+      .fn<[TestEntity[], TestEntity[], unknown?], TestEntity[]>()
+      .mockImplementation((snapshot: TestEntity[], delta: TestEntity[]) => [...snapshot, ...delta]);
 
   describe('Feature Flag', () => {
     it('should use delta path when the feature flag is enabled', async () => {
-      cacheManagerSpies.get.mockReturnValue(
-        createCacheEntry([{ id: 'snap-1' }], 1000),
-      );
+      cacheManagerSpies.get.mockReturnValue(createCacheEntry([{ id: 'snap-1' }], 1000));
       knowledgeStoreSpies.get.mockReturnValue(1000);
       const fetcher = createFetcher({ data: [{ id: 'delta-1' }], serverKnowledge: 1010 });
       const merger = createMerger();
@@ -162,11 +159,7 @@ describe('DeltaCache', () => {
       );
 
       expect(result.usedDelta).toBe(true);
-      expect(merger).toHaveBeenCalledWith(
-        [{ id: 'snap' }],
-        [{ id: 'delta' }],
-        undefined,
-      );
+      expect(merger).toHaveBeenCalledWith([{ id: 'snap' }], [{ id: 'delta' }], undefined);
     });
 
     it('should treat response as unchanged when knowledge stays equal', async () => {
@@ -191,10 +184,7 @@ describe('DeltaCache', () => {
       cacheManagerSpies.get.mockReturnValue(null);
       knowledgeStoreSpies.get.mockReturnValue(undefined);
       const fetcher = createFetcher({
-        data: [
-          { id: 'kept' },
-          { id: 'deleted', deleted: true },
-        ],
+        data: [{ id: 'kept' }, { id: 'deleted', deleted: true }],
         serverKnowledge: 1050,
       });
 
@@ -232,10 +222,7 @@ describe('DeltaCache', () => {
     it('should filter deleted entities on full refresh', async () => {
       cacheManagerSpies.get.mockReturnValue(null);
       const fetcher = createFetcher({
-        data: [
-          { id: '1' },
-          { id: '2', deleted: true },
-        ],
+        data: [{ id: '1' }, { id: '2', deleted: true }],
         serverKnowledge: 2000,
       });
 
@@ -316,9 +303,15 @@ describe('DeltaCache', () => {
       knowledgeStoreSpies.get.mockReturnValue(1000);
       const fetcher = createFetcher({ data: [{ id: 'delta' }], serverKnowledge: 1155 });
 
-      await deltaCache.fetchWithDelta('payees:list:budget-xyz', 'budget-xyz', fetcher, createMerger(), {
-        ttl: 5000,
-      });
+      await deltaCache.fetchWithDelta(
+        'payees:list:budget-xyz',
+        'budget-xyz',
+        fetcher,
+        createMerger(),
+        {
+          ttl: 5000,
+        },
+      );
 
       expect(loggerSpies.warn).toHaveBeenCalledWith(
         'delta-cache.knowledge-gap',
@@ -359,9 +352,15 @@ describe('DeltaCache', () => {
       cacheManagerSpies.get.mockReturnValue(null);
       const fetcher = createFetcher({ data: [{ id: 'fresh' }], serverKnowledge: 101 });
 
-      await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), {
-        ttl: 1234,
-      });
+      await deltaCache.fetchWithDelta(
+        'accounts:list:budget-1',
+        'budget-1',
+        fetcher,
+        createMerger(),
+        {
+          ttl: 1234,
+        },
+      );
 
       expect(cacheManagerSpies.set).toHaveBeenCalledWith(
         'accounts:list:budget-1',
@@ -378,14 +377,17 @@ describe('DeltaCache', () => {
       cacheManagerSpies.get.mockReturnValue(null);
       const fetcher = createFetcher({ data: [{ id: 'item' }], serverKnowledge: 222 });
 
-      await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), {
-        ttl: 5000,
-      });
-
-      expect(knowledgeStoreSpies.update).toHaveBeenCalledWith(
+      await deltaCache.fetchWithDelta(
         'accounts:list:budget-1',
-        222,
+        'budget-1',
+        fetcher,
+        createMerger(),
+        {
+          ttl: 5000,
+        },
       );
+
+      expect(knowledgeStoreSpies.update).toHaveBeenCalledWith('accounts:list:budget-1', 222);
     });
 
     it('should return cached data on cache hit', async () => {
@@ -394,7 +396,13 @@ describe('DeltaCache', () => {
       knowledgeStoreSpies.get.mockReturnValue(333);
       const fetcher = createFetcher({ data: [], serverKnowledge: 333 });
 
-      const result = await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), { ttl: 5000 });
+      const result = await deltaCache.fetchWithDelta(
+        'accounts:list:budget-1',
+        'budget-1',
+        fetcher,
+        createMerger(),
+        { ttl: 5000 },
+      );
 
       expect(result.wasCached).toBe(true);
       expect(result.data).toEqual([{ id: 'cached' }]);
@@ -404,9 +412,15 @@ describe('DeltaCache', () => {
       cacheManagerSpies.get.mockReturnValue(null);
       const fetcher = createFetcher({ data: [{ id: 'fresh' }], serverKnowledge: 400 });
 
-      await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), {
-        ttl: 9999,
-      });
+      await deltaCache.fetchWithDelta(
+        'accounts:list:budget-1',
+        'budget-1',
+        fetcher,
+        createMerger(),
+        {
+          ttl: 9999,
+        },
+      );
 
       expect(cacheManagerSpies.set).toHaveBeenCalledWith(
         'accounts:list:budget-1',
@@ -445,22 +459,12 @@ describe('DeltaCache', () => {
       const merger = createMerger();
       const mergeOptions = { preserveDeleted: true, equalityFn: vi.fn() };
 
-      await deltaCache.fetchWithDelta(
-        'transactions:list:budget-1',
-        'budget-1',
-        fetcher,
-        merger,
-        {
-          ttl: 5000,
-          mergeOptions,
-        },
-      );
-
-      expect(merger).toHaveBeenCalledWith(
-        [{ id: 'cached' }],
-        [{ id: 'delta' }],
+      await deltaCache.fetchWithDelta('transactions:list:budget-1', 'budget-1', fetcher, merger, {
+        ttl: 5000,
         mergeOptions,
-      );
+      });
+
+      expect(merger).toHaveBeenCalledWith([{ id: 'cached' }], [{ id: 'delta' }], mergeOptions);
     });
 
     it('should allow preserveDeleted to keep deleted entities after merge', async () => {
@@ -493,16 +497,10 @@ describe('DeltaCache', () => {
       const equalityFn = vi.fn();
       const merger = createMerger();
 
-      await deltaCache.fetchWithDelta(
-        'transactions:list:budget-1',
-        'budget-1',
-        fetcher,
-        merger,
-        {
-          ttl: 5000,
-          mergeOptions: { equalityFn },
-        },
-      );
+      await deltaCache.fetchWithDelta('transactions:list:budget-1', 'budget-1', fetcher, merger, {
+        ttl: 5000,
+        mergeOptions: { equalityFn },
+      });
 
       expect(merger).toHaveBeenCalledWith(
         [{ id: 'cached' }],
@@ -553,9 +551,15 @@ describe('DeltaCache', () => {
       const fetcher = vi.fn().mockRejectedValue(new Error('API down'));
 
       await expect(
-        deltaCache.fetchWithDelta('transactions:list:budget-1', 'budget-1', fetcher, createMerger(), {
-          ttl: 5000,
-        }),
+        deltaCache.fetchWithDelta(
+          'transactions:list:budget-1',
+          'budget-1',
+          fetcher,
+          createMerger(),
+          {
+            ttl: 5000,
+          },
+        ),
       ).rejects.toThrow('API down');
 
       expect(cacheManagerSpies.set).not.toHaveBeenCalled();
@@ -695,9 +699,15 @@ describe('DeltaCache', () => {
       cacheManagerSpies.get.mockReturnValue(null);
       const fetcher = createFetcher({ data: [{ id: 'fresh' }], serverKnowledge: 50 });
 
-      await deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), {
-        ttl: 5000,
-      });
+      await deltaCache.fetchWithDelta(
+        'accounts:list:budget-1',
+        'budget-1',
+        fetcher,
+        createMerger(),
+        {
+          ttl: 5000,
+        },
+      );
 
       expect(deltaCache.getStats()).toEqual({
         deltaHits: 0,
@@ -740,15 +750,9 @@ describe('DeltaCache', () => {
       const fetcher = createFetcher({ data: [{ id: 'fresh' }], serverKnowledge: 1 });
 
       await expect(
-        deltaCache.fetchWithDelta(
-          'accounts:list:budget-1',
-          'budget-1',
-          fetcher,
-          createMerger(),
-          {
-            ttl: undefined as unknown as number,
-          },
-        ),
+        deltaCache.fetchWithDelta('accounts:list:budget-1', 'budget-1', fetcher, createMerger(), {
+          ttl: undefined as unknown as number,
+        }),
       ).rejects.toThrow(/finite ttl/i);
     });
 

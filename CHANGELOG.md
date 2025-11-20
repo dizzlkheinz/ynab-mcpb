@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Default Build to Production** - All builds now use minified production bundle
+  - `npm run build` now aliases `build:prod` (was dev build)
+  - `prepare` hook uses production build for consistent npm distribution
+  - Bundle size reduced from 2.35 MB → 1.28 MB (~45% smaller)
+  - Use `npm run build:dev` if you need sourcemaps for debugging
+- **Integrated Linting and Formatting** - Code quality checks now run automatically
+  - `npm run lint` now runs both ESLint and Prettier checks
+  - `npm run lint:fix` now fixes both ESLint issues and formats with Prettier
+  - `npm run build` automatically fixes code quality and formatting issues before building
+  - `console.log` statements now allowed in test files for debugging
+  - Use `npm run build:no-lint` to skip linting during rapid iteration
+- **Reconciliation Default Tolerance** - Increased `date_tolerance_days` default from 2 to 5 days
+  - Better handles typical credit card processing delays (3-5 days)
+  - Matches `compare_transactions` default for consistency
+  - Still configurable per-call for tighter matching when needed
+
+### Fixed
+
+- **Month Output Schema** - `age_of_money` now correctly accepts `null` values
+  - YNAB API returns `null` when insufficient transaction history exists
+  - Changed from `z.number().optional()` to `z.number().nullish()`
+  - Affects both `MonthDetailSchema` and `MonthSummarySchema`
+
 ## [0.12.0] - 2025-11-19
 
 ### Added

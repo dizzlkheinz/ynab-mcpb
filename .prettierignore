@@ -6,3 +6,5 @@ coverage/
 .git/
 .github/
 docs/**/*.md
+scripts/analyze-bundle.mjs
+test-reconcile-with-csv.cjs

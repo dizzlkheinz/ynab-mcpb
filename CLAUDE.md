@@ -217,18 +217,23 @@ The system defines 5 preset annotation patterns in `src/tools/toolCategories.ts`
 All 30 tools are classified into the following categories:
 
 **Read-Only External (15 tools):**
+
 - `list_budgets`, `get_budget`, `list_accounts`, `get_account`, `list_transactions`, `export_transactions`, `compare_transactions`, `get_transaction`, `list_categories`, `get_category`, `list_payees`, `get_payee`, `get_month`, `list_months`, `get_user`
 
 **Write External - Create (4 tools):**
+
 - `create_account`, `create_transaction`, `create_transactions`, `create_receipt_split_transaction`
 
 **Write External - Update (5 tools):**
+
 - `set_default_budget`, `reconcile_account`, `update_transaction`, `update_transactions`, `update_category`
 
 **Write External - Delete (1 tool):**
+
 - `delete_transaction` ⚠️
 
 **Utility Local (5 tools):**
+
 - `get_default_budget`, `convert_amount`, `diagnostic_info`, `clear_cache`, `set_output_format`
 
 ### Expected Benefits

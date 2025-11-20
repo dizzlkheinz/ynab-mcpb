@@ -1,12 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  beforeEach,
-  afterEach,
-  vi,
-} from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import * as ynab from 'ynab';
 import { executeReconciliation, type AccountSnapshot } from '../executor.js';
 import type { ReconciliationAnalysis } from '../types.js';
@@ -50,10 +42,16 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     }
   });
 
-  it('creates 10 transactions via bulk mode', { meta: { tier: 'domain', domain: 'reconciliation' } },
+  it(
+    'creates 10 transactions via bulk mode',
+    { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 10, 7);
-      const params = buildIntegrationParams(accountId, budgetId, analysis.summary.target_statement_balance);
+      const params = buildIntegrationParams(
+        accountId,
+        budgetId,
+        analysis.summary.target_statement_balance,
+      );
 
       const result = await skipOnRateLimit(
         () =>
@@ -78,10 +76,16 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     60000,
   );
 
-  it('reports duplicates when import IDs already exist', { meta: { tier: 'domain', domain: 'reconciliation' } },
+  it(
+    'reports duplicates when import IDs already exist',
+    { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 9);
-      const params = buildIntegrationParams(accountId, budgetId, analysis.summary.target_statement_balance);
+      const params = buildIntegrationParams(
+        accountId,
+        budgetId,
+        analysis.summary.target_statement_balance,
+      );
 
       const firstRun = await skipOnRateLimit(
         () =>
@@ -124,10 +128,16 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     60000,
   );
 
-  it('processes 150 transactions across multiple chunks', { meta: { tier: 'domain', domain: 'reconciliation' } },
+  it(
+    'processes 150 transactions across multiple chunks',
+    { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 150, 3);
-      const params = buildIntegrationParams(accountId, budgetId, analysis.summary.target_statement_balance);
+      const params = buildIntegrationParams(
+        accountId,
+        budgetId,
+        analysis.summary.target_statement_balance,
+      );
 
       const result = await skipOnRateLimit(
         () =>
@@ -151,10 +161,16 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     90000,
   );
 
-  it('processes 20 transactions in under 8 seconds', { meta: { tier: 'domain', domain: 'reconciliation' } },
+  it(
+    'processes 20 transactions in under 8 seconds',
+    { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 20, 4);
-      const params = buildIntegrationParams(accountId, budgetId, analysis.summary.target_statement_balance);
+      const params = buildIntegrationParams(
+        accountId,
+        budgetId,
+        analysis.summary.target_statement_balance,
+      );
       const start = Date.now();
 
       const result = await skipOnRateLimit(
@@ -180,10 +196,16 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     60000,
   );
 
-  it('propagates API errors for invalid account IDs', { meta: { tier: 'domain', domain: 'reconciliation' } },
+  it(
+    'propagates API errors for invalid account IDs',
+    { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
       const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 6);
-      const params = buildIntegrationParams('invalid-account', budgetId, analysis.summary.target_statement_balance);
+      const params = buildIntegrationParams(
+        'invalid-account',
+        budgetId,
+        analysis.summary.target_statement_balance,
+      );
 
       await skipOnRateLimit(async () => {
         await expect(
@@ -202,17 +224,23 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
     60000,
   );
 
-  it('skips work when a rate limit error is detected', { meta: { tier: 'domain', domain: 'reconciliation' } }, async () => {
-    const fakeContext = { skip: vi.fn() };
-    const rateLimitError = Object.assign(new Error('429 Too Many Requests'), { status: 429 });
-    const result = await skipOnRateLimit(async () => {
-      throw rateLimitError;
-    }, fakeContext);
-    expect(result).toBeUndefined();
-    expect(fakeContext.skip).toHaveBeenCalled();
-  });
+  it(
+    'skips work when a rate limit error is detected',
+    { meta: { tier: 'domain', domain: 'reconciliation' } },
+    async () => {
+      const fakeContext = { skip: vi.fn() };
+      const rateLimitError = Object.assign(new Error('429 Too Many Requests'), { status: 429 });
+      const result = await skipOnRateLimit(async () => {
+        throw rateLimitError;
+      }, fakeContext);
+      expect(result).toBeUndefined();
+      expect(fakeContext.skip).toHaveBeenCalled();
+    },
+  );
 
-  function trackCreatedTransactions(result: Awaited<ReturnType<typeof executeReconciliation>>): void {
+  function trackCreatedTransactions(
+    result: Awaited<ReturnType<typeof executeReconciliation>>,
+  ): void {
     for (const action of result.actions_taken) {
       if (action.type !== 'create_transaction') continue;
       const transaction = action.transaction as { id?: string } | null;

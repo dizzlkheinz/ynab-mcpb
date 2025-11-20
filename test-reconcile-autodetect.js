@@ -2,7 +2,10 @@
  * Test the auto-detect date range functionality
  */
 
-import { extractDateRangeFromCSV, autoDetectCSVFormat } from './dist/tools/compareTransactions/parser.js';
+import {
+  extractDateRangeFromCSV,
+  autoDetectCSVFormat,
+} from './dist/tools/compareTransactions/parser.js';
 
 const csvContent = `Date,Description,Debit,Credit,Balance
 11/10/2025,DOLLARAMA # 109,10.91,,
