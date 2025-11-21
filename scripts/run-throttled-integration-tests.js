@@ -91,10 +91,16 @@ function estimateCalls(filePath) {
 
 async function runVitestFile(testFile) {
   const normalized = toPosixPath(testFile);
-  const vitestArgs = ['vitest', 'run', '--project', 'integration:full', normalized];
-  const runner = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const child = spawn(runner, vitestArgs, {
+  const vitestBin = path.join(
+    projectRoot,
+    'node_modules',
+    '.bin',
+    process.platform === 'win32' ? 'vitest.cmd' : 'vitest',
+  );
+  const vitestArgs = ['run', '--project', 'integration:full', normalized];
+  const child = spawn(vitestBin, vitestArgs, {
     stdio: 'inherit',
+    shell: process.platform === 'win32',
     env: {
       ...process.env,
       INTEGRATION_TEST_TIER: 'full',

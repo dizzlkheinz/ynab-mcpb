@@ -270,10 +270,11 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
             : `creating ${entry.bankTransaction.payee ?? 'missing transaction'}`;
           recordAlignmentIfNeeded(trigger);
         } catch (error) {
+          const ynabError = normalizeYnabError(error);
           if (bulkOperationDetails) {
             bulkOperationDetails.transaction_failures += 1; // Canonical counter for per-transaction failures
           }
-          const failureReason = error instanceof Error ? error.message : 'Unknown error occurred';
+          const failureReason = ynabError.message || 'Unknown error occurred';
           const failureAction: ExecutionActionRecord = {
             type: 'create_transaction_failed',
             transaction: entry.saveTransaction as unknown as Record<string, unknown>,
@@ -286,6 +287,10 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
             failureAction.bulk_chunk_index = options.chunkIndex;
           }
           actions_taken.push(failureAction);
+
+          if (shouldPropagateYnabError(ynabError)) {
+            throw attachStatusToError(ynabError);
+          }
         }
       }
       // Update sequential_attempts metric if this was a fallback operation
@@ -420,17 +425,23 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
             await processBulkChunk(chunk, chunkIndex);
             bulkOperationDetails.bulk_successes += 1;
           } catch (error) {
-            bulkOperationDetails.sequential_fallbacks += 1;
+            const ynabError = normalizeYnabError(error);
+            const failureReason = ynabError.message || 'unknown error';
             bulkOperationDetails.bulk_chunk_failures += 1; // API-level failure (entire chunk failed)
+
+            if (shouldPropagateYnabError(ynabError)) {
+              bulkOperationDetails.transaction_failures += chunk.length;
+              throw attachStatusToError(ynabError);
+            }
+
+            bulkOperationDetails.sequential_fallbacks += 1;
             actions_taken.push({
               type: 'bulk_create_fallback',
               transaction: null,
-              reason: `Bulk chunk #${chunkIndex} failed (${
-                error instanceof Error ? error.message : 'unknown error'
-              }) - falling back to sequential creation`,
+              reason: `Bulk chunk #${chunkIndex} failed (${failureReason}) - falling back to sequential creation`,
               bulk_chunk_index: chunkIndex,
             });
-            await processSequentialEntries(chunk, { chunkIndex, fallbackError: error });
+            await processSequentialEntries(chunk, { chunkIndex, fallbackError: ynabError });
           }
         }
       }
@@ -628,6 +639,87 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
   }
 
   return result;
+}
+
+interface NormalizedYnabError {
+  status?: number;
+  name?: string;
+  message: string;
+  detail?: string;
+}
+
+const FATAL_YNAB_STATUS_CODES = new Set([400, 401, 403, 404, 429, 500]);
+
+function normalizeYnabError(error: unknown): NormalizedYnabError {
+  const parseStatus = (value: unknown): number | undefined => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) return numeric;
+    }
+    return undefined;
+  };
+
+  if (error instanceof Error) {
+    const status = parseStatus((error as { status?: unknown }).status);
+    const detailSource = (error as { detail?: unknown }).detail;
+    const detail =
+      typeof detailSource === 'string' && detailSource.trim().length > 0 ? detailSource : undefined;
+    return {
+      status,
+      name: error.name,
+      message: error.message || 'Unknown error occurred',
+      detail,
+    };
+  }
+
+  if (error && typeof error === 'object') {
+    const errObj = (error as { error?: unknown }).error ?? error;
+    const status = parseStatus(
+      (errObj as { id?: unknown }).id ?? (errObj as { status?: unknown }).status,
+    );
+    const detailCandidate =
+      (errObj as { detail?: unknown }).detail ??
+      (errObj as { message?: unknown }).message ??
+      (errObj as { name?: unknown }).name;
+    const detail =
+      typeof detailCandidate === 'string' && detailCandidate.trim().length > 0
+        ? detailCandidate
+        : undefined;
+    const message =
+      detail ??
+      (typeof errObj === 'string' && errObj.trim().length > 0 ? errObj : 'Unknown error occurred');
+    const name =
+      typeof (errObj as { name?: unknown }).name === 'string'
+        ? ((errObj as { name: string }).name as string)
+        : undefined;
+    return { status, name, message, detail };
+  }
+
+  if (typeof error === 'string') {
+    return { message: error };
+  }
+
+  return { message: 'Unknown error occurred' };
+}
+
+function shouldPropagateYnabError(error: NormalizedYnabError): boolean {
+  return error.status !== undefined && FATAL_YNAB_STATUS_CODES.has(error.status);
+}
+
+function attachStatusToError(error: NormalizedYnabError): Error {
+  const message = error.message || 'YNAB API error';
+  const err = new Error(message);
+  if (error.status !== undefined) {
+    (err as { status?: number }).status = error.status;
+  }
+  if (error.name) {
+    err.name = error.name;
+  }
+  if (error.detail && !message.includes(error.detail)) {
+    err.message = `${message} (${error.detail})`;
+  }
+  return err;
 }
 
 function formatDisplay(amount: number, currency: string): string {

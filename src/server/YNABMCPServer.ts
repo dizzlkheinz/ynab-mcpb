@@ -13,9 +13,13 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
-import { AuthenticationError, ConfigurationError } from '../utils/errors.js';
+import {
+  AuthenticationError,
+  ConfigurationError,
+  ValidationError as ConfigValidationError,
+} from '../utils/errors.js';
 import { YNABErrorCode, ValidationError } from '../types/index.js';
-import { config } from './config.js';
+import { loadConfig, type AppConfig } from './config.js';
 import { createErrorHandler, ErrorHandler } from './errorHandler.js';
 import { BudgetResolver } from './budgetResolver.js';
 import { SecurityMiddleware, withSecurityWrapper } from './securityMiddleware.js';
@@ -120,6 +124,7 @@ export class YNABMCPServer {
   private ynabAPI: ynab.API;
   private exitOnError: boolean;
   private defaultBudgetId: string | undefined;
+  private configInstance: AppConfig;
   private serverVersion: string;
   private toolRegistry: ToolRegistry;
   private resourceManager: ResourceManager;
@@ -132,11 +137,12 @@ export class YNABMCPServer {
 
   constructor(exitOnError: boolean = true) {
     this.exitOnError = exitOnError;
+    this.configInstance = loadConfig();
     // Config is now imported and validated at startup
     this.defaultBudgetId = process.env['YNAB_DEFAULT_BUDGET_ID'];
 
     // Initialize YNAB API
-    this.ynabAPI = new ynab.API(config.YNAB_ACCESS_TOKEN);
+    this.ynabAPI = new ynab.API(this.configInstance.YNAB_ACCESS_TOKEN);
 
     // Determine server version (prefer package.json)
     this.serverVersion = this.readPackageVersion() ?? '0.0.0';
@@ -197,7 +203,7 @@ export class YNABMCPServer {
         },
       },
       validateAccessToken: (token: string) => {
-        const expected = config.YNAB_ACCESS_TOKEN.trim();
+        const expected = this.configInstance.YNAB_ACCESS_TOKEN.trim();
         const provided = typeof token === 'string' ? token.trim() : '';
         if (!provided) {
           throw this.errorHandler.createYNABError(
@@ -249,6 +255,10 @@ export class YNABMCPServer {
       await this.ynabAPI.user.getUser();
       return true;
     } catch (error) {
+      if (this.isMalformedTokenResponse(error)) {
+        throw new AuthenticationError('Unexpected response from YNAB during token validation');
+      }
+
       if (error instanceof Error) {
         // Check for authentication-related errors
         if (error.message.includes('401') || error.message.includes('Unauthorized')) {
@@ -257,9 +267,37 @@ export class YNABMCPServer {
         if (error.message.includes('403') || error.message.includes('Forbidden')) {
           throw new AuthenticationError('YNAB access token has insufficient permissions');
         }
+
+        const reason = error.message || String(error);
+        throw new AuthenticationError(`Token validation failed: ${reason}`);
       }
-      throw new AuthenticationError(`Token validation failed: ${error}`);
+
+      throw new AuthenticationError(`Token validation failed: ${String(error)}`);
     }
+  }
+
+  private isMalformedTokenResponse(error: unknown): boolean {
+    if (error instanceof SyntaxError) {
+      return true;
+    }
+
+    const message =
+      typeof error === 'string'
+        ? error
+        : typeof (error as { message?: unknown })?.message === 'string'
+          ? String((error as { message: unknown }).message)
+          : null;
+
+    if (!message) {
+      return false;
+    }
+
+    const normalized = message.toLowerCase();
+    return (
+      normalized.includes('unexpected token') ||
+      normalized.includes('unexpected end of json') ||
+      normalized.includes('<html')
+    );
   }
 
   /**
@@ -325,7 +363,7 @@ export class YNABMCPServer {
         minifyOverride?: boolean;
       } = {
         name: request.params.name,
-        accessToken: config.YNAB_ACCESS_TOKEN,
+        accessToken: this.configInstance.YNAB_ACCESS_TOKEN,
         arguments: sanitizedArgs ?? {},
       };
 
@@ -981,8 +1019,14 @@ export class YNABMCPServer {
 
       console.error('YNAB MCP Server started successfully');
     } catch (error) {
-      if (error instanceof AuthenticationError || error instanceof ConfigurationError) {
-        console.error(`Server startup failed: ${error.message}`);
+      if (
+        error instanceof AuthenticationError ||
+        error instanceof ConfigurationError ||
+        error instanceof ConfigValidationError ||
+        error instanceof ValidationError ||
+        (error as { name?: string })?.name === 'ValidationError'
+      ) {
+        console.error(`Server startup failed: ${error instanceof Error ? error.message : error}`);
         if (this.exitOnError) {
           process.exit(1);
         } else {
