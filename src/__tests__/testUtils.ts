@@ -499,12 +499,19 @@ export function isRateLimitError(error: any): boolean {
   // Check for HTML responses (YNAB API returns HTML when rate limited or down)
   // This manifests as JSON parsing errors with messages like:
   // "SyntaxError: Unexpected token '<', "<style>..." is not valid JSON"
+  const looksLikeHTML =
+    errorString.includes('<html') ||
+    errorString.includes('<head') ||
+    errorString.includes('<body') ||
+    errorString.includes('<!doctype html');
+
   const isHTMLResponse =
-    (errorString.includes('syntaxerror') || errorString.includes('unexpected token')) &&
-    (errorString.includes("'<'") ||
-      errorString.includes('"<"') ||
-      errorString.includes('<style') ||
-      errorString.includes('not valid json'));
+    looksLikeHTML ||
+    ((errorString.includes('syntaxerror') || errorString.includes('unexpected token')) &&
+      (errorString.includes("'<'") ||
+        errorString.includes('"<"') ||
+        errorString.includes('<style') ||
+        errorString.includes('not valid json')));
 
   // Check for VALIDATION_ERROR from output schema validation failures
   // These occur when YNAB API returns error responses instead of data during rate limiting
@@ -529,6 +536,56 @@ export function isRateLimitError(error: any): boolean {
   }
 
   return hasRateLimitMessage || isHTMLResponse || isValidationError;
+}
+
+/**
+ * Detects rate limit responses that are embedded in a CallToolResult (text JSON with an error object).
+ * Returns true and optionally skips the current test when a rate limit is found.
+ */
+export function skipIfRateLimitedResult(
+  result: CallToolResult,
+  context?: { skip?: () => void },
+): boolean {
+  const markSkipped = () => {
+    console.warn('[rate-limit] Skipping test due to YNAB API rate limit (embedded payload)');
+    context?.skip?.();
+  };
+
+  const content = result.content?.[0];
+  const text = content && content.type === 'text' ? content.text : '';
+
+  try {
+    const parsed = typeof text === 'string' && text.trim().length > 0 ? JSON.parse(text) : null;
+    const candidates: any[] = [];
+
+    if (parsed && typeof parsed === 'object') {
+      const parsedObj = parsed as Record<string, unknown>;
+      if ('error' in parsedObj) candidates.push(parsedObj.error);
+      if ('data' in parsedObj) {
+        const data = (parsedObj as any).data;
+        candidates.push(data?.error ?? data);
+      }
+      candidates.push(parsed);
+    }
+
+    if (typeof text === 'string') {
+      candidates.push(text);
+    }
+
+    for (const candidate of candidates) {
+      if (isRateLimitError(candidate)) {
+        markSkipped();
+        return true;
+      }
+    }
+  } catch (parseError) {
+    if (isRateLimitError(parseError) || isRateLimitError(text)) {
+      markSkipped();
+      return true;
+    }
+    // If parsing fails and no rate limit markers are present, fall through.
+  }
+  return false;
 }
 
 /**

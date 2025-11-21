@@ -574,6 +574,29 @@ describe('executeReconciliation - bulk create mode', () => {
     );
   });
 
+  it('propagates rate-limit error payloads with status codes from bulk create', async () => {
+    const analysis = buildBulkAnalysis(3, 7);
+    const params = buildBulkParams(analysis.summary.target_statement_balance);
+    const initialAccount = { ...defaultAccountSnapshot };
+    const { api, mocks } = createMockYnabAPI(initialAccount);
+
+    mocks.createTransactions.mockRejectedValue({
+      error: { id: '429', name: 'too_many_requests', detail: 'Too many requests' },
+    });
+
+    await expect(
+      executeReconciliation({
+        ynabAPI: api,
+        analysis,
+        params,
+        budgetId: params.budget_id,
+        accountId: params.account_id,
+        initialAccount,
+        currencyCode: 'USD',
+      }),
+    ).rejects.toMatchObject({ status: 429 });
+  });
+
   it('splits large batches into 100-transaction chunks', async () => {
     const analysis = buildBulkAnalysis(150, 5);
     const params = buildBulkParams(analysis.summary.target_statement_balance);
@@ -615,6 +638,29 @@ describe('executeReconciliation - bulk create mode', () => {
         transaction_failures: 0,
       }),
     );
+  });
+
+  it('throws on fatal sequential creation errors surfaced as objects', async () => {
+    const analysis = buildBulkAnalysis(1, 5);
+    const params = buildBulkParams(analysis.summary.target_statement_balance);
+    const initialAccount = { ...defaultAccountSnapshot };
+    const { api, mocks } = createMockYnabAPI(initialAccount);
+
+    mocks.createTransaction.mockRejectedValue({
+      error: { id: '404', name: 'not_found', detail: 'Account not found' },
+    });
+
+    await expect(
+      executeReconciliation({
+        ynabAPI: api,
+        analysis,
+        params,
+        budgetId: params.budget_id,
+        accountId: params.account_id,
+        initialAccount,
+        currencyCode: 'USD',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
   });
 
   it('flags duplicate transactions returned by YNAB API', async () => {

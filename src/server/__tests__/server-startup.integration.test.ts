@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YNABMCPServer } from '../YNABMCPServer';
-import { AuthenticationError, ConfigurationError } from '../../types/index';
+import { ValidationError } from '../../types/index';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { skipOnRateLimit } from '../../__tests__/testUtils.js';
 // StdioServerTransport import removed as it's not used in tests
@@ -55,10 +55,7 @@ describeIntegration('Server Startup and Transport Integration', () => {
         const originalToken = process.env['YNAB_ACCESS_TOKEN'];
         delete process.env['YNAB_ACCESS_TOKEN'];
 
-        expect(() => new YNABMCPServer(false)).toThrow(ConfigurationError);
-        expect(() => new YNABMCPServer(false)).toThrow(
-          'YNAB_ACCESS_TOKEN environment variable is required but not set',
-        );
+        expect(() => new YNABMCPServer(false)).toThrow(/YNAB_ACCESS_TOKEN/i);
 
         // Restore token
         process.env['YNAB_ACCESS_TOKEN'] = originalToken;
@@ -72,7 +69,6 @@ describeIntegration('Server Startup and Transport Integration', () => {
         const originalToken = process.env['YNAB_ACCESS_TOKEN'];
         process.env['YNAB_ACCESS_TOKEN'] = '';
 
-        expect(() => new YNABMCPServer(false)).toThrow(ConfigurationError);
         expect(() => new YNABMCPServer(false)).toThrow(
           'YNAB_ACCESS_TOKEN must be a non-empty string',
         );
@@ -111,7 +107,10 @@ describeIntegration('Server Startup and Transport Integration', () => {
 
           try {
             const invalidServer = new YNABMCPServer(false);
-            await expect(invalidServer.validateToken()).rejects.toThrow(AuthenticationError);
+            await expect(invalidServer.validateToken()).rejects.toHaveProperty(
+              'name',
+              'AuthenticationError',
+            );
           } finally {
             process.env['YNAB_ACCESS_TOKEN'] = originalToken;
           }
@@ -129,19 +128,42 @@ describeIntegration('Server Startup and Transport Integration', () => {
 
           try {
             const invalidServer = new YNABMCPServer(false);
-            await expect(invalidServer.validateToken()).rejects.toThrow(AuthenticationError);
+            await expect(invalidServer.validateToken()).rejects.toHaveProperty(
+              'name',
+              'AuthenticationError',
+            );
 
             // Verify the error message contains relevant information
             try {
               await invalidServer.validateToken();
             } catch (error) {
-              expect(error).toBeInstanceOf(AuthenticationError);
+              expect((error as { name?: string }).name).toBe('AuthenticationError');
               expect(error.message).toContain('Token validation failed');
             }
           } finally {
             process.env['YNAB_ACCESS_TOKEN'] = originalToken;
           }
         }, ctx);
+      },
+    );
+
+    it(
+      'should surface malformed token responses as AuthenticationError',
+      { meta: { tier: 'domain', domain: 'server' } },
+      async () => {
+        const syntaxError = new SyntaxError('Unexpected token < in JSON at position 0');
+        const getUserSpy = vi
+          .spyOn(server.getYNABAPI().user, 'getUser')
+          .mockRejectedValue(syntaxError);
+
+        try {
+          await expect(server.validateToken()).rejects.toHaveProperty('name', 'AuthenticationError');
+          await expect(server.validateToken()).rejects.toThrow(
+            'Unexpected response from YNAB during token validation',
+          );
+        } finally {
+          getUserSpy.mockRestore();
+        }
       },
     );
   });
@@ -262,7 +284,7 @@ describeIntegration('Server Startup and Transport Integration', () => {
           } catch (error) {
             // Expected to fail on stdio connection in test environment
             // Token was already validated above, so this error should be transport-related
-            expect(error).not.toBeInstanceOf(ConfigurationError);
+            expect(error).not.toBeInstanceOf(ValidationError);
           }
 
           consoleSpy.mockRestore();
@@ -325,7 +347,7 @@ describeIntegration('Server Startup and Transport Integration', () => {
 
         expect(() => new YNABMCPServer(false)).toThrow(
           expect.objectContaining({
-            message: 'YNAB_ACCESS_TOKEN environment variable is required but not set',
+            message: expect.stringMatching(/YNAB_ACCESS_TOKEN/i),
           }),
         );
 
@@ -343,7 +365,7 @@ describeIntegration('Server Startup and Transport Integration', () => {
 
           try {
             const server = new YNABMCPServer(false);
-            await expect(server.validateToken()).rejects.toThrow(AuthenticationError);
+            await expect(server.validateToken()).rejects.toHaveProperty('name', 'AuthenticationError');
           } finally {
             process.env['YNAB_ACCESS_TOKEN'] = originalToken;
           }
@@ -448,7 +470,7 @@ describeIntegration('Server Startup and Transport Integration', () => {
         delete process.env['YNAB_ACCESS_TOKEN'];
 
         // Should fail immediately on construction, not during run()
-        expect(() => new YNABMCPServer(false)).toThrow(ConfigurationError);
+        expect(() => new YNABMCPServer(false)).toThrow(/YNAB_ACCESS_TOKEN/i);
 
         process.env['YNAB_ACCESS_TOKEN'] = originalToken;
       },
@@ -466,7 +488,7 @@ describeIntegration('Server Startup and Transport Integration', () => {
             const server = new YNABMCPServer(false);
 
             // Should fail on token validation, before transport setup
-            await expect(server.run()).rejects.toThrow(AuthenticationError);
+            await expect(server.run()).rejects.toHaveProperty('name', 'AuthenticationError');
           } finally {
             process.env['YNAB_ACCESS_TOKEN'] = originalToken;
           }

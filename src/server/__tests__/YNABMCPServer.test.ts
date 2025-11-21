@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vite
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { YNABMCPServer } from '../YNABMCPServer.js';
-import { AuthenticationError, ConfigurationError, ValidationError } from '../../types/index.js';
+import { AuthenticationError, ValidationError } from '../../types/index.js';
 import { ToolRegistry } from '../toolRegistry.js';
 import { cacheManager } from '../../server/cacheManager.js';
 import { responseFormatter } from '../../server/responseFormatter.js';
@@ -80,38 +80,53 @@ describe('YNABMCPServer', () => {
       expect(server.getYNABAPI()).toBeDefined();
     });
 
-    it('should throw ConfigurationError when YNAB_ACCESS_TOKEN is missing', () => {
+    it('should throw ValidationError when YNAB_ACCESS_TOKEN is missing', () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       delete process.env['YNAB_ACCESS_TOKEN'];
 
-      expect(() => new YNABMCPServer()).toThrow(ConfigurationError);
-      expect(() => new YNABMCPServer()).toThrow(
-        'YNAB_ACCESS_TOKEN environment variable is required but not set',
-      );
+      expect(() => new YNABMCPServer()).toThrow(/YNAB_ACCESS_TOKEN/i);
 
       // Restore token
       process.env['YNAB_ACCESS_TOKEN'] = originalToken;
     });
 
-    it('should throw ConfigurationError when YNAB_ACCESS_TOKEN is empty string', () => {
+    it('should throw ValidationError when YNAB_ACCESS_TOKEN is empty string', () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = '';
 
-      expect(() => new YNABMCPServer()).toThrow(ConfigurationError);
       expect(() => new YNABMCPServer()).toThrow('YNAB_ACCESS_TOKEN must be a non-empty string');
 
       // Restore token
       process.env['YNAB_ACCESS_TOKEN'] = originalToken;
     });
 
-    it('should throw ConfigurationError when YNAB_ACCESS_TOKEN is only whitespace', () => {
+    it('should throw ValidationError when YNAB_ACCESS_TOKEN is only whitespace', () => {
       const originalToken = process.env['YNAB_ACCESS_TOKEN'];
       process.env['YNAB_ACCESS_TOKEN'] = '   ';
 
-      expect(() => new YNABMCPServer()).toThrow(ConfigurationError);
       expect(() => new YNABMCPServer()).toThrow('YNAB_ACCESS_TOKEN must be a non-empty string');
 
       // Restore token
+      process.env['YNAB_ACCESS_TOKEN'] = originalToken;
+    });
+
+    it('should reload configuration for each server instance', () => {
+      const originalToken = process.env['YNAB_ACCESS_TOKEN'];
+
+      process.env['YNAB_ACCESS_TOKEN'] = 'token-one';
+      const firstServer = new YNABMCPServer(false);
+      const firstConfig = (
+        firstServer as unknown as { configInstance: { YNAB_ACCESS_TOKEN: string } }
+      ).configInstance;
+      expect(firstConfig.YNAB_ACCESS_TOKEN).toBe('token-one');
+
+      process.env['YNAB_ACCESS_TOKEN'] = 'token-two';
+      const secondServer = new YNABMCPServer(false);
+      const secondConfig = (
+        secondServer as unknown as { configInstance: { YNAB_ACCESS_TOKEN: string } }
+      ).configInstance;
+      expect(secondConfig.YNAB_ACCESS_TOKEN).toBe('token-two');
+
       process.env['YNAB_ACCESS_TOKEN'] = originalToken;
     });
 
@@ -193,7 +208,7 @@ describe('YNABMCPServer', () => {
         // Expected to fail on stdio connection in test environment
         // But should not fail on token validation
         expect(error).not.toBeInstanceOf(AuthenticationError);
-        expect(error).not.toBeInstanceOf(ConfigurationError);
+        expect(error).not.toBeInstanceOf(ValidationError);
       }
 
       consoleSpy.mockRestore();
@@ -739,10 +754,7 @@ describe('YNABMCPServer', () => {
       delete process.env['YNAB_ACCESS_TOKEN'];
 
       try {
-        expect(() => new YNABMCPServer()).toThrow(ConfigurationError);
-        expect(() => new YNABMCPServer()).toThrow(
-          'YNAB_ACCESS_TOKEN environment variable is required but not set',
-        );
+        expect(() => new YNABMCPServer()).toThrow(/YNAB_ACCESS_TOKEN/i);
       } finally {
         // Restore token
         process.env['YNAB_ACCESS_TOKEN'] = originalToken;

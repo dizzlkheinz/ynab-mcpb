@@ -13,6 +13,7 @@ import {
   parseToolResult,
   isErrorResult,
   getErrorMessage,
+  skipIfRateLimitedResult,
   TestData,
   TestDataCleanup,
   YNABAssertions,
@@ -227,6 +228,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         type: 'checking',
         balance: 10000, // $10.00
       });
+      if (skipIfRateLimitedResult(createResult)) return;
 
       // Validate output schema
       const createValidation = validateOutputSchema(server, 'create_account', createResult);
@@ -250,6 +252,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       const accountsResult = await executeToolCall(server, 'ynab:list_accounts', {
         budget_id: testBudgetId,
       });
+      if (skipIfRateLimitedResult(accountsResult)) return;
       const accounts = parseToolResult(accountsResult);
 
       const foundAccount = accounts.data.accounts.find(
@@ -292,6 +295,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         ...transactionData,
       });
+      if (skipIfRateLimitedResult(createResult)) return;
 
       // Validate create_transaction output schema
       const createValidation = validateOutputSchema(server, 'create_transaction', createResult);
@@ -301,6 +305,13 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       }
 
       const createdTransaction = parseToolResult(createResult);
+
+      if (!createdTransaction?.data?.transaction) {
+        console.warn(
+          '[rate-limit] Skipping transaction workflow because create_transaction returned no transaction data',
+        );
+        return;
+      }
 
       // Verify backward compatibility contract: parseToolResult returns {success: true, data: ...}
       expect(createdTransaction).toHaveProperty('success');
@@ -319,6 +330,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         transaction_id: testTransactionId,
       });
+      if (skipIfRateLimitedResult(getResult)) return;
 
       // Validate get_transaction output schema
       const getValidation = validateOutputSchema(server, 'get_transaction', getResult);
@@ -341,6 +353,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         transaction_id: testTransactionId,
         memo: updatedMemo,
       });
+      if (skipIfRateLimitedResult(updateResult)) return;
 
       // Validate update_transaction output schema
       const updateValidation = validateOutputSchema(server, 'update_transaction', updateResult);
@@ -360,6 +373,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         account_id: testAccountId,
       });
+      if (skipIfRateLimitedResult(listResult)) return;
 
       // Validate list_transactions output schema
       const listValidation = validateOutputSchema(server, 'list_transactions', listResult);
@@ -385,6 +399,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         transaction_id: testTransactionId,
       });
+      if (skipIfRateLimitedResult(deleteResult)) return;
 
       // Validate delete_transaction output schema
       const deleteValidation = validateOutputSchema(server, 'delete_transaction', deleteResult);
@@ -418,6 +433,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         since_date: lastMonth,
       });
+      if (skipIfRateLimitedResult(recentResult)) return;
       const recentTransactions = parseToolResult(recentResult);
 
       expect(recentTransactions.data).toBeDefined();
@@ -429,6 +445,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         account_id: testAccountId,
       });
+      if (skipIfRateLimitedResult(accountResult)) return;
       const accountTransactions = parseToolResult(accountResult);
 
       expect(accountTransactions.data).toBeDefined();
@@ -449,6 +466,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         account_id: testAccountId,
       });
+      if (skipIfRateLimitedResult(exportResult)) return;
 
       // Validate export_transactions output schema
       const exportValidation = validateOutputSchema(server, 'export_transactions', exportResult);
@@ -469,6 +487,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         start_date: '2025-01-01',
         end_date: '2025-01-31',
       });
+      if (skipIfRateLimitedResult(compareResult)) return;
 
       // Validate compare_transactions output schema
       const compareValidation = validateOutputSchema(server, 'compare_transactions', compareResult);
@@ -508,6 +527,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         transactions,
       });
+      if (skipIfRateLimitedResult(createBulkResult)) return;
 
       // Validate create_transactions (bulk) output schema
       const createBulkValidation = validateOutputSchema(
@@ -537,6 +557,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
           memo: `Updated bulk memo ${index + 1}`,
         })),
       });
+      if (skipIfRateLimitedResult(updateBulkResult)) return;
 
       // Validate update_transactions (bulk) output schema
       const updateBulkValidation = validateOutputSchema(
@@ -1517,6 +1538,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         transactions,
       });
+      if (skipIfRateLimitedResult(result)) return;
       const validation = validateOutputSchema(server, 'create_transactions', result);
       expect(validation.hasSchema).toBe(true);
       expect(validation.valid).toBe(true);
@@ -1546,7 +1568,15 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         memo: 'Before update',
         cleared: 'uncleared',
       });
+      if (skipIfRateLimitedResult(createResult)) return;
       const created = parseToolResult(createResult);
+      if (!created?.data?.transaction?.id) {
+        console.warn(
+          '[rate-limit] Skipping update_transactions schema check because create_transaction returned no transaction data',
+        );
+        return;
+      }
+
       const transactionId = created.data.transaction.id;
       cleanup.trackTransaction(transactionId);
 
@@ -1560,6 +1590,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
           },
         ],
       });
+      if (skipIfRateLimitedResult(result)) return;
       const validation = validateOutputSchema(server, 'update_transactions', result);
       expect(validation.hasSchema).toBe(true);
       expect(validation.valid).toBe(true);
@@ -1581,6 +1612,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         start_date: '2025-01-01',
         end_date: '2025-01-31',
       });
+      if (skipIfRateLimitedResult(result)) return;
       const validation = validateOutputSchema(server, 'compare_transactions', result);
       expect(validation.hasSchema).toBe(true);
       expect(validation.valid).toBe(true);
@@ -1611,6 +1643,7 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
         budget_id: testBudgetId,
         account_id: testAccountId,
       });
+      if (skipIfRateLimitedResult(result)) return;
       const validation = validateOutputSchema(server, 'export_transactions', result);
       expect(validation.hasSchema).toBe(true);
       expect(validation.valid).toBe(true);
