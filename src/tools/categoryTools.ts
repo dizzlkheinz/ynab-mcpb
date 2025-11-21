@@ -272,7 +272,11 @@ export async function handleUpdateCategory(
     const category = response.data.category;
 
     // Invalidate category-related caches after successful update
-    const categoriesListCacheKey = CacheManager.generateKey(CacheKeys.CATEGORIES, 'list', params.budget_id);
+    const categoriesListCacheKey = CacheManager.generateKey(
+      CacheKeys.CATEGORIES,
+      'list',
+      params.budget_id,
+    );
     const specificCategoryCacheKey = CacheManager.generateKey(
       CacheKeys.CATEGORIES,
       'get',
@@ -365,4 +369,3 @@ function handleCategoryError(error: unknown, defaultMessage: string): CallToolRe
     ],
   };
 }
-

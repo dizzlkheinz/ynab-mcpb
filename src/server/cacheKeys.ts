@@ -1,4 +1,3 @@
-
 export const CacheKeys = {
   ACCOUNTS: 'accounts',
   BUDGETS: 'budgets',

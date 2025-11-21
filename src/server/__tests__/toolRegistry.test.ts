@@ -169,9 +169,9 @@ describe('ToolRegistry', () => {
     expect(tools[0]?.name).toBe('sample_tool');
     const schema = tools[0]?.inputSchema as Record<string, unknown> | undefined;
     expect(schema).toBeDefined();
+    // Input schemas use io:'input' mode which doesn't set additionalProperties
     expect(schema).toMatchObject({
       type: 'object',
-      additionalProperties: false,
       properties: expect.objectContaining({
         id: expect.objectContaining({ type: 'string' }),
         minify: expect.objectContaining({ type: 'boolean' }),

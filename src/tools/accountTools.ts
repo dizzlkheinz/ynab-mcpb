@@ -249,7 +249,11 @@ export async function handleCreateAccount(
       const account = response.data.account;
 
       // Invalidate accounts list cache after successful account creation
-      const accountsListCacheKey = CacheManager.generateKey(CacheKeys.ACCOUNTS, 'list', params.budget_id);
+      const accountsListCacheKey = CacheManager.generateKey(
+        CacheKeys.ACCOUNTS,
+        'list',
+        params.budget_id,
+      );
       cacheManager.delete(accountsListCacheKey);
 
       deltaCache.invalidate(params.budget_id, CacheKeys.ACCOUNTS);
