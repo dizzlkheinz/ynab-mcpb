@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2025-11-21
+
 ### Fixed
 
 - Fixed missing `cached` property in large transaction list responses (>90KB)
   - Large response path now includes `cached` and `cache_info` properties
   - Maintains consistency with normal response path
   - Resolves integration test failures when accounts have many transactions
+- Fixed TypeScript strict mode error in testUtils (TS4111)
+  - Properties from index signatures now use bracket notation
 
 ## [0.13.0] - 2025-11-20
 
