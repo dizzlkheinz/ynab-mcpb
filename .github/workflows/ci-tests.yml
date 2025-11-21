@@ -38,5 +38,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run core integration tests (throttled)
+        # Integration tests with real YNAB API may hit rate limits (200/hour)
+        # causing 60-minute waits. Tests provide visibility but don't block merges.
+        continue-on-error: true
         run: npm run test:integration:full
-        timeout-minutes: 25
+        timeout-minutes: 90
