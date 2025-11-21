@@ -352,6 +352,61 @@ describe('transactionTools', () => {
       const response = JSON.parse(result.content[0].text);
       expect(response.error.message).toBe('Failed to list transactions');
     });
+
+    it('should include cached property in large response path', async () => {
+      // Create large transaction list (> 90KB)
+      const largeTransactionList: ynab.TransactionDetail[] = [];
+      for (let i = 0; i < 5000; i++) {
+        largeTransactionList.push({
+          id: `transaction-${i}`,
+          date: '2025-01-01',
+          amount: -10000,
+          memo: 'Test transaction with long memo to increase size '.repeat(10),
+          cleared: 'cleared',
+          approved: true,
+          flag_color: null,
+          account_id: 'test-account',
+          payee_id: null,
+          category_id: null,
+          transfer_account_id: null,
+          transfer_transaction_id: null,
+          matched_transaction_id: null,
+          import_id: null,
+          import_payee_name: null,
+          import_payee_name_original: null,
+          debt_transaction_type: null,
+          deleted: false,
+          account_name: 'Test Account',
+          payee_name: 'Test Payee',
+          category_name: 'Test Category',
+          subtransactions: [],
+        } as ynab.TransactionDetail);
+      }
+
+      const mockResponse = {
+        data: {
+          transactions: largeTransactionList,
+        },
+      };
+
+      (mockYnabAPI.transactions.getTransactionsByAccount as any).mockResolvedValue(mockResponse);
+
+      const result = await handleListTransactions(mockYnabAPI, {
+        budget_id: 'test-budget',
+        account_id: 'test-account',
+      });
+
+      const content = result.content?.[0];
+      expect(content).toBeDefined();
+      expect(content?.type).toBe('text');
+
+      const parsedResponse = JSON.parse(content!.text);
+
+      // Should have cached property even in large response path
+      expect(parsedResponse.cached).toBeDefined();
+      expect(parsedResponse.cached).toBe(false);
+      expect(parsedResponse.cache_info).toBeDefined();
+    });
   });
 
   describe('GetTransactionSchema', () => {
