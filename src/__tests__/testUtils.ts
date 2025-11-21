@@ -560,7 +560,7 @@ export function skipIfRateLimitedResult(
 
     if (parsed && typeof parsed === 'object') {
       const parsedObj = parsed as Record<string, unknown>;
-      if ('error' in parsedObj) candidates.push(parsedObj.error);
+      if ('error' in parsedObj) candidates.push(parsedObj['error']);
       if ('data' in parsedObj) {
         const data = (parsedObj as any).data;
         candidates.push(data?.error ?? data);
