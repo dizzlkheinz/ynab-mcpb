@@ -231,24 +231,9 @@ type BulkTransactionInput = Omit<
   'budget_id' | 'dry_run' | 'subtransactions'
 >;
 
-const BulkTransactionInputSchema = BulkTransactionInputSchemaBase.extend({
-  subtransactions: z.any().optional(),
-})
-  .strict()
-  .superRefine((data, ctx) => {
-    if (data.subtransactions !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Subtransactions are not supported in bulk transaction creation',
-        path: ['subtransactions'],
-      });
-    }
-  })
-  .transform((data): BulkTransactionInput => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { subtransactions, ...rest } = data;
-    return rest;
-  });
+// Schema for bulk transaction creation - subtransactions are not supported
+// The .strict() modifier automatically rejects any fields not in the schema
+const BulkTransactionInputSchema = BulkTransactionInputSchemaBase.strict();
 
 export const CreateTransactionsSchema = z
   .object({

@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2025-11-20
+
 ### Changed
 
 - **Default Build to Production** - All builds now use minified production bundle
   - `npm run build` now aliases `build:prod` (was dev build)
   - `prepare` hook uses production build for consistent npm distribution
-  - Bundle size reduced from 2.35 MB → 1.28 MB (~45% smaller)
+  - Bundle size reduced from 2.35 MB to 1.28 MB (~45% smaller)
   - Use `npm run build:dev` if you need sourcemaps for debugging
 - **Integrated Linting and Formatting** - Code quality checks now run automatically
   - `npm run lint` now runs both ESLint and Prettier checks

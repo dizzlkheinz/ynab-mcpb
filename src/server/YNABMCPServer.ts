@@ -101,25 +101,15 @@ import {
   ListBudgetsOutputSchema,
   ListAccountsOutputSchema,
   GetAccountOutputSchema,
-  CreateAccountOutputSchema,
-  ListTransactionsOutputSchema,
   GetTransactionOutputSchema,
   ExportTransactionsOutputSchema,
   CompareTransactionsOutputSchema,
-  CreateTransactionOutputSchema,
-  CreateTransactionsOutputSchema,
-  UpdateTransactionOutputSchema,
-  UpdateTransactionsOutputSchema,
-  DeleteTransactionOutputSchema,
-  CreateReceiptSplitTransactionOutputSchema,
   ListCategoriesOutputSchema,
   GetCategoryOutputSchema,
-  UpdateCategoryOutputSchema,
   ListPayeesOutputSchema,
   GetPayeeOutputSchema,
   GetMonthOutputSchema,
   ListMonthsOutputSchema,
-  ReconcileAccountOutputSchema,
 } from '../tools/schemas/outputs/index.js';
 
 /**
@@ -159,9 +149,9 @@ export class YNABMCPServer {
       },
       {
         capabilities: {
-          tools: {},
-          resources: {},
-          prompts: {},
+          tools: { listChanged: true },
+          resources: { listChanged: true },
+          prompts: { listChanged: true },
         },
       },
     );
@@ -426,6 +416,8 @@ export class YNABMCPServer {
         pretty_spaces: z.number().int().min(0).max(10).optional(),
       })
       .strict();
+    // Permissive object schema used where hosts require a top-level object type
+    const LooseObjectSchema = z.object({}).passthrough();
 
     register({
       name: 'list_budgets',
@@ -566,7 +558,7 @@ export class YNABMCPServer {
       name: 'create_account',
       description: 'Create a new account in the specified budget',
       inputSchema: CreateAccountSchema,
-      outputSchema: CreateAccountOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWrite(handleCreateAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateAccountSchema>>(),
       metadata: {
@@ -581,7 +573,7 @@ export class YNABMCPServer {
       name: 'list_transactions',
       description: 'List transactions for a budget with optional filtering',
       inputSchema: ListTransactionsSchema,
-      outputSchema: ListTransactionsOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWithDelta(handleListTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListTransactionsSchema>>(),
       metadata: {
@@ -628,7 +620,7 @@ export class YNABMCPServer {
       description:
         'Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).',
       inputSchema: ReconcileAccountSchema,
-      outputSchema: ReconcileAccountOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWithDelta(handleReconcileAccount),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
       metadata: {
@@ -658,7 +650,7 @@ export class YNABMCPServer {
       name: 'create_transaction',
       description: 'Create a new transaction in the specified budget and account',
       inputSchema: CreateTransactionSchema,
-      outputSchema: CreateTransactionOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWrite(handleCreateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionSchema>>(),
       metadata: {
@@ -674,7 +666,7 @@ export class YNABMCPServer {
       description:
         'Create multiple transactions in a single batch (1-100 items) with duplicate detection, dry-run validation, and automatic response size management with correlation metadata.',
       inputSchema: CreateTransactionsSchema,
-      outputSchema: CreateTransactionsOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWrite(handleCreateTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionsSchema>>(),
       metadata: {
@@ -690,7 +682,7 @@ export class YNABMCPServer {
       description:
         'Update multiple transactions in a single batch (1-100 items) with dry-run validation, automatic cache invalidation, and response size management. Supports optional original_account_id and original_date metadata for efficient cache invalidation.',
       inputSchema: UpdateTransactionsSchema,
-      outputSchema: UpdateTransactionsOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWrite(handleUpdateTransactions),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionsSchema>>(),
       metadata: {
@@ -705,7 +697,7 @@ export class YNABMCPServer {
       name: 'create_receipt_split_transaction',
       description: 'Create a split transaction from receipt items with proportional tax allocation',
       inputSchema: CreateReceiptSplitTransactionSchema,
-      outputSchema: CreateReceiptSplitTransactionOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWrite(handleCreateReceiptSplitTransaction),
       defaultArgumentResolver:
         resolveBudgetId<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
@@ -721,7 +713,7 @@ export class YNABMCPServer {
       name: 'update_transaction',
       description: 'Update an existing transaction',
       inputSchema: UpdateTransactionSchema,
-      outputSchema: UpdateTransactionOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWrite(handleUpdateTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionSchema>>(),
       metadata: {
@@ -736,7 +728,7 @@ export class YNABMCPServer {
       name: 'delete_transaction',
       description: 'Delete a transaction from the specified budget',
       inputSchema: DeleteTransactionSchema,
-      outputSchema: DeleteTransactionOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWrite(handleDeleteTransaction),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof DeleteTransactionSchema>>(),
       metadata: {
@@ -781,7 +773,7 @@ export class YNABMCPServer {
       name: 'update_category',
       description: 'Update the budgeted amount for a category in the current month',
       inputSchema: UpdateCategorySchema,
-      outputSchema: UpdateCategoryOutputSchema,
+      outputSchema: LooseObjectSchema,
       handler: adaptWrite(handleUpdateCategory),
       defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateCategorySchema>>(),
       metadata: {
@@ -1161,6 +1153,19 @@ export class YNABMCPServer {
       }
     } catch {
       // ignore
+    }
+    try {
+      // CJS bundles can rely on __dirname being defined; add nearby package.json fallbacks
+      const dir = typeof __dirname === 'string' ? __dirname : undefined;
+      if (dir) {
+        candidates.push(
+          path.resolve(dir, '../../package.json'),
+          path.resolve(dir, '../package.json'),
+          path.resolve(dir, 'package.json'),
+        );
+      }
+    } catch {
+      // ignore additional fallbacks
     }
     for (const p of candidates) {
       try {

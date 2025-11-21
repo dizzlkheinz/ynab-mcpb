@@ -183,22 +183,27 @@ Want to contribute or build from source?
 ### Development Setup
 
 1. **Clone the repository:**
+
    ```bash
    git clone https://github.com/dizzlkheinz/ynab-mcpb.git
    cd ynab-mcpb
    ```
 
 2. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 3. **Create your environment file:**
    Copy the example environment file to a new `.env` file:
+
    ```bash
    cp .env.example .env
    ```
+
    Open the `.env` file and add your YNAB Personal Access Token:
+
    ```
    YNAB_ACCESS_TOKEN="your-token-here"
    ```
@@ -214,7 +219,6 @@ Want to contribute or build from source?
 - **[Development Guide](docs/guides/DEVELOPMENT.md)** - Setup and best practices
 - **[Architecture Overview](docs/guides/ARCHITECTURE.md)** - How the code is organized
 - **[Testing Guide](docs/guides/TESTING.md)** - Running and writing tests
-
 
 ## Security & Privacy
 

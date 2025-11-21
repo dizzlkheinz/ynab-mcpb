@@ -163,7 +163,10 @@ export class ToolRegistry {
         inputSchema,
       };
       if (tool.outputSchema) {
-        const outputSchema = this.generateJsonSchema(tool.outputSchema) as Tool['outputSchema'];
+        const outputSchema = this.generateJsonSchema(
+          tool.outputSchema,
+          'output',
+        ) as Tool['outputSchema'];
         result.outputSchema = outputSchema;
       }
       if (tool.metadata?.annotations) {
@@ -390,9 +393,12 @@ export class ToolRegistry {
     }
   }
 
-  private generateJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
+  private generateJsonSchema(
+    schema: z.ZodTypeAny,
+    ioMode: 'input' | 'output' = 'input',
+  ): Record<string, unknown> {
     try {
-      return toJSONSchema(schema, { target: 'draft-2020-12', io: 'output' });
+      return toJSONSchema(schema, { target: 'draft-2020-12', io: ioMode });
     } catch (error) {
       console.warn(`Failed to generate JSON schema for tool: ${error}`);
       return { type: 'object', additionalProperties: true };

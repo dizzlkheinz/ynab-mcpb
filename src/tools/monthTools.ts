@@ -43,7 +43,12 @@ export async function handleGetMonth(
   return await withToolErrorHandling(
     async () => {
       // Always use cache
-      const cacheKey = CacheManager.generateKey(CacheKeys.MONTHS, 'get', params.budget_id, params.month);
+      const cacheKey = CacheManager.generateKey(
+        CacheKeys.MONTHS,
+        'get',
+        params.budget_id,
+        params.month,
+      );
       const wasCached = cacheManager.has(cacheKey);
       const month = await cacheManager.wrap<ynab.MonthDetail>(cacheKey, {
         ttl: CACHE_TTLS.MONTHS,

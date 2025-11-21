@@ -1852,8 +1852,9 @@ describe('transactionTools', () => {
       const result = CreateTransactionsSchema.safeParse(params);
       expect(result.success).toBe(false);
       if (!result.success) {
-        const issue = result.error.issues.find((i) => i.path.includes('subtransactions'));
-        expect(issue?.message).toContain('Subtransactions are not supported');
+        const issue = result.error.issues.find((i) => i.code === 'unrecognized_keys');
+        expect(issue).toBeDefined();
+        expect((issue as any)?.keys).toContain('subtransactions');
       }
     });
 
