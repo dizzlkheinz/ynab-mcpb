@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { ValidationError } from '../../utils/errors.js';
 
 const originalEnv = { ...process.env };
 
