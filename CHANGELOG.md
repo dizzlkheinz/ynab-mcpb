@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed missing `cached` property in large transaction list responses (>90KB)
+  - Large response path now includes `cached` and `cache_info` properties
+  - Maintains consistency with normal response path
+  - Resolves integration test failures when accounts have many transactions
+
 ## [0.13.0] - 2025-11-20
 
 ### Changed
