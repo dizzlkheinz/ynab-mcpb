@@ -29,6 +29,7 @@ jobs:
     if: always()
     env:
       YNAB_ACCESS_TOKEN: ${{ secrets.YNAB_ACCESS_TOKEN }}
+      RATE_LIMIT_MAX_WAIT_MS: 300000  # Max 5 minutes wait (not 60)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,4 +40,4 @@ jobs:
         run: npm ci
       - name: Run core integration tests (throttled)
         run: npm run test:integration:full
-        timeout-minutes: 25
+        timeout-minutes: 20
