@@ -76,7 +76,7 @@ describe('Category Tools', () => {
           return `months:get:${budgetId}:${id}`;
         }
         return `${prefix}:${type}:${budgetId}:${id || ''}`;
-      }
+      },
     );
   });
 
@@ -464,14 +464,18 @@ describe('Category Tools', () => {
         data: { category: mockUpdatedCategory },
       });
 
-      const result = await handleUpdateCategory(mockYnabAPI, {
+      await handleUpdateCategory(mockYnabAPI, {
         budget_id: 'budget-1',
         category_id: 'category-1',
         budgeted: 60000,
       });
 
       // Verify cache was invalidated for both category list and specific category
-      expect(CacheManager.generateKey).toHaveBeenCalledWith(CacheKeys.CATEGORIES, 'list', 'budget-1');
+      expect(CacheManager.generateKey).toHaveBeenCalledWith(
+        CacheKeys.CATEGORIES,
+        'list',
+        'budget-1',
+      );
       expect(CacheManager.generateKey).toHaveBeenCalledWith(
         CacheKeys.CATEGORIES,
         'get',

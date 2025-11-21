@@ -4,6 +4,7 @@
 
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod/v4';
+import { fromZodError } from 'zod-validation-error';
 import { globalRateLimiter, RateLimitError } from './rateLimiter.js';
 import { globalRequestLogger } from './requestLogger.js';
 import { ErrorHandler } from './errorHandler.js';
@@ -112,13 +113,8 @@ export class SecurityMiddleware {
       return schema.parse(parameters);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const errorMessage =
-          error.issues && error.issues.length > 0
-            ? error.issues
-                .map((err: z.ZodIssue) => `${err.path.join('.')}: ${err.message}`)
-                .join(', ')
-            : error.message || 'Validation failed';
-        throw new Error(`Validation failed: ${errorMessage}`);
+        const validationError = fromZodError(error);
+        throw new Error(`Validation failed: ${validationError.message}`);
       }
       throw error;
     }

@@ -1,5 +1,6 @@
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import { z, toJSONSchema } from 'zod/v4';
+import { fromZodError } from 'zod-validation-error';
 import type { MCPToolAnnotations } from '../types/toolAnnotations.js';
 
 export type SecurityWrapperFactory = <T extends Record<string, unknown>>(
@@ -311,9 +312,10 @@ export class ToolRegistry {
     tool: RegisteredTool<Record<string, unknown>, Record<string, unknown>>,
   ): CallToolResult {
     if (error instanceof z.ZodError) {
+      const validationError = fromZodError(error);
       return this.deps.errorHandler.createValidationError(
         `Invalid parameters for ${tool.name}`,
-        error.message,
+        validationError.message,
       );
     }
 
@@ -467,12 +469,8 @@ export class ToolRegistry {
     // Validate against schema
     const result = validator.safeParse(parsedOutput);
     if (!result.success) {
-      const validationErrors = result.error.issues
-        .map((err) => {
-          const path = err.path.join('.');
-          return path ? `${path}: ${err.message}` : err.message;
-        })
-        .join('; ');
+      const validationError = fromZodError(result.error);
+      const validationErrors = validationError.message;
       return this.deps.errorHandler.createValidationError(
         `Output validation failed for ${toolName}`,
         `Handler output does not match declared output schema: ${validationErrors}`,

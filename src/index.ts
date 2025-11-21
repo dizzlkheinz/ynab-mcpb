@@ -5,7 +5,6 @@ import 'dotenv/config';
 
 import { YNABMCPServer } from './server/YNABMCPServer.js';
 import { AuthenticationError, ConfigurationError, ValidationError } from './utils/errors.js';
-import { SecurityErrorCode } from './server/errorHandler.js';
 
 /**
  * Global server instance for graceful shutdown
