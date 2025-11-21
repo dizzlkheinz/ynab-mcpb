@@ -665,12 +665,16 @@ function normalizeYnabError(error: unknown): NormalizedYnabError {
     const detailSource = (error as { detail?: unknown }).detail;
     const detail =
       typeof detailSource === 'string' && detailSource.trim().length > 0 ? detailSource : undefined;
-    return {
-      status,
+
+    const result: NormalizedYnabError = {
       name: error.name,
       message: error.message || 'Unknown error occurred',
-      detail,
     };
+
+    if (status !== undefined) result.status = status;
+    if (detail !== undefined) result.detail = detail;
+
+    return result;
   }
 
   if (error && typeof error === 'object') {
@@ -693,7 +697,14 @@ function normalizeYnabError(error: unknown): NormalizedYnabError {
       typeof (errObj as { name?: unknown }).name === 'string'
         ? ((errObj as { name: string }).name as string)
         : undefined;
-    return { status, name, message, detail };
+
+    const result: NormalizedYnabError = { message };
+
+    if (status !== undefined) result.status = status;
+    if (name !== undefined) result.name = name;
+    if (detail !== undefined) result.detail = detail;
+
+    return result;
   }
 
   if (typeof error === 'string') {
