@@ -13,10 +13,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
-import {
-  AuthenticationError,
-  ConfigurationError,
-} from '../utils/errors.js';
+import { AuthenticationError, ConfigurationError } from '../utils/errors.js';
 import { YNABErrorCode, ValidationError } from '../types/index.js';
 import { config } from './config.js';
 import { createErrorHandler, ErrorHandler } from './errorHandler.js';
@@ -146,7 +143,7 @@ export class YNABMCPServer {
   constructor(exitOnError: boolean = true) {
     this.exitOnError = exitOnError;
     // Config is now imported and validated at startup
-    this.defaultBudgetId = process.env.YNAB_DEFAULT_BUDGET_ID;
+    this.defaultBudgetId = process.env['YNAB_DEFAULT_BUDGET_ID'];
 
     // Initialize YNAB API
     this.ynabAPI = new ynab.API(config.YNAB_ACCESS_TOKEN);
