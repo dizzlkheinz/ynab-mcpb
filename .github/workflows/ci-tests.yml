@@ -39,4 +39,4 @@ jobs:
         run: npm ci
       - name: Run core integration tests (throttled)
         run: npm run test:integration:full
-        timeout-minutes: 15
+        timeout-minutes: 25
