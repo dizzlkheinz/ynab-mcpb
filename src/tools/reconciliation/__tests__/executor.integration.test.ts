@@ -40,7 +40,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
         await ynabAPI.transactions.deleteTransaction(budgetId, transactionId);
       });
     }
-  });
+  }, 60000); // 60 second timeout for cleanup of bulk transactions
 
   it(
     'creates 10 transactions via bulk mode',
@@ -257,7 +257,11 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
   function containsRateLimitFailure(result: Awaited<ReturnType<typeof executeReconciliation>>) {
     return result.actions_taken.some((action) => {
       const reason = typeof action.reason === 'string' ? action.reason.toLowerCase() : '';
-      return reason.includes('429') || reason.includes('too many requests') || reason.includes('rate limit');
+      return (
+        reason.includes('429') ||
+        reason.includes('too many requests') ||
+        reason.includes('rate limit')
+      );
     });
   }
 });
