@@ -798,6 +798,10 @@ export async function handleListTransactions(
                 showing: `First ${preview.length} transactions:`,
                 total_count: transactions.length,
                 estimated_size_kb: Math.round(estimatedSize / 1024),
+                cached: cacheHit,
+                cache_info: cacheHit
+                  ? `Data retrieved from cache for improved performance${usedDelta ? ' (delta merge applied)' : ''}`
+                  : 'Fresh data retrieved from YNAB API',
                 preview_transactions: preview.map((transaction) => ({
                   id: transaction.id,
                   date: transaction.date,
