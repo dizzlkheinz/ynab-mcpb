@@ -87,3 +87,7 @@ jobs:
           files: ${{ steps.meta.outputs.file }}
           generate_release_notes: true
           fail_on_unmatched_files: true
+          # Use WORKFLOW_PAT to allow triggering the publish workflow
+          # PAT needs: repo, workflow permissions
+          # Falls back to GITHUB_TOKEN if PAT not configured
+          token: ${{ secrets.WORKFLOW_PAT || github.token }}
