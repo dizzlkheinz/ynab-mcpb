@@ -4,10 +4,7 @@ import { fromZodError } from 'zod-validation-error';
 import { ValidationError } from '../utils/errors.js';
 
 const envSchema = z.object({
-  YNAB_ACCESS_TOKEN: z
-    .string()
-    .trim()
-    .min(1, 'YNAB_ACCESS_TOKEN must be a non-empty string'),
+  YNAB_ACCESS_TOKEN: z.string().trim().min(1, 'YNAB_ACCESS_TOKEN must be a non-empty string'),
   MCP_PORT: z.coerce.number().int().positive().optional(),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 });
