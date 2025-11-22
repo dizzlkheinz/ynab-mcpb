@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.3] - 2025-11-21
+
+### Fixed
+
+- **Publish Workflow** - Added YNAB_ACCESS_TOKEN to npm publish workflow
+  - Performance tests now have required token during publish
+  - Ensures all unit tests pass before npm publish
+
 ## [0.13.2] - 2025-11-21
 
 ### Changed
