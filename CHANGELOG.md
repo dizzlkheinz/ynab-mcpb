@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.4] - 2025-11-21
+
+### Changed
+
+- **npm Trusted Publishing** - Switched to OIDC-based authentication
+  - More secure than token-based authentication
+  - No secrets to manage or rotate
+  - Automatic authentication via GitHub Actions OIDC
+
 ## [0.13.3] - 2025-11-21
 
 ### Fixed
