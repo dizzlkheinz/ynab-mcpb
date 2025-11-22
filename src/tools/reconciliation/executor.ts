@@ -275,12 +275,13 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
             bulkOperationDetails.transaction_failures += 1; // Canonical counter for per-transaction failures
           }
           const failureReason = ynabError.message || 'Unknown error occurred';
+          const statusSuffix = ynabError.status ? ` (HTTP ${ynabError.status})` : '';
           const failureAction: ExecutionActionRecord = {
             type: 'create_transaction_failed',
             transaction: entry.saveTransaction as unknown as Record<string, unknown>,
             reason: options.fallbackError
-              ? `Bulk fallback failed for ${entry.bankTransaction.payee ?? 'Unknown'} (${failureReason})`
-              : `Failed to create transaction ${entry.bankTransaction.payee ?? 'Unknown'} (${failureReason})`,
+              ? `Bulk fallback failed for ${entry.bankTransaction.payee ?? 'Unknown'} (${failureReason}${statusSuffix})`
+              : `Failed to create transaction ${entry.bankTransaction.payee ?? 'Unknown'} (${failureReason}${statusSuffix})`,
             correlation_key: entry.correlationKey,
           };
           if (options.chunkIndex !== undefined) {
@@ -438,7 +439,9 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
             actions_taken.push({
               type: 'bulk_create_fallback',
               transaction: null,
-              reason: `Bulk chunk #${chunkIndex} failed (${failureReason}) - falling back to sequential creation`,
+              reason: `Bulk chunk #${chunkIndex} failed (${failureReason}${
+                ynabError.status ? ` (HTTP ${ynabError.status})` : ''
+              }) - falling back to sequential creation`,
               bulk_chunk_index: chunkIndex,
             });
             await processSequentialEntries(chunk, { chunkIndex, fallbackError: ynabError });
@@ -641,16 +644,16 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
   return result;
 }
 
-interface NormalizedYnabError {
+export interface NormalizedYnabError {
   status?: number;
   name?: string;
   message: string;
   detail?: string;
 }
 
-const FATAL_YNAB_STATUS_CODES = new Set([400, 401, 403, 404, 429, 500]);
+const FATAL_YNAB_STATUS_CODES = new Set([400, 401, 403, 404, 429, 500, 503]);
 
-function normalizeYnabError(error: unknown): NormalizedYnabError {
+export function normalizeYnabError(error: unknown): NormalizedYnabError {
   const parseStatus = (value: unknown): number | undefined => {
     if (typeof value === 'number' && Number.isFinite(value)) return value;
     if (typeof value === 'string') {
@@ -714,21 +717,21 @@ function normalizeYnabError(error: unknown): NormalizedYnabError {
   return { message: 'Unknown error occurred' };
 }
 
-function shouldPropagateYnabError(error: NormalizedYnabError): boolean {
+export function shouldPropagateYnabError(error: NormalizedYnabError): boolean {
   return error.status !== undefined && FATAL_YNAB_STATUS_CODES.has(error.status);
 }
 
 function attachStatusToError(error: NormalizedYnabError): Error {
   const message = error.message || 'YNAB API error';
-  const err = new Error(message);
+  const statusFragment = error.status ? ` (HTTP ${error.status})` : '';
+  const detailFragment =
+    error.detail && !message.includes(error.detail) ? ` (${error.detail})` : '';
+  const err = new Error(`${message}${statusFragment}${detailFragment}`);
   if (error.status !== undefined) {
     (err as { status?: number }).status = error.status;
   }
   if (error.name) {
     err.name = error.name;
-  }
-  if (error.detail && !message.includes(error.detail)) {
-    err.message = `${message} (${error.detail})`;
   }
   return err;
 }

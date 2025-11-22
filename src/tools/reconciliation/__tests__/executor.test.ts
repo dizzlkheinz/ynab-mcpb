@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import type * as ynab from 'ynab';
 import type { ReconciliationAnalysis } from '../types.js';
 import { executeReconciliation, type AccountSnapshot } from '../executor.js';
+import type { NormalizedYnabError } from '../executor.js';
+import { normalizeYnabError, shouldPropagateYnabError } from '../executor.js';
 import type { ReconcileAccountRequest } from '../index.js';
 
 const buildAnalysis = (): ReconciliationAnalysis => ({
@@ -193,6 +195,20 @@ const createMockYnabAPI = (snapshot: AccountSnapshot = defaultAccountSnapshot) =
     },
   };
 };
+
+describe('error normalization helpers', () => {
+  it('normalizes YNAB SDK error objects with status and detail', () => {
+    const err = normalizeYnabError({ error: { id: '429', detail: 'Too many requests' } });
+    expect(err.status).toBe(429);
+    expect(err.message).toContain('Too many requests');
+  });
+
+  it('retains status from Error-like objects and propagates HTTP code decisions', () => {
+    const err = normalizeYnabError(Object.assign(new Error('Nope'), { status: 503 }));
+    expect(err.status).toBe(503);
+    expect(shouldPropagateYnabError(err as NormalizedYnabError)).toBe(true);
+  });
+});
 
 describe('executeReconciliation (dry run)', () => {
   it('produces action plan without calling YNAB APIs when dry_run=true', async () => {
