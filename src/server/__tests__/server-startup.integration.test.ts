@@ -157,7 +157,10 @@ describeIntegration('Server Startup and Transport Integration', () => {
           .mockRejectedValue(syntaxError);
 
         try {
-          await expect(server.validateToken()).rejects.toHaveProperty('name', 'AuthenticationError');
+          await expect(server.validateToken()).rejects.toHaveProperty(
+            'name',
+            'AuthenticationError',
+          );
           await expect(server.validateToken()).rejects.toThrow(
             'Unexpected response from YNAB during token validation',
           );
@@ -365,7 +368,10 @@ describeIntegration('Server Startup and Transport Integration', () => {
 
           try {
             const server = new YNABMCPServer(false);
-            await expect(server.validateToken()).rejects.toHaveProperty('name', 'AuthenticationError');
+            await expect(server.validateToken()).rejects.toHaveProperty(
+              'name',
+              'AuthenticationError',
+            );
           } finally {
             process.env['YNAB_ACCESS_TOKEN'] = originalToken;
           }
