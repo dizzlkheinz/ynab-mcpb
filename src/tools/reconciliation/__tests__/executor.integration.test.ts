@@ -222,7 +222,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
             initialAccount: accountSnapshot,
             currencyCode: 'USD',
           }),
-        ).rejects.toThrow();
+        ).rejects.toMatchObject({ status: expect.any(Number) });
       }, this);
     },
     60000,
