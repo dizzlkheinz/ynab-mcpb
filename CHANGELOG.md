@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2025-11-21
+
+### Changed
+
+- **Improved CI/CD Workflows** - Enhanced reliability and automation
+  - Integration tests now optional with `continue-on-error` (won't block merges)
+  - Increased integration test timeout to 90 minutes for rate-limited YNAB API calls
+  - Added WORKFLOW_PAT support for automatic npm publish on release
+  - Release workflow can now trigger publish workflow automatically
+
+### Fixed
+
+- **CI Timeout Issues** - Resolved integration test timeouts in GitHub Actions
+  - Tests hitting YNAB API rate limits (200/hour) no longer cause failures
+  - 60-minute rate limit reset waits are now accommodated
+  - CI provides visibility without blocking development
+
 ## [0.13.1] - 2025-11-21
 
 ### Fixed
