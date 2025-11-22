@@ -27,9 +27,7 @@ jobs:
         run: npm run build
 
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          echo "CI detected, using unit tests only"
+          echo "Using npm Trusted Publishing (OIDC)"
           npm run test:unit
           npm publish --provenance --access public
