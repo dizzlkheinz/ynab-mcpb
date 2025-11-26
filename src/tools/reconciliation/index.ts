@@ -9,7 +9,7 @@ import type * as ynab from 'ynab';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { withToolErrorHandling } from '../../types/index.js';
 import { analyzeReconciliation } from './analyzer.js';
-import type { MatchingConfig } from './types.js';
+import type { MatchingConfig } from './matcher.js';
 import { buildReconciliationPayload } from '../reconcileAdapter.js';
 import {
   executeReconciliation,
@@ -167,13 +167,21 @@ export async function handleReconcileAccount(
   const forceFullRefresh = params.force_full_refresh ?? true;
   return await withToolErrorHandling(
     async () => {
-      // Build matching configuration from parameters
+      // Build matching configuration from parameters (V2 Format)
       const config: MatchingConfig = {
-        dateToleranceDays: params.date_tolerance_days,
-        amountToleranceCents: params.amount_tolerance_cents,
-        descriptionSimilarityThreshold: 0.8, // Fixed for Phase 1
-        autoMatchThreshold: params.auto_match_threshold,
-        suggestionThreshold: params.suggestion_threshold,
+        weights: {
+          amount: 0.5,
+          date: 0.15,
+          payee: 0.35,
+        },
+        dateToleranceDays: params.date_tolerance_days ?? 5,
+        amountToleranceMilliunits: (params.amount_tolerance_cents ?? 1) * 10,
+        autoMatchThreshold: params.auto_match_threshold ?? 90,
+        suggestedMatchThreshold: params.suggestion_threshold ?? 60,
+        minimumCandidateScore: 40,
+        exactAmountBonus: 10,
+        exactDateBonus: 5,
+        exactPayeeBonus: 10,
       };
 
       const accountResult = forceFullRefresh

@@ -13,13 +13,14 @@ import type {
   NormalizedYNABTransaction,
 } from '../../types/reconciliation.js';
 import {
-  DEFAULT_MATCHING_CONFIG,
   type BankTransaction as LegacyBankTransaction,
   type YNABTransaction as LegacyYNABTransaction,
-  type MatchingConfig as LegacyMatchingConfig,
   type TransactionMatch as LegacyTransactionMatch,
   type MatchCandidate as LegacyMatchCandidate,
+  type MatchingConfig,
 } from './types.js';
+
+export type { MatchingConfig };
 
 export interface MatchCandidate {
   ynabTransaction: NormalizedYNABTransaction;
@@ -40,28 +41,6 @@ export interface MatchResult {
   confidenceScore: number;
 }
 
-export interface MatchingConfig {
-  weights: {
-    amount: number; // Recommended: 0.50
-    date: number; // Recommended: 0.15
-    payee: number; // Recommended: 0.35
-  };
-
-  // Tolerances (in MILLIUNITS for amount)
-  amountToleranceMilliunits: number; // Default: 10 (1 cent)
-  dateToleranceDays: number; // Default: 7
-
-  // Thresholds
-  autoMatchThreshold: number; // Default: 85
-  suggestedMatchThreshold: number; // Default: 60
-  minimumCandidateScore: number; // Default: 40
-
-  // Bonuses for perfect matches
-  exactAmountBonus: number; // Default: 10
-  exactDateBonus: number; // Default: 5
-  exactPayeeBonus: number; // Default: 10
-}
-
 export const DEFAULT_CONFIG: MatchingConfig = {
   weights: {
     amount: 0.5,
@@ -78,50 +57,23 @@ export const DEFAULT_CONFIG: MatchingConfig = {
   exactPayeeBonus: 10,
 };
 
-type AnyMatchingConfig = MatchingConfig | LegacyMatchingConfig | undefined;
-
-function normalizeConfig(config: AnyMatchingConfig): MatchingConfig {
+export function normalizeConfig(config?: MatchingConfig): MatchingConfig {
   if (!config) {
     return { ...DEFAULT_CONFIG };
   }
 
-  // If it already looks like a V2 config (has weights), fill in defaults
-  if ((config as MatchingConfig).weights) {
-    const v2 = config as MatchingConfig;
-    return {
-      weights: v2.weights ?? DEFAULT_CONFIG.weights,
-      amountToleranceMilliunits:
-        v2.amountToleranceMilliunits ?? DEFAULT_CONFIG.amountToleranceMilliunits,
-      dateToleranceDays: v2.dateToleranceDays ?? DEFAULT_CONFIG.dateToleranceDays,
-      autoMatchThreshold: v2.autoMatchThreshold ?? DEFAULT_CONFIG.autoMatchThreshold,
-      suggestedMatchThreshold: v2.suggestedMatchThreshold ?? DEFAULT_CONFIG.suggestedMatchThreshold,
-      minimumCandidateScore: v2.minimumCandidateScore ?? DEFAULT_CONFIG.minimumCandidateScore,
-      exactAmountBonus: v2.exactAmountBonus ?? DEFAULT_CONFIG.exactAmountBonus,
-      exactDateBonus: v2.exactDateBonus ?? DEFAULT_CONFIG.exactDateBonus,
-      exactPayeeBonus: v2.exactPayeeBonus ?? DEFAULT_CONFIG.exactPayeeBonus,
-    };
-  }
-
-  const legacy = config as LegacyMatchingConfig;
-
-  const amountToleranceCents =
-    legacy.amountToleranceCents ?? DEFAULT_MATCHING_CONFIG.amountToleranceCents;
-  const dateToleranceDays = legacy.dateToleranceDays ?? DEFAULT_MATCHING_CONFIG.dateToleranceDays;
-  const autoMatchThreshold =
-    legacy.autoMatchThreshold ?? DEFAULT_MATCHING_CONFIG.autoMatchThreshold;
-  const suggestedMatchThreshold =
-    legacy.suggestionThreshold ?? DEFAULT_MATCHING_CONFIG.suggestionThreshold;
-
   return {
-    weights: { ...DEFAULT_CONFIG.weights },
-    amountToleranceMilliunits: amountToleranceCents * 10, // cents -> milliunits
-    dateToleranceDays,
-    autoMatchThreshold,
-    suggestedMatchThreshold,
-    minimumCandidateScore: DEFAULT_CONFIG.minimumCandidateScore,
-    exactAmountBonus: DEFAULT_CONFIG.exactAmountBonus,
-    exactDateBonus: DEFAULT_CONFIG.exactDateBonus,
-    exactPayeeBonus: DEFAULT_CONFIG.exactPayeeBonus,
+    weights: config.weights ?? DEFAULT_CONFIG.weights,
+    amountToleranceMilliunits:
+      config.amountToleranceMilliunits ?? DEFAULT_CONFIG.amountToleranceMilliunits,
+    dateToleranceDays: config.dateToleranceDays ?? DEFAULT_CONFIG.dateToleranceDays,
+    autoMatchThreshold: config.autoMatchThreshold ?? DEFAULT_CONFIG.autoMatchThreshold,
+    suggestedMatchThreshold:
+      config.suggestedMatchThreshold ?? DEFAULT_CONFIG.suggestedMatchThreshold,
+    minimumCandidateScore: config.minimumCandidateScore ?? DEFAULT_CONFIG.minimumCandidateScore,
+    exactAmountBonus: config.exactAmountBonus ?? DEFAULT_CONFIG.exactAmountBonus,
+    exactDateBonus: config.exactDateBonus ?? DEFAULT_CONFIG.exactDateBonus,
+    exactPayeeBonus: config.exactPayeeBonus ?? DEFAULT_CONFIG.exactPayeeBonus,
   };
 }
 
@@ -179,7 +131,9 @@ function toCanonicalYNABTransaction(
   };
 }
 
-function mapToLegacyBankTransaction(canonical: CanonicalBankTransaction): LegacyBankTransaction {
+export function mapToLegacyBankTransaction(
+  canonical: CanonicalBankTransaction,
+): LegacyBankTransaction {
   return {
     id: canonical.id,
     date: canonical.date,
@@ -190,7 +144,9 @@ function mapToLegacyBankTransaction(canonical: CanonicalBankTransaction): Legacy
   };
 }
 
-function mapToLegacyYNABTransaction(canonical: NormalizedYNABTransaction): LegacyYNABTransaction {
+export function mapToLegacyYNABTransaction(
+  canonical: NormalizedYNABTransaction,
+): LegacyYNABTransaction {
   return {
     id: canonical.id,
     date: canonical.date,
@@ -203,7 +159,7 @@ function mapToLegacyYNABTransaction(canonical: NormalizedYNABTransaction): Legac
   };
 }
 
-function mapToLegacyTransactionMatch(result: MatchResult): LegacyTransactionMatch {
+export function mapToLegacyTransactionMatch(result: MatchResult): LegacyTransactionMatch {
   const bankTransaction = mapToLegacyBankTransaction(result.bankTransaction);
   const ynabTransaction = result.bestMatch
     ? mapToLegacyYNABTransaction(result.bestMatch.ynabTransaction)
@@ -251,7 +207,7 @@ function matchSingle(
   bankTxnInput: CanonicalBankTransaction | LegacyBankTransaction,
   ynabTransactionsInput: (NormalizedYNABTransaction | LegacyYNABTransaction)[],
   usedIds: Set<string>,
-  configInput: AnyMatchingConfig,
+  configInput: MatchingConfig | undefined,
 ): MatchResult {
   const bankTxn = toCanonicalBankTransaction(bankTxnInput);
   const ynabTransactions = ynabTransactionsInput.map(toCanonicalYNABTransaction);
@@ -292,13 +248,13 @@ export function findMatches(
 export function findMatches(
   bankTransactions: LegacyBankTransaction[],
   ynabTransactions: LegacyYNABTransaction[],
-  config: LegacyMatchingConfig,
+  config?: MatchingConfig,
 ): LegacyTransactionMatch[];
 
 export function findMatches(
   bankTransactions: (CanonicalBankTransaction | LegacyBankTransaction)[],
   ynabTransactions: (NormalizedYNABTransaction | LegacyYNABTransaction)[],
-  config?: AnyMatchingConfig,
+  config?: MatchingConfig,
 ): (MatchResult | LegacyTransactionMatch)[] {
   const usedYnabIds = new Set<string>();
   const results: MatchResult[] = [];
@@ -487,14 +443,14 @@ export function findBestMatch(
   bankTransaction: LegacyBankTransaction,
   ynabTransactions: LegacyYNABTransaction[],
   usedYnabIds: Set<string>,
-  config: LegacyMatchingConfig,
+  config?: MatchingConfig,
 ): LegacyTransactionMatch;
 
 export function findBestMatch(
   bankTransaction: CanonicalBankTransaction | LegacyBankTransaction,
   ynabTransactions: NormalizedYNABTransaction[] | LegacyYNABTransaction[],
   usedYnabIds: Set<string> = new Set<string>(),
-  config?: AnyMatchingConfig,
+  config?: MatchingConfig,
 ): MatchResult | LegacyTransactionMatch {
   const result = matchSingle(bankTransaction, ynabTransactions, usedYnabIds, config);
 

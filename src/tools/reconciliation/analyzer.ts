@@ -8,85 +8,31 @@
 
 import type * as ynab from 'ynab';
 import { parseCSV, type ParseCSVOptions } from './csvParser.js';
-import { findMatches } from './matcher.js';
+import {
+  findMatches,
+  mapToLegacyTransactionMatch,
+  mapToLegacyYNABTransaction,
+  normalizeConfig,
+  type MatchingConfig,
+  DEFAULT_CONFIG,
+} from './matcher.js';
 import { normalizeYNABTransactions } from './ynabAdapter.js';
 import type {
   BankTransaction as NewBankTransaction,
   NormalizedYNABTransaction,
 } from '../../types/reconciliation.js';
-import type { MatchResult as NewMatchResult } from './matcher.js';
 
-import { DEFAULT_MATCHING_CONFIG } from './types.js';
 import type {
   BankTransaction,
   YNABTransaction,
   ReconciliationAnalysis,
   TransactionMatch,
-  MatchingConfig,
   BalanceInfo,
   ReconciliationSummary,
   ReconciliationInsight,
-  MatchCandidate,
 } from './types.js';
 import { toMoneyValueFromDecimal } from '../../utils/money.js';
 import { generateRecommendations } from './recommendationEngine.js';
-
-// --- Legacy Type Mappers ---
-
-function mapToOldBankTransaction(newTxn: NewBankTransaction): BankTransaction {
-  return {
-    id: newTxn.id,
-    date: newTxn.date,
-    amount: newTxn.amount / 1000, // Convert milliunits to dollars for legacy type
-    payee: newTxn.payee,
-    ...(newTxn.memo && { memo: newTxn.memo }),
-    original_csv_row: newTxn.sourceRow,
-  };
-}
-
-function mapToOldYNABTransaction(newTxn: NormalizedYNABTransaction): YNABTransaction {
-  return {
-    id: newTxn.id,
-    date: newTxn.date,
-    amount: newTxn.amount, // Legacy type already uses milliunits
-    payee_name: newTxn.payee,
-    category_name: newTxn.categoryName,
-    cleared: newTxn.cleared,
-    approved: newTxn.approved,
-    ...(newTxn.memo !== null && { memo: newTxn.memo }),
-  };
-}
-
-function mapToOldTransactionMatch(result: NewMatchResult): TransactionMatch {
-  const bankTransaction = mapToOldBankTransaction(result.bankTransaction);
-  const ynabTransaction = result.bestMatch
-    ? mapToOldYNABTransaction(result.bestMatch.ynabTransaction)
-    : undefined;
-
-  const candidates: MatchCandidate[] = result.candidates.map((c) => ({
-    ynab_transaction: mapToOldYNABTransaction(c.ynabTransaction),
-    confidence: c.scores.combined,
-    match_reason: c.matchReasons.join(', '),
-    explanation: `Score: ${c.scores.combined}. ${c.matchReasons.join(', ')}`,
-  }));
-
-  const actionHint =
-    result.confidence === 'high' ? 'approve' : result.confidence === 'none' ? 'add' : 'review';
-
-  return {
-    bank_transaction: bankTransaction,
-    ...(ynabTransaction && { ynab_transaction: ynabTransaction }),
-    candidates: candidates,
-    confidence: result.confidence,
-    confidence_score: result.confidenceScore,
-    match_reason: result.bestMatch?.matchReasons.join(', ') ?? 'No match found',
-    ...(result.candidates[0] && { top_confidence: result.candidates[0].scores.combined }),
-    ...(actionHint && { action_hint: actionHint }),
-    ...(result.confidence === 'none' && {
-      recommendation: 'Consider adding this transaction to YNAB',
-    }),
-  };
-}
 
 // --- Helper Functions (Adapted from original) ---
 
@@ -362,7 +308,7 @@ export function analyzeReconciliation(
   _csvFilePath: string | undefined,
   ynabTransactions: ynab.TransactionDetail[],
   statementBalance: number,
-  config: MatchingConfig = DEFAULT_MATCHING_CONFIG as MatchingConfig,
+  config: MatchingConfig = DEFAULT_CONFIG,
   currency: string = 'USD',
   accountId?: string,
   budgetId?: string,
@@ -383,33 +329,13 @@ export function analyzeReconciliation(
   const newYNABTransactions = normalizeYNABTransactions(ynabTransactions);
 
   // Step 3: Run new matching algorithm
-  // Convert legacy config to new config format if needed
-  const amountToleranceCents =
-    config.amountToleranceCents ?? DEFAULT_MATCHING_CONFIG.amountToleranceCents ?? 1;
-  const dateToleranceDays =
-    config.dateToleranceDays ?? DEFAULT_MATCHING_CONFIG.dateToleranceDays ?? 7;
-  const autoMatchThreshold =
-    config.autoMatchThreshold ?? DEFAULT_MATCHING_CONFIG.autoMatchThreshold ?? 85;
-  const suggestedMatchThreshold =
-    config.suggestionThreshold ?? DEFAULT_MATCHING_CONFIG.suggestionThreshold ?? 60;
+  // Use normalizeConfig to convert legacy config to V2 format with defaults
+  const normalizedConfig = normalizeConfig(config);
 
-  const newConfig = {
-    ...config,
-    weights: { amount: 0.5, date: 0.15, payee: 0.35 }, // Default weights
-    amountToleranceMilliunits: amountToleranceCents * 10, // cents -> milliunits
-    dateToleranceDays,
-    autoMatchThreshold,
-    suggestedMatchThreshold,
-    minimumCandidateScore: 40,
-    exactAmountBonus: 10,
-    exactDateBonus: 5,
-    exactPayeeBonus: 10,
-  };
-
-  const newMatches = findMatches(newBankTransactions, newYNABTransactions, newConfig);
+  const newMatches = findMatches(newBankTransactions, newYNABTransactions, normalizedConfig);
 
   // Step 4: Map results to legacy types
-  const matches: TransactionMatch[] = newMatches.map(mapToOldTransactionMatch);
+  const matches: TransactionMatch[] = newMatches.map(mapToLegacyTransactionMatch);
 
   // Categorize
   const autoMatches = matches.filter((m) => m.confidence === 'high');
@@ -426,12 +352,12 @@ export function analyzeReconciliation(
   });
   const unmatchedYNAB = newYNABTransactions
     .filter((t) => !matchedYnabIds.has(t.id))
-    .map(mapToOldYNABTransaction);
+    .map(mapToLegacyYNABTransaction);
 
   // Note: Combination matching disabled in this version to ensure stability of V2 core
 
   // Step 6: Calculate balances
-  const legacyYNABTxns = newYNABTransactions.map(mapToOldYNABTransaction);
+  const legacyYNABTxns = newYNABTransactions.map(mapToLegacyYNABTransaction);
   const balances = calculateBalances(legacyYNABTxns, statementBalance, currency);
 
   // Step 7: Generate summary
@@ -477,7 +403,7 @@ export function analyzeReconciliation(
       account_id: accountId,
       budget_id: budgetId,
       analysis,
-      matching_config: config,
+      matching_config: normalizedConfig,
     });
     analysis.recommendations = recommendations;
   }
