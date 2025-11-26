@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { analyzeReconciliation } from '../../analyzer.js';
 import type { TransactionDetail } from 'ynab';
-import * as parser from '../../../compareTransactions/parser.js';
+import * as csvParser from '../../csvParser.js';
 
-vi.mock('../../../compareTransactions/parser.js', () => ({
-  parseBankCSV: vi.fn(),
-  readCSVFile: vi.fn(),
+vi.mock('../../csvParser.js', () => ({
+  parseCSV: vi.fn(),
 }));
 
 describe('scenario: repeat amount collisions', () => {
@@ -14,19 +13,55 @@ describe('scenario: repeat amount collisions', () => {
   });
 
   it('prioritizes repeat-amount insight when multiple bank rows share totals', () => {
-    vi.mocked(parser.parseBankCSV).mockReturnValue({
+    vi.mocked(csvParser.parseCSV).mockReturnValue({
       transactions: [
-        // Three -22.22 transactions: one will match YNAB, two will remain unmatched
-        { date: '2025-10-20', amount: -22.22, payee: 'RideShare', memo: '' },
-        { date: '2025-10-21', amount: -22.22, payee: 'RideShare', memo: '' },
-        { date: '2025-10-25', amount: -22.22, payee: 'RideShare', memo: '' },
-        { date: '2025-10-23', amount: -15.0, payee: 'Cafe', memo: '' },
+        // Three -22.22 transactions in milliunits: one will match YNAB, two will remain unmatched
+        {
+          id: 'b1',
+          date: '2025-10-20',
+          amount: -22220,
+          payee: 'RideShare',
+          memo: '',
+          sourceRow: 2,
+          raw: { date: '2025-10-20', amount: '-22.22', description: 'RideShare' },
+        },
+        {
+          id: 'b2',
+          date: '2025-10-21',
+          amount: -22220,
+          payee: 'RideShare',
+          memo: '',
+          sourceRow: 3,
+          raw: { date: '2025-10-21', amount: '-22.22', description: 'RideShare' },
+        },
+        {
+          id: 'b3',
+          date: '2025-10-25',
+          amount: -22220,
+          payee: 'RideShare',
+          memo: '',
+          sourceRow: 4,
+          raw: { date: '2025-10-25', amount: '-22.22', description: 'RideShare' },
+        },
+        {
+          id: 'b4',
+          date: '2025-10-23',
+          amount: -15000,
+          payee: 'Cafe',
+          memo: '',
+          sourceRow: 5,
+          raw: { date: '2025-10-23', amount: '-15.00', description: 'Cafe' },
+        },
       ],
-      format_detected: 'standard',
-      delimiter: ',',
-      total_rows: 4,
-      valid_rows: 4,
       errors: [],
+      warnings: [],
+      meta: {
+        detectedDelimiter: ',',
+        detectedColumns: ['Date', 'Description', 'Amount'],
+        totalRows: 4,
+        validRows: 4,
+        skippedRows: 0,
+      },
     });
 
     const ynabTxns: TransactionDetail[] = [
