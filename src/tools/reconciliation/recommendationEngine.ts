@@ -388,7 +388,12 @@ function processUnmatchedTransactions(context: RecommendationContext): Actionabl
   }
 
   // Suggested matches → review as potential duplicates or auto-match
-  for (const match of context.analysis.suggested_matches) {
+  const matchesForReview = [
+    ...context.analysis.suggested_matches,
+    ...context.analysis.auto_matches,
+  ];
+
+  for (const match of matchesForReview) {
     recommendations.push(createSuggestedMatchRecommendation(match, context));
   }
 

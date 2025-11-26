@@ -3,6 +3,7 @@
  * Implements guided reconciliation workflow with conservative matching
  */
 
+import { promises as fs } from 'fs';
 import { z } from 'zod/v4';
 import type * as ynab from 'ynab';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -16,7 +17,7 @@ import {
   type LegacyReconciliationResult,
 } from './executor.js';
 import { responseFormatter } from '../../server/responseFormatter.js';
-import { extractDateRangeFromCSV, autoDetectCSVFormat } from '../compareTransactions/parser.js';
+import { parseCSV, type ParseCSVOptions } from './csvParser.js';
 import type { DeltaFetcher } from '../deltaFetcher.js';
 import { resolveDeltaFetcherArgs } from '../deltaSupport.js';
 
@@ -213,6 +214,46 @@ export async function handleReconcileAccount(
       const budgetResponse = await ynabAPI.budgets.getBudgetById(params.budget_id);
       const currencyCode = budgetResponse.data.budget?.currency_format?.iso_code ?? 'USD';
 
+      // Prepare CSV parsing options from request
+      const dateFormat = mapCsvDateFormatToHint(params.csv_format?.date_format);
+      const csvOptions: ParseCSVOptions = {
+        columns: {
+          ...(typeof params.csv_format?.date_column === 'string' && {
+            date: params.csv_format.date_column,
+          }),
+          ...(typeof params.csv_format?.amount_column === 'string' && {
+            amount: params.csv_format.amount_column,
+          }),
+          ...(typeof params.csv_format?.debit_column === 'string' && {
+            debit: params.csv_format.debit_column,
+          }),
+          ...(typeof params.csv_format?.credit_column === 'string' && {
+            credit: params.csv_format.credit_column,
+          }),
+          ...(typeof params.csv_format?.description_column === 'string' && {
+            description: params.csv_format.description_column,
+          }),
+        },
+        ...(dateFormat && { dateFormat }),
+        ...(params.csv_format?.has_header !== undefined && {
+          header: params.csv_format.has_header,
+        }),
+      };
+
+      // Load CSV content from either inline data or filesystem path
+      let csvContent = params.csv_data ?? '';
+      if (!csvContent && params.csv_file_path) {
+        try {
+          csvContent = await fs.readFile(params.csv_file_path, 'utf8');
+        } catch (error) {
+          const message =
+            error instanceof Error && error.message
+              ? error.message
+              : 'Unknown error while reading CSV file';
+          throw new Error(`Failed to read CSV file at path ${params.csv_file_path}: ${message}`);
+        }
+      }
+
       // Fetch YNAB transactions for the account
       // Auto-detect date range from CSV if not explicitly provided
       let sinceDate: Date;
@@ -221,29 +262,26 @@ export async function handleReconcileAccount(
         // User provided explicit start date
         sinceDate = new Date(params.statement_start_date);
       } else {
-        // Auto-detect from CSV content
+        // Auto-detect from CSV content using new parser
         try {
-          const csvContent = params.csv_data || params.csv_file_path || '';
-          const csvFormat = params.csv_format || autoDetectCSVFormat(csvContent);
+          const parseResult = parseCSV(csvContent, csvOptions);
 
-          // Convert schema format to parser format
-          const parserFormat = {
-            date_column: csvFormat.date_column || 'Date',
-            amount_column: csvFormat.amount_column,
-            debit_column: csvFormat.debit_column,
-            credit_column: csvFormat.credit_column,
-            description_column: csvFormat.description_column || 'Description',
-            date_format: csvFormat.date_format || 'MM/DD/YYYY',
-            has_header: csvFormat.has_header ?? true,
-            delimiter: csvFormat.delimiter || ',',
-          };
-
-          const { minDate } = extractDateRangeFromCSV(csvContent, parserFormat);
-
-          // Add 7-day buffer before min date for pending transactions
-          const minDateObj = new Date(minDate);
-          minDateObj.setDate(minDateObj.getDate() - 7);
-          sinceDate = minDateObj;
+          if (parseResult.transactions.length > 0) {
+            // Find min date
+            const dates = parseResult.transactions
+              .map((t) => new Date(t.date).getTime())
+              .filter((t) => !isNaN(t));
+            if (dates.length > 0) {
+              const minTime = Math.min(...dates);
+              const minDateObj = new Date(minTime);
+              minDateObj.setDate(minDateObj.getDate() - 7); // 7-day buffer
+              sinceDate = minDateObj;
+            } else {
+              sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+            }
+          } else {
+            sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+          }
         } catch {
           // Fallback to 90 days if CSV parsing fails
           sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
@@ -281,7 +319,7 @@ export async function handleReconcileAccount(
 
       // Perform analysis
       const analysis = analyzeReconciliation(
-        params.csv_data || params.csv_file_path || '',
+        csvContent,
         params.csv_file_path,
         ynabTransactions,
         adjustedStatementBalance,
@@ -290,6 +328,7 @@ export async function handleReconcileAccount(
         params.account_id,
         params.budget_id,
         shouldInvertBankAmounts,
+        csvOptions,
       );
 
       const initialAccount: AccountSnapshot = {
@@ -357,6 +396,28 @@ export async function handleReconcileAccount(
     'ynab:reconcile_account',
     'analyzing account reconciliation',
   );
+}
+
+function mapCsvDateFormatToHint(
+  format: string | undefined,
+): ParseCSVOptions['dateFormat'] | undefined {
+  if (!format) {
+    return undefined;
+  }
+
+  const normalized = format.toUpperCase().replace(/[^YMD]/g, '');
+
+  if (normalized === 'YYYYMMDD' || normalized === 'YYMMDD' || normalized === 'YMD') {
+    return 'YMD';
+  }
+  if (normalized === 'MMDDYYYY' || normalized === 'MDY') {
+    return 'MDY';
+  }
+  if (normalized === 'DDMMYYYY' || normalized === 'DMY') {
+    return 'DMY';
+  }
+
+  return undefined;
 }
 
 function mapCsvFormatForPayload(format: ReconcileAccountRequest['csv_format'] | undefined):

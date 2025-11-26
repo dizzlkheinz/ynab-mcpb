@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { analyzeReconciliation } from '../../analyzer.js';
 import type { TransactionDetail } from 'ynab';
-import * as parser from '../../../compareTransactions/parser.js';
+import * as csvParser from '../../csvParser.js';
 
-vi.mock('../../../compareTransactions/parser.js', () => ({
-  parseBankCSV: vi.fn(),
-  readCSVFile: vi.fn(),
+vi.mock('../../csvParser.js', () => ({
+  parseCSV: vi.fn(),
 }));
 
 describe('scenario: zero, negative, and large statements', () => {
@@ -14,16 +13,36 @@ describe('scenario: zero, negative, and large statements', () => {
   });
 
   it('handles zero and negative statement balances with mixed unmatched items', () => {
-    vi.mocked(parser.parseBankCSV).mockReturnValue({
+    vi.mocked(csvParser.parseCSV).mockReturnValue({
       transactions: [
-        { date: '2025-11-01', amount: 0, payee: 'Zero Adjustment', memo: '' },
-        { date: '2025-11-02', amount: 2500, payee: 'Interest', memo: '' },
+        {
+          id: 'b1',
+          date: '2025-11-01',
+          amount: 0,
+          payee: 'Zero Adjustment',
+          memo: '',
+          sourceRow: 2,
+          raw: { date: '2025-11-01', amount: '0', description: 'Zero Adjustment' },
+        },
+        {
+          id: 'b2',
+          date: '2025-11-02',
+          amount: 2500000,
+          payee: 'Interest',
+          memo: '',
+          sourceRow: 3,
+          raw: { date: '2025-11-02', amount: '2500.00', description: 'Interest' },
+        },
       ],
-      format_detected: 'standard',
-      delimiter: ',',
-      total_rows: 2,
-      valid_rows: 2,
       errors: [],
+      warnings: [],
+      meta: {
+        detectedDelimiter: ',',
+        detectedColumns: ['Date', 'Description', 'Amount'],
+        totalRows: 2,
+        validRows: 2,
+        skippedRows: 0,
+      },
     });
 
     const ynabTxns: TransactionDetail[] = [

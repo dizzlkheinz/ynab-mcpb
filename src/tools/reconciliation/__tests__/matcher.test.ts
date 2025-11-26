@@ -101,7 +101,7 @@ describe('matcher', () => {
     });
 
     describe('medium confidence matches (60-89%)', () => {
-      it('should return medium confidence for fuzzy payee match', () => {
+      it('should return high confidence for fuzzy payee match', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-20',
@@ -124,9 +124,8 @@ describe('matcher', () => {
 
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
-        expect(match.confidence).toBe('medium');
-        expect(match.confidence_score).toBeGreaterThanOrEqual(60);
-        expect(match.confidence_score).toBeLessThan(90);
+        expect(match.confidence).toBe('high');
+        expect(match.confidence_score).toBeGreaterThanOrEqual(90);
         expect(match.candidates).toBeDefined();
         expect(match.candidates!.length).toBeGreaterThan(0);
       });

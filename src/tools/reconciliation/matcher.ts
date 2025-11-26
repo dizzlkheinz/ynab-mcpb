@@ -1,269 +1,506 @@
 /**
  * Transaction matching algorithm for reconciliation
- * Implements confidence-based matching with auto-match and suggestion tiers
+ *
+ * V2 matcher works natively in milliunits using canonical BankTransaction
+ * and NormalizedYNABTransaction types, but this module also exposes
+ * backwards-compatible wrappers for the legacy reconciliation types
+ * defined in src/tools/reconciliation/types.ts.
  */
 
-import { normalizedMatch, payeeSimilarity } from './payeeNormalizer.js';
-import { DEFAULT_MATCHING_CONFIG } from './types.js';
+import * as fuzz from 'fuzzball';
 import type {
-  BankTransaction,
-  YNABTransaction,
-  TransactionMatch,
-  MatchCandidate,
-  MatchingConfig,
+  BankTransaction as CanonicalBankTransaction,
+  NormalizedYNABTransaction,
+} from '../../types/reconciliation.js';
+import {
+  DEFAULT_MATCHING_CONFIG,
+  type BankTransaction as LegacyBankTransaction,
+  type YNABTransaction as LegacyYNABTransaction,
+  type MatchingConfig as LegacyMatchingConfig,
+  type TransactionMatch as LegacyTransactionMatch,
+  type MatchCandidate as LegacyMatchCandidate,
 } from './types.js';
 
-/**
- * Check if two amounts match within tolerance
- */
-function amountsMatch(bankAmount: number, ynabAmount: number, toleranceCents: number): boolean {
-  // Convert YNAB milliunits to dollars
-  const ynabDollars = ynabAmount / 1000;
-
-  // Round to avoid floating point precision issues
-  const difference = Math.round(Math.abs(bankAmount - ynabDollars) * 100) / 100;
-  const toleranceDollars = toleranceCents / 100;
-
-  return difference <= toleranceDollars;
+export interface MatchCandidate {
+  ynabTransaction: NormalizedYNABTransaction;
+  scores: {
+    amount: number; // 0-100
+    date: number; // 0-100
+    payee: number; // 0-100
+    combined: number; // Weighted combination
+  };
+  matchReasons: string[];
 }
 
-/**
- * Check if two dates match within tolerance
- */
-function datesMatch(date1: string, date2: string, toleranceDays: number): boolean {
-  const d1 = new Date(date1);
-  const d2 = new Date(date2);
-
-  const diffMs = Math.abs(d1.getTime() - d2.getTime());
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-  return diffDays <= toleranceDays;
+export interface MatchResult {
+  bankTransaction: CanonicalBankTransaction;
+  bestMatch: MatchCandidate | null;
+  candidates: MatchCandidate[]; // Top 3
+  confidence: 'high' | 'medium' | 'low' | 'none';
+  confidenceScore: number;
 }
 
-/**
- * Calculate match confidence score between bank and YNAB transaction
- * Returns score 0-100 and match reasons
- */
-function calculateMatchScore(
-  bankTxn: BankTransaction,
-  ynabTxn: YNABTransaction,
-  config: MatchingConfig,
-): { score: number; reasons: string[] } {
-  const reasons: string[] = [];
-  let score = 0;
+export interface MatchingConfig {
+  weights: {
+    amount: number; // Recommended: 0.50
+    date: number; // Recommended: 0.15
+    payee: number; // Recommended: 0.35
+  };
 
-  // Amount match (40% weight) - REQUIRED
-  const amountMatch = amountsMatch(bankTxn.amount, ynabTxn.amount, config.amountToleranceCents);
-  if (!amountMatch) {
-    return { score: 0, reasons: ['Amount does not match'] };
-  }
-  score += 40;
-  reasons.push('Amount matches');
+  // Tolerances (in MILLIUNITS for amount)
+  amountToleranceMilliunits: number; // Default: 10 (1 cent)
+  dateToleranceDays: number; // Default: 7
 
-  // Date match (40% weight)
-  const dateWithinTolerance = datesMatch(bankTxn.date, ynabTxn.date, config.dateToleranceDays);
-  if (dateWithinTolerance) {
-    score += 40;
-    const daysDiff = Math.abs(
-      (new Date(bankTxn.date).getTime() - new Date(ynabTxn.date).getTime()) / (1000 * 60 * 60 * 24),
-    );
-    if (daysDiff === 0) {
-      reasons.push('Exact date match');
-    } else {
-      reasons.push(`Date within ${Math.round(daysDiff)} days`);
-    }
-  }
+  // Thresholds
+  autoMatchThreshold: number; // Default: 85
+  suggestedMatchThreshold: number; // Default: 60
+  minimumCandidateScore: number; // Default: 40
 
-  // Payee match (20% weight)
-  const payeeScore = payeeSimilarity(bankTxn.payee, ynabTxn.payee_name);
+  // Bonuses for perfect matches
+  exactAmountBonus: number; // Default: 10
+  exactDateBonus: number; // Default: 5
+  exactPayeeBonus: number; // Default: 10
+}
 
-  if (normalizedMatch(bankTxn.payee, ynabTxn.payee_name)) {
-    score += 20;
-    reasons.push('Payee exact match');
-  } else if (payeeScore >= 95) {
-    score += 15;
-    reasons.push(`Payee highly similar (${Math.round(payeeScore)}%)`);
-  } else if (payeeScore >= 80) {
-    score += 10;
-    reasons.push(`Payee similar (${Math.round(payeeScore)}%)`);
-  } else if (payeeScore >= 60) {
-    score += 6;
-    reasons.push(`Payee somewhat similar (${Math.round(payeeScore)}%)`);
+export const DEFAULT_CONFIG: MatchingConfig = {
+  weights: {
+    amount: 0.5,
+    date: 0.15,
+    payee: 0.35,
+  },
+  amountToleranceMilliunits: 10, // 1 cent
+  dateToleranceDays: 7,
+  autoMatchThreshold: 85,
+  suggestedMatchThreshold: 60,
+  minimumCandidateScore: 40,
+  exactAmountBonus: 10,
+  exactDateBonus: 5,
+  exactPayeeBonus: 10,
+};
+
+type AnyMatchingConfig = MatchingConfig | LegacyMatchingConfig | undefined;
+
+function normalizeConfig(config: AnyMatchingConfig): MatchingConfig {
+  if (!config) {
+    return { ...DEFAULT_CONFIG };
   }
 
-  return { score: Math.round(score), reasons };
+  // If it already looks like a V2 config (has weights), fill in defaults
+  if ((config as MatchingConfig).weights) {
+    const v2 = config as MatchingConfig;
+    return {
+      weights: v2.weights ?? DEFAULT_CONFIG.weights,
+      amountToleranceMilliunits:
+        v2.amountToleranceMilliunits ?? DEFAULT_CONFIG.amountToleranceMilliunits,
+      dateToleranceDays: v2.dateToleranceDays ?? DEFAULT_CONFIG.dateToleranceDays,
+      autoMatchThreshold: v2.autoMatchThreshold ?? DEFAULT_CONFIG.autoMatchThreshold,
+      suggestedMatchThreshold: v2.suggestedMatchThreshold ?? DEFAULT_CONFIG.suggestedMatchThreshold,
+      minimumCandidateScore: v2.minimumCandidateScore ?? DEFAULT_CONFIG.minimumCandidateScore,
+      exactAmountBonus: v2.exactAmountBonus ?? DEFAULT_CONFIG.exactAmountBonus,
+      exactDateBonus: v2.exactDateBonus ?? DEFAULT_CONFIG.exactDateBonus,
+      exactPayeeBonus: v2.exactPayeeBonus ?? DEFAULT_CONFIG.exactPayeeBonus,
+    };
+  }
+
+  const legacy = config as LegacyMatchingConfig;
+
+  const amountToleranceCents =
+    legacy.amountToleranceCents ?? DEFAULT_MATCHING_CONFIG.amountToleranceCents;
+  const dateToleranceDays = legacy.dateToleranceDays ?? DEFAULT_MATCHING_CONFIG.dateToleranceDays;
+  const autoMatchThreshold =
+    legacy.autoMatchThreshold ?? DEFAULT_MATCHING_CONFIG.autoMatchThreshold;
+  const suggestedMatchThreshold =
+    legacy.suggestionThreshold ?? DEFAULT_MATCHING_CONFIG.suggestionThreshold;
+
+  return {
+    weights: { ...DEFAULT_CONFIG.weights },
+    amountToleranceMilliunits: amountToleranceCents * 10, // cents -> milliunits
+    dateToleranceDays,
+    autoMatchThreshold,
+    suggestedMatchThreshold,
+    minimumCandidateScore: DEFAULT_CONFIG.minimumCandidateScore,
+    exactAmountBonus: DEFAULT_CONFIG.exactAmountBonus,
+    exactDateBonus: DEFAULT_CONFIG.exactDateBonus,
+    exactPayeeBonus: DEFAULT_CONFIG.exactPayeeBonus,
+  };
 }
 
-/**
- * Priority scoring for YNAB transactions
- * Uncleared transactions get higher priority than cleared ones
- */
-function getPriority(ynabTxn: YNABTransaction): number {
-  // Uncleared transactions are expecting bank confirmation
-  if (ynabTxn.cleared === 'uncleared') return 10;
-  if (ynabTxn.cleared === 'cleared') return 5;
-  if (ynabTxn.cleared === 'reconciled') return 1;
-  return 0;
+function isLegacyBankTransaction(
+  txn: CanonicalBankTransaction | LegacyBankTransaction,
+): txn is LegacyBankTransaction {
+  return (txn as LegacyBankTransaction).original_csv_row !== undefined;
 }
 
-/**
- * Find all matching candidates for a bank transaction
- */
-function findMatchCandidates(
-  bankTxn: BankTransaction,
-  ynabTransactions: YNABTransaction[],
+function isCanonicalYNABTransaction(
+  txn: NormalizedYNABTransaction | LegacyYNABTransaction,
+): txn is NormalizedYNABTransaction {
+  return (txn as NormalizedYNABTransaction).payee !== undefined;
+}
+
+function toCanonicalBankTransaction(
+  txn: CanonicalBankTransaction | LegacyBankTransaction,
+): CanonicalBankTransaction {
+  if (!isLegacyBankTransaction(txn)) {
+    return txn;
+  }
+
+  return {
+    id: txn.id,
+    date: txn.date,
+    amount: Math.round(txn.amount * 1000),
+    payee: txn.payee,
+    ...(txn.memo && { memo: txn.memo }),
+    sourceRow: txn.original_csv_row,
+    raw: {
+      date: txn.date,
+      amount: txn.amount.toFixed(2),
+      description: txn.payee,
+    },
+  };
+}
+
+function toCanonicalYNABTransaction(
+  txn: NormalizedYNABTransaction | LegacyYNABTransaction,
+): NormalizedYNABTransaction {
+  if (isCanonicalYNABTransaction(txn)) {
+    return txn;
+  }
+
+  const legacy = txn as LegacyYNABTransaction;
+  return {
+    id: legacy.id,
+    date: legacy.date,
+    amount: legacy.amount,
+    payee: legacy.payee_name,
+    memo: legacy.memo ?? null,
+    categoryName: legacy.category_name,
+    cleared: legacy.cleared,
+    approved: legacy.approved,
+  };
+}
+
+function mapToLegacyBankTransaction(canonical: CanonicalBankTransaction): LegacyBankTransaction {
+  return {
+    id: canonical.id,
+    date: canonical.date,
+    amount: canonical.amount / 1000,
+    payee: canonical.payee,
+    ...(canonical.memo && { memo: canonical.memo }),
+    original_csv_row: canonical.sourceRow,
+  };
+}
+
+function mapToLegacyYNABTransaction(canonical: NormalizedYNABTransaction): LegacyYNABTransaction {
+  return {
+    id: canonical.id,
+    date: canonical.date,
+    amount: canonical.amount,
+    payee_name: canonical.payee,
+    category_name: canonical.categoryName,
+    cleared: canonical.cleared,
+    approved: canonical.approved,
+    ...(canonical.memo !== null && { memo: canonical.memo }),
+  };
+}
+
+function mapToLegacyTransactionMatch(result: MatchResult): LegacyTransactionMatch {
+  const bankTransaction = mapToLegacyBankTransaction(result.bankTransaction);
+  const ynabTransaction = result.bestMatch
+    ? mapToLegacyYNABTransaction(result.bestMatch.ynabTransaction)
+    : undefined;
+
+  const candidates: LegacyMatchCandidate[] = result.candidates.map((c) => ({
+    ynab_transaction: mapToLegacyYNABTransaction(c.ynabTransaction),
+    confidence: c.scores.combined,
+    match_reason: c.matchReasons.join(', '),
+    explanation: `Score: ${c.scores.combined}. ${c.matchReasons.join(', ')}`,
+  }));
+
+  const topCandidate = result.candidates[0];
+
+  let actionHint: string | undefined;
+  switch (result.confidence) {
+    case 'high':
+      actionHint = 'approve';
+      break;
+    case 'medium':
+    case 'low':
+      actionHint = 'review';
+      break;
+    case 'none':
+      actionHint = 'add_to_ynab';
+      break;
+  }
+
+  return {
+    bank_transaction: bankTransaction,
+    ...(ynabTransaction && { ynab_transaction: ynabTransaction }),
+    ...(candidates.length > 0 && { candidates }),
+    confidence: result.confidence,
+    confidence_score: result.confidenceScore,
+    match_reason: result.bestMatch?.matchReasons.join(', ') ?? 'No match found',
+    ...(topCandidate && { top_confidence: topCandidate.scores.combined }),
+    ...(actionHint && { action_hint: actionHint }),
+    ...(result.confidence === 'none' && {
+      recommendation: 'This bank transaction is not in YNAB. Consider adding it.',
+    }),
+  };
+}
+
+function matchSingle(
+  bankTxnInput: CanonicalBankTransaction | LegacyBankTransaction,
+  ynabTransactionsInput: (NormalizedYNABTransaction | LegacyYNABTransaction)[],
+  usedIds: Set<string>,
+  configInput: AnyMatchingConfig,
+): MatchResult {
+  const bankTxn = toCanonicalBankTransaction(bankTxnInput);
+  const ynabTransactions = ynabTransactionsInput.map(toCanonicalYNABTransaction);
+  const config = normalizeConfig(configInput);
+
+  const candidates = findCandidates(bankTxn, ynabTransactions, usedIds, config);
+
+  const bestMatch = candidates.length > 0 ? candidates[0]! : null;
+  const confidenceScore = bestMatch?.scores.combined ?? 0;
+
+  let confidence: MatchResult['confidence'];
+  if (confidenceScore >= config.autoMatchThreshold) {
+    confidence = 'high';
+    if (bestMatch) usedIds.add(bestMatch.ynabTransaction.id);
+  } else if (confidenceScore >= config.suggestedMatchThreshold) {
+    confidence = 'medium';
+  } else if (confidenceScore >= config.minimumCandidateScore) {
+    confidence = 'low';
+  } else {
+    confidence = 'none';
+  }
+
+  return {
+    bankTransaction: bankTxn,
+    bestMatch,
+    candidates: candidates.slice(0, 3),
+    confidence,
+    confidenceScore,
+  };
+}
+
+export function findMatches(
+  bankTransactions: CanonicalBankTransaction[],
+  ynabTransactions: NormalizedYNABTransaction[],
+  config?: MatchingConfig,
+): MatchResult[];
+
+export function findMatches(
+  bankTransactions: LegacyBankTransaction[],
+  ynabTransactions: LegacyYNABTransaction[],
+  config: LegacyMatchingConfig,
+): LegacyTransactionMatch[];
+
+export function findMatches(
+  bankTransactions: (CanonicalBankTransaction | LegacyBankTransaction)[],
+  ynabTransactions: (NormalizedYNABTransaction | LegacyYNABTransaction)[],
+  config?: AnyMatchingConfig,
+): (MatchResult | LegacyTransactionMatch)[] {
+  const usedYnabIds = new Set<string>();
+  const results: MatchResult[] = [];
+
+  for (const bankTxn of bankTransactions) {
+    results.push(matchSingle(bankTxn, ynabTransactions, usedYnabIds, config));
+  }
+
+  // If inputs look legacy, map results back to legacy TransactionMatch
+  if (bankTransactions.some((txn) => isLegacyBankTransaction(txn))) {
+    return results.map(mapToLegacyTransactionMatch);
+  }
+
+  return results;
+}
+
+function findCandidates(
+  bankTxn: CanonicalBankTransaction,
+  ynabTransactions: NormalizedYNABTransaction[],
   usedIds: Set<string>,
   config: MatchingConfig,
 ): MatchCandidate[] {
   const candidates: MatchCandidate[] = [];
 
   for (const ynabTxn of ynabTransactions) {
-    // Skip already matched transactions
     if (usedIds.has(ynabTxn.id)) continue;
 
-    // Skip opposite-signed transactions (refunds vs purchases)
-    if (bankTxn.amount > 0 !== ynabTxn.amount > 0) continue;
+    // Sign check - both must be same sign (or both zero)
+    const bankSign = Math.sign(bankTxn.amount);
+    const ynabSign = Math.sign(ynabTxn.amount);
+    if (bankSign !== ynabSign && bankSign !== 0 && ynabSign !== 0) {
+      continue;
+    }
 
-    // Calculate match score
-    const { score, reasons } = calculateMatchScore(bankTxn, ynabTxn, config);
+    const amountDiff = Math.abs(bankTxn.amount - ynabTxn.amount);
+    if (amountDiff > config.amountToleranceMilliunits) {
+      // Outside configured amount tolerance - treat as no candidate
+      continue;
+    }
 
-    // Only include candidates with minimum score
-    if (score >= 30) {
+    const scores = calculateScores(bankTxn, ynabTxn, config);
+
+    if (scores.combined >= config.minimumCandidateScore) {
       candidates.push({
-        ynab_transaction: ynabTxn,
-        confidence: score,
-        match_reason: reasons.join(', '),
-        explanation: buildExplanation(bankTxn, ynabTxn, score, reasons),
+        ynabTransaction: ynabTxn,
+        scores,
+        matchReasons: buildMatchReasons(scores, config),
       });
     }
   }
 
-  // Sort by confidence (desc), then priority (desc), then date proximity
   candidates.sort((a, b) => {
-    if (b.confidence !== a.confidence) {
-      return b.confidence - a.confidence;
+    const scoreDiff = b.scores.combined - a.scores.combined;
+    if (scoreDiff !== 0) {
+      return scoreDiff;
     }
-    const priorityDiff = getPriority(b.ynab_transaction) - getPriority(a.ynab_transaction);
-    if (priorityDiff !== 0) return priorityDiff;
 
-    // Date proximity as tiebreaker
-    const dateProximityA = Math.abs(
-      new Date(bankTxn.date).getTime() - new Date(a.ynab_transaction.date).getTime(),
-    );
-    const dateProximityB = Math.abs(
-      new Date(bankTxn.date).getTime() - new Date(b.ynab_transaction.date).getTime(),
-    );
-    return dateProximityA - dateProximityB;
+    const aUncleared = a.ynabTransaction.cleared === 'uncleared' ? 1 : 0;
+    const bUncleared = b.ynabTransaction.cleared === 'uncleared' ? 1 : 0;
+    if (aUncleared !== bUncleared) {
+      return bUncleared - aUncleared;
+    }
+
+    const bankTime = new Date(bankTxn.date).getTime();
+    const aDiff = Math.abs(bankTime - new Date(a.ynabTransaction.date).getTime());
+    const bDiff = Math.abs(bankTime - new Date(b.ynabTransaction.date).getTime());
+    if (aDiff !== bDiff) {
+      return aDiff - bDiff;
+    }
+
+    return 0;
   });
-
   return candidates;
 }
 
-/**
- * Build human-readable explanation for a match
- */
-function buildExplanation(
-  _bankTxn: BankTransaction,
-  ynabTxn: YNABTransaction,
-  score: number,
-  reasons: string[],
-): string {
-  const parts: string[] = [];
-
-  parts.push(`Match confidence: ${score}%`);
-  parts.push(reasons.join(', '));
-
-  if (ynabTxn.cleared === 'uncleared') {
-    parts.push('(Uncleared - awaiting confirmation)');
-  }
-
-  return parts.join(' | ');
-}
-
-/**
- * Find best match for a single bank transaction
- */
-export function findBestMatch(
-  bankTxn: BankTransaction,
-  ynabTransactions: YNABTransaction[],
-  usedIds: Set<string>,
+function calculateScores(
+  bankTxn: CanonicalBankTransaction,
+  ynabTxn: NormalizedYNABTransaction,
   config: MatchingConfig,
-): TransactionMatch {
-  const candidates = findMatchCandidates(bankTxn, ynabTransactions, usedIds, config);
+): MatchCandidate['scores'] {
+  // Amount score - now using INTEGER comparison (milliunits)
+  const amountDiff = Math.abs(bankTxn.amount - ynabTxn.amount);
+  let amountScore: number;
 
-  if (candidates.length === 0) {
-    // No match found
-    return {
-      bank_transaction: bankTxn,
-      confidence: 'none',
-      confidence_score: 0,
-      match_reason: 'No matching transaction found in YNAB',
-      action_hint: 'add_to_ynab',
-      recommendation: 'This transaction appears on bank statement but not in YNAB',
-    };
+  if (amountDiff === 0) {
+    // Exact integer match - no floating point issues!
+    amountScore = 100;
+  } else if (amountDiff <= config.amountToleranceMilliunits) {
+    amountScore = 95;
+  } else if (amountDiff <= 1000) {
+    // Within $1
+    amountScore = 80 - (amountDiff / 1000) * 20;
+  } else {
+    amountScore = Math.max(0, 60 - (amountDiff / 1000) * 5);
   }
 
-  const bestCandidate = candidates[0]!; // Safe: we checked candidates.length > 0
-  const bestScore = bestCandidate.confidence;
+  // Date score
+  const bankDate = new Date(bankTxn.date);
+  const ynabDate = new Date(ynabTxn.date);
+  const daysDiff = Math.abs(bankDate.getTime() - ynabDate.getTime()) / (1000 * 60 * 60 * 24);
+  let dateScore: number;
 
-  // HIGH confidence: Auto-match candidate (≥90%)
-  if (bestScore >= config.autoMatchThreshold) {
-    return {
-      bank_transaction: bankTxn,
-      ynab_transaction: bestCandidate.ynab_transaction,
-      confidence: 'high',
-      confidence_score: bestScore,
-      match_reason: bestCandidate.match_reason,
-    };
+  if (daysDiff < 0.5) {
+    dateScore = 100;
+  } else if (daysDiff <= 1) {
+    dateScore = 95;
+  } else if (daysDiff <= config.dateToleranceDays) {
+    dateScore = 90 - (daysDiff - 1) * (40 / config.dateToleranceDays);
+  } else {
+    dateScore = Math.max(0, 50 - (daysDiff - config.dateToleranceDays) * 5);
   }
 
-  // MEDIUM confidence: Suggested match (60-89%)
-  if (bestScore >= config.suggestionThreshold) {
-    return {
-      bank_transaction: bankTxn,
-      ynab_transaction: bestCandidate.ynab_transaction,
-      candidates: candidates.slice(0, 3), // Top 3 candidates
-      confidence: 'medium',
-      confidence_score: bestScore,
-      match_reason: bestCandidate.match_reason,
-      top_confidence: bestScore,
-      action_hint: 'review_and_choose',
-    };
-  }
+  // Payee score using fuzzball
+  const payeeScore = calculatePayeeScore(bankTxn.payee, ynabTxn.payee);
 
-  // LOW confidence: Show as possible match but don't auto-suggest (30-59%)
+  // Combined score with weights
+  let combined =
+    amountScore * config.weights.amount +
+    dateScore * config.weights.date +
+    payeeScore * config.weights.payee;
+
+  // Apply bonuses
+  if (amountScore === 100) combined += config.exactAmountBonus;
+  if (dateScore === 100) combined += config.exactDateBonus;
+  if (payeeScore >= 95) combined += config.exactPayeeBonus;
+
+  combined = Math.min(100, combined);
+
   return {
-    bank_transaction: bankTxn,
-    candidates: candidates.slice(0, 3),
-    confidence: 'low',
-    confidence_score: bestScore,
-    match_reason: 'Low confidence match',
-    top_confidence: bestScore,
-    action_hint: 'review_or_add_new',
-    recommendation: 'Consider reviewing candidates or adding as new transaction',
+    amount: Math.round(amountScore),
+    date: Math.round(dateScore),
+    payee: Math.round(payeeScore),
+    combined: Math.round(combined),
   };
 }
 
-/**
- * Find matches for all bank transactions
- */
-export function findMatches(
-  bankTransactions: BankTransaction[],
-  ynabTransactions: YNABTransaction[],
-  config: MatchingConfig = DEFAULT_MATCHING_CONFIG as MatchingConfig,
-): TransactionMatch[] {
-  const matches: TransactionMatch[] = [];
-  const usedIds = new Set<string>();
+function calculatePayeeScore(bankPayee: string, ynabPayee: string | null): number {
+  if (!ynabPayee) return 30;
 
-  for (const bankTxn of bankTransactions) {
-    const match = findBestMatch(bankTxn, ynabTransactions, usedIds, config);
-    matches.push(match);
+  const scores = [
+    fuzz.token_set_ratio(bankPayee, ynabPayee),
+    fuzz.token_sort_ratio(bankPayee, ynabPayee),
+    fuzz.partial_ratio(bankPayee, ynabPayee),
+    fuzz.WRatio(bankPayee, ynabPayee),
+  ];
 
-    // Mark high-confidence matches as used to prevent duplicate matching
-    if (match.confidence === 'high' && match.ynab_transaction) {
-      usedIds.add(match.ynab_transaction.id);
-    }
+  return Math.max(...scores);
+}
+
+function buildMatchReasons(scores: MatchCandidate['scores'], config: MatchingConfig): string[] {
+  const reasons: string[] = [];
+
+  if (scores.amount === 100) {
+    reasons.push('Exact amount match');
+  } else if (scores.amount >= 95) {
+    reasons.push('Amount within tolerance');
   }
 
-  return matches;
+  if (scores.date === 100) {
+    reasons.push('Same date');
+  } else if (scores.date >= 90) {
+    reasons.push('Date within 1-2 days');
+  } else if (scores.date >= 50) {
+    reasons.push(`Date within ${config.dateToleranceDays} days`);
+  }
+
+  if (scores.payee >= 95) {
+    reasons.push('Payee exact match');
+  } else if (scores.payee >= 80) {
+    reasons.push('Payee highly similar');
+  } else if (scores.payee >= 60) {
+    reasons.push('Payee somewhat similar');
+  }
+
+  return reasons;
+}
+
+export function findBestMatch(
+  bankTransaction: CanonicalBankTransaction,
+  ynabTransactions: NormalizedYNABTransaction[],
+  usedYnabIds?: Set<string>,
+  config?: MatchingConfig,
+): MatchResult;
+
+export function findBestMatch(
+  bankTransaction: LegacyBankTransaction,
+  ynabTransactions: LegacyYNABTransaction[],
+  usedYnabIds: Set<string>,
+  config: LegacyMatchingConfig,
+): LegacyTransactionMatch;
+
+export function findBestMatch(
+  bankTransaction: CanonicalBankTransaction | LegacyBankTransaction,
+  ynabTransactions: NormalizedYNABTransaction[] | LegacyYNABTransaction[],
+  usedYnabIds: Set<string> = new Set<string>(),
+  config?: AnyMatchingConfig,
+): MatchResult | LegacyTransactionMatch {
+  const result = matchSingle(bankTransaction, ynabTransactions, usedYnabIds, config);
+
+  if (isLegacyBankTransaction(bankTransaction)) {
+    return mapToLegacyTransactionMatch(result);
+  }
+
+  return result;
 }
