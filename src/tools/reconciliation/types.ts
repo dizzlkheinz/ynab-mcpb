@@ -163,31 +163,29 @@ export interface ReconciliationAction {
 }
 
 /**
- * Matching algorithm configuration
+ * Matching algorithm configuration (V2)
  */
 export interface MatchingConfig {
-  /** Date tolerance in days */
-  dateToleranceDays: number;
-  /** Amount tolerance in cents */
-  amountToleranceCents: number;
-  /** Description similarity threshold (0-1) */
-  descriptionSimilarityThreshold: number;
-  /** Confidence threshold for auto-matching (0-100) */
-  autoMatchThreshold: number;
-  /** Confidence threshold for suggestions (0-100) */
-  suggestionThreshold: number;
-}
+  weights: {
+    amount: number; // Recommended: 0.50
+    date: number; // Recommended: 0.15
+    payee: number; // Recommended: 0.35
+  };
 
-/**
- * Default matching configuration (not type-only for use in code)
- */
-export const DEFAULT_MATCHING_CONFIG = {
-  dateToleranceDays: 2,
-  amountToleranceCents: 1,
-  descriptionSimilarityThreshold: 0.8,
-  autoMatchThreshold: 90,
-  suggestionThreshold: 60,
-};
+  // Tolerances (in MILLIUNITS for amount)
+  amountToleranceMilliunits: number; // Default: 10 (1 cent)
+  dateToleranceDays: number; // Default: 7
+
+  // Thresholds
+  autoMatchThreshold: number; // Default: 85
+  suggestedMatchThreshold: number; // Default: 60
+  minimumCandidateScore: number; // Default: 40
+
+  // Bonuses for perfect matches
+  exactAmountBonus: number; // Default: 10
+  exactDateBonus: number; // Default: 5
+  exactPayeeBonus: number; // Default: 10
+}
 
 /**
  * Parsed CSV data from compareTransactions

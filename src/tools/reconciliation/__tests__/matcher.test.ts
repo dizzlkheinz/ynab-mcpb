@@ -7,11 +7,19 @@ describe('matcher', () => {
 
   beforeEach(() => {
     config = {
+      weights: {
+        amount: 0.5,
+        date: 0.15,
+        payee: 0.35,
+      },
+      amountToleranceMilliunits: 10,
       dateToleranceDays: 2,
-      amountToleranceCents: 1,
-      descriptionSimilarityThreshold: 0.8,
       autoMatchThreshold: 90,
-      suggestionThreshold: 60,
+      suggestedMatchThreshold: 60,
+      minimumCandidateScore: 40,
+      exactAmountBonus: 10,
+      exactDateBonus: 5,
+      exactPayeeBonus: 10,
     };
   });
 
@@ -98,9 +106,7 @@ describe('matcher', () => {
         expect(match.confidence).toBe('high');
         expect(match.confidence_score).toBeGreaterThanOrEqual(90);
       });
-    });
 
-    describe('medium confidence matches (60-89%)', () => {
       it('should return high confidence for fuzzy payee match', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
@@ -129,7 +135,9 @@ describe('matcher', () => {
         expect(match.candidates).toBeDefined();
         expect(match.candidates!.length).toBeGreaterThan(0);
       });
+    });
 
+    describe('medium confidence matches (60-89%)', () => {
       it('should provide multiple candidates for medium confidence', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
@@ -328,7 +336,7 @@ describe('matcher', () => {
       });
 
       it('should not match outside amount tolerance', () => {
-        config.amountToleranceCents = 1;
+        config.amountToleranceMilliunits = 10; // 1 cent
 
         const bankTxn: BankTransaction = {
           id: 'b1',
@@ -516,11 +524,19 @@ describe('matcher', () => {
 
     it('should use custom configuration', () => {
       const customConfig: MatchingConfig = {
+        weights: {
+          amount: 0.5,
+          date: 0.15,
+          payee: 0.35,
+        },
+        amountToleranceMilliunits: 100, // 10 cents
         dateToleranceDays: 5,
-        amountToleranceCents: 10,
-        descriptionSimilarityThreshold: 0.6,
         autoMatchThreshold: 85,
-        suggestionThreshold: 50,
+        suggestedMatchThreshold: 50,
+        minimumCandidateScore: 40,
+        exactAmountBonus: 10,
+        exactDateBonus: 5,
+        exactPayeeBonus: 10,
       };
 
       const bankTxns: BankTransaction[] = [
