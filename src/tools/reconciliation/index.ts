@@ -76,25 +76,17 @@ export const ReconcileAccountSchema = z
 
     csv_format: z
       .object({
-        date_column: z.union([z.string(), z.number()]).optional().default('Date'),
+        date_column: z.union([z.string(), z.number()]).optional(),
         amount_column: z.union([z.string(), z.number()]).optional(),
         debit_column: z.union([z.string(), z.number()]).optional(),
         credit_column: z.union([z.string(), z.number()]).optional(),
-        description_column: z.union([z.string(), z.number()]).optional().default('Description'),
-        date_format: z.string().optional().default('MM/DD/YYYY'),
-        has_header: z.boolean().optional().default(true),
-        delimiter: z.string().optional().default(','),
+        description_column: z.union([z.string(), z.number()]).optional(),
+        date_format: z.string().optional(),
+        has_header: z.boolean().optional(),
+        delimiter: z.string().optional(),
       })
       .strict()
-      .optional()
-      .default(() => ({
-        date_column: 'Date',
-        amount_column: 'Amount',
-        description_column: 'Description',
-        date_format: 'MM/DD/YYYY',
-        has_header: true,
-        delimiter: ',',
-      })),
+      .optional(),
 
     // Statement information
     statement_balance: z.number({
@@ -226,20 +218,20 @@ export async function handleReconcileAccount(
       const dateFormat = mapCsvDateFormatToHint(params.csv_format?.date_format);
       const csvOptions: ParseCSVOptions = {
         columns: {
-          ...(typeof params.csv_format?.date_column === 'string' && {
-            date: params.csv_format.date_column,
+          ...(params.csv_format?.date_column !== undefined && {
+            date: String(params.csv_format.date_column),
           }),
-          ...(typeof params.csv_format?.amount_column === 'string' && {
-            amount: params.csv_format.amount_column,
+          ...(params.csv_format?.amount_column !== undefined && {
+            amount: String(params.csv_format.amount_column),
           }),
-          ...(typeof params.csv_format?.debit_column === 'string' && {
-            debit: params.csv_format.debit_column,
+          ...(params.csv_format?.debit_column !== undefined && {
+            debit: String(params.csv_format.debit_column),
           }),
-          ...(typeof params.csv_format?.credit_column === 'string' && {
-            credit: params.csv_format.credit_column,
+          ...(params.csv_format?.credit_column !== undefined && {
+            credit: String(params.csv_format.credit_column),
           }),
-          ...(typeof params.csv_format?.description_column === 'string' && {
-            description: params.csv_format.description_column,
+          ...(params.csv_format?.description_column !== undefined && {
+            description: String(params.csv_format.description_column),
           }),
         },
         ...(dateFormat && { dateFormat }),
