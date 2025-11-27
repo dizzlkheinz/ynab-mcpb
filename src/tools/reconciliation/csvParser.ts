@@ -234,9 +234,13 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
     }
   }
 
+  const maxRows = options.maxRows ?? 10000;
+
   // Parse with PapaParse
+  // Security: Use preview to limit rows parsed into memory (prevents memory exhaustion)
   const parsed = Papa.parse(content, {
     header: hasHeader,
+    preview: maxRows + (hasHeader ? 1 : 0), // +1 for header row if present
     dynamicTyping: false, // We'll handle type conversion ourselves
     skipEmptyLines: true,
     transformHeader: (h) => h.trim(),
@@ -312,7 +316,7 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
     errors.push({
       row: 0,
       field: 'date',
-      message: 'Could not identify date column',
+      message: `Could not identify date column from: ${columns.join(', ')}. Try using preset option (td, rbc, scotiabank, etc.) or specify columns manually with columns.date`,
       rawValue: columns.join(', '),
     });
   }
@@ -321,14 +325,14 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
       errors.push({
         row: 0,
         field: 'amount',
-        message: 'Could not identify amount column',
+        message: `Could not identify amount column from: ${columns.join(', ')}. Try using preset option or specify columns manually with columns.amount (or columns.debit/credit for split columns)`,
         rawValue: columns.join(', '),
       });
     } else if (!debitCol || !creditCol) {
       errors.push({
         row: 0,
         field: 'amount',
-        message: 'Could not identify debit/credit columns pair',
+        message: `Could not identify debit/credit columns pair from: ${columns.join(', ')}. Found ${debitCol ? 'debit' : 'credit'} but missing ${debitCol ? 'credit' : 'debit'}. Specify both with columns.debit and columns.credit`,
         rawValue: columns.join(', '),
       });
     }
@@ -337,8 +341,8 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
   const transactions: BankTransaction[] = [];
 
   const dateFormat = options.dateFormat ?? preset?.dateFormat;
-  const maxRows = options.maxRows ?? 10000;
 
+  // Papa.parse preview already limited rows, but keep defensive check
   for (let i = 0; i < Math.min(rows.length, maxRows); i++) {
     const row = rows[i];
     if (!row) continue;
@@ -427,9 +431,20 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
 
     // Parse description & Sanitize
     let rawDesc = getValue(descCol)?.trim() ?? '';
-    // Remove control characters (except newlines if any, though CSV usually handles that)
-    // Limiting to 500 characters
-    rawDesc = rawDesc.replace(/[\x00-\x1F\x7F]/g, '').substring(0, 500);
+    // Security: Remove potentially malicious/confusing Unicode characters:
+    // - ASCII control chars (0x00-0x1F, 0x7F)
+    // - C1 control chars (0x80-0x9F)
+    // - Bidirectional text overrides (U+202A-202E, U+2066-2069)
+    // - Zero-width characters (U+200B-200D, U+FEFF)
+    // - Unicode line/paragraph separators (U+2028-2029)
+
+    rawDesc = rawDesc
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // ASCII + C1 control chars
+      .replace(/[\u202A-\u202E\u2066-\u2069]/g, '') // Bidirectional overrides
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width chars
+      .replace(/[\u2028-\u2029]/g, '') // Line/paragraph separators
+      .substring(0, 500);
 
     transactions.push({
       id: randomUUID(),
@@ -504,11 +519,14 @@ function parseDate(raw: string, formatHint?: 'YMD' | 'MDY' | 'DMY'): Date | null
   }
 
   // 3. Fallback to chrono-node (handles natural language, many formats)
+  // Timezone strategy: chrono-node returns local time, but we extract only date components
+  // and reconstruct as UTC to ensure consistent date handling across all parsing paths.
+  // This prevents "off-by-one-day" errors from timezone conversions during date comparison.
   const parsed = chrono.parseDate(raw);
   if (parsed) {
     return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
   }
-  
+
   return null;
 }
 

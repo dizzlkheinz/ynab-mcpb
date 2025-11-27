@@ -99,9 +99,9 @@ export const ReconcileAccountSchema = z
     as_of_timezone: z.string().optional(),
 
     // Matching configuration (optional)
-    date_tolerance_days: z.number().min(0).max(7).optional().default(5),
+    date_tolerance_days: z.number().min(0).max(7).optional().default(7),
     amount_tolerance_cents: z.number().min(0).max(100).optional().default(1),
-    auto_match_threshold: z.number().min(0).max(100).optional().default(90),
+    auto_match_threshold: z.number().min(0).max(100).optional().default(85),
     suggestion_threshold: z.number().min(0).max(100).optional().default(60),
     amount_tolerance: z.number().min(0).max(1).optional(),
 
@@ -265,7 +265,10 @@ export async function handleReconcileAccount(
       } else {
         // Auto-detect from CSV content using new parser
         try {
-          parseResult = parseCSV(csvContent, csvOptions);
+          parseResult = parseCSV(csvContent, {
+            ...csvOptions,
+            invertAmounts: shouldInvertBankAmounts,
+          });
 
           if (parseResult.transactions.length > 0) {
             // Find min date

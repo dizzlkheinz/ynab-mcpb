@@ -15,12 +15,12 @@ describe('ynabAdapter', () => {
     account_id: 'account-1',
     deleted: false,
     account_name: 'Test Account',
-    subtransactions: []
+    subtransactions: [],
   };
 
   it('should normalize a single transaction correctly', () => {
     const result = normalizeYNABTransaction(mockTransaction);
-    
+
     expect(result).toEqual({
       id: 'test-id-1',
       date: '2024-01-01',
@@ -42,20 +42,17 @@ describe('ynabAdapter', () => {
     };
 
     const result = normalizeYNABTransaction(minimalTransaction);
-    
+
     expect(result.payee).toBeNull();
     expect(result.memo).toBeNull();
     expect(result.categoryName).toBeNull();
   });
 
   it('should normalize multiple transactions', () => {
-    const transactions = [
-      mockTransaction,
-      { ...mockTransaction, id: 'test-id-2', amount: 5000 }
-    ];
+    const transactions = [mockTransaction, { ...mockTransaction, id: 'test-id-2', amount: 5000 }];
 
     const results = normalizeYNABTransactions(transactions);
-    
+
     expect(results).toHaveLength(2);
     expect(results[0].id).toBe('test-id-1');
     expect(results[1].id).toBe('test-id-2');
