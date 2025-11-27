@@ -116,6 +116,10 @@ export interface ParseCSVOptions {
    * Defaults to true.
    */
   header?: boolean;
+  /** Maximum number of rows to process (default: 10000) */
+  maxRows?: number;
+  /** Maximum file size in bytes (default: 10MB) */
+  maxBytes?: number;
 }
 
 /**
@@ -196,6 +200,12 @@ function checkTDPattern(rows: string[][]): boolean {
 export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVParseResult {
   const errors: ParseError[] = [];
   const warnings: ParseWarning[] = [];
+
+  // Security: Check file size limit
+  const MAX_BYTES = options.maxBytes ?? 10 * 1024 * 1024; // 10MB default
+  if (content.length > MAX_BYTES) {
+    throw new Error(`File size exceeds limit of ${Math.round(MAX_BYTES / 1024 / 1024)}MB`);
+  }
 
   // Auto-detect format when preset or header are not fully specified
   let detectedPreset: string | undefined = options.preset;
@@ -327,8 +337,9 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
   const transactions: BankTransaction[] = [];
 
   const dateFormat = options.dateFormat ?? preset?.dateFormat;
+  const maxRows = options.maxRows ?? 10000;
 
-  for (let i = 0; i < rows.length; i++) {
+  for (let i = 0; i < Math.min(rows.length, maxRows); i++) {
     const row = rows[i];
     if (!row) continue;
 
@@ -357,7 +368,7 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
       });
       continue;
     }
-    // Use LOCAL date components
+    // Use LOCAL date components (now derived from UTC date object)
     const dateStr = formatLocalDate(parsedDate);
 
     // Parse amount
@@ -414,8 +425,11 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
     const multiplier = options.invertAmounts ? -1 : (preset?.amountMultiplier ?? 1);
     amountMilliunits *= multiplier;
 
-    // Parse description
-    const rawDesc = getValue(descCol)?.trim() ?? '';
+    // Parse description & Sanitize
+    let rawDesc = getValue(descCol)?.trim() ?? '';
+    // Remove control characters (except newlines if any, though CSV usually handles that)
+    // Limiting to 500 characters
+    rawDesc = rawDesc.replace(/[\x00-\x1F\x7F]/g, '').substring(0, 500);
 
     transactions.push({
       id: randomUUID(),
@@ -453,7 +467,7 @@ function parseDate(raw: string, formatHint?: 'YMD' | 'MDY' | 'DMY'): Date | null
   const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     const [, year, month, day] = isoMatch;
-    return new Date(parseInt(year!), parseInt(month!) - 1, parseInt(day!));
+    return new Date(Date.UTC(parseInt(year!), parseInt(month!) - 1, parseInt(day!)));
   }
 
   // 2. Try explicit format hint for ambiguous numeric dates
@@ -485,18 +499,23 @@ function parseDate(raw: string, formatHint?: 'YMD' | 'MDY' | 'DMY'): Date | null
     if (year < 100) year += 2000; // 25 -> 2025
 
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      return new Date(year, month - 1, day);
+      return new Date(Date.UTC(year, month - 1, day));
     }
   }
 
   // 3. Fallback to chrono-node (handles natural language, many formats)
-  return chrono.parseDate(raw);
+  const parsed = chrono.parseDate(raw);
+  if (parsed) {
+    return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
+  }
+  
+  return null;
 }
 
 function formatLocalDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 

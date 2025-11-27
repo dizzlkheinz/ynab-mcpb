@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation** - Corrected outdated references and mismatches
   - Fixed file path references (removed non-existent `matcher.v2.ts`)
   - Corrected config value documentation (amountToleranceMilliunits)
-  - Fixed markdown table formatting in reconciliation plan
+  - Fixed Markdown table formatting in reconciliation plan
 
 ## [0.13.4] - 2025-11-21
 

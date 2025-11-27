@@ -6,7 +6,7 @@
  */
 
 import type * as ynab from 'ynab';
-import { parseCSV, type ParseCSVOptions } from './csvParser.js';
+import { parseCSV, type ParseCSVOptions, type CSVParseResult } from './csvParser.js';
 import { findMatches, normalizeConfig, type MatchingConfig, DEFAULT_CONFIG } from './matcher.js';
 import { normalizeYNABTransactions } from './ynabAdapter.js';
 
@@ -18,6 +18,7 @@ import type {
   BalanceInfo,
   ReconciliationSummary,
   ReconciliationInsight,
+  ActionableRecommendation,
 } from './types.js';
 import type { MatchResult } from './matcher.js'; // Import MatchResult
 import { toMoneyValue } from '../../utils/money.js';
@@ -165,10 +166,10 @@ function generateNextSteps(summary: ReconciliationSummary): string[] {
   return steps;
 }
 
-function formatCurrency(amountMilli: number): string {
+function formatCurrency(amountMilli: number, currency: string = 'USD'): string {
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -177,7 +178,7 @@ function formatCurrency(amountMilli: number): string {
 
 // --- Insight Generation ---
 
-function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationInsight[] {
+function repeatAmountInsights(unmatchedBank: BankTransaction[], currency: string = 'USD'): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
   if (unmatchedBank.length === 0) {
     return insights;
@@ -206,9 +207,9 @@ function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationI
     id: `repeat-${top.amount}`,
     type: 'repeat_amount',
     severity: top.txns.length >= 4 ? 'critical' : 'warning',
-    title: `${top.txns.length} unmatched transactions at ${formatCurrency(top.amount)}`,
+    title: `${top.txns.length} unmatched transactions at ${formatCurrency(top.amount, currency)}`,
     description:
-      `The bank statement shows ${top.txns.length} unmatched transaction(s) at ${formatCurrency(top.amount)}. ` +
+      `The bank statement shows ${top.txns.length} unmatched transaction(s) at ${formatCurrency(top.amount, currency)}. ` +
       'Repeated amounts are usually the quickest wins — reconcile these first.',
     evidence: {
       amount: top.amount, // Milliunits
@@ -250,6 +251,7 @@ function detectInsights(
   unmatchedBank: BankTransaction[],
   _summary: ReconciliationSummary,
   balances: BalanceInfo,
+  currency: string,
   csvErrors: { row: number; field: string; message: string }[] = [],
   csvWarnings: { row: number; message: string }[] = [],
 ): ReconciliationInsight[] {
@@ -300,7 +302,7 @@ function detectInsights(
     });
   }
 
-  for (const insight of repeatAmountInsights(unmatchedBank)) {
+  for (const insight of repeatAmountInsights(unmatchedBank, currency)) {
     addUnique(insight);
   }
 
@@ -316,7 +318,7 @@ function detectInsights(
 /**
  * Perform reconciliation analysis
  *
- * @param csvContent - CSV file content or file path
+ * @param csvContentOrParsed - CSV file content or pre-parsed result
  * @param csvFilePath - Optional file path (if csvContent is a path)
  * @param ynabTransactions - YNAB transactions from API
  * @param statementBalance - Expected cleared balance from statement
@@ -328,7 +330,7 @@ function detectInsights(
  * @param csvOptions - Optional CSV parsing options (manual overrides)
  */
 export function analyzeReconciliation(
-  csvContent: string,
+  csvContentOrParsed: string | CSVParseResult,
   _csvFilePath: string | undefined,
   ynabTransactions: ynab.TransactionDetail[],
   statementBalance: number,
@@ -339,11 +341,17 @@ export function analyzeReconciliation(
   invertBankAmounts: boolean = false,
   csvOptions?: ParseCSVOptions,
 ): ReconciliationAnalysis {
-  // Step 1: Parse bank CSV using new Parser
-  const parseResult = parseCSV(csvContent, {
-    ...csvOptions,
-    invertAmounts: invertBankAmounts,
-  });
+  // Step 1: Parse bank CSV using new Parser (or use provided result)
+  let parseResult: CSVParseResult;
+  
+  if (typeof csvContentOrParsed === 'string') {
+    parseResult = parseCSV(csvContentOrParsed, {
+      ...csvOptions,
+      invertAmounts: invertBankAmounts,
+    });
+  } else {
+    parseResult = csvContentOrParsed;
+  }
 
   const newBankTransactions = parseResult.transactions;
   const csvParseErrors = parseResult.errors;
@@ -396,6 +404,7 @@ export function analyzeReconciliation(
     unmatchedBank,
     summary,
     balances,
+    currency,
     csvParseErrors,
     csvParseWarnings,
   );
