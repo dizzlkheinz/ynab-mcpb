@@ -11,7 +11,10 @@ describe('csvParser', () => {
     });
 
     it('should respect maxRows limit', () => {
-      const rows = Array.from({ length: 20 }, (_, i) => `2024-01-${String(i + 1).padStart(2, '0')},Desc ${i},10.00`).join('\n');
+      const rows = Array.from(
+        { length: 20 },
+        (_, i) => `2024-01-${String(i + 1).padStart(2, '0')},Desc ${i},10.00`,
+      ).join('\n');
       const content = `Date,Description,Amount\n${rows}`;
       const options: ParseCSVOptions = { maxRows: 10 };
 
@@ -24,7 +27,7 @@ describe('csvParser', () => {
       // ASCII 0x07 (Bell) and 0x1B (Escape) are control characters
       const badDesc = 'Bad\x07Description\x1B';
       const content = `Date,Description,Amount\n2024-01-01,${badDesc},10.00`;
-      
+
       const result = parseCSV(content);
       expect(result.transactions[0].payee).toBe('BadDescription');
     });
@@ -32,7 +35,7 @@ describe('csvParser', () => {
     it('should limit description length to 500 characters', () => {
       const longDesc = 'a'.repeat(600);
       const content = `Date,Description,Amount\n2024-01-01,${longDesc},10.00`;
-      
+
       const result = parseCSV(content);
       expect(result.transactions[0].payee).toHaveLength(500);
       expect(result.transactions[0].payee).toBe('a'.repeat(500));
@@ -68,11 +71,11 @@ describe('csvParser', () => {
 01/15/2024,PAYMENT RECEIVED,,100.00,500.00
 01/16/2024,PURCHASE,50.00,,450.00
 `.trim();
-      
+
       // Note: TD pattern detection requires 4+ columns
       // Our parser might need a hint if the csv is very short or malformed
       // But the auto-detect logic checks for date in col 0 and numerics in 2/3
-      
+
       const result = parseCSV(content);
       // Should detect TD preset which implies header: false
       expect(result.meta.detectedColumns).toBeDefined();

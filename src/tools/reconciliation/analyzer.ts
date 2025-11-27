@@ -18,7 +18,6 @@ import type {
   BalanceInfo,
   ReconciliationSummary,
   ReconciliationInsight,
-  ActionableRecommendation,
 } from './types.js';
 import type { MatchResult } from './matcher.js'; // Import MatchResult
 import { toMoneyValue } from '../../utils/money.js';
@@ -178,7 +177,10 @@ function formatCurrency(amountMilli: number, currency: string = 'USD'): string {
 
 // --- Insight Generation ---
 
-function repeatAmountInsights(unmatchedBank: BankTransaction[], currency: string = 'USD'): ReconciliationInsight[] {
+function repeatAmountInsights(
+  unmatchedBank: BankTransaction[],
+  currency: string = 'USD',
+): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
   if (unmatchedBank.length === 0) {
     return insights;
@@ -343,7 +345,7 @@ export function analyzeReconciliation(
 ): ReconciliationAnalysis {
   // Step 1: Parse bank CSV using new Parser (or use provided result)
   let parseResult: CSVParseResult;
-  
+
   if (typeof csvContentOrParsed === 'string') {
     parseResult = parseCSV(csvContentOrParsed, {
       ...csvOptions,
