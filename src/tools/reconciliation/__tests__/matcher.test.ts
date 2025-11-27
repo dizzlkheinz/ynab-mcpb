@@ -29,7 +29,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -45.23,
+          amount: -45230, // milliunits (-45.23)
           payee: 'Shell Gas Station',
           original_csv_row: 2,
         };
@@ -49,15 +49,15 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
         expect(match.confidence).toBe('high');
-        expect(match.confidence_score).toBeGreaterThanOrEqual(90);
-        expect(match.ynab_transaction).toEqual(ynabTxns[0]);
+        expect(match.confidenceScore).toBeGreaterThanOrEqual(90);
+        expect(match.bestMatch?.ynabTransaction).toEqual(ynabTxns[0]);
       });
 
       it('should return high confidence for normalized payee match', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -100.0,
+          amount: -100000, // milliunits (-100.00)
           payee: 'NETFLIX.COM',
           original_csv_row: 2,
         };
@@ -77,14 +77,14 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
         expect(match.confidence).toBe('high');
-        expect(match.confidence_score).toBeGreaterThanOrEqual(90);
+        expect(match.confidenceScore).toBeGreaterThanOrEqual(90);
       });
 
       it('should handle date within tolerance', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.0,
+          amount: -50000, // milliunits (-50.00)
           payee: 'Restaurant',
           original_csv_row: 2,
         };
@@ -94,8 +94,8 @@ describe('matcher', () => {
             id: 'y1',
             date: '2025-10-14', // 1 day difference
             amount: -50000,
-            payee_name: 'Restaurant',
-            category_name: 'Dining',
+            payee: 'Restaurant',
+            categoryName: 'Dining',
             cleared: 'uncleared',
             approved: true,
           },
@@ -104,14 +104,14 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
         expect(match.confidence).toBe('high');
-        expect(match.confidence_score).toBeGreaterThanOrEqual(90);
+        expect(match.confidenceScore).toBeGreaterThanOrEqual(90);
       });
 
       it('should return high confidence for fuzzy payee match', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-20',
-          amount: -127.43,
+          amount: -127430, // milliunits (-127.43)
           payee: 'AMAZON.COM',
           original_csv_row: 2,
         };
@@ -131,7 +131,7 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
         expect(match.confidence).toBe('high');
-        expect(match.confidence_score).toBeGreaterThanOrEqual(90);
+        expect(match.confidenceScore).toBeGreaterThanOrEqual(90);
         expect(match.candidates).toBeDefined();
         expect(match.candidates!.length).toBeGreaterThan(0);
       });
@@ -142,7 +142,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.0,
+          amount: -50000,
           payee: 'Restaurant',
           original_csv_row: 2,
         };
@@ -181,7 +181,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -45.23,
+          amount: -45230,
           payee: 'Shell',
           original_csv_row: 2,
         };
@@ -201,15 +201,15 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
         expect(match.confidence).toBe('none');
-        expect(match.confidence_score).toBe(0);
-        expect(match.action_hint).toBe('add_to_ynab');
+        expect(match.confidenceScore).toBe(0);
+        expect(match.bestMatch).toBeNull();
       });
 
       it('should not match opposite-signed transactions', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: 50.0, // Positive (refund)
+          amount: 50000, // Positive (refund) in milliunits
           payee: 'Amazon',
           original_csv_row: 2,
         };
@@ -229,7 +229,7 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
         expect(match.confidence).toBe('none');
-        expect(match.ynab_transaction).toBeUndefined();
+        expect(match.bestMatch).toBeNull();
       });
     });
 
@@ -238,7 +238,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.0,
+          amount: -50000,
           payee: 'Coffee Shop',
           original_csv_row: 2,
         };
@@ -267,14 +267,14 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
         // Should prefer uncleared transaction
-        expect(match.ynab_transaction?.id).toBe('y2');
+        expect(match.bestMatch?.ynabTransaction.id).toBe('y2');
       });
 
       it('should use date proximity as tiebreaker', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.0,
+          amount: -50000,
           payee: 'Store',
           original_csv_row: 2,
         };
@@ -303,7 +303,7 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
         // Should prefer closer date
-        expect(match.ynab_transaction?.id).toBe('y2');
+        expect(match.bestMatch?.ynabTransaction.id).toBe('y2');
       });
     });
 
@@ -312,7 +312,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -45.23,
+          amount: -45230,
           payee: 'Shell',
           original_csv_row: 2,
         };
@@ -332,7 +332,7 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
 
         expect(match.confidence).not.toBe('none');
-        expect(match.ynab_transaction).toBeDefined();
+        expect(match.bestMatch?.ynabTransaction).toBeDefined();
       });
 
       it('should not match outside amount tolerance', () => {
@@ -341,7 +341,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -45.0,
+          amount: -45000,
           payee: 'Shell',
           original_csv_row: 2,
         };
@@ -369,7 +369,7 @@ describe('matcher', () => {
         const bankTxn: BankTransaction = {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.0,
+          amount: -50000,
           payee: 'Store',
           original_csv_row: 2,
         };
@@ -390,7 +390,7 @@ describe('matcher', () => {
         const match = findBestMatch(bankTxn, ynabTxns, usedIds, config);
 
         expect(match.confidence).toBe('none');
-        expect(match.ynab_transaction).toBeUndefined();
+        expect(match.bestMatch).toBeNull();
       });
     });
   });
@@ -401,14 +401,14 @@ describe('matcher', () => {
         {
           id: 'b1',
           date: '2025-10-15',
-          amount: -45.23,
+          amount: -45230,
           payee: 'Shell',
           original_csv_row: 2,
         },
         {
           id: 'b2',
           date: '2025-10-16',
-          amount: -100.0,
+          amount: -100000,
           payee: 'Netflix',
           original_csv_row: 3,
         },
@@ -438,8 +438,8 @@ describe('matcher', () => {
       const matches = findMatches(bankTxns, ynabTxns, config);
 
       expect(matches).toHaveLength(2);
-      expect(matches[0].bank_transaction.id).toBe('b1');
-      expect(matches[1].bank_transaction.id).toBe('b2');
+      expect(matches[0].bankTransaction.id).toBe('b1');
+      expect(matches[1].bankTransaction.id).toBe('b2');
     });
 
     it('should prevent duplicate matching of YNAB transactions', () => {
@@ -447,14 +447,14 @@ describe('matcher', () => {
         {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.0,
+          amount: -50000,
           payee: 'Store',
           original_csv_row: 2,
         },
         {
           id: 'b2',
           date: '2025-10-15',
-          amount: -50.0,
+          amount: -50000,
           payee: 'Store',
           original_csv_row: 3,
         },
@@ -478,7 +478,7 @@ describe('matcher', () => {
 
       // First should match
       expect(matches[0].confidence).toBe('high');
-      expect(matches[0].ynab_transaction?.id).toBe('y1');
+      expect(matches[0].bestMatch?.ynabTransaction.id).toBe('y1');
 
       // Second should not match (y1 already used)
       expect(matches[1].confidence).toBe('none');
@@ -489,14 +489,14 @@ describe('matcher', () => {
         {
           id: 'b1',
           date: '2025-10-15',
-          amount: -45.23,
+          amount: -45230,
           payee: 'Shell',
           original_csv_row: 2,
         },
         {
           id: 'b2',
           date: '2025-10-16',
-          amount: -15.99,
+          amount: -15990,
           payee: 'NewStore',
           original_csv_row: 3,
         },
@@ -519,7 +519,7 @@ describe('matcher', () => {
       expect(matches).toHaveLength(2);
       expect(matches[0].confidence).toBe('high');
       expect(matches[1].confidence).toBe('none');
-      expect(matches[1].action_hint).toBe('add_to_ynab');
+      expect(matches[1].bestMatch).toBeNull();
     });
 
     it('should use custom configuration', () => {
@@ -543,7 +543,7 @@ describe('matcher', () => {
         {
           id: 'b1',
           date: '2025-10-15',
-          amount: -50.0,
+          amount: -50000,
           payee: 'Store',
           original_csv_row: 2,
         },
@@ -580,14 +580,14 @@ describe('matcher', () => {
       const match = findBestMatch(bankTxn, [], new Set(), config);
 
       expect(match.confidence).toBe('none');
-      expect(match.recommendation).toContain('not in YNAB');
+      expect(match.bestMatch).toBeNull();
     });
 
     it('should handle null payee names', () => {
       const bankTxn: BankTransaction = {
         id: 'b1',
         date: '2025-10-15',
-        amount: -50.0,
+        amount: -50000,
         payee: 'Store',
         original_csv_row: 2,
       };
@@ -614,7 +614,7 @@ describe('matcher', () => {
       const bankTxn: BankTransaction = {
         id: 'b1',
         date: '2025-10-15',
-        amount: -0.01,
+        amount: -10, // 1 cent in milliunits
         payee: 'Micro Transaction',
         original_csv_row: 2,
       };
@@ -632,7 +632,6 @@ describe('matcher', () => {
       ];
 
       const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
-
       expect(match.confidence).toBe('high');
     });
 
@@ -640,7 +639,7 @@ describe('matcher', () => {
       const bankTxn: BankTransaction = {
         id: 'b1',
         date: '2025-10-15',
-        amount: -10000.0,
+        amount: -10000000, // $10,000 in milliunits
         payee: 'Large Purchase',
         original_csv_row: 2,
       };

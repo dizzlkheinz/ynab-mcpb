@@ -3,19 +3,11 @@
  * Coordinates CSV parsing, YNAB transaction fetching, and matching
  *
  * V2 UPDATE: Uses new parser and matcher (milliunits based)
- * Maps results back to legacy types for backward compatibility
  */
 
 import type * as ynab from 'ynab';
 import { parseCSV, type ParseCSVOptions } from './csvParser.js';
-import {
-  findMatches,
-  mapToLegacyTransactionMatch,
-  mapToLegacyYNABTransaction,
-  normalizeConfig,
-  type MatchingConfig,
-  DEFAULT_CONFIG,
-} from './matcher.js';
+import { findMatches, normalizeConfig, type MatchingConfig, DEFAULT_CONFIG } from './matcher.js';
 import { normalizeYNABTransactions } from './ynabAdapter.js';
 
 import type {
@@ -27,21 +19,54 @@ import type {
   ReconciliationSummary,
   ReconciliationInsight,
 } from './types.js';
-import { toMoneyValueFromDecimal } from '../../utils/money.js';
+import type { MatchResult } from './matcher.js'; // Import MatchResult
+import { toMoneyValue } from '../../utils/money.js';
 import { generateRecommendations } from './recommendationEngine.js';
 
-// --- Helper Functions (Adapted from original) ---
+// --- Helper Functions ---
+
+function mapToTransactionMatch(result: MatchResult): TransactionMatch {
+  const candidates = result.candidates.map((c) => ({
+    ynab_transaction: c.ynabTransaction,
+    confidence: c.scores.combined,
+    match_reason: c.matchReasons.join(', '),
+    explanation: c.matchReasons.join(', '),
+  }));
+
+  const match: TransactionMatch = {
+    bankTransaction: result.bankTransaction,
+    candidates,
+    confidence: result.confidence,
+    confidenceScore: result.confidenceScore,
+    matchReason: result.bestMatch?.matchReasons.join(', ') ?? 'No match found',
+    actionHint: result.confidence === 'high' ? 'approve' : 'review',
+  };
+
+  if (result.bestMatch) {
+    match.ynabTransaction = result.bestMatch.ynabTransaction;
+  }
+
+  if (result.candidates[0]) {
+    match.topConfidence = result.candidates[0].scores.combined;
+  }
+
+  if (result.confidence === 'none') {
+    match.recommendation = 'This bank transaction is not in YNAB. Consider adding it.';
+  }
+
+  return match;
+}
 
 function calculateBalances(
   ynabTransactions: YNABTransaction[],
-  statementBalance: number,
+  statementBalanceDecimal: number,
   currency: string,
 ): BalanceInfo {
   let clearedBalance = 0;
   let unclearedBalance = 0;
 
   for (const txn of ynabTransactions) {
-    const amount = txn.amount / 1000; // Convert from milliunits to dollars
+    const amount = txn.amount; // Milliunits
 
     if (txn.cleared === 'cleared' || txn.cleared === 'reconciled') {
       clearedBalance += amount;
@@ -50,16 +75,17 @@ function calculateBalances(
     }
   }
 
+  const statementBalanceMilli = Math.round(statementBalanceDecimal * 1000);
   const totalBalance = clearedBalance + unclearedBalance;
-  const discrepancy = clearedBalance - statementBalance;
+  const discrepancy = clearedBalance - statementBalanceMilli;
 
   return {
-    current_cleared: toMoneyValueFromDecimal(clearedBalance, currency),
-    current_uncleared: toMoneyValueFromDecimal(unclearedBalance, currency),
-    current_total: toMoneyValueFromDecimal(totalBalance, currency),
-    target_statement: toMoneyValueFromDecimal(statementBalance, currency),
-    discrepancy: toMoneyValueFromDecimal(discrepancy, currency),
-    on_track: Math.abs(discrepancy) < 0.01, // Within 1 cent
+    current_cleared: toMoneyValue(clearedBalance, currency),
+    current_uncleared: toMoneyValue(unclearedBalance, currency),
+    current_total: toMoneyValue(totalBalance, currency),
+    target_statement: toMoneyValue(statementBalanceMilli, currency),
+    discrepancy: toMoneyValue(discrepancy, currency),
+    on_track: Math.abs(discrepancy) < 10, // Within 1 cent (10 milliunits)
   };
 }
 
@@ -139,17 +165,17 @@ function generateNextSteps(summary: ReconciliationSummary): string[] {
   return steps;
 }
 
-function formatCurrency(amount: number): string {
+function formatCurrency(amountMilli: number): string {
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return formatter.format(amount);
+  return formatter.format(amountMilli / 1000);
 }
 
-// --- Insight Generation (Adapted) ---
+// --- Insight Generation ---
 
 function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
@@ -157,10 +183,11 @@ function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationI
     return insights;
   }
 
-  const frequency = new Map<string, { amount: number; txns: BankTransaction[] }>();
+  // Group by milliunits amount
+  const frequency = new Map<number, { amount: number; txns: BankTransaction[] }>();
 
   for (const txn of unmatchedBank) {
-    const key = txn.amount.toFixed(2);
+    const key = txn.amount;
     const entry = frequency.get(key) ?? { amount: txn.amount, txns: [] };
     entry.txns.push(txn);
     frequency.set(key, entry);
@@ -176,7 +203,7 @@ function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationI
 
   const top = repeated[0]!;
   insights.push({
-    id: `repeat-${top.amount.toFixed(2)}`,
+    id: `repeat-${top.amount}`,
     type: 'repeat_amount',
     severity: top.txns.length >= 4 ? 'critical' : 'warning',
     title: `${top.txns.length} unmatched transactions at ${formatCurrency(top.amount)}`,
@@ -184,10 +211,10 @@ function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationI
       `The bank statement shows ${top.txns.length} unmatched transaction(s) at ${formatCurrency(top.amount)}. ` +
       'Repeated amounts are usually the quickest wins — reconcile these first.',
     evidence: {
-      amount: top.amount,
+      amount: top.amount, // Milliunits
       occurrences: top.txns.length,
       dates: top.txns.map((txn) => txn.date),
-      csv_rows: top.txns.map((txn) => txn.original_csv_row),
+      csv_rows: top.txns.map((txn) => txn.sourceRow),
     },
   });
 
@@ -196,13 +223,14 @@ function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationI
 
 function anomalyInsights(balances: BalanceInfo): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
-  const discrepancyAbs = Math.abs(balances.discrepancy.value);
+  const discrepancyAbs = Math.abs(balances.discrepancy.value_milliunits);
 
-  if (discrepancyAbs >= 1) {
+  if (discrepancyAbs >= 1000) {
+    // 1 dollar
     insights.push({
       id: 'balance-gap',
       type: 'anomaly',
-      severity: discrepancyAbs >= 100 ? 'critical' : 'warning',
+      severity: discrepancyAbs >= 100000 ? 'critical' : 'warning', // 100 dollars
       title: `Cleared balance off by ${balances.discrepancy.value_display}`,
       description:
         `YNAB cleared balance is ${balances.current_cleared.value_display} but the statement expects ` +
@@ -329,9 +357,7 @@ export function analyzeReconciliation(
   const normalizedConfig = normalizeConfig(config);
 
   const newMatches = findMatches(newBankTransactions, newYNABTransactions, normalizedConfig);
-
-  // Step 4: Map results to legacy types
-  const matches: TransactionMatch[] = newMatches.map(mapToLegacyTransactionMatch);
+  const matches: TransactionMatch[] = newMatches.map(mapToTransactionMatch);
 
   // Categorize
   const autoMatches = matches.filter((m) => m.confidence === 'high');
@@ -339,27 +365,22 @@ export function analyzeReconciliation(
   const unmatchedBankMatches = matches.filter(
     (m) => m.confidence === 'low' || m.confidence === 'none',
   );
-  const unmatchedBank = unmatchedBankMatches.map((m) => m.bank_transaction);
+  const unmatchedBank = unmatchedBankMatches.map((m) => m.bankTransaction);
 
   // Find unmatched YNAB
   const matchedYnabIds = new Set<string>();
   matches.forEach((m) => {
-    if (m.ynab_transaction) matchedYnabIds.add(m.ynab_transaction.id);
+    if (m.ynabTransaction) matchedYnabIds.add(m.ynabTransaction.id);
   });
-  const unmatchedYNAB = newYNABTransactions
-    .filter((t) => !matchedYnabIds.has(t.id))
-    .map(mapToLegacyYNABTransaction);
-
-  // Note: Combination matching disabled in this version to ensure stability of V2 core
+  const unmatchedYNAB = newYNABTransactions.filter((t) => !matchedYnabIds.has(t.id));
 
   // Step 6: Calculate balances
-  const legacyYNABTxns = newYNABTransactions.map(mapToLegacyYNABTransaction);
-  const balances = calculateBalances(legacyYNABTxns, statementBalance, currency);
+  const balances = calculateBalances(newYNABTransactions, statementBalance, currency);
 
   // Step 7: Generate summary
   const summary = generateSummary(
-    matches.map((m) => m.bank_transaction),
-    legacyYNABTxns,
+    matches.map((m) => m.bankTransaction),
+    newYNABTransactions,
     autoMatches,
     suggestedMatches,
     unmatchedBank,

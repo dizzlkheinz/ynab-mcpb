@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import type * as ynab from 'ynab';
 import type { SaveTransaction } from 'ynab/dist/models/SaveTransaction.js';
-import { toMilli, toMoneyValue, toMoneyValueFromDecimal, addMilli } from '../../utils/money.js';
+import { toMilli, toMoneyValue, addMilli } from '../../utils/money.js';
 import type { ReconciliationAnalysis, TransactionMatch, BankTransaction } from './types.js';
 import type { ReconcileAccountRequest } from './index.js';
 import {
@@ -195,7 +195,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
   // STEP 1: Auto-create missing transactions (bank -> YNAB)
   if (params.auto_create_transactions && !balanceAligned) {
     const buildPreparedEntry = (bankTxn: BankTransaction): PreparedBulkCreateEntry => {
-      const amountMilli = toMilli(bankTxn.amount);
+      const amountMilli = bankTxn.amount;
       const saveTransaction: SaveTransaction = {
         account_id: accountId,
         amount: amountMilli,
@@ -463,17 +463,17 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
       if (balanceAligned) break;
       const flags = computeUpdateFlags(match, params);
       if (!flags.needsClearedUpdate && !flags.needsDateUpdate) continue;
-      if (!match.ynab_transaction) continue;
+      if (!match.ynabTransaction) continue;
 
       // Build minimal update payload - only include ID and fields that are changing
       // Including unnecessary fields (like amount, payee_name, memo) can cause unexpected behavior
       const updatePayload: ynab.SaveTransactionWithIdOrImportId = {
-        id: match.ynab_transaction.id,
+        id: match.ynabTransaction.id,
       };
 
       // Only include fields that are actually changing
       if (flags.needsDateUpdate) {
-        updatePayload.date = match.bank_transaction.date;
+        updatePayload.date = match.bankTransaction.date;
       }
       if (flags.needsClearedUpdate) {
         updatePayload.cleared = 'cleared' as ynab.TransactionClearedStatus;
@@ -485,17 +485,17 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
         actions_taken.push({
           type: 'update_transaction',
           transaction: {
-            transaction_id: match.ynab_transaction.id,
-            new_date: flags.needsDateUpdate ? match.bank_transaction.date : undefined,
+            transaction_id: match.ynabTransaction.id,
+            new_date: flags.needsDateUpdate ? match.bankTransaction.date : undefined,
             cleared: flags.needsClearedUpdate ? 'cleared' : undefined,
           },
           reason: `Would update transaction: ${updateReason(match, flags, currencyCode)}`,
         });
         if (flags.needsClearedUpdate) {
-          applyClearedDelta(match.ynab_transaction.amount);
+          applyClearedDelta(match.ynabTransaction.amount);
           if (
             recordAlignmentIfNeeded(
-              `clearing ${match.ynab_transaction.id ?? 'transaction'} (dry run)`,
+              `clearing ${match.ynabTransaction.id ?? 'transaction'} (dry run)`,
             )
           ) {
             break;
@@ -505,8 +505,8 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
         transactionsToUpdate.push(updatePayload);
         if (flags.needsDateUpdate) summary.dates_adjusted += 1;
         if (flags.needsClearedUpdate) {
-          applyClearedDelta(match.ynab_transaction.amount);
-          if (recordAlignmentIfNeeded(`clearing ${match.ynab_transaction.id}`)) {
+          applyClearedDelta(match.ynabTransaction.amount);
+          if (recordAlignmentIfNeeded(`clearing ${match.ynabTransaction.id}`)) {
             break;
           }
         }
@@ -524,7 +524,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
 
       for (const updatedTransaction of updatedTransactions) {
         const match = orderedAutoMatches.find(
-          (m) => m.ynab_transaction?.id === updatedTransaction.id,
+          (m) => m.ynabTransaction?.id === updatedTransaction.id,
         );
         const flags = match
           ? computeUpdateFlags(match, params)
@@ -737,12 +737,12 @@ function attachStatusToError(error: NormalizedYnabError): Error {
 }
 
 function formatDisplay(amount: number, currency: string): string {
-  return toMoneyValueFromDecimal(amount, currency).value_display;
+  return toMoneyValue(amount, currency).value_display;
 }
 
 function computeUpdateFlags(match: TransactionMatch, params: ReconcileAccountRequest): UpdateFlags {
-  const ynabTxn = match.ynab_transaction;
-  const bankTxn = match.bank_transaction;
+  const ynabTxn = match.ynabTransaction;
+  const bankTxn = match.bankTransaction;
   if (!ynabTxn) {
     return { needsClearedUpdate: false, needsDateUpdate: false };
   }
@@ -759,7 +759,7 @@ function updateReason(match: TransactionMatch, flags: UpdateFlags, _currency: st
     parts.push('marked as cleared');
   }
   if (flags.needsDateUpdate) {
-    parts.push(`date adjusted to ${match.bank_transaction.date}`);
+    parts.push(`date adjusted to ${match.bankTransaction.date}`);
   }
   return parts.join(', ');
 }
@@ -967,9 +967,7 @@ function sortByDateDescending<T extends { date: string }>(items: T[]): T[] {
 }
 
 function sortMatchesByBankDateDescending(matches: TransactionMatch[]): TransactionMatch[] {
-  return [...matches].sort((a, b) =>
-    compareDates(b.bank_transaction.date, a.bank_transaction.date),
-  );
+  return [...matches].sort((a, b) => compareDates(b.bankTransaction.date, a.bankTransaction.date));
 }
 
 function compareDates(dateA: string, dateB: string): number {

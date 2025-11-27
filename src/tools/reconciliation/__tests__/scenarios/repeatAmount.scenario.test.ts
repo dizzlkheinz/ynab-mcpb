@@ -88,7 +88,7 @@ describe('scenario: repeat amount collisions', () => {
     // Statement balance now accounts for 3 x -22.22 + 1 x -15.00 = -81.66
     const result = analyzeReconciliation('csv', undefined, ynabTxns, -81.66);
 
-    const repeatInsight = result.insights.find((insight) => insight.id.startsWith('repeat--22.22')); // Note: double dash for negative
+    const repeatInsight = result.insights.find((insight) => insight.id.startsWith('repeat--22220')); // amount in milliunits, double dash for negative
     expect(repeatInsight).toBeDefined();
     expect(repeatInsight?.severity).toBe('warning');
     expect(result.summary.unmatched_bank).toBeGreaterThan(0);

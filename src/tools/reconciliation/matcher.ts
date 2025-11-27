@@ -2,9 +2,7 @@
  * Transaction matching algorithm for reconciliation
  *
  * V2 matcher works natively in milliunits using canonical BankTransaction
- * and NormalizedYNABTransaction types, but this module also exposes
- * backwards-compatible wrappers for the legacy reconciliation types
- * defined in src/tools/reconciliation/types.ts.
+ * and NormalizedYNABTransaction types.
  */
 
 import * as fuzz from 'fuzzball';
@@ -12,13 +10,7 @@ import type {
   BankTransaction as CanonicalBankTransaction,
   NormalizedYNABTransaction,
 } from '../../types/reconciliation.js';
-import {
-  type BankTransaction as LegacyBankTransaction,
-  type YNABTransaction as LegacyYNABTransaction,
-  type TransactionMatch as LegacyTransactionMatch,
-  type MatchCandidate as LegacyMatchCandidate,
-  type MatchingConfig,
-} from './types.js';
+import { type MatchingConfig } from './types.js';
 
 export type { MatchingConfig };
 
@@ -77,140 +69,12 @@ export function normalizeConfig(config?: MatchingConfig): MatchingConfig {
   };
 }
 
-function isLegacyBankTransaction(
-  txn: CanonicalBankTransaction | LegacyBankTransaction,
-): txn is LegacyBankTransaction {
-  return (txn as LegacyBankTransaction).original_csv_row !== undefined;
-}
-
-function isCanonicalYNABTransaction(
-  txn: NormalizedYNABTransaction | LegacyYNABTransaction,
-): txn is NormalizedYNABTransaction {
-  return (txn as NormalizedYNABTransaction).payee !== undefined;
-}
-
-function toCanonicalBankTransaction(
-  txn: CanonicalBankTransaction | LegacyBankTransaction,
-): CanonicalBankTransaction {
-  if (!isLegacyBankTransaction(txn)) {
-    return txn;
-  }
-
-  return {
-    id: txn.id,
-    date: txn.date,
-    amount: Math.round(txn.amount * 1000),
-    payee: txn.payee,
-    ...(txn.memo && { memo: txn.memo }),
-    sourceRow: txn.original_csv_row,
-    raw: {
-      date: txn.date,
-      amount: txn.amount.toFixed(2),
-      description: txn.payee,
-    },
-  };
-}
-
-function toCanonicalYNABTransaction(
-  txn: NormalizedYNABTransaction | LegacyYNABTransaction,
-): NormalizedYNABTransaction {
-  if (isCanonicalYNABTransaction(txn)) {
-    return txn;
-  }
-
-  const legacy = txn as LegacyYNABTransaction;
-  return {
-    id: legacy.id,
-    date: legacy.date,
-    amount: legacy.amount,
-    payee: legacy.payee_name,
-    memo: legacy.memo ?? null,
-    categoryName: legacy.category_name,
-    cleared: legacy.cleared,
-    approved: legacy.approved,
-  };
-}
-
-export function mapToLegacyBankTransaction(
-  canonical: CanonicalBankTransaction,
-): LegacyBankTransaction {
-  return {
-    id: canonical.id,
-    date: canonical.date,
-    amount: canonical.amount / 1000,
-    payee: canonical.payee,
-    ...(canonical.memo && { memo: canonical.memo }),
-    original_csv_row: canonical.sourceRow,
-  };
-}
-
-export function mapToLegacyYNABTransaction(
-  canonical: NormalizedYNABTransaction,
-): LegacyYNABTransaction {
-  return {
-    id: canonical.id,
-    date: canonical.date,
-    amount: canonical.amount,
-    payee_name: canonical.payee,
-    category_name: canonical.categoryName,
-    cleared: canonical.cleared,
-    approved: canonical.approved,
-    ...(canonical.memo !== null && { memo: canonical.memo }),
-  };
-}
-
-export function mapToLegacyTransactionMatch(result: MatchResult): LegacyTransactionMatch {
-  const bankTransaction = mapToLegacyBankTransaction(result.bankTransaction);
-  const ynabTransaction = result.bestMatch
-    ? mapToLegacyYNABTransaction(result.bestMatch.ynabTransaction)
-    : undefined;
-
-  const candidates: LegacyMatchCandidate[] = result.candidates.map((c) => ({
-    ynab_transaction: mapToLegacyYNABTransaction(c.ynabTransaction),
-    confidence: c.scores.combined,
-    match_reason: c.matchReasons.join(', '),
-    explanation: `Score: ${c.scores.combined}. ${c.matchReasons.join(', ')}`,
-  }));
-
-  const topCandidate = result.candidates[0];
-
-  let actionHint: string | undefined;
-  switch (result.confidence) {
-    case 'high':
-      actionHint = 'approve';
-      break;
-    case 'medium':
-    case 'low':
-      actionHint = 'review';
-      break;
-    case 'none':
-      actionHint = 'add_to_ynab';
-      break;
-  }
-
-  return {
-    bank_transaction: bankTransaction,
-    ...(ynabTransaction && { ynab_transaction: ynabTransaction }),
-    ...(candidates.length > 0 && { candidates }),
-    confidence: result.confidence,
-    confidence_score: result.confidenceScore,
-    match_reason: result.bestMatch?.matchReasons.join(', ') ?? 'No match found',
-    ...(topCandidate && { top_confidence: topCandidate.scores.combined }),
-    ...(actionHint && { action_hint: actionHint }),
-    ...(result.confidence === 'none' && {
-      recommendation: 'This bank transaction is not in YNAB. Consider adding it.',
-    }),
-  };
-}
-
 function matchSingle(
-  bankTxnInput: CanonicalBankTransaction | LegacyBankTransaction,
-  ynabTransactionsInput: (NormalizedYNABTransaction | LegacyYNABTransaction)[],
+  bankTxn: CanonicalBankTransaction,
+  ynabTransactions: NormalizedYNABTransaction[],
   usedIds: Set<string>,
   configInput: MatchingConfig | undefined,
 ): MatchResult {
-  const bankTxn = toCanonicalBankTransaction(bankTxnInput);
-  const ynabTransactions = ynabTransactionsInput.map(toCanonicalYNABTransaction);
   const config = normalizeConfig(configInput);
 
   const candidates = findCandidates(bankTxn, ynabTransactions, usedIds, config);
@@ -243,29 +107,12 @@ export function findMatches(
   bankTransactions: CanonicalBankTransaction[],
   ynabTransactions: NormalizedYNABTransaction[],
   config?: MatchingConfig,
-): MatchResult[];
-
-export function findMatches(
-  bankTransactions: LegacyBankTransaction[],
-  ynabTransactions: LegacyYNABTransaction[],
-  config?: MatchingConfig,
-): LegacyTransactionMatch[];
-
-export function findMatches(
-  bankTransactions: (CanonicalBankTransaction | LegacyBankTransaction)[],
-  ynabTransactions: (NormalizedYNABTransaction | LegacyYNABTransaction)[],
-  config?: MatchingConfig,
-): (MatchResult | LegacyTransactionMatch)[] {
+): MatchResult[] {
   const usedYnabIds = new Set<string>();
   const results: MatchResult[] = [];
 
   for (const bankTxn of bankTransactions) {
     results.push(matchSingle(bankTxn, ynabTransactions, usedYnabIds, config));
-  }
-
-  // If inputs look legacy, map results back to legacy TransactionMatch
-  if (bankTransactions.some((txn) => isLegacyBankTransaction(txn))) {
-    return results.map(mapToLegacyTransactionMatch);
   }
 
   return results;
@@ -435,28 +282,8 @@ function buildMatchReasons(scores: MatchCandidate['scores'], config: MatchingCon
 export function findBestMatch(
   bankTransaction: CanonicalBankTransaction,
   ynabTransactions: NormalizedYNABTransaction[],
-  usedYnabIds?: Set<string>,
-  config?: MatchingConfig,
-): MatchResult;
-
-export function findBestMatch(
-  bankTransaction: LegacyBankTransaction,
-  ynabTransactions: LegacyYNABTransaction[],
-  usedYnabIds: Set<string>,
-  config?: MatchingConfig,
-): LegacyTransactionMatch;
-
-export function findBestMatch(
-  bankTransaction: CanonicalBankTransaction | LegacyBankTransaction,
-  ynabTransactions: NormalizedYNABTransaction[] | LegacyYNABTransaction[],
   usedYnabIds: Set<string> = new Set<string>(),
   config?: MatchingConfig,
-): MatchResult | LegacyTransactionMatch {
-  const result = matchSingle(bankTransaction, ynabTransactions, usedYnabIds, config);
-
-  if (isLegacyBankTransaction(bankTransaction)) {
-    return mapToLegacyTransactionMatch(result);
-  }
-
-  return result;
+): MatchResult {
+  return matchSingle(bankTransaction, ynabTransactions, usedYnabIds, config);
 }

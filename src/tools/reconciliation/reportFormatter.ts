@@ -173,16 +173,17 @@ function formatBankTransactionLine(txn: BankTransaction): string {
  * Format a suggested match line
  */
 function formatSuggestedMatchLine(match: TransactionMatch): string {
-  const bankTxn = match.bank_transaction;
+  const bankTxn = match.bankTransaction;
   const amountStr = formatAmount(bankTxn.amount);
-  const confidenceStr = `${match.confidence_score}%`;
+  const confidenceStr = `${match.confidenceScore}%`;
   return `   ${bankTxn.date} - ${bankTxn.payee.substring(0, 35).padEnd(35)} ${amountStr} (${confidenceStr} confidence)`;
 }
 
 /**
- * Format an amount for display
+ * Format an amount for display (input in milliunits)
  */
-function formatAmount(amount: number): string {
+function formatAmount(amountMilli: number): string {
+  const amount = amountMilli / 1000;
   const sign = amount >= 0 ? '+' : '-';
   const absAmount = Math.abs(amount);
   return `${sign}$${absAmount.toFixed(2)}`.padStart(10);
@@ -336,6 +337,8 @@ export function formatBalanceInfo(balance: BalanceInfo): string {
 /**
  * Format transaction list (helper for detailed reports)
  */
+type FormattableYnabTransaction = YNABTransaction & { payee_name?: string | null };
+
 export function formatTransactionList(
   transactions: BankTransaction[] | YNABTransaction[],
   maxItems: number = 10,
@@ -344,14 +347,16 @@ export function formatTransactionList(
   const toShow = transactions.slice(0, maxItems);
 
   for (const txn of toShow) {
-    if ('payee' in txn) {
-      // Bank transaction
-      lines.push(formatBankTransactionLine(txn));
+    if ('cleared' in txn) {
+      // YNAB transaction (normalized)
+      const ynabTxn = txn as FormattableYnabTransaction;
+      const payee = ynabTxn.payee_name ?? ynabTxn.payee ?? 'Unknown';
+      lines.push(
+        `   ${ynabTxn.date} - ${payee.substring(0, 40).padEnd(40)} ${formatAmount(ynabTxn.amount)}`,
+      );
     } else {
-      // YNAB transaction
-      const amount = txn.amount / 1000; // Convert milliunits to dollars
-      const payee = txn.payee_name ?? 'Unknown';
-      lines.push(`   ${txn.date} - ${payee.substring(0, 40).padEnd(40)} ${formatAmount(amount)}`);
+      // Bank transaction
+      lines.push(formatBankTransactionLine(txn as BankTransaction));
     }
   }
 

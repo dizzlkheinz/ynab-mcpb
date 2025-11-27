@@ -236,7 +236,7 @@ describe('analyzer', () => {
       const result = analyzeReconciliation('csv', undefined, ynabTxns, 0);
 
       expect(result.unmatched_ynab.length).toBe(1);
-      expect(result.unmatched_ynab[0].payee_name).toBe('Restaurant');
+      expect(result.unmatched_ynab[0].payee).toBe('Restaurant');
     });
 
     it('should calculate balance information correctly', () => {
