@@ -4,44 +4,19 @@
  */
 
 import type { MoneyValue } from '../../utils/money.js';
+import type {
+  BankTransaction as CanonicalBankTransaction,
+  NormalizedYNABTransaction as CanonicalYNABTransaction,
+} from '../../types/reconciliation.js';
+
+// Re-export canonical types as the standard types
+export type BankTransaction = CanonicalBankTransaction;
+export type YNABTransaction = CanonicalYNABTransaction;
 
 /**
  * Matching confidence levels
  */
 export type MatchConfidence = 'high' | 'medium' | 'low' | 'none';
-
-/**
- * Bank transaction parsed from CSV
- */
-export interface BankTransaction {
-  /** Generated UUID for tracking */
-  id: string;
-  /** Transaction date in YYYY-MM-DD format */
-  date: string;
-  /** Amount in dollars */
-  amount: number;
-  /** Payee/merchant name */
-  payee: string;
-  /** Optional memo/description */
-  memo?: string;
-  /** Original CSV row number for debugging */
-  original_csv_row: number;
-}
-
-/**
- * YNAB transaction (simplified from API)
- */
-export interface YNABTransaction {
-  id: string;
-  date: string;
-  /** Amount in milliunits */
-  amount: number;
-  payee_name: string | null;
-  category_name: string | null;
-  cleared: 'cleared' | 'uncleared' | 'reconciled';
-  approved: boolean;
-  memo?: string | null;
-}
 
 /**
  * Match candidate with confidence score
@@ -57,21 +32,21 @@ export interface MatchCandidate {
  * Transaction match result
  */
 export interface TransactionMatch {
-  bank_transaction: BankTransaction;
+  bankTransaction: BankTransaction;
   /** Best matched YNAB transaction (if any) */
-  ynab_transaction?: YNABTransaction;
+  ynabTransaction?: YNABTransaction;
   /** Alternative candidates for suggested matches */
   candidates?: MatchCandidate[];
   /** Confidence level */
   confidence: MatchConfidence;
   /** Confidence score 0-100 */
-  confidence_score: number;
+  confidenceScore: number;
   /** Reason for the match */
-  match_reason: string;
+  matchReason: string;
   /** Top confidence from candidates */
-  top_confidence?: number;
+  topConfidence?: number;
   /** Action hint for user */
-  action_hint?: string;
+  actionHint?: string;
   /** Recommendation text */
   recommendation?: string;
 }

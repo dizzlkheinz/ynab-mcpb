@@ -11,7 +11,7 @@ import type {
   BankTransaction,
   YNABTransaction,
 } from './types.js';
-import { toMoneyValueFromDecimal, fromMilli, toMilli } from '../../utils/money.js';
+import { toMoneyValue, toMoneyValueFromDecimal, fromMilli } from '../../utils/money.js';
 
 const RECOMMENDATION_VERSION = '1.0';
 
@@ -139,17 +139,17 @@ function createSuggestedMatchRecommendation(
   match: TransactionMatch,
   context: RecommendationContext,
 ): CreateTransactionRecommendation | ReviewDuplicateRecommendation | ManualReviewRecommendation {
-  const bankTxn = match.bank_transaction;
+  const bankTxn = match.bankTransaction;
 
   // If there's a suggested YNAB transaction, review as possible duplicate
-  if (match.ynab_transaction && match.confidence !== 'none') {
+  if (match.ynabTransaction && match.confidence !== 'none') {
     return {
       id: randomUUID(),
       action_type: 'review_duplicate',
       priority: 'high',
-      confidence: Math.max(0, Math.min(1, match.confidence_score / 100)),
+      confidence: Math.max(0, Math.min(1, match.confidenceScore / 100)),
       message: `Review possible match: ${bankTxn.payee}`,
-      reason: match.match_reason,
+      reason: match.matchReason,
       estimated_impact: toMoneyValueFromDecimal(
         0,
         context.analysis.balance_info.current_cleared.currency,
@@ -160,16 +160,15 @@ function createSuggestedMatchRecommendation(
         created_at: new Date().toISOString(),
       },
       parameters: {
-        candidate_ids: [match.ynab_transaction.id],
+        candidate_ids: [match.ynabTransaction.id],
         bank_transaction: bankTxn,
-        suggested_match_id: match.ynab_transaction.id,
+        suggested_match_id: match.ynabTransaction.id,
       },
     };
   }
 
   // Check for combination matches (multiple YNAB transactions that together match the bank transaction)
-  const isCombinationMatch =
-    match.match_reason === 'combination_match' || (match.candidates?.length ?? 0) > 1;
+  const isCombinationMatch = (match.candidates?.length ?? 0) > 1;
 
   if (isCombinationMatch) {
     return createCombinationReviewRecommendation(match, context);
@@ -179,7 +178,7 @@ function createSuggestedMatchRecommendation(
   const parameters: CreateTransactionRecommendation['parameters'] = {
     account_id: context.account_id,
     date: bankTxn.date,
-    amount: toMilli(bankTxn.amount), // Convert dollars to milliunits for create_transaction
+    amount: bankTxn.amount, // Amount is already milliunits
     payee_name: bankTxn.payee,
     cleared: 'cleared',
     approved: true,
@@ -196,7 +195,7 @@ function createSuggestedMatchRecommendation(
     confidence: CONFIDENCE.CREATE_EXACT_MATCH,
     message: `Create transaction for ${bankTxn.payee}`,
     reason: `This transaction exactly matches your discrepancy`,
-    estimated_impact: toMoneyValueFromDecimal(
+    estimated_impact: toMoneyValue(
       bankTxn.amount,
       context.analysis.balance_info.current_cleared.currency,
     ),
@@ -216,7 +215,7 @@ function createCombinationReviewRecommendation(
   match: TransactionMatch,
   context: RecommendationContext,
 ): ManualReviewRecommendation {
-  const bankTxn = match.bank_transaction;
+  const bankTxn = match.bankTransaction;
   const candidateIds = match.candidates?.map((candidate) => candidate.ynab_transaction.id) ?? [];
 
   // Calculate total amount from candidates for context (convert from milliunits to decimal)
@@ -247,7 +246,7 @@ function createCombinationReviewRecommendation(
     metadata: {
       version: RECOMMENDATION_VERSION,
       created_at: new Date().toISOString(),
-      bank_transaction_amount: toMoneyValueFromDecimal(
+      bank_transaction_amount: toMoneyValue(
         bankTxn.amount,
         context.analysis.balance_info.current_cleared.currency,
       ),
@@ -269,8 +268,8 @@ function createCombinationReviewRecommendation(
           source: 'ynab' as const,
           id,
           description:
-            match.candidates?.find((c) => c.ynab_transaction.id === id)?.ynab_transaction
-              .payee_name ?? 'Unknown',
+            match.candidates?.find((c) => c.ynab_transaction.id === id)?.ynab_transaction.payee ??
+            'Unknown',
         })),
       ],
     },
@@ -425,7 +424,7 @@ function createUnmatchedBankRecommendation(
   const parameters: CreateTransactionRecommendation['parameters'] = {
     account_id: context.account_id,
     date: txn.date,
-    amount: toMilli(txn.amount), // Convert dollars to milliunits for create_transaction
+    amount: txn.amount, // Amount is already milliunits
     payee_name: txn.payee,
     cleared: 'cleared',
     approved: true,
@@ -442,7 +441,7 @@ function createUnmatchedBankRecommendation(
     confidence: CONFIDENCE.UNMATCHED_BANK,
     message: `Create missing transaction: ${txn.payee}`,
     reason: 'Transaction appears on bank statement but not in YNAB',
-    estimated_impact: toMoneyValueFromDecimal(
+    estimated_impact: toMoneyValue(
       txn.amount,
       context.analysis.balance_info.current_cleared.currency,
     ),
@@ -476,7 +475,7 @@ function createUpdateClearedRecommendation(
     action_type: 'update_cleared',
     priority: 'low',
     confidence: CONFIDENCE.UPDATE_CLEARED,
-    message: `Mark transaction as cleared: ${txn.payee_name || 'Unknown'}`,
+    message: `Mark transaction as cleared: ${txn.payee || 'Unknown'}`,
     reason: 'Transaction exists in YNAB but not yet cleared',
     estimated_impact: toMoneyValueFromDecimal(
       0,
