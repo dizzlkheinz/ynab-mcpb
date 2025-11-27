@@ -1551,21 +1551,21 @@ Each fixture should include edge cases:
 ## Appendix C: Reference Materials
 
 ### Research Sources
-1. **Midday.ai Reconciliation Engine** - https://midday.ai/updates/automatic-reconciliation-engine/
-   - Open source: https://github.com/midday-ai/midday
+1. **Midday.ai Reconciliation Engine** - <https://midday.ai/updates/automatic-reconciliation-engine/>
+   - Open source: <https://github.com/midday-ai/midday>
    - Uses vector embeddings + multi-dimensional scoring
    - Key insight: 50% amount, 35% semantic, 10% currency, 5% date
 
-2. **CSV Parser Comparison** - https://www.oneschema.co/blog/top-5-javascript-csv-parsers
+2. **CSV Parser Comparison** - <https://www.oneschema.co/blog/top-5-javascript-csv-parsers>
    - PapaParse: Best for malformed CSVs, auto-detect
    - csv-parser: Fastest for large files
    - fast-csv: Smallest footprint
 
-3. **Fuzzball (TheFuzz port)** - https://www.npmjs.com/package/fuzzball
+3. **Fuzzball (TheFuzz port)** - <https://www.npmjs.com/package/fuzzball>
    - token_set_ratio: Best for merchant name matching
    - Handles word order variations
    - Built-in normalization
 
-4. **chrono-node** - https://www.npmjs.com/package/chrono-node
+4. **chrono-node** - <https://www.npmjs.com/package/chrono-node>
    - Parses virtually any date format
    - Natural language support

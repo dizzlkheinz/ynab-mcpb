@@ -17,7 +17,7 @@ import {
   type LegacyReconciliationResult,
 } from './executor.js';
 import { responseFormatter } from '../../server/responseFormatter.js';
-import { parseCSV, type ParseCSVOptions } from './csvParser.js';
+import { parseCSV, type ParseCSVOptions, type CSVParseResult } from './csvParser.js';
 import type { DeltaFetcher } from '../deltaFetcher.js';
 import { resolveDeltaFetcherArgs } from '../deltaSupport.js';
 
@@ -257,6 +257,7 @@ export async function handleReconcileAccount(
       // Fetch YNAB transactions for the account
       // Auto-detect date range from CSV if not explicitly provided
       let sinceDate: Date;
+      let parseResult: CSVParseResult | undefined;
 
       if (params.statement_start_date) {
         // User provided explicit start date
@@ -264,7 +265,7 @@ export async function handleReconcileAccount(
       } else {
         // Auto-detect from CSV content using new parser
         try {
-          const parseResult = parseCSV(csvContent, csvOptions);
+          parseResult = parseCSV(csvContent, csvOptions);
 
           if (parseResult.transactions.length > 0) {
             // Find min date
@@ -319,7 +320,7 @@ export async function handleReconcileAccount(
 
       // Perform analysis
       const analysis = analyzeReconciliation(
-        csvContent,
+        parseResult ?? csvContent,
         params.csv_file_path,
         ynabTransactions,
         adjustedStatementBalance,

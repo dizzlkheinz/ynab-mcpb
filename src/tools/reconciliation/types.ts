@@ -1,6 +1,11 @@
 /**
  * Type definitions for the reconciliation tool
  * Based on the 2025-10-31 reconciliation redesign specification
+ *
+ * IMPORTANT UNIT CONVENTION:
+ * BankTransaction.amount is in MILLIUNITS (integers) in V2 architecture (formerly dollars).
+ * YNABTransaction.amount is in MILLIUNITS (integers).
+ * All internal calculations use milliunits to avoid floating-point errors.
  */
 
 import type { MoneyValue } from '../../utils/money.js';
