@@ -22,8 +22,7 @@ The current reconciliation tool has fundamental architectural problems that prev
 
 When in doubt, read the actual source files:
 - `src/tools/reconciliation/types.ts` - Canonical types
-- `src/tools/reconciliation/matcher.v2.ts` - New Matching algorithm (V2)
-- `src/tools/reconciliation/matcher.ts` - Legacy matching algorithm (to be replaced)
+- `src/tools/reconciliation/matcher.ts` - Matching algorithm (V2 with legacy compatibility)
 - `src/tools/reconciliation/analyzer.ts` - Orchestration
 - `src/tools/compareTransactions/parser.ts` - Legacy CSV parsing (to be replaced)
 
@@ -786,7 +785,7 @@ export interface MatchingConfig {
   };
   
   // Tolerances (in MILLIUNITS for amount)
-  amountToleranceMilliunits: number;  // Default: 50 (5 cents)
+  amountToleranceMilliunits: number;  // Default: 10 (1 cent)
   dateToleranceDays: number;          // Default: 7
   
   // Thresholds
@@ -806,7 +805,7 @@ export const DEFAULT_CONFIG: MatchingConfig = {
     date: 0.15,
     payee: 0.35,
   },
-  amountToleranceMilliunits: 50,  // 5 cents
+  amountToleranceMilliunits: 10,  // 1 cent
   dateToleranceDays: 7,
   autoMatchThreshold: 85,
   suggestedMatchThreshold: 60,
@@ -1200,7 +1199,7 @@ Based on research and the Midday.ai approach:
 | Parameter | Current | Recommended | Rationale |
 |-----------|---------|-------------|-----------|
 | `dateToleranceDays` | 2 | 7 | Banks often post 3-7 days late |
-| `amountToleranceMilliunits` | 10 | 50 | 5 cents for rounding |
+| `amountToleranceMilliunits` | 10 | 10 | 1 cent tolerance |
 | `autoMatchThreshold` | 90 | 85 | More lenient with better algorithm |
 | `suggestedMatchThreshold` | 60 | 60 | Keep same |
 | Amount weight | 40% | 50% | Amount is most reliable signal |
@@ -1333,7 +1332,7 @@ When multiple YNAB candidates have identical scores:
 ### Diagnostic Output Locations
 
 | Context | Output Location | Verbosity |
-|---------|-----------------|-----------||
+|---------|-----------------|-----------|
 | MCP response (success) | `structured_data.diagnostics` | Minimal (counts only) |
 | MCP response (errors/low match) | `structured_data.diagnostics` | Full (per-transaction details) |
 | Server logs | `stdout` via structured logging | Configurable via `LOG_LEVEL` |

@@ -17,10 +17,6 @@ import {
   DEFAULT_CONFIG,
 } from './matcher.js';
 import { normalizeYNABTransactions } from './ynabAdapter.js';
-import type {
-  BankTransaction as NewBankTransaction,
-  NormalizedYNABTransaction,
-} from '../../types/reconciliation.js';
 
 import type {
   BankTransaction,
