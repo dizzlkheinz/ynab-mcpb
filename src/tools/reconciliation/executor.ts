@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import type * as ynab from 'ynab';
 import type { SaveTransaction } from 'ynab/dist/models/SaveTransaction.js';
+import { YNABAPIError, YNABErrorCode } from '../../server/errorHandler.js';
 import { toMilli, toMoneyValue, addMilli } from '../../utils/money.js';
 import type { ReconciliationAnalysis, TransactionMatch, BankTransaction } from './types.js';
 import type { ReconcileAccountRequest } from './index.js';
@@ -87,6 +88,9 @@ const MONEY_EPSILON_MILLI = 100; // $0.10
 const DEFAULT_TOLERANCE_CENTS = 1;
 const CENTS_TO_MILLI = 10;
 const MAX_BULK_CREATE_CHUNK = 100;
+const MAX_BULK_UPDATE_CHUNK = 10; // Reduced to 10 - YNAB API seems to have strict limits for batch updates
+const BATCH_DELAY_MS = 200; // Delay between batch chunks to avoid rate limiting
+const MAX_MEMO_LENGTH = 500; // YNAB's maximum memo length
 
 function chunkArray<T>(array: T[], size: number): T[][] {
   if (size <= 0) {
@@ -97,6 +101,16 @@ function chunkArray<T>(array: T[], size: number): T[][] {
     chunks.push(array.slice(i, i + size));
   }
   return chunks;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function truncateMemo(memo: string | null | undefined): string {
+  if (!memo) return 'Auto-reconciled from bank statement';
+  if (memo.length <= MAX_MEMO_LENGTH) return memo;
+  return memo.substring(0, MAX_MEMO_LENGTH - 3) + '...';
 }
 
 interface PreparedBulkCreateEntry {
@@ -201,7 +215,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
         amount: amountMilli,
         date: bankTxn.date,
         payee_name: bankTxn.payee ?? undefined,
-        memo: bankTxn.memo ?? 'Auto-reconciled from bank statement',
+        memo: truncateMemo(bankTxn.memo),
         cleared: 'cleared',
         approved: true,
         import_id: generateBulkImportId(accountId, bankTxn.date, amountMilli, bankTxn.payee),
@@ -290,7 +304,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           actions_taken.push(failureAction);
 
           if (shouldPropagateYnabError(ynabError)) {
-            throw attachStatusToError(ynabError);
+            throw attachStatusToError(ynabError, error);
           }
         }
       }
@@ -432,7 +446,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
 
             if (shouldPropagateYnabError(ynabError)) {
               bulkOperationDetails.transaction_failures += chunk.length;
-              throw attachStatusToError(ynabError);
+              throw attachStatusToError(ynabError, error);
             }
 
             bulkOperationDetails.sequential_fallbacks += 1;
@@ -466,10 +480,16 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
       if (!match.ynabTransaction) continue;
 
       // Build minimal update payload - only include ID and fields that are changing
-      // Including unnecessary fields (like amount, payee_name, memo) can cause unexpected behavior
+      // Including unnecessary fields (like amount, payee_name) can cause unexpected behavior
+      // BUT we must include memo to fix existing memos that exceed YNAB's 500 char limit
       const updatePayload: ynab.SaveTransactionWithIdOrImportId = {
         id: match.ynabTransaction.id,
       };
+
+      // Truncate memo if it exists and is too long (YNAB validates on update even if not changed)
+      if (match.ynabTransaction.memo) {
+        updatePayload.memo = truncateMemo(match.ynabTransaction.memo);
+      }
 
       // Only include fields that are actually changing
       if (flags.needsDateUpdate) {
@@ -514,28 +534,54 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     }
 
     // Batch update all transactions in a single API call
+    // YNAB API has a limit of ~100 transactions per batch, so we chunk the updates
     if (!params.dry_run && transactionsToUpdate.length > 0) {
-      const response = await ynabAPI.transactions.updateTransactions(budgetId, {
-        transactions: transactionsToUpdate,
-      });
+      const updateChunks = chunkArray(transactionsToUpdate, MAX_BULK_UPDATE_CHUNK);
 
-      const updatedTransactions = response.data.transactions ?? [];
-      summary.transactions_updated += updatedTransactions.length;
+      for (let chunkIdx = 0; chunkIdx < updateChunks.length; chunkIdx++) {
+        const chunk = updateChunks[chunkIdx]!;
+        try {
+          const response = await ynabAPI.transactions.updateTransactions(budgetId, {
+            transactions: chunk,
+          });
 
-      for (const updatedTransaction of updatedTransactions) {
-        const match = orderedAutoMatches.find(
-          (m) => m.ynabTransaction?.id === updatedTransaction.id,
-        );
-        const flags = match
-          ? computeUpdateFlags(match, params)
-          : { needsClearedUpdate: false, needsDateUpdate: false };
-        actions_taken.push({
-          type: 'update_transaction',
-          transaction: updatedTransaction as unknown as Record<string, unknown> | null,
-          reason: `Updated transaction: ${match ? updateReason(match, flags, currencyCode) : 'cleared'}`,
-        });
+          const updatedTransactions = response.data.transactions ?? [];
+          summary.transactions_updated += updatedTransactions.length;
+
+          for (const updatedTransaction of updatedTransactions) {
+            const match = orderedAutoMatches.find(
+              (m) => m.ynabTransaction?.id === updatedTransaction.id,
+            );
+            const flags = match
+              ? computeUpdateFlags(match, params)
+              : { needsClearedUpdate: false, needsDateUpdate: false };
+            actions_taken.push({
+              type: 'update_transaction',
+              transaction: updatedTransaction as unknown as Record<string, unknown> | null,
+              reason: `Updated transaction: ${match ? updateReason(match, flags, currencyCode) : 'cleared'}`,
+            });
+          }
+          accountSnapshotDirty = true;
+        } catch (error) {
+          const ynabError = normalizeYnabError(error);
+          const failureReason = ynabError.message || 'Unknown error occurred';
+          const statusSuffix = ynabError.status ? ` (HTTP ${ynabError.status})` : '';
+          actions_taken.push({
+            type: 'batch_update_failed',
+            transaction: null,
+            reason: `Failed to update chunk ${chunkIdx + 1}/${updateChunks.length} (${chunk.length} transaction(s)): ${failureReason}${statusSuffix}`,
+          });
+
+          if (shouldPropagateYnabError(ynabError)) {
+            throw attachStatusToError(ynabError, error);
+          }
+        }
+
+        // Add delay between chunks to avoid rate limiting (except after last chunk)
+        if (chunkIdx < updateChunks.length - 1) {
+          await sleep(BATCH_DELAY_MS);
+        }
       }
-      accountSnapshotDirty = true;
     }
   }
 
@@ -573,22 +619,48 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     }
 
     // Batch update all unclear operations in a single API call
+    // YNAB API has a limit of ~100 transactions per batch, so we chunk the updates
     if (!params.dry_run && transactionsToUnclear.length > 0) {
-      const response = await ynabAPI.transactions.updateTransactions(budgetId, {
-        transactions: transactionsToUnclear,
-      });
+      const unclearChunks = chunkArray(transactionsToUnclear, MAX_BULK_UPDATE_CHUNK);
 
-      const updatedTransactions = response.data.transactions ?? [];
-      summary.transactions_updated += updatedTransactions.length;
+      for (let chunkIdx = 0; chunkIdx < unclearChunks.length; chunkIdx++) {
+        const chunk = unclearChunks[chunkIdx]!;
+        try {
+          const response = await ynabAPI.transactions.updateTransactions(budgetId, {
+            transactions: chunk,
+          });
 
-      for (const updatedTransaction of updatedTransactions) {
-        actions_taken.push({
-          type: 'update_transaction',
-          transaction: updatedTransaction as unknown as Record<string, unknown> | null,
-          reason: `Marked transaction ${updatedTransaction.id} as uncleared - not found on statement`,
-        });
+          const updatedTransactions = response.data.transactions ?? [];
+          summary.transactions_updated += updatedTransactions.length;
+
+          for (const updatedTransaction of updatedTransactions) {
+            actions_taken.push({
+              type: 'update_transaction',
+              transaction: updatedTransaction as unknown as Record<string, unknown> | null,
+              reason: `Marked transaction ${updatedTransaction.id} as uncleared - not found on statement`,
+            });
+          }
+          accountSnapshotDirty = true;
+        } catch (error) {
+          const ynabError = normalizeYnabError(error);
+          const failureReason = ynabError.message || 'Unknown error occurred';
+          const statusSuffix = ynabError.status ? ` (HTTP ${ynabError.status})` : '';
+          actions_taken.push({
+            type: 'batch_unclear_failed',
+            transaction: null,
+            reason: `Failed to unclear chunk ${chunkIdx + 1}/${unclearChunks.length} (${chunk.length} transaction(s)): ${failureReason}${statusSuffix}`,
+          });
+
+          if (shouldPropagateYnabError(ynabError)) {
+            throw attachStatusToError(ynabError, error);
+          }
+        }
+
+        // Add delay between chunks to avoid rate limiting (except after last chunk)
+        if (chunkIdx < unclearChunks.length - 1) {
+          await sleep(BATCH_DELAY_MS);
+        }
       }
-      accountSnapshotDirty = true;
     }
   }
 
@@ -664,7 +736,9 @@ export function normalizeYnabError(error: unknown): NormalizedYnabError {
   };
 
   if (error instanceof Error) {
-    const status = parseStatus((error as { status?: unknown }).status);
+    const status =
+      parseStatus((error as { status?: unknown }).status) ??
+      parseStatus((error as { response?: { status?: unknown } }).response?.status);
     const detailSource = (error as { detail?: unknown }).detail;
     const detail =
       typeof detailSource === 'string' && detailSource.trim().length > 0 ? detailSource : undefined;
@@ -721,8 +795,21 @@ export function shouldPropagateYnabError(error: NormalizedYnabError): boolean {
   return error.status !== undefined && FATAL_YNAB_STATUS_CODES.has(error.status);
 }
 
-function attachStatusToError(error: NormalizedYnabError): Error {
+function attachStatusToError(error: NormalizedYnabError, originalError?: unknown): Error {
   const message = error.message || 'YNAB API error';
+
+  const isKnownCode =
+    error.status === YNABErrorCode.BAD_REQUEST ||
+    error.status === YNABErrorCode.UNAUTHORIZED ||
+    error.status === YNABErrorCode.FORBIDDEN ||
+    error.status === YNABErrorCode.NOT_FOUND ||
+    error.status === YNABErrorCode.TOO_MANY_REQUESTS ||
+    error.status === YNABErrorCode.INTERNAL_SERVER_ERROR;
+
+  if (isKnownCode) {
+    return new YNABAPIError(error.status as YNABErrorCode, message, originalError);
+  }
+
   const statusFragment = error.status ? ` (HTTP ${error.status})` : '';
   const detailFragment =
     error.detail && !message.includes(error.detail) ? ` (${error.detail})` : '';
