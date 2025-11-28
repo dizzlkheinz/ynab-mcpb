@@ -20,6 +20,8 @@ import { responseFormatter } from '../../server/responseFormatter.js';
 import { parseCSV, type ParseCSVOptions, type CSVParseResult } from './csvParser.js';
 import type { DeltaFetcher } from '../deltaFetcher.js';
 import { resolveDeltaFetcherArgs } from '../deltaSupport.js';
+import { detectSignInversion } from './signDetector.js';
+import { normalizeYNABTransactions } from './ynabAdapter.js';
 
 // Re-export types for external use
 export type * from './types.js';
@@ -307,6 +309,35 @@ export async function handleReconcileAccount(
 
       const ynabTransactions = transactionsResult.data;
 
+      // Smart sign detection: If invert_bank_amounts not explicitly set, auto-detect
+      let finalInvertAmounts = shouldInvertBankAmounts;
+      if (params.invert_bank_amounts === undefined && csvContent) {
+        // Parse CSV without inversion to get raw amounts
+        const rawParseResult = parseCSV(csvContent, {
+          ...csvOptions,
+          invertAmounts: false, // Don't invert yet
+        });
+
+        if (rawParseResult.transactions.length > 0 && ynabTransactions.length > 0) {
+          // Normalize YNAB transactions for comparison
+          const normalizedYNAB = normalizeYNABTransactions(ynabTransactions);
+
+          // Detect if signs are mismatched
+          const needsInversion = detectSignInversion(
+            rawParseResult.transactions,
+            normalizedYNAB,
+          );
+
+          finalInvertAmounts = needsInversion;
+
+          // If detection result differs from default, invalidate parseResult
+          // to force re-parsing with correct inversion
+          if (needsInversion !== shouldInvertBankAmounts && parseResult) {
+            parseResult = undefined;
+          }
+        }
+      }
+
       const auditMetadata = {
         data_freshness: getDataFreshness(transactionsResult, forceFullRefresh),
         data_source: getAuditDataSource(transactionsResult, forceFullRefresh),
@@ -331,7 +362,7 @@ export async function handleReconcileAccount(
         currencyCode,
         params.account_id,
         params.budget_id,
-        shouldInvertBankAmounts,
+        finalInvertAmounts, // Use smart-detected value
         csvOptions,
       );
 
