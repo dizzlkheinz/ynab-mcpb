@@ -323,10 +323,7 @@ export async function handleReconcileAccount(
           const normalizedYNAB = normalizeYNABTransactions(ynabTransactions);
 
           // Detect if signs are mismatched
-          const needsInversion = detectSignInversion(
-            rawParseResult.transactions,
-            normalizedYNAB,
-          );
+          const needsInversion = detectSignInversion(rawParseResult.transactions, normalizedYNAB);
 
           finalInvertAmounts = needsInversion;
 

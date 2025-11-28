@@ -12,6 +12,7 @@ interface ErrorResponseFormatter {
  */
 
 export const enum YNABErrorCode {
+  BAD_REQUEST = 400,
   UNAUTHORIZED = 401,
   FORBIDDEN = 403,
   NOT_FOUND = 404,
@@ -106,7 +107,12 @@ export class ErrorHandler {
       formattedText = this.formatter.format(errorResponse);
     } catch {
       // Fallback to JSON.stringify if formatter fails
-      formattedText = JSON.stringify(errorResponse, null, 2);
+      try {
+        formattedText = JSON.stringify(errorResponse, null, 2);
+      } catch {
+        // Final fallback if JSON serialization fails (e.g. circular references)
+        formattedText = `Error processing request: ${this.getGenericErrorMessage(context)}`;
+      }
     }
 
     return {
@@ -135,7 +141,9 @@ export class ErrorHandler {
   private createErrorResponse(error: unknown, context: string): ErrorResponse {
     // Handle custom error types
     if (error instanceof YNABAPIError) {
-      const sanitizedDetails = this.sanitizeErrorDetails(error.originalError);
+      const ynabDetails = this.extractYNABApiError(error.originalError);
+      const detailsToSanitize = ynabDetails?.details || error.originalError;
+      const sanitizedDetails = this.sanitizeErrorDetails(detailsToSanitize);
       return {
         error: {
           code: error.code,
@@ -216,7 +224,22 @@ export class ErrorHandler {
 
     // Fallback for unknown errors
     // Preserve the original error message for debugging while sanitizing sensitive data
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    let errorMessage: string;
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object') {
+      // Handle plain objects (e.g., YNAB SDK errors that aren't Error instances)
+      try {
+        errorMessage = JSON.stringify(error, null, 2);
+      } catch {
+        // Circular reference or other JSON issue
+        errorMessage = Object.prototype.toString.call(error);
+      }
+    } else {
+      errorMessage = String(error);
+    }
     const sanitizedDetails = this.sanitizeErrorDetails(errorMessage);
 
     return {
@@ -264,6 +287,8 @@ export class ErrorHandler {
    */
   private getUserFriendlyMessage(code: YNABErrorCode | SecurityErrorCode, context: string): string {
     switch (code) {
+      case YNABErrorCode.BAD_REQUEST:
+        return 'The request was invalid. Please check your input data.';
       case YNABErrorCode.UNAUTHORIZED:
         return 'Your YNAB access token is invalid or has expired. Please check your token and try again.';
       case YNABErrorCode.FORBIDDEN:
@@ -288,6 +313,12 @@ export class ErrorHandler {
    */
   private getErrorSuggestions(code: YNABErrorCode | SecurityErrorCode, context: string): string[] {
     switch (code) {
+      case YNABErrorCode.BAD_REQUEST:
+        return [
+          'Check that all required fields are correct',
+          'Verify that dates are in the correct format (ISO 8601)',
+          'Ensure amounts are valid numbers',
+        ];
       case YNABErrorCode.UNAUTHORIZED:
         return [
           'Go to https://app.youneedabudget.com/settings/developer to generate a new access token',
@@ -401,6 +432,8 @@ export class ErrorHandler {
    */
   private getErrorMessage(code: YNABErrorCode, context: string): string {
     switch (code) {
+      case YNABErrorCode.BAD_REQUEST:
+        return 'Bad request - invalid parameters';
       case YNABErrorCode.UNAUTHORIZED:
         return 'Invalid or expired YNAB access token';
       case YNABErrorCode.FORBIDDEN:
@@ -535,6 +568,7 @@ export class ErrorHandler {
    */
   private mapHttpStatusToErrorCode(status: number): YNABErrorCode | null {
     switch (status) {
+      case YNABErrorCode.BAD_REQUEST:
       case YNABErrorCode.UNAUTHORIZED:
       case YNABErrorCode.FORBIDDEN:
       case YNABErrorCode.NOT_FOUND:
@@ -571,11 +605,19 @@ export class ErrorHandler {
    * Extracts structured YNAB API error information
    */
   private extractYNABApiError(error: unknown): { code: YNABErrorCode; details?: string } | null {
-    if (!error || typeof error !== 'object' || !('error' in (error as Record<string, unknown>))) {
+    if (!error || typeof error !== 'object') {
       return null;
     }
 
-    const payload = (error as { error?: unknown }).error;
+    let payload = (error as { error?: unknown }).error;
+
+    if (!payload) {
+      const responseData = (error as { response?: { data?: unknown } }).response?.data;
+      if (responseData && typeof responseData === 'object') {
+        payload = (responseData as { error?: unknown }).error;
+      }
+    }
+
     if (!payload || typeof payload !== 'object') {
       return null;
     }
