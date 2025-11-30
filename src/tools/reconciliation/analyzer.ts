@@ -61,22 +61,28 @@ function calculateBalances(
   ynabTransactions: YNABTransaction[],
   statementBalanceDecimal: number,
   currency: string,
+  accountSnapshot?: { balance?: number; cleared_balance?: number; uncleared_balance?: number },
 ): BalanceInfo {
-  let clearedBalance = 0;
-  let unclearedBalance = 0;
+  // Compute from the fetched transactions, but prefer the authoritative account snapshot
+  // because we usually fetch a limited date window.
+  let computedCleared = 0;
+  let computedUncleared = 0;
 
   for (const txn of ynabTransactions) {
     const amount = txn.amount; // Milliunits
 
     if (txn.cleared === 'cleared' || txn.cleared === 'reconciled') {
-      clearedBalance += amount;
+      computedCleared += amount;
     } else {
-      unclearedBalance += amount;
+      computedUncleared += amount;
     }
   }
 
+  const clearedBalance = accountSnapshot?.cleared_balance ?? computedCleared;
+  const unclearedBalance = accountSnapshot?.uncleared_balance ?? computedUncleared;
+  const totalBalance = accountSnapshot?.balance ?? clearedBalance + unclearedBalance;
+
   const statementBalanceMilli = Math.round(statementBalanceDecimal * 1000);
-  const totalBalance = clearedBalance + unclearedBalance;
   const discrepancy = clearedBalance - statementBalanceMilli;
 
   return {
@@ -342,6 +348,7 @@ export function analyzeReconciliation(
   budgetId?: string,
   invertBankAmounts: boolean = false,
   csvOptions?: ParseCSVOptions,
+  accountSnapshot?: { balance?: number; cleared_balance?: number; uncleared_balance?: number },
 ): ReconciliationAnalysis {
   // Step 1: Parse bank CSV using new Parser (or use provided result)
   let parseResult: CSVParseResult;
@@ -398,7 +405,12 @@ export function analyzeReconciliation(
   const unmatchedYNAB = newYNABTransactions.filter((t) => !matchedYnabIds.has(t.id));
 
   // Step 6: Calculate balances
-  const balances = calculateBalances(newYNABTransactions, statementBalance, currency);
+  const balances = calculateBalances(
+    newYNABTransactions,
+    statementBalance,
+    currency,
+    accountSnapshot,
+  );
 
   // Step 7: Generate summary
   const summary = generateSummary(
