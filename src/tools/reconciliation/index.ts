@@ -349,6 +349,12 @@ export async function handleReconcileAccount(
         },
       };
 
+      const initialAccount: AccountSnapshot = {
+        balance: accountData.balance,
+        cleared_balance: accountData.cleared_balance,
+        uncleared_balance: accountData.uncleared_balance,
+      };
+
       // Perform analysis
       const analysis = analyzeReconciliation(
         parseResult ?? csvContent,
@@ -361,13 +367,8 @@ export async function handleReconcileAccount(
         params.budget_id,
         finalInvertAmounts, // Use smart-detected value
         csvOptions,
+        initialAccount,
       );
-
-      const initialAccount: AccountSnapshot = {
-        balance: accountData.balance,
-        cleared_balance: accountData.cleared_balance,
-        uncleared_balance: accountData.uncleared_balance,
-      };
 
       let executionData: LegacyReconciliationResult | undefined;
       const wantsBalanceVerification = Boolean(params.statement_date);
