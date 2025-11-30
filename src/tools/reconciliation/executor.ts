@@ -88,7 +88,7 @@ const MONEY_EPSILON_MILLI = 100; // $0.10
 const DEFAULT_TOLERANCE_CENTS = 1;
 const CENTS_TO_MILLI = 10;
 const MAX_BULK_CREATE_CHUNK = 100;
-const MAX_BULK_UPDATE_CHUNK = 10; // Reduced to 10 - YNAB API seems to have strict limits for batch updates
+const MAX_BULK_UPDATE_CHUNK = 100; // YNAB API supports up to 100 transactions per batch for updates
 const BATCH_DELAY_MS = 200; // Delay between batch chunks to avoid rate limiting
 const MAX_MEMO_LENGTH = 500; // YNAB's maximum memo length
 
@@ -587,6 +587,32 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
 
   // STEP 3: Auto-unclear YNAB transactions missing from bank
   const shouldRunSanityPass = params.auto_unclear_missing && !balanceAligned;
+
+  // Diagnostic logging for auto_unclear_missing debugging
+  actions_taken.push({
+    type: 'diagnostic_step3_entry',
+    transaction: null,
+    reason: `STEP 3 diagnostics: auto_unclear_missing=${params.auto_unclear_missing}, balanceAligned=${balanceAligned}, shouldRunSanityPass=${shouldRunSanityPass}, orderedUnmatchedYNAB.length=${orderedUnmatchedYNAB.length}`,
+  });
+
+  if (orderedUnmatchedYNAB.length > 0) {
+    const unmatchedDetails = orderedUnmatchedYNAB.slice(0, 10).map((t) => ({
+      id: t.id,
+      date: t.date,
+      cleared: t.cleared,
+      amount: formatDisplay(t.amount, currencyCode),
+      payee: t.payee ?? 'Unknown',
+    }));
+    actions_taken.push({
+      type: 'diagnostic_unmatched_ynab',
+      transaction: { unmatched_transactions: unmatchedDetails } as unknown as Record<
+        string,
+        unknown
+      >,
+      reason: `First ${Math.min(10, orderedUnmatchedYNAB.length)} unmatched YNAB transactions (cleared status and amounts)`,
+    });
+  }
+
   if (shouldRunSanityPass) {
     const transactionsToUnclear: ynab.SaveTransactionWithIdOrImportId[] = [];
 
@@ -664,7 +690,76 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     }
   }
 
-  // STEP 4: Balance reconciliation snapshot (only once per execution)
+  // STEP 4: Mark all matched transactions as reconciled when balance aligns
+  if (balanceAligned && !params.dry_run) {
+    const transactionsToReconcile: ynab.SaveTransactionWithIdOrImportId[] = [];
+
+    for (const match of orderedAutoMatches) {
+      if (!match.ynabTransaction) continue;
+      // Only reconcile transactions that are not already reconciled
+      if (match.ynabTransaction.cleared === 'reconciled') continue;
+
+      transactionsToReconcile.push({
+        id: match.ynabTransaction.id,
+        cleared: 'reconciled' as ynab.TransactionClearedStatus,
+      });
+    }
+
+    // Batch update all reconciliations in chunks
+    if (transactionsToReconcile.length > 0) {
+      const reconcileChunks = chunkArray(transactionsToReconcile, MAX_BULK_UPDATE_CHUNK);
+
+      for (let chunkIdx = 0; chunkIdx < reconcileChunks.length; chunkIdx++) {
+        const chunk = reconcileChunks[chunkIdx]!;
+        try {
+          const response = await ynabAPI.transactions.updateTransactions(budgetId, {
+            transactions: chunk,
+          });
+
+          const reconciledTransactions = response.data.transactions ?? [];
+          summary.transactions_updated += reconciledTransactions.length;
+
+          for (const reconciledTransaction of reconciledTransactions) {
+            const match = orderedAutoMatches.find(
+              (m) => m.ynabTransaction?.id === reconciledTransaction.id,
+            );
+            actions_taken.push({
+              type: 'update_transaction',
+              transaction: reconciledTransaction as unknown as Record<string, unknown> | null,
+              reason: `Marked as reconciled: ${match?.bankTransaction.payee ?? 'transaction'} (${formatDisplay(reconciledTransaction.amount, currencyCode)})`,
+            });
+          }
+          accountSnapshotDirty = true;
+        } catch (error) {
+          const ynabError = normalizeYnabError(error);
+          const failureReason = ynabError.message || 'Unknown error occurred';
+          const statusSuffix = ynabError.status ? ` (HTTP ${ynabError.status})` : '';
+          actions_taken.push({
+            type: 'batch_reconcile_failed',
+            transaction: null,
+            reason: `Failed to reconcile chunk ${chunkIdx + 1}/${reconcileChunks.length} (${chunk.length} transaction(s)): ${failureReason}${statusSuffix}`,
+          });
+
+          if (shouldPropagateYnabError(ynabError)) {
+            throw attachStatusToError(ynabError, error);
+          }
+        }
+
+        // Add delay between chunks to avoid rate limiting (except after last chunk)
+        if (chunkIdx < reconcileChunks.length - 1) {
+          await sleep(BATCH_DELAY_MS);
+        }
+      }
+
+      actions_taken.push({
+        type: 'reconciliation_complete',
+        transaction: null,
+        reason: `Marked ${transactionsToReconcile.length} matched transaction(s) as reconciled - balance aligned within tolerance`,
+      });
+    }
+  }
+
+  // STEP 5: Balance reconciliation snapshot (only once per execution)
   let balance_reconciliation: ExecutionResult['balance_reconciliation'];
   if (params.statement_balance !== undefined && params.statement_date) {
     balance_reconciliation = await buildBalanceReconciliation({
@@ -677,7 +772,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     });
   }
 
-  // STEP 5: Recommendations and balance changes
+  // STEP 6: Recommendations and balance changes
   if (!params.dry_run && accountSnapshotDirty) {
     afterAccount = await refreshAccountSnapshot(ynabAPI, budgetId, accountId);
   }

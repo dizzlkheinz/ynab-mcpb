@@ -55,6 +55,11 @@ export class YNABAPIError extends Error {
     this.code = code;
     this.originalError = originalError;
   }
+
+  // Expose status as an alias for code for backward compatibility with tests
+  get status(): YNABErrorCode {
+    return this.code;
+  }
 }
 
 export class ValidationError extends Error {
