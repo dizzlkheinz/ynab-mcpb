@@ -1,418 +1,72 @@
 /**
  * Analysis phase orchestration for reconciliation
  * Coordinates CSV parsing, YNAB transaction fetching, and matching
+ *
+ * V2 UPDATE: Uses new parser and matcher (milliunits based)
  */
 
-import { randomUUID } from 'crypto';
 import type * as ynab from 'ynab';
-import * as bankParser from '../compareTransactions/parser.js';
-import type { CSVFormat as ParserCSVFormat } from '../compareTransactions/types.js';
-import { findMatches } from './matcher.js';
-import { DEFAULT_MATCHING_CONFIG } from './types.js';
+import { parseCSV, type ParseCSVOptions, type CSVParseResult } from './csvParser.js';
+import { findMatches, normalizeConfig, type MatchingConfig, DEFAULT_CONFIG } from './matcher.js';
+import { normalizeYNABTransactions } from './ynabAdapter.js';
+
 import type {
   BankTransaction,
   YNABTransaction,
   ReconciliationAnalysis,
   TransactionMatch,
-  MatchingConfig,
   BalanceInfo,
   ReconciliationSummary,
   ReconciliationInsight,
 } from './types.js';
-import { toMoneyValueFromDecimal } from '../../utils/money.js';
+import type { MatchResult } from './matcher.js'; // Import MatchResult
+import { toMoneyValue } from '../../utils/money.js';
 import { generateRecommendations } from './recommendationEngine.js';
 
-/**
- * Convert YNAB API transaction to simplified format
- */
-function convertYNABTransaction(apiTxn: ynab.TransactionDetail): YNABTransaction {
-  return {
-    id: apiTxn.id,
-    date: apiTxn.date,
-    amount: apiTxn.amount,
-    payee_name: apiTxn.payee_name || null,
-    category_name: apiTxn.category_name || null,
-    cleared: apiTxn.cleared,
-    approved: apiTxn.approved,
-    memo: apiTxn.memo || null,
-  };
-}
+// --- Helper Functions ---
 
-/**
- * Parse CSV bank statement and generate unique IDs for tracking
- */
-const FALLBACK_CSV_FORMAT: ParserCSVFormat = {
-  date_column: 'Date',
-  amount_column: 'Amount',
-  description_column: 'Description',
-  date_format: 'MM/DD/YYYY',
-  has_header: true,
-  delimiter: ',',
-};
+function mapToTransactionMatch(result: MatchResult): TransactionMatch {
+  const candidates = result.candidates.map((c) => ({
+    ynab_transaction: c.ynabTransaction,
+    confidence: c.scores.combined,
+    match_reason: c.matchReasons.join(', '),
+    explanation: c.matchReasons.join(', '),
+  }));
 
-const ENABLE_COMBINATION_MATCHING = true;
-
-const DAYS_IN_MS = 24 * 60 * 60 * 1000;
-
-function toDollars(milliunits: number): number {
-  return milliunits / 1000;
-}
-
-function amountTolerance(config: MatchingConfig): number {
-  const toleranceCents =
-    config.amountToleranceCents ?? DEFAULT_MATCHING_CONFIG.amountToleranceCents ?? 1;
-  return Math.max(0, toleranceCents) / 100;
-}
-
-function dateTolerance(config: MatchingConfig): number {
-  return config.dateToleranceDays ?? DEFAULT_MATCHING_CONFIG.dateToleranceDays ?? 2;
-}
-
-function daysBetween(dateA: string, dateB: string): number {
-  const a = new Date(`${dateA}T00:00:00Z`).getTime();
-  const b = new Date(`${dateB}T00:00:00Z`).getTime();
-  if (Number.isNaN(a) || Number.isNaN(b)) return Number.POSITIVE_INFINITY;
-  return Math.abs(a - b) / DAYS_IN_MS;
-}
-
-function withinDateTolerance(
-  bankDate: string,
-  ynabTxns: YNABTransaction[],
-  toleranceDays: number,
-): boolean {
-  return ynabTxns.every((txn) => daysBetween(bankDate, txn.date) <= toleranceDays);
-}
-
-function hasMatchingSign(bankAmount: number, ynabTxns: YNABTransaction[]): boolean {
-  const bankSign = Math.sign(bankAmount);
-  const sumSign = Math.sign(ynabTxns.reduce((sum, txn) => sum + toDollars(txn.amount), 0));
-  return bankSign === sumSign || Math.abs(bankAmount) === 0;
-}
-
-function computeCombinationConfidence(diff: number, tolerance: number, legCount: number): number {
-  const safeTolerance = tolerance > 0 ? tolerance : 0.01;
-  const ratio = diff / safeTolerance;
-  let base = legCount === 2 ? 75 : 70;
-  if (ratio <= 0.25) {
-    base += 5;
-  } else if (ratio <= 0.5) {
-    base += 3;
-  } else if (ratio >= 0.9) {
-    base -= 5;
-  }
-  return Math.max(65, Math.min(80, Math.round(base)));
-}
-
-function formatDifference(diff: number): string {
-  return formatCurrency(diff); // diff already absolute; formatCurrency handles sign
-}
-
-interface CombinationResult {
-  matches: TransactionMatch[];
-  insights: ReconciliationInsight[];
-}
-
-function findCombinationMatches(
-  unmatchedBank: BankTransaction[],
-  unmatchedYNAB: YNABTransaction[],
-  config: MatchingConfig,
-): CombinationResult {
-  if (!ENABLE_COMBINATION_MATCHING || unmatchedBank.length === 0 || unmatchedYNAB.length === 0) {
-    return { matches: [], insights: [] };
-  }
-
-  const tolerance = amountTolerance(config);
-  const toleranceDays = dateTolerance(config);
-
-  const matches: TransactionMatch[] = [];
-  const insights: ReconciliationInsight[] = [];
-  const seenCombinations = new Set<string>();
-
-  for (const bankTxn of unmatchedBank) {
-    const viableYnab = unmatchedYNAB.filter((txn) => hasMatchingSign(bankTxn.amount, [txn]));
-    if (viableYnab.length < 2) continue;
-
-    const evaluated: { txns: YNABTransaction[]; diff: number; sum: number }[] = [];
-
-    const addIfValid = (combo: YNABTransaction[]) => {
-      const sum = combo.reduce((acc, txn) => acc + toDollars(txn.amount), 0);
-      const diff = Math.abs(sum - bankTxn.amount);
-      if (diff > tolerance) return;
-      if (!withinDateTolerance(bankTxn.date, combo, toleranceDays)) return;
-      if (!hasMatchingSign(bankTxn.amount, combo)) return;
-      evaluated.push({ txns: combo, diff, sum });
-    };
-
-    const n = viableYnab.length;
-    for (let i = 0; i < n - 1; i++) {
-      for (let j = i + 1; j < n; j++) {
-        addIfValid([viableYnab[i]!, viableYnab[j]!]);
-      }
-    }
-
-    if (n >= 3) {
-      for (let i = 0; i < n - 2; i++) {
-        for (let j = i + 1; j < n - 1; j++) {
-          for (let k = j + 1; k < n; k++) {
-            addIfValid([viableYnab[i]!, viableYnab[j]!, viableYnab[k]!]);
-          }
-        }
-      }
-    }
-
-    if (evaluated.length === 0) continue;
-
-    evaluated.sort((a, b) => a.diff - b.diff);
-    const recordedSizes = new Set<number>();
-
-    for (const combo of evaluated) {
-      if (recordedSizes.has(combo.txns.length)) continue; // surface best per size
-      const comboIds = combo.txns.map((txn) => txn.id).sort();
-      const key = `${bankTxn.id}|${comboIds.join('+')}`;
-      if (seenCombinations.has(key)) continue;
-      seenCombinations.add(key);
-      recordedSizes.add(combo.txns.length);
-
-      const score = computeCombinationConfidence(combo.diff, tolerance, combo.txns.length);
-      const candidateConfidence = Math.max(60, score - 5);
-      const descriptionTotal = formatCurrency(combo.sum);
-      const diffLabel = formatDifference(combo.diff);
-
-      matches.push({
-        bank_transaction: bankTxn,
-        confidence: 'medium',
-        confidence_score: score,
-        match_reason: 'combination_match',
-        top_confidence: score,
-        candidates: combo.txns.map((txn) => ({
-          ynab_transaction: txn,
-          confidence: candidateConfidence,
-          match_reason: 'combination_component',
-          explanation: `Part of combination totaling ${descriptionTotal} (difference ${diffLabel}).`,
-        })),
-        action_hint: 'review_combination',
-        recommendation:
-          `Combination of ${combo.txns.length} YNAB transactions totals ${descriptionTotal} versus ` +
-          `${formatCurrency(bankTxn.amount)} on the bank statement.`,
-      });
-
-      const insightId = `combination-${bankTxn.id}-${comboIds.join('+')}`;
-      insights.push({
-        id: insightId,
-        type: 'combination_match' as unknown as ReconciliationInsight['type'],
-        severity: 'info',
-        title: `Combination of ${combo.txns.length} transactions matches ${formatCurrency(
-          bankTxn.amount,
-        )}`,
-        description:
-          `${combo.txns.length} YNAB transactions totaling ${descriptionTotal} align with ` +
-          `${formatCurrency(bankTxn.amount)} from ${bankTxn.payee}. Difference ${diffLabel}.`,
-        evidence: {
-          bank_transaction_id: bankTxn.id,
-          bank_amount: bankTxn.amount,
-          ynab_transaction_ids: comboIds,
-          ynab_amounts_milliunits: combo.txns.map((txn) => txn.amount),
-          combination_size: combo.txns.length,
-          difference: combo.diff,
-        },
-      });
-    }
-  }
-
-  return { matches, insights };
-}
-
-type ParserResult =
-  | {
-      transactions: unknown[];
-      format_detected?: string;
-      delimiter?: string;
-      total_rows?: number;
-      valid_rows?: number;
-      errors?: string[];
-    }
-  | unknown[];
-
-function isParsedCSVData(
-  result: ParserResult,
-): result is Extract<ParserResult, { transactions: unknown[] }> {
-  return (
-    typeof result === 'object' &&
-    result !== null &&
-    !Array.isArray(result) &&
-    'transactions' in result
-  );
-}
-
-function normalizeDate(value: unknown): string {
-  if (value instanceof Date) {
-    return value.toISOString().split('T')[0]!;
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return trimmed;
-
-    const parsed = new Date(trimmed);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString().split('T')[0]!;
-    }
-
-    return trimmed;
-  }
-
-  return new Date().toISOString().split('T')[0]!;
-}
-
-function normalizeAmount(record: Record<string, unknown>): number {
-  const raw = record['amount'];
-
-  if (typeof raw === 'number') {
-    if (record['date'] instanceof Date || 'raw_amount' in record || 'raw_date' in record) {
-      return Math.round(raw) / 1000;
-    }
-    return raw;
-  }
-
-  if (typeof raw === 'string') {
-    const cleaned = raw.replace(/[$,\s]/g, '');
-    const parsed = Number.parseFloat(cleaned);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  return 0;
-}
-
-function normalizePayee(record: Record<string, unknown>): string {
-  const candidates = [record['payee'], record['description'], record['memo']];
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-  return 'Unknown Payee';
-}
-
-function determineRow(record: Record<string, unknown>, index: number): number {
-  if (typeof record['original_csv_row'] === 'number') {
-    return record['original_csv_row'];
-  }
-  if (typeof record['row_number'] === 'number') {
-    return record['row_number'];
-  }
-  return index + 1;
-}
-
-function convertParserRecord(record: unknown, index: number): BankTransaction {
-  const data =
-    typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : {};
-
-  const dateValue = normalizeDate(data['date']);
-  const amountValue = normalizeAmount(data);
-  const payeeValue = normalizePayee(data);
-  const memoValue =
-    typeof data['memo'] === 'string' && data['memo'].trim() ? data['memo'].trim() : undefined;
-  const originalRow = determineRow(data, index);
-
-  const transaction: BankTransaction = {
-    id: randomUUID(),
-    date: dateValue,
-    amount: amountValue,
-    payee: payeeValue,
-    original_csv_row: originalRow,
+  const match: TransactionMatch = {
+    bankTransaction: result.bankTransaction,
+    candidates,
+    confidence: result.confidence,
+    confidenceScore: result.confidenceScore,
+    matchReason: result.bestMatch?.matchReasons.join(', ') ?? 'No match found',
+    actionHint: result.confidence === 'high' ? 'approve' : 'review',
   };
 
-  if (memoValue !== undefined) {
-    transaction.memo = memoValue;
+  if (result.bestMatch) {
+    match.ynabTransaction = result.bestMatch.ynabTransaction;
   }
 
-  return transaction;
+  if (result.candidates[0]) {
+    match.topConfidence = result.candidates[0].scores.combined;
+  }
+
+  if (result.confidence === 'none') {
+    match.recommendation = 'This bank transaction is not in YNAB. Consider adding it.';
+  }
+
+  return match;
 }
 
-function parseBankStatement(csvContent: string, csvFilePath?: string): BankTransaction[] {
-  const content = csvFilePath ? bankParser.readCSVFile(csvFilePath) : csvContent;
-
-  let format: ParserCSVFormat = FALLBACK_CSV_FORMAT;
-  let autoDetect: ((content: string) => ParserCSVFormat) | undefined;
-  try {
-    autoDetect = (bankParser as { autoDetectCSVFormat?: (content: string) => ParserCSVFormat })
-      .autoDetectCSVFormat;
-  } catch {
-    autoDetect = undefined;
-  }
-
-  if (typeof autoDetect === 'function') {
-    try {
-      format = autoDetect(content);
-    } catch {
-      format = FALLBACK_CSV_FORMAT;
-    }
-  }
-
-  const rawResult = bankParser.parseBankCSV(content, format) as unknown as ParserResult;
-  const records = isParsedCSVData(rawResult) ? rawResult.transactions : rawResult;
-
-  return records.map(convertParserRecord);
-}
-
-/**
- * Categorize matches by confidence level
- */
-function categorizeMatches(matches: TransactionMatch[]): {
-  autoMatches: TransactionMatch[];
-  suggestedMatches: TransactionMatch[];
-  unmatchedBank: BankTransaction[];
-} {
-  const autoMatches: TransactionMatch[] = [];
-  const suggestedMatches: TransactionMatch[] = [];
-  const unmatchedBank: BankTransaction[] = [];
-
-  for (const match of matches) {
-    if (match.confidence === 'high') {
-      autoMatches.push(match);
-    } else if (match.confidence === 'medium') {
-      suggestedMatches.push(match);
-    } else {
-      // low or none confidence
-      unmatchedBank.push(match.bank_transaction);
-    }
-  }
-
-  return { autoMatches, suggestedMatches, unmatchedBank };
-}
-
-/**
- * Find unmatched YNAB transactions
- * These are transactions in YNAB that don't appear on the bank statement
- */
-function findUnmatchedYNAB(
-  ynabTransactions: YNABTransaction[],
-  matches: TransactionMatch[],
-): YNABTransaction[] {
-  const matchedIds = new Set<string>();
-
-  for (const match of matches) {
-    if (match.ynab_transaction) {
-      matchedIds.add(match.ynab_transaction.id);
-    }
-  }
-
-  return ynabTransactions.filter((txn) => !matchedIds.has(txn.id));
-}
-
-/**
- * Calculate balance information
- */
 function calculateBalances(
   ynabTransactions: YNABTransaction[],
-  statementBalance: number,
+  statementBalanceDecimal: number,
   currency: string,
 ): BalanceInfo {
   let clearedBalance = 0;
   let unclearedBalance = 0;
 
   for (const txn of ynabTransactions) {
-    const amount = txn.amount / 1000; // Convert from milliunits to dollars
+    const amount = txn.amount; // Milliunits
 
     if (txn.cleared === 'cleared' || txn.cleared === 'reconciled') {
       clearedBalance += amount;
@@ -421,22 +75,20 @@ function calculateBalances(
     }
   }
 
+  const statementBalanceMilli = Math.round(statementBalanceDecimal * 1000);
   const totalBalance = clearedBalance + unclearedBalance;
-  const discrepancy = clearedBalance - statementBalance;
+  const discrepancy = clearedBalance - statementBalanceMilli;
 
   return {
-    current_cleared: toMoneyValueFromDecimal(clearedBalance, currency),
-    current_uncleared: toMoneyValueFromDecimal(unclearedBalance, currency),
-    current_total: toMoneyValueFromDecimal(totalBalance, currency),
-    target_statement: toMoneyValueFromDecimal(statementBalance, currency),
-    discrepancy: toMoneyValueFromDecimal(discrepancy, currency),
-    on_track: Math.abs(discrepancy) < 0.01, // Within 1 cent
+    current_cleared: toMoneyValue(clearedBalance, currency),
+    current_uncleared: toMoneyValue(unclearedBalance, currency),
+    current_total: toMoneyValue(totalBalance, currency),
+    target_statement: toMoneyValue(statementBalanceMilli, currency),
+    discrepancy: toMoneyValue(discrepancy, currency),
+    on_track: Math.abs(discrepancy) < 10, // Within 1 cent (10 milliunits)
   };
 }
 
-/**
- * Generate reconciliation summary
- */
 function generateSummary(
   bankTransactions: BankTransaction[],
   ynabTransactions: YNABTransaction[],
@@ -485,9 +137,6 @@ function generateSummary(
   };
 }
 
-/**
- * Generate next steps for user
- */
 function generateNextSteps(summary: ReconciliationSummary): string[] {
   const steps: string[] = [];
 
@@ -516,26 +165,32 @@ function generateNextSteps(summary: ReconciliationSummary): string[] {
   return steps;
 }
 
-function formatCurrency(amount: number): string {
+function formatCurrency(amountMilli: number, currency: string = 'USD'): string {
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return formatter.format(amount);
+  return formatter.format(amountMilli / 1000);
 }
 
-function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationInsight[] {
+// --- Insight Generation ---
+
+function repeatAmountInsights(
+  unmatchedBank: BankTransaction[],
+  currency: string = 'USD',
+): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
   if (unmatchedBank.length === 0) {
     return insights;
   }
 
-  const frequency = new Map<string, { amount: number; txns: BankTransaction[] }>();
+  // Group by milliunits amount
+  const frequency = new Map<number, { amount: number; txns: BankTransaction[] }>();
 
   for (const txn of unmatchedBank) {
-    const key = txn.amount.toFixed(2);
+    const key = txn.amount;
     const entry = frequency.get(key) ?? { amount: txn.amount, txns: [] };
     entry.txns.push(txn);
     frequency.set(key, entry);
@@ -551,88 +206,34 @@ function repeatAmountInsights(unmatchedBank: BankTransaction[]): ReconciliationI
 
   const top = repeated[0]!;
   insights.push({
-    id: `repeat-${top.amount.toFixed(2)}`,
+    id: `repeat-${top.amount}`,
     type: 'repeat_amount',
     severity: top.txns.length >= 4 ? 'critical' : 'warning',
-    title: `${top.txns.length} unmatched transactions at ${formatCurrency(top.amount)}`,
+    title: `${top.txns.length} unmatched transactions at ${formatCurrency(top.amount, currency)}`,
     description:
-      `The bank statement shows ${top.txns.length} unmatched transaction(s) at ${formatCurrency(top.amount)}. ` +
+      `The bank statement shows ${top.txns.length} unmatched transaction(s) at ${formatCurrency(top.amount, currency)}. ` +
       'Repeated amounts are usually the quickest wins — reconcile these first.',
     evidence: {
-      amount: top.amount,
+      amount: top.amount, // Milliunits
       occurrences: top.txns.length,
       dates: top.txns.map((txn) => txn.date),
-      csv_rows: top.txns.map((txn) => txn.original_csv_row),
+      csv_rows: top.txns.map((txn) => txn.sourceRow),
     },
   });
 
   return insights;
 }
 
-function nearMatchInsights(
-  matches: TransactionMatch[],
-  config: MatchingConfig,
-): ReconciliationInsight[] {
+function anomalyInsights(balances: BalanceInfo): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
+  const discrepancyAbs = Math.abs(balances.discrepancy.value_milliunits);
 
-  for (const match of matches) {
-    if (!match.candidates || match.candidates.length === 0) continue;
-    if (match.confidence === 'high') continue;
-
-    const topCandidate = match.candidates[0]!;
-    const score = topCandidate.confidence;
-    const highSignal =
-      (match.confidence === 'medium' && score >= config.autoMatchThreshold - 5) ||
-      (match.confidence === 'low' && score >= config.suggestionThreshold) ||
-      (match.confidence === 'none' && score >= config.suggestionThreshold);
-
-    if (!highSignal) continue;
-
-    const bankTxn = match.bank_transaction;
-    const ynabTxn = topCandidate.ynab_transaction;
-
-    insights.push({
-      id: `near-${bankTxn.id}`,
-      type: 'near_match',
-      severity: score >= config.autoMatchThreshold ? 'warning' : 'info',
-      title: `${formatCurrency(bankTxn.amount)} nearly matches ${formatCurrency(ynabTxn.amount / 1000)}`,
-      description:
-        `Bank transaction on ${bankTxn.date} (${formatCurrency(bankTxn.amount)}) nearly matches ` +
-        `${ynabTxn.payee_name ?? 'unknown payee'} on ${ynabTxn.date}. Confidence ${score}% — review and confirm.`,
-      evidence: {
-        bank_transaction: {
-          id: bankTxn.id,
-          date: bankTxn.date,
-          amount: bankTxn.amount,
-          payee: bankTxn.payee,
-        },
-        candidate: {
-          id: ynabTxn.id,
-          date: ynabTxn.date,
-          amount_milliunits: ynabTxn.amount,
-          payee_name: ynabTxn.payee_name,
-          confidence: score,
-          reasons: topCandidate.match_reason,
-        },
-      },
-    });
-  }
-
-  return insights.slice(0, 3);
-}
-
-function anomalyInsights(
-  summary: ReconciliationSummary,
-  balances: BalanceInfo,
-): ReconciliationInsight[] {
-  const insights: ReconciliationInsight[] = [];
-  const discrepancyAbs = Math.abs(balances.discrepancy.value);
-
-  if (discrepancyAbs >= 1) {
+  if (discrepancyAbs >= 1000) {
+    // 1 dollar
     insights.push({
       id: 'balance-gap',
       type: 'anomaly',
-      severity: discrepancyAbs >= 100 ? 'critical' : 'warning',
+      severity: discrepancyAbs >= 100000 ? 'critical' : 'warning', // 100 dollars
       title: `Cleared balance off by ${balances.discrepancy.value_display}`,
       description:
         `YNAB cleared balance is ${balances.current_cleared.value_display} but the statement expects ` +
@@ -645,30 +246,16 @@ function anomalyInsights(
     });
   }
 
-  if (summary.unmatched_bank >= 5) {
-    insights.push({
-      id: 'bulk-missing-bank',
-      type: 'anomaly',
-      severity: summary.unmatched_bank >= 10 ? 'critical' : 'warning',
-      title: `${summary.unmatched_bank} bank transactions still unmatched`,
-      description:
-        `There are ${summary.unmatched_bank} bank transactions without a match. ` +
-        'Consider bulk importing or reviewing by date sequence.',
-      evidence: {
-        unmatched_bank: summary.unmatched_bank,
-      },
-    });
-  }
-
   return insights;
 }
 
 function detectInsights(
-  matches: TransactionMatch[],
   unmatchedBank: BankTransaction[],
-  summary: ReconciliationSummary,
+  _summary: ReconciliationSummary,
   balances: BalanceInfo,
-  config: MatchingConfig,
+  currency: string,
+  csvErrors: { row: number; field: string; message: string }[] = [],
+  csvWarnings: { row: number; message: string }[] = [],
 ): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
   const seen = new Set<string>();
@@ -679,45 +266,61 @@ function detectInsights(
     insights.push(insight);
   };
 
-  for (const insight of repeatAmountInsights(unmatchedBank)) {
+  // Surface CSV parsing errors
+  if (csvErrors.length > 0) {
+    addUnique({
+      id: 'csv-parse-errors',
+      type: 'anomaly',
+      severity: csvErrors.length >= 5 ? 'critical' : 'warning',
+      title: `${csvErrors.length} CSV parsing error(s)`,
+      description:
+        csvErrors
+          .slice(0, 3)
+          .map((e) => `Row ${e.row}: ${e.message}`)
+          .join('; ') + (csvErrors.length > 3 ? ` (+${csvErrors.length - 3} more)` : ''),
+      evidence: {
+        error_count: csvErrors.length,
+        errors: csvErrors.slice(0, 5),
+      },
+    });
+  }
+
+  // Surface CSV parsing warnings
+  if (csvWarnings.length > 0) {
+    addUnique({
+      id: 'csv-parse-warnings',
+      type: 'anomaly',
+      severity: 'info',
+      title: `${csvWarnings.length} CSV parsing warning(s)`,
+      description:
+        csvWarnings
+          .slice(0, 3)
+          .map((w) => `Row ${w.row}: ${w.message}`)
+          .join('; ') + (csvWarnings.length > 3 ? ` (+${csvWarnings.length - 3} more)` : ''),
+      evidence: {
+        warning_count: csvWarnings.length,
+        warnings: csvWarnings.slice(0, 5),
+      },
+    });
+  }
+
+  for (const insight of repeatAmountInsights(unmatchedBank, currency)) {
     addUnique(insight);
   }
 
-  for (const insight of nearMatchInsights(matches, config)) {
-    addUnique(insight);
-  }
-
-  for (const insight of anomalyInsights(summary, balances)) {
+  for (const insight of anomalyInsights(balances)) {
     addUnique(insight);
   }
 
   return insights.slice(0, 5);
 }
 
-function mergeInsights(
-  base: ReconciliationInsight[],
-  additional: ReconciliationInsight[],
-): ReconciliationInsight[] {
-  if (additional.length === 0) {
-    return base;
-  }
-
-  const seen = new Set(base.map((insight) => insight.id));
-  const merged = [...base];
-
-  for (const insight of additional) {
-    if (seen.has(insight.id)) continue;
-    seen.add(insight.id);
-    merged.push(insight);
-  }
-
-  return merged.slice(0, 5);
-}
+// --- Main Analysis Function ---
 
 /**
  * Perform reconciliation analysis
  *
- * @param csvContent - CSV file content or file path
+ * @param csvContentOrParsed - CSV file content or pre-parsed result
  * @param csvFilePath - Optional file path (if csvContent is a path)
  * @param ynabTransactions - YNAB transactions from API
  * @param statementBalance - Expected cleared balance from statement
@@ -726,63 +329,83 @@ function mergeInsights(
  * @param accountId - Account ID for recommendation context
  * @param budgetId - Budget ID for recommendation context
  * @param invertBankAmounts - Whether to invert bank transaction amounts (for banks that show charges as positive)
+ * @param csvOptions - Optional CSV parsing options (manual overrides)
  */
 export function analyzeReconciliation(
-  csvContent: string,
-  csvFilePath: string | undefined,
+  csvContentOrParsed: string | CSVParseResult,
+  _csvFilePath: string | undefined,
   ynabTransactions: ynab.TransactionDetail[],
   statementBalance: number,
-  config: MatchingConfig = DEFAULT_MATCHING_CONFIG as MatchingConfig,
+  config: MatchingConfig = DEFAULT_CONFIG,
   currency: string = 'USD',
   accountId?: string,
   budgetId?: string,
   invertBankAmounts: boolean = false,
+  csvOptions?: ParseCSVOptions,
 ): ReconciliationAnalysis {
-  // Step 1: Parse bank CSV
-  let bankTransactions = parseBankStatement(csvContent, csvFilePath);
+  // Step 1: Parse bank CSV using new Parser (or use provided result)
+  let parseResult: CSVParseResult;
 
-  // Step 1b: Optionally invert bank transaction amounts
-  // Some banks show charges as positive (need inversion to match YNAB's negative convention)
-  // Other banks (e.g., Wealthsimple) show charges as negative already (no inversion needed)
-  if (invertBankAmounts) {
-    bankTransactions = bankTransactions.map((txn) => ({
-      ...txn,
-      amount: -txn.amount,
-    }));
+  if (typeof csvContentOrParsed === 'string') {
+    parseResult = parseCSV(csvContentOrParsed, {
+      ...csvOptions,
+      invertAmounts: invertBankAmounts,
+    });
+  } else {
+    parseResult = csvContentOrParsed;
   }
 
-  // Step 2: Convert YNAB transactions
-  const convertedYNABTxns = ynabTransactions.map(convertYNABTransaction);
+  const newBankTransactions = parseResult.transactions;
+  const csvParseErrors = parseResult.errors;
+  const csvParseWarnings = parseResult.warnings;
 
-  // Step 3: Run matching algorithm
-  const matches = findMatches(bankTransactions, convertedYNABTxns, config);
+  // Step 2: Normalize YNAB transactions
+  const newYNABTransactions = normalizeYNABTransactions(ynabTransactions);
 
-  // Step 4: Categorize matches
-  const { autoMatches, suggestedMatches, unmatchedBank } = categorizeMatches(matches);
+  // Step 3: Run new matching algorithm
+  // Use normalizeConfig to convert legacy config to V2 format with defaults
+  const normalizedConfig = normalizeConfig(config);
 
-  // Step 5: Find unmatched YNAB transactions
-  const unmatchedYNAB = findUnmatchedYNAB(convertedYNABTxns, matches);
+  const newMatches = findMatches(newBankTransactions, newYNABTransactions, normalizedConfig);
+  const matches: TransactionMatch[] = newMatches.map(mapToTransactionMatch);
 
-  let combinationMatches: TransactionMatch[] = [];
-  let combinationInsights: ReconciliationInsight[] = [];
+  // Categorize
+  const autoMatches = matches.filter((m) => m.confidence === 'high');
 
-  if (ENABLE_COMBINATION_MATCHING) {
-    const combinationResult = findCombinationMatches(unmatchedBank, unmatchedYNAB, config);
-    combinationMatches = combinationResult.matches;
-    combinationInsights = combinationResult.insights;
-  }
+  // Build set of YNAB transaction IDs that are already auto-matched
+  const autoMatchedYnabIds = new Set<string>();
+  autoMatches.forEach((m) => {
+    if (m.ynabTransaction) autoMatchedYnabIds.add(m.ynabTransaction.id);
+  });
 
-  const enrichedSuggestedMatches = [...suggestedMatches, ...combinationMatches];
+  // Only suggest matches for YNAB transactions NOT already auto-matched
+  const suggestedMatches = matches.filter(
+    (m) =>
+      m.confidence === 'medium' &&
+      (!m.ynabTransaction || !autoMatchedYnabIds.has(m.ynabTransaction.id)),
+  );
+
+  const unmatchedBankMatches = matches.filter(
+    (m) => m.confidence === 'low' || m.confidence === 'none',
+  );
+  const unmatchedBank = unmatchedBankMatches.map((m) => m.bankTransaction);
+
+  // Find unmatched YNAB
+  const matchedYnabIds = new Set<string>();
+  matches.forEach((m) => {
+    if (m.ynabTransaction) matchedYnabIds.add(m.ynabTransaction.id);
+  });
+  const unmatchedYNAB = newYNABTransactions.filter((t) => !matchedYnabIds.has(t.id));
 
   // Step 6: Calculate balances
-  const balances = calculateBalances(convertedYNABTxns, statementBalance, currency);
+  const balances = calculateBalances(newYNABTransactions, statementBalance, currency);
 
   // Step 7: Generate summary
   const summary = generateSummary(
-    bankTransactions,
-    convertedYNABTxns,
+    matches.map((m) => m.bankTransaction),
+    newYNABTransactions,
     autoMatches,
-    enrichedSuggestedMatches,
+    suggestedMatches,
     unmatchedBank,
     unmatchedYNAB,
     balances,
@@ -791,9 +414,15 @@ export function analyzeReconciliation(
   // Step 8: Generate next steps
   const nextSteps = generateNextSteps(summary);
 
-  // Step 9: Detect insights and patterns
-  const baseInsights = detectInsights(matches, unmatchedBank, summary, balances, config);
-  const insights = mergeInsights(baseInsights, combinationInsights);
+  // Step 9: Detect insights (including any CSV parsing issues)
+  const insights = detectInsights(
+    unmatchedBank,
+    summary,
+    balances,
+    currency,
+    csvParseErrors,
+    csvParseWarnings,
+  );
 
   // Step 10: Build the analysis result
   const analysis: ReconciliationAnalysis = {
@@ -801,7 +430,7 @@ export function analyzeReconciliation(
     phase: 'analysis',
     summary,
     auto_matches: autoMatches,
-    suggested_matches: enrichedSuggestedMatches,
+    suggested_matches: suggestedMatches,
     unmatched_bank: unmatchedBank,
     unmatched_ynab: unmatchedYNAB,
     balance_info: balances,
@@ -809,13 +438,13 @@ export function analyzeReconciliation(
     insights,
   };
 
-  // Step 11: Generate recommendations (if account and budget IDs are provided)
+  // Step 11: Generate recommendations
   if (accountId && budgetId) {
     const recommendations = generateRecommendations({
       account_id: accountId,
       budget_id: budgetId,
       analysis,
-      matching_config: config,
+      matching_config: normalizedConfig,
     });
     analysis.recommendations = recommendations;
   }

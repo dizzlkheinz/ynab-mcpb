@@ -76,7 +76,7 @@ const createBankTransaction = (
 ): BankTransaction => ({
   id,
   date,
-  amount,
+  amount: Math.round(amount * 1000),
   payee,
   original_csv_row: 1,
 });
@@ -278,12 +278,13 @@ describe('reportFormatter', () => {
       const analysis = createTestAnalysis({
         suggested_matches: [
           {
-            bank_transaction: createBankTransaction('bank-1', -60.0, 'Amazon', '2025-10-20'),
+            bankTransaction: createBankTransaction('bank-1', -60.0, 'Amazon', '2025-10-20'),
+            ynabTransaction: undefined,
             candidates: [],
             confidence: 'medium',
-            confidence_score: 75,
-            match_reason: 'amount_and_date_fuzzy_payee',
-            top_confidence: 75,
+            confidenceScore: 75,
+            matchReason: 'amount_and_date_fuzzy_payee',
+            topConfidence: 75,
           },
         ],
       });

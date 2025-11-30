@@ -71,15 +71,22 @@ const createMockContext = (overrides?: Partial<RecommendationContext>): Recommen
 };
 
 // Helper to create mock bank transaction
-const createBankTransaction = (overrides?: Partial<BankTransaction>): BankTransaction => ({
-  id: 'bank-txn-1',
-  date: '2024-01-15',
-  amount: -50.0,
-  payee: 'Test Store',
-  memo: 'Test memo',
-  original_csv_row: 1,
-  ...overrides,
-});
+// NOTE: amount overrides are provided in DECIMAL units (dollars) and converted to milliunits
+const createBankTransaction = (overrides?: Partial<BankTransaction>): BankTransaction => {
+  const { amount, ...restOverrides } = overrides ?? {};
+  const baseAmount = amount ?? -50.0; // dollars
+  const amountMilli = Math.round(baseAmount * 1000); // milliunits
+
+  return {
+    id: 'bank-txn-1',
+    date: '2024-01-15',
+    amount: amountMilli,
+    payee: 'Test Store',
+    memo: 'Test memo',
+    original_csv_row: 1,
+    ...restOverrides,
+  };
+};
 
 // Helper to create mock YNAB transaction
 const createYNABTransaction = (overrides?: Partial<YNABTransaction>): YNABTransaction => ({
@@ -406,11 +413,11 @@ describe('recommendationEngine', () => {
         const ynabTxn = createYNABTransaction();
 
         const suggestedMatch: TransactionMatch = {
-          bank_transaction: bankTxn,
-          ynab_transaction: ynabTxn,
+          bankTransaction: bankTxn,
+          ynabTransaction: ynabTxn,
           confidence: 'medium',
-          confidence_score: 75,
-          match_reason: 'Fuzzy payee match',
+          confidenceScore: 75,
+          matchReason: 'Fuzzy payee match',
         };
 
         const context = createMockContext({
@@ -435,10 +442,10 @@ describe('recommendationEngine', () => {
         const bankTxn = createBankTransaction({ amount: -45.0 });
 
         const suggestedMatch: TransactionMatch = {
-          bank_transaction: bankTxn,
+          bankTransaction: bankTxn,
           confidence: 'none',
-          confidence_score: 0,
-          match_reason: 'No match found',
+          confidenceScore: 0,
+          matchReason: 'No match found',
         };
 
         const context = createMockContext({
@@ -472,7 +479,7 @@ describe('recommendationEngine', () => {
         });
 
         const suggestedMatch: TransactionMatch = {
-          bank_transaction: bankTxn,
+          bankTransaction: bankTxn,
           candidates: [
             {
               ynab_transaction: ynabTxn1,
@@ -488,8 +495,8 @@ describe('recommendationEngine', () => {
             },
           ],
           confidence: 'medium',
-          confidence_score: 60,
-          match_reason: 'combination_match',
+          confidenceScore: 60,
+          matchReason: 'combination_match',
         };
 
         const context = createMockContext({
@@ -575,10 +582,10 @@ describe('recommendationEngine', () => {
         const bankTxn = createBankTransaction({ amount: -99.99 });
 
         const suggestedMatch: TransactionMatch = {
-          bank_transaction: bankTxn,
+          bankTransaction: bankTxn,
           confidence: 'none',
-          confidence_score: 0,
-          match_reason: 'No match',
+          confidenceScore: 0,
+          matchReason: 'No match',
         };
 
         const context = createMockContext({
@@ -662,11 +669,11 @@ describe('recommendationEngine', () => {
         const bankTxn = createBankTransaction();
         const ynabTxn = createYNABTransaction({ cleared: 'uncleared' });
         const suggestedMatch: TransactionMatch = {
-          bank_transaction: bankTxn,
-          ynab_transaction: ynabTxn,
+          bankTransaction: bankTxn,
+          ynabTransaction: ynabTxn,
           confidence: 'medium',
-          confidence_score: 75,
-          match_reason: 'Suggested',
+          confidenceScore: 75,
+          matchReason: 'Suggested',
         };
 
         const insights = [
@@ -967,11 +974,11 @@ describe('recommendationEngine', () => {
         const bankTxn = createBankTransaction({ id: 'b1' });
         const ynabTxn = createYNABTransaction({ id: 'y1', cleared: 'uncleared' });
         const suggestedMatch: TransactionMatch = {
-          bank_transaction: createBankTransaction({ id: 'b2' }),
-          ynab_transaction: createYNABTransaction({ id: 'y2' }),
+          bankTransaction: createBankTransaction({ id: 'b2' }),
+          ynabTransaction: createYNABTransaction({ id: 'y2' }),
           confidence: 'medium',
-          confidence_score: 75,
-          match_reason: 'Suggested',
+          confidenceScore: 75,
+          matchReason: 'Suggested',
         };
         const insights = [
           createInsight('near_match', 'warning'),

@@ -1,47 +1,27 @@
 /**
  * Type definitions for the reconciliation tool
  * Based on the 2025-10-31 reconciliation redesign specification
+ *
+ * IMPORTANT UNIT CONVENTION:
+ * BankTransaction.amount is in MILLIUNITS (integers) in V2 architecture (formerly dollars).
+ * YNABTransaction.amount is in MILLIUNITS (integers).
+ * All internal calculations use milliunits to avoid floating-point errors.
  */
 
 import type { MoneyValue } from '../../utils/money.js';
+import type {
+  BankTransaction as CanonicalBankTransaction,
+  NormalizedYNABTransaction as CanonicalYNABTransaction,
+} from '../../types/reconciliation.js';
+
+// Re-export canonical types as the standard types
+export type BankTransaction = CanonicalBankTransaction;
+export type YNABTransaction = CanonicalYNABTransaction;
 
 /**
  * Matching confidence levels
  */
 export type MatchConfidence = 'high' | 'medium' | 'low' | 'none';
-
-/**
- * Bank transaction parsed from CSV
- */
-export interface BankTransaction {
-  /** Generated UUID for tracking */
-  id: string;
-  /** Transaction date in YYYY-MM-DD format */
-  date: string;
-  /** Amount in dollars */
-  amount: number;
-  /** Payee/merchant name */
-  payee: string;
-  /** Optional memo/description */
-  memo?: string;
-  /** Original CSV row number for debugging */
-  original_csv_row: number;
-}
-
-/**
- * YNAB transaction (simplified from API)
- */
-export interface YNABTransaction {
-  id: string;
-  date: string;
-  /** Amount in milliunits */
-  amount: number;
-  payee_name: string | null;
-  category_name: string | null;
-  cleared: 'cleared' | 'uncleared' | 'reconciled';
-  approved: boolean;
-  memo?: string | null;
-}
 
 /**
  * Match candidate with confidence score
@@ -57,21 +37,21 @@ export interface MatchCandidate {
  * Transaction match result
  */
 export interface TransactionMatch {
-  bank_transaction: BankTransaction;
+  bankTransaction: BankTransaction;
   /** Best matched YNAB transaction (if any) */
-  ynab_transaction?: YNABTransaction;
+  ynabTransaction?: YNABTransaction;
   /** Alternative candidates for suggested matches */
   candidates?: MatchCandidate[];
   /** Confidence level */
   confidence: MatchConfidence;
   /** Confidence score 0-100 */
-  confidence_score: number;
+  confidenceScore: number;
   /** Reason for the match */
-  match_reason: string;
+  matchReason: string;
   /** Top confidence from candidates */
-  top_confidence?: number;
+  topConfidence?: number;
   /** Action hint for user */
-  action_hint?: string;
+  actionHint?: string;
   /** Recommendation text */
   recommendation?: string;
 }
@@ -163,31 +143,29 @@ export interface ReconciliationAction {
 }
 
 /**
- * Matching algorithm configuration
+ * Matching algorithm configuration (V2)
  */
 export interface MatchingConfig {
-  /** Date tolerance in days */
-  dateToleranceDays: number;
-  /** Amount tolerance in cents */
-  amountToleranceCents: number;
-  /** Description similarity threshold (0-1) */
-  descriptionSimilarityThreshold: number;
-  /** Confidence threshold for auto-matching (0-100) */
-  autoMatchThreshold: number;
-  /** Confidence threshold for suggestions (0-100) */
-  suggestionThreshold: number;
-}
+  weights: {
+    amount: number; // Recommended: 0.50
+    date: number; // Recommended: 0.15
+    payee: number; // Recommended: 0.35
+  };
 
-/**
- * Default matching configuration (not type-only for use in code)
- */
-export const DEFAULT_MATCHING_CONFIG = {
-  dateToleranceDays: 2,
-  amountToleranceCents: 1,
-  descriptionSimilarityThreshold: 0.8,
-  autoMatchThreshold: 90,
-  suggestionThreshold: 60,
-};
+  // Tolerances (in MILLIUNITS for amount)
+  amountToleranceMilliunits: number; // Default: 10 (1 cent)
+  dateToleranceDays: number; // Default: 7
+
+  // Thresholds
+  autoMatchThreshold: number; // Default: 85
+  suggestedMatchThreshold: number; // Default: 60
+  minimumCandidateScore: number; // Default: 40
+
+  // Bonuses for perfect matches
+  exactAmountBonus: number; // Default: 10
+  exactDateBonus: number; // Default: 5
+  exactPayeeBonus: number; // Default: 10
+}
 
 /**
  * Parsed CSV data from compareTransactions

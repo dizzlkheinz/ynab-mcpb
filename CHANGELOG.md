@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2025-11-26
+
+### Added
+
+- **Reconciliation V2 Architecture** - Complete redesign of reconciliation system
+  - Canonical transaction types with milliunits-based amounts (eliminates float precision issues)
+  - New CSV parser using PapaParse with Canadian bank presets (TD, RBC, Scotiabank, Wealthsimple, Tangerine)
+  - Advanced fuzzy matching engine using fuzzball for merchant name matching
+  - Configurable scoring system with amount/date/payee weights and bonuses
+  - Enhanced date parsing with chrono-node supporting multiple formats
+  - Auto-detection of CSV formats with comprehensive error reporting
+  - Support for debit/credit column formats and European number formats
+  - New dependencies: `chrono-node`, `dayjs`, `fuzzball`, `papaparse`
+
+### Changed
+
+- **Matching Algorithm** - Improved accuracy and configurability
+  - Default amount tolerance: 1 cent (10 milliunits, down from 50)
+  - Default date tolerance: 7 days (up from 2 days for bank posting delays)
+  - Rebalanced weights: amount 50%, payee 35%, date 15%
+  - Auto-match threshold: 85% (down from 90% for better match rates)
+  - Token-set-ratio matching for payee names handles bank merchant variations
+
+- **Code Quality** - Eliminated duplication and improved maintainability
+  - Exported `normalizeConfig` function from matcher for reuse
+  - Removed 23 lines of duplicated config construction in analyzer
+  - Updated all documentation to reflect V2 implementation
+
+### Fixed
+
+- **Documentation** - Corrected outdated references and mismatches
+  - Fixed file path references (removed non-existent `matcher.v2.ts`)
+  - Corrected config value documentation (amountToleranceMilliunits)
+  - Fixed Markdown table formatting in reconciliation plan
+
 ## [0.13.4] - 2025-11-21
 
 ### Changed

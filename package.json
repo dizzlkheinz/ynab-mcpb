@@ -1,6 +1,6 @@
 {
   "name": "@dizzlkheinz/ynab-mcpb",
-  "version": "0.13.4",
+  "version": "0.14.0",
   "description": "Model Context Protocol server for YNAB (You Need A Budget) integration",
   "main": "dist/index.js",
   "type": "module",
@@ -67,10 +67,14 @@
   "license": "AGPL-3.0",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
+    "chrono-node": "^2.9.0",
     "csv-parse": "^6.1.0",
     "d3-array": "^3.2.4",
     "date-fns": "^4.1.0",
+    "dayjs": "^1.11.19",
     "dotenv": "^17.2.1",
+    "fuzzball": "^2.2.3",
+    "papaparse": "^5.5.3",
     "ynab": "^2.9.0",
     "zod": "^4.1.11",
     "zod-validation-error": "^5.0.0"
@@ -79,6 +83,7 @@
     "@eslint/js": "^9.35.0",
     "@types/d3-array": "^3.2.1",
     "@types/node": "^24.5.2",
+    "@types/papaparse": "^5.5.0",
     "@vitest/coverage-v8": "^3.2.4",
     "@vitest/ui": "^3.2.4",
     "esbuild": "^0.25.10",

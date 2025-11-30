@@ -5,6 +5,7 @@ import { executeReconciliation, type AccountSnapshot } from '../executor.js';
 import type { NormalizedYnabError } from '../executor.js';
 import { normalizeYnabError, shouldPropagateYnabError } from '../executor.js';
 import type { ReconcileAccountRequest } from '../index.js';
+import { toMoneyValue } from '../../../utils/money.js';
 
 const buildAnalysis = (): ReconciliationAnalysis => ({
   success: true,
@@ -17,34 +18,35 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
     suggested_matches: 0,
     unmatched_bank: 1,
     unmatched_ynab: 1,
-    current_cleared_balance: -899.02,
-    target_statement_balance: -921.24,
-    discrepancy: 22.22,
+    current_cleared_balance: toMoneyValue(-899020, 'USD'),
+    target_statement_balance: toMoneyValue(-921240, 'USD'),
+    discrepancy: toMoneyValue(22220, 'USD'),
     discrepancy_explanation: 'Need to add 1 missing transaction',
   },
   auto_matches: [
     {
-      bank_transaction: {
+      bankTransaction: {
         id: 'bank-1',
         date: '2025-10-15',
-        amount: -45.23,
+        amount: -45230,
         payee: 'Shell Gas',
-        original_csv_row: 2,
+        sourceRow: 2,
+        raw: { date: '2025-10-15', amount: '-45.23', description: 'Shell Gas' },
       },
-      ynab_transaction: {
+      ynabTransaction: {
         id: 'ynab-1',
         date: '2025-10-14',
         amount: -45230,
-        payee_name: 'Shell',
-        category_name: 'Auto',
+        payee: 'Shell',
+        categoryName: 'Auto',
         cleared: 'uncleared',
         approved: true,
         memo: null,
       },
       candidates: [],
       confidence: 'high',
-      confidence_score: 97,
-      match_reason: 'exact_amount_and_date',
+      confidenceScore: 97,
+      matchReason: 'exact_amount_and_date',
     },
   ],
   suggested_matches: [],
@@ -52,9 +54,10 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
     {
       id: 'bank-2',
       date: '2025-10-25',
-      amount: 22.22,
+      amount: 22220,
       payee: 'EvoCarShare',
-      original_csv_row: 7,
+      sourceRow: 7,
+      raw: { date: '2025-10-25', amount: '22.22', description: 'EvoCarShare' },
     },
   ],
   unmatched_ynab: [
@@ -62,19 +65,19 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
       id: 'ynab-2',
       date: '2025-10-10',
       amount: -15000,
-      payee_name: 'Coffee Shop',
-      category_name: 'Dining',
+      payee: 'Coffee Shop',
+      categoryName: 'Dining',
       cleared: 'cleared',
       approved: true,
       memo: null,
     },
   ],
   balance_info: {
-    current_cleared: -899.02,
-    current_uncleared: -45.23,
-    current_total: -944.25,
-    target_statement: -921.24,
-    discrepancy: 22.22,
+    current_cleared: toMoneyValue(-899020, 'USD'),
+    current_uncleared: toMoneyValue(-45230, 'USD'),
+    current_total: toMoneyValue(-944250, 'USD'),
+    target_statement: toMoneyValue(-921240, 'USD'),
+    discrepancy: toMoneyValue(22220, 'USD'),
     on_track: false,
   },
   next_steps: ['Review auto matches'],
@@ -89,7 +92,7 @@ const defaultAccountSnapshot: AccountSnapshot = {
 
 const buildBulkAnalysis = (
   count: number,
-  amount = 10,
+  amount = 10000,
   statementMultiplier = count,
 ): ReconciliationAnalysis => {
   const analysis = buildAnalysis();
@@ -110,21 +113,26 @@ const buildBulkAnalysis = (
       amount,
       payee: `Bulk Payee ${index}`,
       memo: `Bulk memo ${index}`,
-      original_csv_row: index + 1,
+      sourceRow: index + 1,
+      raw: {
+        date: date.toISOString().slice(0, 10),
+        amount: String(amount / 1000),
+        description: `Bulk Payee ${index}`,
+      },
     };
   });
   analysis.summary.unmatched_bank = analysis.unmatched_bank.length;
   const statementBalance = amount * statementMultiplier;
-  analysis.summary.current_cleared_balance = 0;
-  analysis.summary.target_statement_balance = statementBalance;
-  analysis.summary.discrepancy = statementBalance;
+  analysis.summary.current_cleared_balance = toMoneyValue(0, 'USD');
+  analysis.summary.target_statement_balance = toMoneyValue(statementBalance, 'USD');
+  analysis.summary.discrepancy = toMoneyValue(statementBalance, 'USD');
   analysis.summary.discrepancy_explanation = 'Bulk test discrepancy';
   analysis.balance_info = {
-    current_cleared: 0,
-    current_uncleared: 0,
-    current_total: 0,
-    target_statement: statementBalance,
-    discrepancy: statementBalance,
+    current_cleared: toMoneyValue(0, 'USD'),
+    current_uncleared: toMoneyValue(0, 'USD'),
+    current_total: toMoneyValue(0, 'USD'),
+    target_statement: toMoneyValue(statementBalance, 'USD'),
+    discrepancy: toMoneyValue(statementBalance, 'USD'),
     on_track: false,
   };
   analysis.next_steps = [];
@@ -133,13 +141,13 @@ const buildBulkAnalysis = (
 };
 
 const buildBulkParams = (
-  statementBalance: number,
+  statementBalance: MoneyValue, // Expects MoneyValue now from buildBulkAnalysis
   overrides: Partial<ReconcileAccountRequest> = {},
 ): ReconcileAccountRequest => ({
   budget_id: 'budget-bulk',
   account_id: 'account-bulk',
   csv_data: 'Date,Payee,Amount',
-  statement_balance: statementBalance,
+  statement_balance: statementBalance.value, // Use decimal value for params
   statement_date: '2025-10-31',
   date_tolerance_days: 1,
   amount_tolerance_cents: 1,
@@ -251,7 +259,8 @@ describe('executeReconciliation (dry run)', () => {
     expect(result.summary.transactions_created).toBe(1);
     expect(result.summary.transactions_updated).toBe(2);
     expect(result.summary.dates_adjusted).toBe(1);
-    expect(result.actions_taken).toHaveLength(3);
+    // 3 original actions + 2 diagnostic actions (diagnostic_step3_entry + diagnostic_unmatched_ynab)
+    expect(result.actions_taken).toHaveLength(5);
     expect(result.recommendations).toContain(
       'Dry run only — re-run with dry_run=false to apply these changes',
     );
@@ -346,68 +355,70 @@ describe('executeReconciliation (ordered halting)', () => {
         suggested_matches: 0,
         unmatched_bank: 0,
         unmatched_ynab: 0,
-        current_cleared_balance: 90,
-        target_statement_balance: 100,
-        discrepancy: -10,
+        current_cleared_balance: toMoneyValue(90000, 'USD'),
+        target_statement_balance: toMoneyValue(100000, 'USD'),
+        discrepancy: toMoneyValue(-10000, 'USD'),
         discrepancy_explanation: 'Awaiting cleared transactions',
       },
       auto_matches: [
         {
-          bank_transaction: {
+          bankTransaction: {
             id: 'bank-older',
             date: '2025-09-15',
-            amount: 5,
+            amount: 5000,
             payee: 'Older',
-            original_csv_row: 2,
+            sourceRow: 2,
+            raw: { date: '2025-09-15', amount: '5.00', description: 'Older' },
           },
-          ynab_transaction: {
+          ynabTransaction: {
             id: 'ynab-older',
             date: '2025-09-14',
             amount: 5000,
-            payee_name: 'Older',
-            category_name: null,
+            payee: 'Older',
+            categoryName: null,
             cleared: 'uncleared',
             approved: true,
             memo: null,
           },
           candidates: [],
           confidence: 'high',
-          confidence_score: 95,
-          match_reason: 'Exact match',
+          confidenceScore: 95,
+          matchReason: 'Exact match',
         },
         {
-          bank_transaction: {
+          bankTransaction: {
             id: 'bank-newer',
             date: '2025-10-25',
-            amount: 10,
+            amount: 10000,
             payee: 'Newer',
-            original_csv_row: 1,
+            sourceRow: 1,
+            raw: { date: '2025-10-25', amount: '10.00', description: 'Newer' },
           },
-          ynab_transaction: {
+          ynabTransaction: {
             id: 'ynab-newer',
             date: '2025-10-24',
             amount: 10000,
-            payee_name: 'Newer',
-            category_name: null,
+            payee: 'Newer',
+            categoryName: null,
             cleared: 'uncleared',
             approved: true,
             memo: null,
           },
           candidates: [],
           confidence: 'high',
-          confidence_score: 99,
-          match_reason: 'Exact match',
+          confidenceScore: 99,
+          matchReason: 'Exact match',
         },
       ],
       suggested_matches: [],
       unmatched_bank: [],
       unmatched_ynab: [],
       balance_info: {
-        current_cleared: 90,
-        current_uncleared: 0,
-        current_total: 90,
-        target_statement: 100,
-        discrepancy: -10,
+        current_cleared: toMoneyValue(90000, 'USD'),
+        current_uncleared: toMoneyValue(0, 'USD'),
+        current_total: toMoneyValue(90000, 'USD'),
+        target_statement: toMoneyValue(100000, 'USD'),
+        discrepancy: toMoneyValue(-10000, 'USD'),
         on_track: false,
       },
       next_steps: [],
@@ -543,7 +554,7 @@ describe('executeReconciliation - bulk create mode', () => {
   });
 
   it('falls back to sequential creation when bulk request fails', async () => {
-    const analysis = buildBulkAnalysis(3, 8);
+    const analysis = buildBulkAnalysis(3, 1000);
     const params = buildBulkParams(analysis.summary.target_statement_balance);
     const initialAccount = { ...defaultAccountSnapshot };
     const { api, mocks } = createMockYnabAPI(initialAccount);
@@ -614,7 +625,7 @@ describe('executeReconciliation - bulk create mode', () => {
   });
 
   it('splits large batches into 100-transaction chunks', async () => {
-    const analysis = buildBulkAnalysis(150, 5);
+    const analysis = buildBulkAnalysis(150, 1000);
     const params = buildBulkParams(analysis.summary.target_statement_balance);
     const initialAccount = { ...defaultAccountSnapshot };
     const { api, mocks } = createMockYnabAPI(initialAccount);
@@ -657,7 +668,7 @@ describe('executeReconciliation - bulk create mode', () => {
   });
 
   it('throws on fatal sequential creation errors surfaced as objects', async () => {
-    const analysis = buildBulkAnalysis(1, 5);
+    const analysis = buildBulkAnalysis(1, 1000);
     const params = buildBulkParams(analysis.summary.target_statement_balance);
     const initialAccount = { ...defaultAccountSnapshot };
     const { api, mocks } = createMockYnabAPI(initialAccount);
@@ -727,7 +738,7 @@ describe('executeReconciliation - bulk create mode', () => {
   });
 
   it('honors halting logic when balance aligns mid-batch', async () => {
-    const analysis = buildBulkAnalysis(10, 10, 5);
+    const analysis = buildBulkAnalysis(10, 1000, 5);
     const params = buildBulkParams(analysis.summary.target_statement_balance);
     const initialAccount = { ...defaultAccountSnapshot };
     const { api, mocks } = createMockYnabAPI(initialAccount);
