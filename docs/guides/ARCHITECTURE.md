@@ -1,24 +1,23 @@
 # YNAB MCP Server Architecture
 
-This guide explains the v0.8.x modular architecture, core components, and architectural patterns.
+This guide explains the modular architecture, core components, and architectural patterns.
 
 ## Table of Contents
 
-- [v0.8.x Modular Architecture](#v08x-modular-architecture)
+- [Modular Architecture](#modular-architecture)
 - [Core Components](#core-components)
 - [Dependency Injection Pattern](#dependency-injection-pattern)
-- [Developing Tools with v0.8.x](#developing-tools-with-v08x)
+- [Developing Tools](#developing-tools)
 - [Cache Management](#cache-management)
 - [Service Module Patterns](#service-module-patterns)
-- [Migration from v0.7.x](#migration-from-v07x)
 
-## v0.8.x Modular Architecture
+## Modular Architecture
 
-The v0.8.x series introduces a completely refactored architecture that improves maintainability, testability, and performance while maintaining 100% backward compatibility.
+The server uses a modular architecture that improves maintainability, testability, and performance.
 
 ### Architecture Overview
 
-The v0.8.x architecture consists of several key components working together:
+The architecture consists of several key components working together:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -92,10 +91,10 @@ Focused modules handling specific server concerns:
 
 ## Dependency Injection Pattern
 
-The v0.8.x releases adopt explicit dependency injection for better testability and maintainability:
+The architecture uses explicit dependency injection for better testability and maintainability:
 
 ```typescript
-// v0.8.x pattern - explicit dependencies
+// Explicit dependency injection pattern
 class MyService {
   constructor(
     private cacheManager: CacheManager,
@@ -120,11 +119,11 @@ class MyService {
 const myService = new MyService(cacheManager, errorHandler, budgetResolver);
 ```
 
-## Developing Tools with v0.8.x
+## Developing Tools
 
 ### Tool Development Patterns
 
-Creating new tools in v0.8.x follows the Tool Registry pattern for consistency and maintainability.
+Creating new tools follows the Tool Registry pattern for consistency and maintainability.
 
 #### 1. Define Tool Schema
 
@@ -250,7 +249,7 @@ export async function handleMyTool(params: MyToolRequest): Promise<any> {
 
 ### Understanding the Enhanced Cache System
 
-The v0.8.x line introduces a sophisticated caching system designed for performance and observability.
+The server includes a sophisticated caching system designed for performance and observability.
 
 #### Cache Configuration
 
@@ -423,7 +422,7 @@ export async function handleSetDefaultBudget(params: SetDefaultBudgetRequest) {
 
 ### Working with Service Modules
 
-The v0.8.x releases decompose server functionality into focused service modules.
+The server decomposes functionality into focused service modules.
 
 #### Resource Manager
 
@@ -527,122 +526,6 @@ class MyDiagnosticManager extends DiagnosticManager {
   }
 }
 ```
-
-## Migration from v0.7.x
-
-### No Breaking Changes for Users
-
-**Important:** All v0.7.x tool calls, parameters, and responses work identically in v0.8.x. This section is for developers working with the internal architecture.
-
-### Internal API Changes
-
-#### Error Handling Migration
-
-**v0.7.x Pattern:**
-```typescript
-// Direct error throwing
-if (!budgetId) {
-  throw new Error('No budget ID provided');
-}
-```
-
-**v0.8.x Pattern:**
-```typescript
-// Centralized error handling with consistent format
-const result = BudgetResolver.resolveBudgetId(providedId, defaultId);
-if (typeof result !== 'string') {
-  return result; // Returns properly formatted CallToolResult
-}
-```
-
-#### Caching Migration
-
-**v0.7.x Pattern:**
-```typescript
-// Manual cache management
-const cached = cacheManager.get(key);
-if (cached && !isExpired(cached)) {
-  return cached.data;
-}
-
-const result = await apiCall();
-cacheManager.set(key, result, ttl);
-return result;
-```
-
-**v0.8.x Pattern:**
-```typescript
-// Enhanced cache wrapper with observability
-return cacheManager.wrap(key, {
-  ttl: CACHE_TTLS.ACCOUNTS,
-  staleWhileRevalidate: 120000,
-  loader: () => apiCall()
-});
-```
-
-#### Tool Registration Migration
-
-**v0.7.x Pattern:**
-```typescript
-// Direct switch statement in handleCallTool
-case 'my_tool':
-  return withSecurityWrapper(async () => {
-    const validated = MyToolSchema.parse(params);
-    return await handleMyTool(validated);
-  });
-```
-
-**v0.8.x Pattern:**
-```typescript
-// Registry-based registration
-registry.register({
-  name: 'my_tool',
-  description: 'Tool description',
-  inputSchema: MyToolSchema,
-  handler: adapt(handleMyTool),
-  defaultArgumentResolver: resolveBudgetId()
-});
-```
-
-### Testing Pattern Updates
-
-**Enhanced Dependency Injection for Testing:**
-
-```typescript
-// v0.8.x - Mock individual services
-const mockCacheManager = {
-  wrap: vi.fn().mockImplementation((key, options) => options.loader()),
-  getStats: vi.fn().mockReturnValue({ hit_rate: 0.5 })
-};
-
-const mockErrorHandler = {
-  createErrorResponse: vi.fn().mockReturnValue({ success: false })
-};
-
-// Test with mocked dependencies
-const service = new MyService(mockCacheManager, mockErrorHandler);
-```
-
-### Import Path Updates
-
-Most imports remain the same due to barrel exports:
-
-```typescript
-// Still works (barrel export)
-import { handleMyTool } from '../tools/myTool.js';
-
-// New modular imports available
-import { parseCSV } from '../tools/compareTransactions/parser.js';
-import { findMatches } from '../tools/compareTransactions/matcher.js';
-import { formatResults } from '../tools/compareTransactions/formatter.js';
-```
-
-### Performance Improvements to Expect
-
-- **Cache Hit Rate**: 60-80% for repeated operations
-- **Initial Load Time**: Faster due to cache warming
-- **Memory Usage**: More efficient with LRU eviction
-- **Error Response Time**: Faster with pre-formatted responses
 
 ---
 
