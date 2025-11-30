@@ -76,7 +76,7 @@ interface LegacyBalanceReconciliation {
 
 const toBankTransactionView = (txn: BankTransaction, currency: string) => ({
   ...txn,
-  amount_money: toMoneyValueFromDecimal(txn.amount, currency),
+  amount_money: toMoneyValue(txn.amount, currency),
 });
 
 const toYNABTransactionView = (txn: YNABTransaction, currency: string) => ({
@@ -85,15 +85,20 @@ const toYNABTransactionView = (txn: YNABTransaction, currency: string) => ({
 });
 
 const convertMatch = (match: TransactionMatch, currency: string) => ({
-  ...match,
-  bank_transaction: toBankTransactionView(match.bank_transaction, currency),
-  ynab_transaction: match.ynab_transaction
-    ? toYNABTransactionView(match.ynab_transaction, currency)
+  bank_transaction: toBankTransactionView(match.bankTransaction, currency),
+  ynab_transaction: match.ynabTransaction
+    ? toYNABTransactionView(match.ynabTransaction, currency)
     : undefined,
   candidates: match.candidates?.map((candidate) => ({
     ...candidate,
     ynab_transaction: toYNABTransactionView(candidate.ynab_transaction, currency),
   })),
+  confidence: match.confidence,
+  confidence_score: match.confidenceScore,
+  match_reason: match.matchReason,
+  top_confidence: match.topConfidence,
+  action_hint: match.actionHint,
+  recommendation: match.recommendation,
 });
 
 const convertInsight = (insight: ReconciliationInsight) => ({

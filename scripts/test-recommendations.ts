@@ -4,7 +4,7 @@
  */
 
 import { analyzeReconciliation } from '../src/tools/reconciliation/analyzer.js';
-import { DEFAULT_MATCHING_CONFIG } from '../src/tools/reconciliation/types.js';
+import { DEFAULT_CONFIG as DEFAULT_MATCHING_CONFIG } from '../src/tools/reconciliation/matcher.js';
 
 // Test data from user's scenario
 const csvContent = `Date,Description,Amount
