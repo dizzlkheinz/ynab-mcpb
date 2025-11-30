@@ -371,7 +371,20 @@ export function analyzeReconciliation(
 
   // Categorize
   const autoMatches = matches.filter((m) => m.confidence === 'high');
-  const suggestedMatches = matches.filter((m) => m.confidence === 'medium');
+
+  // Build set of YNAB transaction IDs that are already auto-matched
+  const autoMatchedYnabIds = new Set<string>();
+  autoMatches.forEach((m) => {
+    if (m.ynabTransaction) autoMatchedYnabIds.add(m.ynabTransaction.id);
+  });
+
+  // Only suggest matches for YNAB transactions NOT already auto-matched
+  const suggestedMatches = matches.filter(
+    (m) =>
+      m.confidence === 'medium' &&
+      (!m.ynabTransaction || !autoMatchedYnabIds.has(m.ynabTransaction.id)),
+  );
+
   const unmatchedBankMatches = matches.filter(
     (m) => m.confidence === 'low' || m.confidence === 'none',
   );

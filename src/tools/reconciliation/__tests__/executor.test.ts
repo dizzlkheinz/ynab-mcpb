@@ -259,7 +259,8 @@ describe('executeReconciliation (dry run)', () => {
     expect(result.summary.transactions_created).toBe(1);
     expect(result.summary.transactions_updated).toBe(2);
     expect(result.summary.dates_adjusted).toBe(1);
-    expect(result.actions_taken).toHaveLength(3);
+    // 3 original actions + 2 diagnostic actions (diagnostic_step3_entry + diagnostic_unmatched_ynab)
+    expect(result.actions_taken).toHaveLength(5);
     expect(result.recommendations).toContain(
       'Dry run only — re-run with dry_run=false to apply these changes',
     );
