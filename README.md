@@ -60,7 +60,7 @@ Add this to your Claude Desktop MCP settings file:
   "mcpServers": {
     "ynab": {
       "command": "npx",
-      "args": ["-y", "@dizzlkheinz/ynab-mcpb"],
+      "args": ["-y", "@dizzlkheinz/ynab-mcpb@latest"],
       "env": {
         "YNAB_ACCESS_TOKEN": "your-token-here"
       }
@@ -81,7 +81,7 @@ Add this to your Cline MCP settings:
   "mcpServers": {
     "ynab": {
       "command": "npx",
-      "args": ["-y", "@dizzlkheinz/ynab-mcpb"],
+      "args": ["-y", "@dizzlkheinz/ynab-mcpb@latest"],
       "env": {
         "YNAB_ACCESS_TOKEN": "your-token-here"
       }
@@ -113,7 +113,7 @@ startup_timeout_sec = 120
 For any MCP-compatible client, configure the server with:
 
 **Command:** `npx`
-**Arguments:** `["-y", "@dizzlkheinz/ynab-mcpb"]`
+**Arguments:** `["-y", "@dizzlkheinz/ynab-mcpb@latest"]`
 **Environment Variables:**
 
 - `YNAB_ACCESS_TOKEN`: Your YNAB Personal Access Token
@@ -148,7 +148,7 @@ Example:
   "mcpServers": {
     "ynab": {
       "command": "npx",
-      "args": ["-y", "@dizzlkheinz/ynab-mcpb"],
+      "args": ["-y", "@dizzlkheinz/ynab-mcpb@latest"],
       "env": {
         "YNAB_ACCESS_TOKEN": "your-token-here",
         "YNAB_EXPORT_PATH": "C:\\Users\\YourName\\Documents"
