@@ -381,14 +381,46 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
 
     if (amountCol) {
       rawAmount = getValue(amountCol)?.trim() ?? '';
-      amountMilliunits = dollarStringToMilliunits(rawAmount);
+      const parsedAmount = parseAmount(rawAmount);
+      if (!parsedAmount.valid) {
+        errors.push({
+          row: rowNum,
+          field: 'amount',
+          message: parsedAmount.reason ?? `Invalid amount: "${rawAmount}"`,
+          rawValue: rawAmount,
+        });
+        continue;
+      }
+      amountMilliunits = parsedAmount.valueMilliunits;
     } else if (debitCol && creditCol) {
       const debit = getValue(debitCol)?.trim() ?? '';
       const credit = getValue(creditCol)?.trim() ?? '';
       rawAmount = debit || credit;
 
-      const debitMilliunits = dollarStringToMilliunits(debit);
-      const creditMilliunits = dollarStringToMilliunits(credit);
+      const parsedDebit = parseAmount(debit);
+      const parsedCredit = parseAmount(credit);
+
+      if (!parsedDebit.valid && debit) {
+        errors.push({
+          row: rowNum,
+          field: 'amount',
+          message: parsedDebit.reason ?? `Invalid debit amount: "${debit}"`,
+          rawValue: debit,
+        });
+        continue;
+      }
+      if (!parsedCredit.valid && credit) {
+        errors.push({
+          row: rowNum,
+          field: 'amount',
+          message: parsedCredit.reason ?? `Invalid credit amount: "${credit}"`,
+          rawValue: credit,
+        });
+        continue;
+      }
+
+      const debitMilliunits = parsedDebit.valid ? parsedDebit.valueMilliunits : 0;
+      const creditMilliunits = parsedCredit.valid ? parsedCredit.valueMilliunits : 0;
 
       // Warn if both debit and credit have values (ambiguous)
       if (Math.abs(debitMilliunits) > 0 && Math.abs(creditMilliunits) > 0) {
@@ -402,7 +434,13 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
       } else if (Math.abs(creditMilliunits) > 0) {
         amountMilliunits = Math.abs(creditMilliunits); // Credits are inflows (positive)
       } else {
-        amountMilliunits = 0;
+        errors.push({
+          row: rowNum,
+          field: 'amount',
+          message: 'Missing debit/credit amount',
+          rawValue: `${debit}|${credit}`,
+        });
+        continue;
       }
 
       // Warn if debit column contains negative value (unusual)
@@ -412,16 +450,6 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
         warnings.push({ row: rowNum, message: warning });
       }
     } else {
-      continue;
-    }
-
-    if (!Number.isFinite(amountMilliunits)) {
-      errors.push({
-        row: rowNum,
-        field: 'amount',
-        message: `Invalid amount: "${rawAmount}"`,
-        rawValue: rawAmount,
-      });
       continue;
     }
 
@@ -589,8 +617,14 @@ function detectPreset(columns: string[]): BankPreset | undefined {
 const CURRENCY_SYMBOLS = /[$€£¥]/g;
 const CURRENCY_CODES = /\b(CAD|USD|EUR|GBP)\b/gi;
 
-function dollarStringToMilliunits(str: string): number {
-  if (!str) return 0;
+function parseAmount(str: string): {
+  valid: boolean;
+  valueMilliunits: number;
+  reason?: string;
+} {
+  if (!str || !str.trim()) {
+    return { valid: false, valueMilliunits: 0, reason: 'Missing amount value' };
+  }
 
   let cleaned = str.replace(CURRENCY_SYMBOLS, '').replace(CURRENCY_CODES, '').trim();
 
@@ -610,8 +644,10 @@ function dollarStringToMilliunits(str: string): number {
   }
 
   const dollars = parseFloat(cleaned);
-  if (!Number.isFinite(dollars)) return 0;
+  if (!Number.isFinite(dollars)) {
+    return { valid: false, valueMilliunits: 0, reason: `Invalid amount: "${str}"` };
+  }
 
   // Convert to milliunits: $1.00 → 1000
-  return Math.round(dollars * 1000);
+  return { valid: true, valueMilliunits: Math.round(dollars * 1000) };
 }

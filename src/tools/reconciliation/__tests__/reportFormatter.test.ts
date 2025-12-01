@@ -155,11 +155,11 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis, options);
 
-      expect(report).toContain('📊 Checking Account Reconciliation Report');
-      expect(report).toContain('═'.repeat(60));
-      expect(report).toContain('BALANCE CHECK');
-      expect(report).toContain('TRANSACTION ANALYSIS');
-      expect(report).toContain('RECOMMENDED ACTIONS');
+      expect(report).toContain('Checking Account Reconciliation Report');
+      expect(report).toContain('-'.repeat(60));
+      expect(report).toContain('Balance Check');
+      expect(report).toContain('Transaction Analysis');
+      expect(report).toContain('Recommended Actions');
     });
 
     it('should show statement date range', () => {
@@ -187,8 +187,8 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('✅ BALANCES MATCH PERFECTLY');
-      expect(report).not.toContain('❌ DISCREPANCY');
+      expect(report).toContain('Balances match perfectly.');
+      expect(report).not.toContain('Discrepancy:');
     });
 
     it('should show discrepancy with correct direction when YNAB higher', () => {
@@ -209,7 +209,7 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('❌ DISCREPANCY: $20.00');
+      expect(report).toContain('Discrepancy: $20.00');
       expect(report).toContain('YNAB shows MORE than statement');
     });
 
@@ -231,7 +231,7 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('❌ DISCREPANCY: -$20.00');
+      expect(report).toContain('Discrepancy: -$20.00');
       expect(report).toContain('Statement shows MORE than YNAB');
     });
 
@@ -255,7 +255,7 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('❌ UNMATCHED BANK TRANSACTIONS:');
+      expect(report).toContain('Unmatched bank transactions:');
       expect(report).toContain('2025-10-25');
       expect(report).toContain('EvoCarShare');
       expect(report).toContain('-$22.22');
@@ -291,7 +291,7 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('💡 SUGGESTED MATCHES:');
+      expect(report).toContain('Suggested matches:');
       expect(report).toContain('Amazon');
       expect(report).toContain('75% confidence');
     });
@@ -318,9 +318,9 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('KEY INSIGHTS');
-      expect(report).toContain('🚨 Repeated amount detected');
-      expect(report).toContain('⚠️ Near match found');
+      expect(report).toContain('Key Insights');
+      expect(report).toContain('[CRITICAL] Repeated amount detected');
+      expect(report).toContain('[WARN] Near match found');
     });
 
     it('should use correct severity icons', () => {
@@ -334,9 +334,9 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('🚨 Critical Issue');
-      expect(report).toContain('⚠️ Warning Issue');
-      expect(report).toContain('ℹ️ Info Issue');
+      expect(report).toContain('[CRITICAL] Critical Issue');
+      expect(report).toContain('[WARN] Warning Issue');
+      expect(report).toContain('[INFO] Info Issue');
     });
 
     it('should truncate insights list', () => {
@@ -364,11 +364,11 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis, {}, execution);
 
-      expect(report).toContain('EXECUTION SUMMARY');
+      expect(report).toContain('Execution Summary');
       expect(report).toContain('Transactions created:  2');
       expect(report).toContain('Transactions updated:  3');
       expect(report).toContain('Date adjustments:      1');
-      expect(report).toContain('✅ Changes applied to YNAB');
+      expect(report).toContain('Changes applied to YNAB');
     });
 
     it('should show dry run notice when dry run enabled', () => {
@@ -384,7 +384,7 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis, {}, execution);
 
-      expect(report).toContain('⚠️  Dry run only — no YNAB changes were applied.');
+      expect(report).toContain('NOTE: Dry run only - no YNAB changes were applied.');
     });
 
     it('should show execution recommendations', () => {
@@ -414,7 +414,7 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('RECOMMENDED ACTIONS');
+      expect(report).toContain('Recommended Actions');
       expect(report).toContain('Create missing transaction for EvoCarShare');
       expect(report).toContain('Mark 8 transactions as cleared');
     });
@@ -433,7 +433,7 @@ describe('reportFormatter', () => {
       const analysis = createTestAnalysis();
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('📊 Account Reconciliation Report');
+      expect(report).toContain('Account Reconciliation Report');
     });
   });
 
@@ -548,7 +548,7 @@ describe('reportFormatter', () => {
       });
 
       const report = formatHumanReadableReport(analysis);
-      expect(report).toContain('✅ BALANCES MATCH PERFECTLY');
+      expect(report).toContain('Balances match perfectly.');
     });
 
     it('should format insight evidence when available', () => {

@@ -22,6 +22,7 @@ import type { DeltaFetcher } from '../deltaFetcher.js';
 import { resolveDeltaFetcherArgs } from '../deltaSupport.js';
 import { detectSignInversion } from './signDetector.js';
 import { normalizeYNABTransactions } from './ynabAdapter.js';
+import type { BankTransaction } from './types.js';
 
 // Re-export types for external use
 export type * from './types.js';
@@ -153,29 +154,29 @@ export async function handleReconcileAccount(
   deltaFetcherOrParams: DeltaFetcher | ReconcileAccountRequest,
   maybeParams?: ReconcileAccountRequest,
 ): Promise<CallToolResult> {
-  const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-    ynabAPI,
-    deltaFetcherOrParams,
-    maybeParams,
-  );
-  const forceFullRefresh = params.force_full_refresh ?? true;
-  return await withToolErrorHandling(
-    async () => {
-      // Build matching configuration from parameters (V2 Format)
-      const config: MatchingConfig = {
-        weights: {
-          amount: 0.5,
-          date: 0.15,
-          payee: 0.35,
-        },
-        dateToleranceDays: params.date_tolerance_days ?? 5,
-        amountToleranceMilliunits: (params.amount_tolerance_cents ?? 1) * 10,
-        autoMatchThreshold: params.auto_match_threshold ?? 90,
-        suggestedMatchThreshold: params.suggestion_threshold ?? 60,
-        minimumCandidateScore: 40,
-        exactAmountBonus: 10,
-        exactDateBonus: 5,
-        exactPayeeBonus: 10,
+      const { deltaFetcher, params } = resolveDeltaFetcherArgs(
+        ynabAPI,
+        deltaFetcherOrParams,
+        maybeParams,
+      );
+      const forceFullRefresh = params.force_full_refresh ?? true;
+      return await withToolErrorHandling(
+        async () => {
+          // Build matching configuration from parameters (V2 Format)
+          const config: MatchingConfig = {
+            weights: {
+              amount: 0.5,
+              date: 0.15,
+              payee: 0.35,
+            },
+            dateToleranceDays: params.date_tolerance_days ?? 7,
+            amountToleranceMilliunits: (params.amount_tolerance_cents ?? 1) * 10,
+            autoMatchThreshold: params.auto_match_threshold ?? 85,
+            suggestedMatchThreshold: params.suggestion_threshold ?? 60,
+            minimumCandidateScore: 40,
+            exactAmountBonus: 10,
+            exactDateBonus: 5,
+            exactPayeeBonus: 10,
       };
 
       const accountResult = forceFullRefresh
@@ -215,6 +216,8 @@ export async function handleReconcileAccount(
 
       const budgetResponse = await ynabAPI.budgets.getBudgetById(params.budget_id);
       const currencyCode = budgetResponse.data.budget?.currency_format?.iso_code ?? 'USD';
+
+      const narrativeNotes: string[] = [];
 
       // Prepare CSV parsing options from request
       const dateFormat = mapCsvDateFormatToHint(params.csv_format?.date_format);
@@ -256,42 +259,44 @@ export async function handleReconcileAccount(
         }
       }
 
-      // Fetch YNAB transactions for the account
-      // Auto-detect date range from CSV if not explicitly provided
+      if (!csvContent.trim()) {
+        throw new Error('CSV content is empty after reading the provided source.');
+      }
+
+      // Initial parse without inversion for date window + sign detection
+      let rawCsvResult: CSVParseResult;
+      try {
+        rawCsvResult = parseCSV(csvContent, {
+          ...csvOptions,
+          invertAmounts: false,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : 'Unknown error while parsing CSV';
+        throw new Error(`Failed to parse CSV data: ${message}`);
+      }
+
+      // Fetch YNAB transactions for the account using inferred date window
       let sinceDate: Date;
-      let parseResult: CSVParseResult | undefined;
+      let dateWindowSource:
+        | 'statement_start_date'
+        | 'csv_min_date_with_buffer'
+        | 'fallback_90_days';
 
       if (params.statement_start_date) {
-        // User provided explicit start date
         sinceDate = new Date(params.statement_start_date);
+        dateWindowSource = 'statement_start_date';
+      } else if (rawCsvResult.transactions.length > 0) {
+        sinceDate = inferSinceDateFromTransactions(rawCsvResult.transactions);
+        dateWindowSource = 'csv_min_date_with_buffer';
       } else {
-        // Auto-detect from CSV content using new parser
-        try {
-          parseResult = parseCSV(csvContent, {
-            ...csvOptions,
-            invertAmounts: shouldInvertBankAmounts,
-          });
-
-          if (parseResult.transactions.length > 0) {
-            // Find min date
-            const dates = parseResult.transactions
-              .map((t) => new Date(t.date).getTime())
-              .filter((t) => !isNaN(t));
-            if (dates.length > 0) {
-              const minTime = Math.min(...dates);
-              const minDateObj = new Date(minTime);
-              minDateObj.setDate(minDateObj.getDate() - 7); // 7-day buffer
-              sinceDate = minDateObj;
-            } else {
-              sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-            }
-          } else {
-            sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-          }
-        } catch {
-          // Fallback to 90 days if CSV parsing fails
-          sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-        }
+        sinceDate = fallbackSinceDate();
+        dateWindowSource = 'fallback_90_days';
+        narrativeNotes.push(
+          'CSV contained no parsable transactions for date detection; fetched the last 90 days from YNAB.',
+        );
       }
 
       const sinceDateString = sinceDate.toISOString().split('T')[0];
@@ -308,32 +313,32 @@ export async function handleReconcileAccount(
           );
 
       const ynabTransactions = transactionsResult.data;
+      const normalizedYNAB = normalizeYNABTransactions(ynabTransactions);
 
       // Smart sign detection: If invert_bank_amounts not explicitly set, auto-detect
       let finalInvertAmounts = shouldInvertBankAmounts;
-      if (params.invert_bank_amounts === undefined && csvContent) {
-        // Parse CSV without inversion to get raw amounts
-        const rawParseResult = parseCSV(csvContent, {
-          ...csvOptions,
-          invertAmounts: false, // Don't invert yet
-        });
+      if (
+        params.invert_bank_amounts === undefined &&
+        rawCsvResult.transactions.length > 0 &&
+        normalizedYNAB.length > 0
+      ) {
+        const needsInversion = detectSignInversion(rawCsvResult.transactions, normalizedYNAB);
 
-        if (rawParseResult.transactions.length > 0 && ynabTransactions.length > 0) {
-          // Normalize YNAB transactions for comparison
-          const normalizedYNAB = normalizeYNABTransactions(ynabTransactions);
-
-          // Detect if signs are mismatched
-          const needsInversion = detectSignInversion(rawParseResult.transactions, normalizedYNAB);
-
-          finalInvertAmounts = needsInversion;
-
-          // If detection result differs from default, invalidate parseResult
-          // to force re-parsing with correct inversion
-          if (needsInversion !== shouldInvertBankAmounts && parseResult) {
-            parseResult = undefined;
-          }
+        if (needsInversion !== finalInvertAmounts) {
+          narrativeNotes.push(
+            needsInversion
+              ? 'Detected bank CSV amounts opposite YNAB; inverting bank amounts for matching.'
+              : 'Detected bank CSV amounts already align with YNAB; using CSV amounts as-is.',
+          );
         }
+
+        finalInvertAmounts = needsInversion;
       }
+
+      const parseResult =
+        finalInvertAmounts === false
+          ? rawCsvResult
+          : parseCSV(csvContent, { ...csvOptions, invertAmounts: finalInvertAmounts });
 
       const auditMetadata = {
         data_freshness: getDataFreshness(transactionsResult, forceFullRefresh),
@@ -347,6 +352,21 @@ export async function handleReconcileAccount(
           transactions_cached: transactionsResult.wasCached,
           delta_merge_applied: transactionsResult.usedDelta,
         },
+        csv: {
+          rows: parseResult.meta.totalRows,
+          transactions: parseResult.transactions.length,
+          errors: parseResult.errors.length,
+          warnings: parseResult.warnings.length,
+          delimiter: parseResult.meta.detectedDelimiter,
+        },
+        date_window: {
+          since_date: sinceDateString,
+          source: dateWindowSource,
+        },
+        sign_detection: {
+          default_invert: shouldInvertBankAmounts,
+          final_invert: finalInvertAmounts,
+        },
       };
 
       const initialAccount: AccountSnapshot = {
@@ -357,7 +377,7 @@ export async function handleReconcileAccount(
 
       // Perform analysis
       const analysis = analyzeReconciliation(
-        parseResult ?? csvContent,
+        parseResult,
         params.csv_file_path,
         ynabTransactions,
         adjustedStatementBalance,
@@ -402,6 +422,9 @@ export async function handleReconcileAccount(
       };
       if (csvFormatForPayload !== undefined) {
         adapterOptions.csvFormat = csvFormatForPayload;
+      }
+      if (narrativeNotes.length > 0) {
+        adapterOptions.notes = narrativeNotes;
       }
 
       const payload = buildReconciliationPayload(analysis, adapterOptions, executionData);
@@ -491,4 +514,28 @@ function mapCsvFormatForPayload(format: ReconcileAccountRequest['csv_format'] | 
     amount_column: coerceString(format.amount_column, '') ?? null,
     payee_column: coerceString(format.description_column, '') ?? null,
   };
+}
+
+function fallbackSinceDate(): Date {
+  const date = new Date();
+  date.setDate(date.getDate() - 90);
+  return date;
+}
+
+function inferSinceDateFromTransactions(transactions: BankTransaction[]): Date {
+  if (transactions.length === 0) {
+    return fallbackSinceDate();
+  }
+
+  const timestamps = transactions
+    .map((t) => new Date(t.date).getTime())
+    .filter((time) => !Number.isNaN(time));
+
+  if (timestamps.length === 0) {
+    return fallbackSinceDate();
+  }
+
+  const minDate = new Date(Math.min(...timestamps));
+  minDate.setDate(minDate.getDate() - 7); // Add a small buffer
+  return minDate;
 }
