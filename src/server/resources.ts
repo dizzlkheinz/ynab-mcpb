@@ -11,6 +11,7 @@ import {
   Resource as MCPResource,
   ResourceContents,
 } from '@modelcontextprotocol/sdk/types.js';
+import { CacheManager, CACHE_TTLS } from './cacheManager.js';
 
 /**
  * Response formatter interface to avoid direct dependency on concrete implementation
@@ -59,54 +60,69 @@ export interface ResourceTemplateDefinition extends MCPResourceTemplate {
 export interface ResourceDependencies {
   ynabAPI: ynab.API;
   responseFormatter: ResponseFormatter;
+  cacheManager: CacheManager;
 }
 
 /**
  * Default resource handlers
  */
 const defaultResourceHandlers: Record<string, ResourceHandler> = {
-  'ynab://budgets': async (uri, { ynabAPI, responseFormatter }) => {
-    try {
-      const response = await ynabAPI.budgets.getBudgets();
-      const budgets = response.data.budgets.map((budget) => ({
-        id: budget.id,
-        name: budget.name,
-        last_modified_on: budget.last_modified_on,
-        first_month: budget.first_month,
-        last_month: budget.last_month,
-        currency_format: budget.currency_format,
-      }));
+  'ynab://budgets': async (uri, { ynabAPI, responseFormatter, cacheManager }) => {
+    const cacheKey = CacheManager.generateKey('resources', 'budgets', 'list');
+    return cacheManager.wrap<ResourceContents[]>(cacheKey, {
+      ttl: CACHE_TTLS.BUDGETS,
+      loader: async () => {
+        try {
+          const response = await ynabAPI.budgets.getBudgets();
+          const budgets = response.data.budgets.map((budget) => ({
+            id: budget.id,
+            name: budget.name,
+            last_modified_on: budget.last_modified_on,
+            first_month: budget.first_month,
+            last_month: budget.last_month,
+            currency_format: budget.currency_format,
+          }));
 
-      return [
-        {
-          uri: uri,
-          mimeType: 'application/json',
-          text: responseFormatter.format({ budgets }),
-        },
-      ];
-    } catch (error) {
-      throw new Error(`Failed to fetch budgets: ${error}`);
-    }
+          return [
+            {
+              uri: uri,
+              mimeType: 'application/json',
+              text: responseFormatter.format({ budgets }),
+            },
+          ];
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`Failed to fetch budgets: ${message}`);
+        }
+      },
+    });
   },
 
-  'ynab://user': async (uri, { ynabAPI, responseFormatter }) => {
-    try {
-      const response = await ynabAPI.user.getUser();
-      const userInfo = response.data.user;
-      const user = {
-        id: userInfo.id,
-      };
+  'ynab://user': async (uri, { ynabAPI, responseFormatter, cacheManager }) => {
+    const cacheKey = CacheManager.generateKey('resources', 'user');
+    return cacheManager.wrap<ResourceContents[]>(cacheKey, {
+      ttl: CACHE_TTLS.USER_INFO,
+      loader: async () => {
+        try {
+          const response = await ynabAPI.user.getUser();
+          const userInfo = response.data.user;
+          const user = {
+            id: userInfo.id,
+          };
 
-      return [
-        {
-          uri: uri,
-          mimeType: 'application/json',
-          text: responseFormatter.format({ user }),
-        },
-      ];
-    } catch (error) {
-      throw new Error(`Failed to fetch user info: ${error}`);
-    }
+          return [
+            {
+              uri: uri,
+              mimeType: 'application/json',
+              text: responseFormatter.format({ user }),
+            },
+          ];
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`Failed to fetch user info: ${message}`);
+        }
+      },
+    });
   },
 };
 
@@ -137,17 +153,28 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
     name: 'Budget Details',
     description: 'Detailed information for a specific budget',
     mimeType: 'application/json',
-    handler: async (uri, params, { ynabAPI, responseFormatter }) => {
+    handler: async (uri, params, { ynabAPI, responseFormatter, cacheManager }) => {
       const budget_id = params['budget_id'];
       if (!budget_id) throw new Error('Missing budget_id parameter');
-      const response = await ynabAPI.budgets.getBudgetById(budget_id);
-      return [
-        {
-          uri,
-          mimeType: 'application/json',
-          text: responseFormatter.format(response.data.budget),
+      const cacheKey = CacheManager.generateKey('resources', 'budgets', 'get', budget_id);
+      return cacheManager.wrap<ResourceContents[]>(cacheKey, {
+        ttl: CACHE_TTLS.BUDGETS,
+        loader: async () => {
+          try {
+            const response = await ynabAPI.budgets.getBudgetById(budget_id);
+            return [
+              {
+                uri,
+                mimeType: 'application/json',
+                text: responseFormatter.format(response.data.budget),
+              },
+            ];
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`Failed to fetch budget ${budget_id}: ${message}`);
+          }
         },
-      ];
+      });
     },
   },
   {
@@ -155,17 +182,28 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
     name: 'Budget Accounts',
     description: 'List of accounts for a specific budget',
     mimeType: 'application/json',
-    handler: async (uri, params, { ynabAPI, responseFormatter }) => {
+    handler: async (uri, params, { ynabAPI, responseFormatter, cacheManager }) => {
       const budget_id = params['budget_id'];
       if (!budget_id) throw new Error('Missing budget_id parameter');
-      const response = await ynabAPI.accounts.getAccounts(budget_id);
-      return [
-        {
-          uri,
-          mimeType: 'application/json',
-          text: responseFormatter.format(response.data.accounts),
+      const cacheKey = CacheManager.generateKey('resources', 'accounts', 'list', budget_id);
+      return cacheManager.wrap<ResourceContents[]>(cacheKey, {
+        ttl: CACHE_TTLS.ACCOUNTS,
+        loader: async () => {
+          try {
+            const response = await ynabAPI.accounts.getAccounts(budget_id);
+            return [
+              {
+                uri,
+                mimeType: 'application/json',
+                text: responseFormatter.format(response.data.accounts),
+              },
+            ];
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`Failed to fetch accounts for budget ${budget_id}: ${message}`);
+          }
         },
-      ];
+      });
     },
   },
   {
@@ -173,19 +211,38 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
     name: 'Account Details',
     description: 'Detailed information for a specific account within a budget',
     mimeType: 'application/json',
-    handler: async (uri, params, { ynabAPI, responseFormatter }) => {
+    handler: async (uri, params, { ynabAPI, responseFormatter, cacheManager }) => {
       const budget_id = params['budget_id'];
       const account_id = params['account_id'];
       if (!budget_id) throw new Error('Missing budget_id parameter');
       if (!account_id) throw new Error('Missing account_id parameter');
-      const response = await ynabAPI.accounts.getAccountById(budget_id, account_id);
-      return [
-        {
-          uri,
-          mimeType: 'application/json',
-          text: responseFormatter.format(response.data.account),
+      const cacheKey = CacheManager.generateKey(
+        'resources',
+        'accounts',
+        'get',
+        budget_id,
+        account_id,
+      );
+      return cacheManager.wrap<ResourceContents[]>(cacheKey, {
+        ttl: CACHE_TTLS.ACCOUNTS,
+        loader: async () => {
+          try {
+            const response = await ynabAPI.accounts.getAccountById(budget_id, account_id);
+            return [
+              {
+                uri,
+                mimeType: 'application/json',
+                text: responseFormatter.format(response.data.account),
+              },
+            ];
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(
+              `Failed to fetch account ${account_id} in budget ${budget_id}: ${message}`,
+            );
+          }
         },
-      ];
+      });
     },
   },
 ];
@@ -203,7 +260,8 @@ export class ResourceManager {
     this.dependencies = dependencies;
     this.resourceHandlers = { ...defaultResourceHandlers };
     this.resourceDefinitions = [...defaultResourceDefinitions];
-    this.resourceTemplates = [...defaultResourceTemplates];
+    this.resourceTemplates = [];
+    defaultResourceTemplates.forEach((template) => this.registerTemplate(template));
   }
 
   /**
@@ -218,6 +276,7 @@ export class ResourceManager {
    * Register a new resource template
    */
   registerTemplate(definition: ResourceTemplateDefinition): void {
+    this.validateTemplateDefinition(definition);
     this.resourceTemplates.push(definition);
   }
 
@@ -301,6 +360,8 @@ export class ResourceManager {
         return '([^/]+)'; // Capture group for parameter value
       });
 
+    // Templates are validated at registration and come from trusted internal sources.
+    // If external template registration is introduced, consider a ReDoS-safe matcher.
     const regex = new RegExp(`^${regexPattern}$`);
     const match = uri.match(regex);
 
@@ -320,5 +381,33 @@ export class ResourceManager {
     }
 
     return null;
+  }
+
+  /**
+   * Validate template format and parameter names at registration time
+   */
+  private validateTemplateDefinition(definition: ResourceTemplateDefinition): void {
+    const { uriTemplate } = definition;
+    if (!/^[a-z0-9:/\-_{}]+$/i.test(uriTemplate)) {
+      throw new Error(`Invalid template format: contains unsafe characters (${uriTemplate})`);
+    }
+
+    const placeholderPattern = /{([^}]+)}/g;
+    const paramNames: string[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = placeholderPattern.exec(uriTemplate)) !== null) {
+      const paramName = match[1] ?? '';
+      if (!/^[a-z_][a-z0-9_]*$/i.test(paramName)) {
+        throw new Error(
+          `Invalid template parameter name '${paramName}' in template ${uriTemplate}`,
+        );
+      }
+      paramNames.push(paramName);
+    }
+
+    const uniqueNames = new Set(paramNames);
+    if (uniqueNames.size !== paramNames.length) {
+      throw new Error(`Duplicate parameter names detected in template ${uriTemplate}`);
+    }
   }
 }

@@ -96,7 +96,7 @@ graph TB
 
 ```mermaid
 graph LR
-    A[CSV Float Dollars] -->|dollarStringToMilliunits| B[BankTransaction Milliunits]
+    A[CSV Float Dollars] -->|parseAmount| B[BankTransaction Milliunits]
     C[YNAB API Milliunits] -->|normalizeYNABTransaction| D[NormalizedYNABTransaction]
 
     B --> E[Matcher Integer Comparison]
@@ -232,7 +232,7 @@ graph TD
     O --> Q
     P --> Q
 
-    Q -->|Single Column| R[dollarStringToMilliunits]
+    Q -->|Single Column| R[parseAmount]
     Q -->|Debit/Credit| S[Combine Columns]
 
     R --> T{Warnings?}
@@ -280,38 +280,38 @@ export const BANK_PRESETS: Record<string, BankPreset> = {
 };
 ```
 
-**Amount Conversion Logic:**
+**Amount Conversion Logic (validated via `parseAmount`):**
 
 ```typescript
-function dollarStringToMilliunits(str: string): number {
-  if (!str) return 0;
+function parseAmount(str: string): {
+  valid: boolean;
+  valueMilliunits: number;
+  reason?: string;
+} {
+  if (!str || !str.trim()) {
+    return { valid: false, valueMilliunits: 0, reason: 'Missing amount value' };
+  }
 
-  // 1. Strip currency symbols and codes
-  let cleaned = str
-    .replace(/[$€£¥]/g, '')
-    .replace(/\b(CAD|USD|EUR|GBP)\b/gi, '')
-    .trim();
+  let cleaned = str.replace(/[$€£¥]/g, '').replace(/\b(CAD|USD|EUR|GBP)\b/gi, '').trim();
 
-  // 2. Handle parentheses as negative: (123.45) → -123.45
   if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
     cleaned = '-' + cleaned.slice(1, -1);
   }
 
-  // 3. Detect European format: 1.234,56 → 1234.56
   if (/^-?\d{1,3}(\.\d{3})+,\d{2}$/.test(cleaned)) {
     cleaned = cleaned.replace(/\./g, '').replace(',', '.');
   }
 
-  // 4. Handle thousands separator: 1,234.56 → 1234.56
   if (cleaned.includes('.')) {
     cleaned = cleaned.replace(/,/g, '');
   }
 
   const dollars = parseFloat(cleaned);
-  if (!Number.isFinite(dollars)) return 0;
+  if (!Number.isFinite(dollars)) {
+    return { valid: false, valueMilliunits: 0, reason: `Invalid amount: "${str}"` };
+  }
 
-  // 5. Convert to milliunits: $1.00 → 1000
-  return Math.round(dollars * 1000);
+  return { valid: true, valueMilliunits: Math.round(dollars * 1000) };
 }
 ```
 
@@ -950,7 +950,7 @@ sequenceDiagram
     Handler->>Parser: parseCSV(csvContent, options)
     Parser->>Parser: Auto-detect format
     Parser->>Parser: PapaParse
-    Parser->>Parser: dollarStringToMilliunits
+    Parser->>Parser: parseAmount
     Parser-->>Handler: { transactions: BankTransaction[], errors, warnings }
 
     Handler->>Fetcher: fetchTransactionsByAccount(budget_id, account_id, since_date)
