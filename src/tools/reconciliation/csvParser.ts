@@ -100,6 +100,8 @@ export interface ParseCSVOptions {
   preset?: string;
   /** Multiply all amounts by -1 */
   invertAmounts?: boolean;
+  /** Explicit CSV delimiter override (defaults to PapaParse auto-detection) */
+  delimiter?: string;
   /** Manual column overrides */
   columns?: {
     date?: string;
@@ -244,6 +246,7 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
     dynamicTyping: false, // We'll handle type conversion ourselves
     skipEmptyLines: true,
     transformHeader: (h) => h.trim(),
+    ...(options.delimiter ? { delimiter: options.delimiter } : {}),
   });
 
   if (parsed.errors.length > 0) {

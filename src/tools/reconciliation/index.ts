@@ -243,6 +243,9 @@ export async function handleReconcileAccount(
         ...(params.csv_format?.has_header !== undefined && {
           header: params.csv_format.has_header,
         }),
+        ...(params.csv_format?.delimiter !== undefined && {
+          delimiter: params.csv_format.delimiter,
+        }),
       };
 
       // Load CSV content from either inline data or filesystem path
