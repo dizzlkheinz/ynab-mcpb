@@ -93,6 +93,21 @@ Add this to your Cline MCP settings:
 </details>
 
 <details>
+<summary><b>Codex</b></summary>
+
+Add this to your configuration file:
+
+```toml
+[mcp_servers.ynab-mcpb]
+command = "npx"
+args = ["-y", "@dizzlkheinz/ynab-mcpb@latest"]
+env = {"YNAB_ACCESS_TOKEN" = "your-token-here"}
+startup_timeout_sec = 120
+```
+
+</details>
+
+<details>
 <summary><b>Other MCP Clients</b></summary>
 
 For any MCP-compatible client, configure the server with:
