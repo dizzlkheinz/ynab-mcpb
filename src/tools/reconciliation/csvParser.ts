@@ -95,12 +95,34 @@ export const BANK_PRESETS: Record<string, BankPreset> = {
   },
 };
 
+/**
+ * Safe delimiters allowed for CSV parsing.
+ * Restricted to common, safe characters to prevent injection attacks.
+ */
+export const SAFE_DELIMITERS = [',', ';', '\t', '|', ' '] as const;
+export type SafeDelimiter = (typeof SAFE_DELIMITERS)[number];
+
+/**
+ * Validates that a delimiter is safe for CSV parsing.
+ * @throws {Error} if delimiter is not in the safe list
+ */
+function validateDelimiter(delimiter: string): asserts delimiter is SafeDelimiter {
+  if (!SAFE_DELIMITERS.includes(delimiter as SafeDelimiter)) {
+    throw new Error(
+      `Unsafe delimiter "${delimiter}". Allowed delimiters: ${SAFE_DELIMITERS.join(', ')}`,
+    );
+  }
+}
+
 export interface ParseCSVOptions {
   /** Bank preset key (e.g., 'td', 'rbc') */
   preset?: string;
   /** Multiply all amounts by -1 */
   invertAmounts?: boolean;
-  /** Explicit CSV delimiter override (defaults to PapaParse auto-detection) */
+  /**
+   * Explicit CSV delimiter override (defaults to PapaParse auto-detection).
+   * Must be one of: comma (,), semicolon (;), tab (\t), pipe (|), or space ( )
+   */
   delimiter?: string;
   /** Manual column overrides */
   columns?: {
@@ -202,6 +224,11 @@ function checkTDPattern(rows: string[][]): boolean {
 export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVParseResult {
   const errors: ParseError[] = [];
   const warnings: ParseWarning[] = [];
+
+  // Security: Validate delimiter if provided
+  if (options.delimiter) {
+    validateDelimiter(options.delimiter);
+  }
 
   // Security: Check file size limit
   const MAX_BYTES = options.maxBytes ?? 10 * 1024 * 1024; // 10MB default

@@ -7,6 +7,7 @@ This document provides comprehensive documentation for all tools available in th
 - [Overview](#overview)
 - [Authentication](#authentication)
 - [Data Formats](#data-formats)
+- [MCP Resources](#mcp-resources)
 - [Budget Management Tools](#budget-management-tools)
 - [Account Management Tools](#account-management-tools)
 - [Transaction Management Tools](#transaction-management-tools)
@@ -64,6 +65,149 @@ All dates use ISO 8601 format: `YYYY-MM-DD`
 All YNAB IDs are UUID strings:
 - Budget ID: `12345678-1234-1234-1234-123456789012`
 - Account ID: `87654321-4321-4321-4321-210987654321`
+
+## MCP Resources
+
+**📢 New in v0.16.0**: The YNAB MCP Server now supports MCP resource templates, enabling AI assistants to discover and access YNAB data through standardized URI patterns.
+
+### What are MCP Resources?
+
+MCP resources provide a standardized way for AI assistants to access structured data using URI patterns. Unlike tools (which perform actions), resources are read-only data endpoints that can be discovered and accessed dynamically.
+
+### Available Resources
+
+#### Static Resources
+
+| URI | Description | Returns |
+|-----|-------------|---------|
+| `ynab://budgets` | List all available budgets | Array of budget summaries with IDs, names, and metadata |
+| `ynab://user` | Current user information | User ID and basic profile data |
+
+#### Resource Templates (Dynamic URIs)
+
+| URI Template | Parameters | Description | Returns |
+|--------------|------------|-------------|---------|
+| `ynab://budgets/{budget_id}` | `budget_id` (UUID) | Detailed budget information | Complete budget object with accounts, categories, months, and settings |
+| `ynab://budgets/{budget_id}/accounts` | `budget_id` (UUID) | List accounts for a budget | Array of all accounts in the specified budget |
+| `ynab://budgets/{budget_id}/accounts/{account_id}` | `budget_id` (UUID)<br>`account_id` (UUID) | Detailed account information | Complete account object with balance, type, and metadata |
+
+### Usage Examples
+
+#### Listing Budgets
+```
+URI: ynab://budgets
+```
+
+**Response:**
+```json
+{
+  "budgets": [
+    {
+      "id": "12345678-1234-1234-1234-123456789012",
+      "name": "My Budget 2025",
+      "last_modified_on": "2025-12-01T10:30:00Z",
+      "first_month": "2025-01-01",
+      "last_month": "2025-12-01",
+      "currency_format": {
+        "iso_code": "USD",
+        "example_format": "$123.45",
+        "decimal_digits": 2,
+        "decimal_separator": ".",
+        "symbol_first": true,
+        "group_separator": ",",
+        "currency_symbol": "$",
+        "display_symbol": true
+      }
+    }
+  ]
+}
+```
+
+#### Getting Budget Details
+```
+URI: ynab://budgets/12345678-1234-1234-1234-123456789012
+```
+
+**Response:**
+```json
+{
+  "id": "12345678-1234-1234-1234-123456789012",
+  "name": "My Budget 2025",
+  "accounts": [...],
+  "categories": [...],
+  "months": [...],
+  "date_format": {"format": "DD/MM/YYYY"},
+  "currency_format": {...}
+}
+```
+
+#### Listing Budget Accounts
+```
+URI: ynab://budgets/12345678-1234-1234-1234-123456789012/accounts
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "87654321-4321-4321-4321-210987654321",
+    "name": "Checking Account",
+    "type": "checking",
+    "balance": -1924.37,
+    "cleared_balance": -1850.00,
+    "uncleared_balance": -74.37,
+    "on_budget": true,
+    "closed": false
+  }
+]
+```
+
+#### Getting Account Details
+```
+URI: ynab://budgets/12345678-1234-1234-1234-123456789012/accounts/87654321-4321-4321-4321-210987654321
+```
+
+**Response:**
+```json
+{
+  "id": "87654321-4321-4321-4321-210987654321",
+  "name": "Checking Account",
+  "type": "checking",
+  "balance": -1924.37,
+  "cleared_balance": -1850.00,
+  "uncleared_balance": -74.37,
+  "on_budget": true,
+  "closed": false,
+  "note": null,
+  "transfer_payee_id": "..."
+}
+```
+
+### Caching
+
+All MCP resources are cached for optimal performance:
+- **Budgets**: 1 hour TTL (rarely change)
+- **Accounts**: 30 minutes TTL (balances update periodically)
+- **User info**: 1 hour TTL (static data)
+
+### Resource vs Tool: When to Use What
+
+**Use MCP Resources when:**
+- You need to **read** structured data
+- You want to **discover** available budgets or accounts
+- You're building a UI that needs to **list** items
+- You need **cached** data for performance
+
+**Use Tools when:**
+- You need to **create**, **update**, or **delete** data
+- You need advanced filtering or querying (e.g., transactions since date)
+- You need to perform **actions** (e.g., reconcile, export)
+- You need the latest **real-time** data
+
+**Example:**
+- Get list of budgets: Use `ynab://budgets` resource ✅
+- Get transactions for an account: Use `list_transactions` tool ✅
+- Create a new transaction: Use `create_transaction` tool ✅
 
 ## Budget Management Tools
 
