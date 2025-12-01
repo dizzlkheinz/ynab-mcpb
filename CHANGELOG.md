@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2025-12-01
+
+### Added
+
+- **MCP Resource Templates** - Implemented resource templates for budgets and accounts
+  - `ynab://budgets/{budget_id}` - Get detailed budget information
+  - `ynab://budgets/{budget_id}/accounts` - List accounts for a specific budget
+  - `ynab://budgets/{budget_id}/accounts/{account_id}` - Get detailed account information
+  - Enables AI assistants to discover and access YNAB resources dynamically
+  - Full caching support with configurable TTLs
+
+- **Reconciliation System Architecture Documentation** - Comprehensive technical documentation (2,249 lines)
+  - Complete system architecture with Mermaid diagrams
+  - Detailed CSV parsing engine documentation
+  - Transaction matching algorithm specifications
+  - Execution engine patterns and bulk operation strategies
+  - Testing strategy and performance characteristics
+  - See `docs/technical/reconciliation-system-architecture.md`
+
+- **CSV Delimiter Security** - Added validation for CSV delimiter override
+  - Whitelist-based delimiter validation (comma, semicolon, tab, pipe, space)
+  - Prevents injection attacks via malicious delimiter strings
+  - Clear error messages for unsupported delimiters
+
+### Changed
+
+- **CSV Parser** - Enhanced delimiter handling
+  - Honor explicit delimiter overrides from reconcile_account requests
+  - Improved error messages for unsupported delimiters
+  - Better auto-detection fallback when delimiter override fails
+
+### Fixed
+
+- **Build Process** - Resolved build errors and applied code formatting
+- **Resource Templates** - Hardened template parameter validation and error handling
+
 ## [0.15.0] - 2025-11-30
 
 ### Changed
