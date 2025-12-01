@@ -1,6 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ResourceManager, ResourceDependencies } from '../resources';
+import { ResourceManager } from '../resources';
 import type * as ynab from 'ynab';
 
 // Mock YNAB API
@@ -47,14 +46,14 @@ describe('ResourceManager Templates', () => {
           uriTemplate: 'ynab://budgets/{budget_id}/accounts',
           name: 'Budget Accounts',
         }),
-      ])
+      ]),
     );
   });
 
   it('should match and handle budget details template', async () => {
     const budgetId = 'test-budget-id';
     const mockBudget = { id: budgetId, name: 'Test Budget' };
-    
+
     (mockYnabAPI.budgets.getBudgetById as any).mockResolvedValue({
       data: { budget: mockBudget },
     });
@@ -71,7 +70,7 @@ describe('ResourceManager Templates', () => {
   it('should match and handle budget accounts template', async () => {
     const budgetId = 'test-budget-id';
     const mockAccounts = [{ id: 'acc1', name: 'Checking' }];
-    
+
     (mockYnabAPI.accounts.getAccounts as any).mockResolvedValue({
       data: { accounts: mockAccounts },
     });
@@ -88,7 +87,7 @@ describe('ResourceManager Templates', () => {
     const budgetId = 'test-budget-id';
     const accountId = 'test-account-id';
     const mockAccount = { id: accountId, name: 'Savings' };
-    
+
     (mockYnabAPI.accounts.getAccountById as any).mockResolvedValue({
       data: { account: mockAccount },
     });
@@ -103,9 +102,11 @@ describe('ResourceManager Templates', () => {
 
   it('should fallback to throwing error for unknown URIs', async () => {
     const uri = 'ynab://unknown/resource';
-    await expect(resourceManager.readResource(uri)).rejects.toThrow('Unknown resource: ynab://unknown/resource');
+    await expect(resourceManager.readResource(uri)).rejects.toThrow(
+      'Unknown resource: ynab://unknown/resource',
+    );
   });
-  
+
   it('should prefer static resources over templates when both match (though unlikely with current design)', async () => {
     // Assuming 'ynab://budgets' is a static resource
     const mockBudgetsList = [{ id: 'b1', name: 'B1' }];
@@ -125,35 +126,33 @@ describe('ResourceManager Templates', () => {
   // Error handling tests
   describe('Error Handling', () => {
     it('should handle API errors gracefully for template resources', async () => {
-      (mockYnabAPI.budgets.getBudgetById as any).mockRejectedValue(
-        new Error('Budget not found')
-      );
+      (mockYnabAPI.budgets.getBudgetById as any).mockRejectedValue(new Error('Budget not found'));
 
-      await expect(
-        resourceManager.readResource('ynab://budgets/invalid-id')
-      ).rejects.toThrow('Failed to resolve template resource ynab://budgets/invalid-id: Budget not found');
+      await expect(resourceManager.readResource('ynab://budgets/invalid-id')).rejects.toThrow(
+        'Failed to resolve template resource ynab://budgets/invalid-id: Budget not found',
+      );
     });
 
     it('should handle API errors for account templates', async () => {
       (mockYnabAPI.accounts.getAccountById as any).mockRejectedValue(
-        new Error('Account not found')
+        new Error('Account not found'),
       );
 
       await expect(
-        resourceManager.readResource('ynab://budgets/budget-id/accounts/invalid-account')
+        resourceManager.readResource('ynab://budgets/budget-id/accounts/invalid-account'),
       ).rejects.toThrow('Failed to resolve template resource');
     });
 
     it('should reject URIs with backslash characters', async () => {
-      await expect(
-        resourceManager.readResource('ynab://budgets/test\\bad')
-      ).rejects.toThrow('Invalid parameter value');
+      await expect(resourceManager.readResource('ynab://budgets/test\\bad')).rejects.toThrow(
+        'Invalid parameter value',
+      );
     });
 
     it('should reject URIs with double-dot sequences in parameters', async () => {
-      await expect(
-        resourceManager.readResource('ynab://budgets/test../accounts')
-      ).rejects.toThrow('Invalid parameter value');
+      await expect(resourceManager.readResource('ynab://budgets/test../accounts')).rejects.toThrow(
+        'Invalid parameter value',
+      );
     });
   });
 
@@ -174,7 +173,7 @@ describe('ResourceManager Templates', () => {
 
       // The template should be registered but fail during matching
       await expect(
-        resourceManager.readResource('ynab://budgets/test$(malicious)')
+        resourceManager.readResource('ynab://budgets/test$(malicious)'),
       ).rejects.toThrow();
     });
   });
