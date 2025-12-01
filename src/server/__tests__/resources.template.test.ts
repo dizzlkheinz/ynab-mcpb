@@ -121,4 +121,61 @@ describe('ResourceManager Templates', () => {
     expect(mockYnabAPI.budgets.getBudgetById).not.toHaveBeenCalled();
     expect(JSON.parse(result.contents[0].text)).toEqual({ budgets: expect.any(Array) });
   });
+
+  // Error handling tests
+  describe('Error Handling', () => {
+    it('should handle API errors gracefully for template resources', async () => {
+      (mockYnabAPI.budgets.getBudgetById as any).mockRejectedValue(
+        new Error('Budget not found')
+      );
+
+      await expect(
+        resourceManager.readResource('ynab://budgets/invalid-id')
+      ).rejects.toThrow('Failed to resolve template resource ynab://budgets/invalid-id: Budget not found');
+    });
+
+    it('should handle API errors for account templates', async () => {
+      (mockYnabAPI.accounts.getAccountById as any).mockRejectedValue(
+        new Error('Account not found')
+      );
+
+      await expect(
+        resourceManager.readResource('ynab://budgets/budget-id/accounts/invalid-account')
+      ).rejects.toThrow('Failed to resolve template resource');
+    });
+
+    it('should reject URIs with backslash characters', async () => {
+      await expect(
+        resourceManager.readResource('ynab://budgets/test\\bad')
+      ).rejects.toThrow('Invalid parameter value');
+    });
+
+    it('should reject URIs with double-dot sequences in parameters', async () => {
+      await expect(
+        resourceManager.readResource('ynab://budgets/test../accounts')
+      ).rejects.toThrow('Invalid parameter value');
+    });
+  });
+
+  // Template validation tests
+  describe('Template Validation', () => {
+    it('should validate template format when registering', async () => {
+      // This test verifies that malformed templates are caught
+      // The validation happens in matchTemplate, so we test it indirectly
+      const maliciousTemplate = {
+        uriTemplate: 'ynab://budgets/{budget_id}$(malicious)',
+        name: 'Malicious Template',
+        description: 'Should be rejected',
+        mimeType: 'application/json',
+        handler: async () => [],
+      };
+
+      resourceManager.registerTemplate(maliciousTemplate);
+
+      // The template should be registered but fail during matching
+      await expect(
+        resourceManager.readResource('ynab://budgets/test$(malicious)')
+      ).rejects.toThrow();
+    });
+  });
 });
