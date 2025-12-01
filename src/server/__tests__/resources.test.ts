@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ResourceManager, type ResourceDependencies } from '../resources.js';
 import type * as ynab from 'ynab';
+import type { CacheManager } from '../cacheManager.js';
 
 // Mock YNAB API
 const mockYnabAPI = {
@@ -23,6 +24,10 @@ const mockResponseFormatter = {
   format: vi.fn((data) => JSON.stringify(data)),
 };
 
+const mockCacheManager = {
+  wrap: vi.fn(async (_key, { loader }) => loader()),
+} as unknown as CacheManager;
+
 describe('resources module', () => {
   let resourceManager: ResourceManager;
   let dependencies: ResourceDependencies;
@@ -33,6 +38,7 @@ describe('resources module', () => {
     dependencies = {
       ynabAPI: mockYnabAPI,
       responseFormatter: mockResponseFormatter,
+      cacheManager: mockCacheManager,
     };
 
     resourceManager = new ResourceManager(dependencies);
@@ -158,7 +164,7 @@ describe('resources module', () => {
           mockYnabAPI.budgets.getBudgets = vi.fn().mockRejectedValue(error);
 
           await expect(resourceManager.readResource('ynab://budgets')).rejects.toThrow(
-            'Failed to fetch budgets: Error: API Error',
+            'Failed to fetch budgets: API Error',
           );
         });
       });
@@ -198,7 +204,7 @@ describe('resources module', () => {
           mockYnabAPI.user.getUser = vi.fn().mockRejectedValue(error);
 
           await expect(resourceManager.readResource('ynab://user')).rejects.toThrow(
-            'Failed to fetch user info: Error: User API Error',
+            'Failed to fetch user info: User API Error',
           );
         });
       });
@@ -238,6 +244,7 @@ describe('resources module', () => {
         const customDependencies = {
           ynabAPI: customYnabAPI,
           responseFormatter: mockResponseFormatter,
+          cacheManager: mockCacheManager,
         };
 
         const customResourceManager = new ResourceManager(customDependencies);
@@ -255,6 +262,7 @@ describe('resources module', () => {
         const customDependencies = {
           ynabAPI: mockYnabAPI,
           responseFormatter: customFormatter,
+          cacheManager: mockCacheManager,
         };
 
         mockYnabAPI.budgets.getBudgets = vi.fn().mockResolvedValue({

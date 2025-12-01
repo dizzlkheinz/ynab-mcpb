@@ -14,6 +14,8 @@ import type {
 import type { LegacyReconciliationResult } from './executor.js';
 import type { MoneyValue } from '../../utils/money.js';
 
+const SECTION_DIVIDER = '-'.repeat(60);
+
 /**
  * Options for report formatting
  */
@@ -24,6 +26,7 @@ export interface ReportFormatterOptions {
   includeDetailedMatches?: boolean | undefined;
   maxUnmatchedToShow?: number | undefined;
   maxInsightsToShow?: number | undefined;
+  notes?: string[] | undefined;
 }
 
 /**
@@ -39,6 +42,11 @@ export function formatHumanReadableReport(
 
   // Header
   sections.push(formatHeader(accountLabel, analysis));
+
+  // Contextual notes (if provided)
+  if (options.notes && options.notes.length > 0) {
+    sections.push(formatNotesSection(options.notes));
+  }
 
   // Balance check section
   sections.push(formatBalanceSection(analysis.balance_info, analysis.summary));
@@ -67,9 +75,19 @@ export function formatHumanReadableReport(
  */
 function formatHeader(accountName: string, analysis: ReconciliationAnalysis): string {
   const lines: string[] = [];
-  lines.push(`📊 ${accountName} Reconciliation Report`);
-  lines.push('═'.repeat(60));
+  lines.push(`${accountName} Reconciliation Report`);
+  lines.push(SECTION_DIVIDER);
   lines.push(`Statement Period: ${analysis.summary.statement_date_range}`);
+  return lines.join('\n');
+}
+
+function formatNotesSection(notes: string[]): string {
+  const lines: string[] = [];
+  lines.push('Notes');
+  lines.push(SECTION_DIVIDER);
+  for (const note of notes) {
+    lines.push(`- ${note}`);
+  }
   return lines.join('\n');
 }
 
@@ -81,18 +99,18 @@ function formatBalanceSection(
   summary: ReconciliationAnalysis['summary'],
 ): string {
   const lines: string[] = [];
-  lines.push('BALANCE CHECK');
-  lines.push('═'.repeat(60));
+  lines.push('Balance Check');
+  lines.push(SECTION_DIVIDER);
 
   // Current balances
-  lines.push(`✓ YNAB Cleared Balance:  ${summary.current_cleared_balance.value_display}`);
-  lines.push(`✓ Statement Balance:     ${summary.target_statement_balance.value_display}`);
+  lines.push(`- YNAB Cleared Balance:  ${summary.current_cleared_balance.value_display}`);
+  lines.push(`- Statement Balance:     ${summary.target_statement_balance.value_display}`);
   lines.push('');
 
   // Discrepancy status
   const discrepancyMilli = balanceInfo.discrepancy.value_milliunits;
   if (discrepancyMilli === 0) {
-    lines.push('✅ BALANCES MATCH PERFECTLY');
+    lines.push('Balances match perfectly.');
   } else {
     const direction = discrepancyMilli > 0 ? 'ynab_higher' : 'bank_higher';
     const directionLabel =
@@ -100,8 +118,8 @@ function formatBalanceSection(
         ? 'YNAB shows MORE than statement'
         : 'Statement shows MORE than YNAB';
 
-    lines.push(`❌ DISCREPANCY: ${balanceInfo.discrepancy.value_display}`);
-    lines.push(`   Direction: ${directionLabel}`);
+    lines.push(`Discrepancy: ${balanceInfo.discrepancy.value_display}`);
+    lines.push(`Direction: ${directionLabel}`);
   }
 
   return lines.join('\n');
@@ -115,21 +133,21 @@ function formatTransactionAnalysisSection(
   options: ReportFormatterOptions,
 ): string {
   const lines: string[] = [];
-  lines.push('TRANSACTION ANALYSIS');
-  lines.push('═'.repeat(60));
+  lines.push('Transaction Analysis');
+  lines.push(SECTION_DIVIDER);
 
   const summary = analysis.summary;
   lines.push(
-    `✓ Automatically matched:  ${summary.auto_matched} of ${summary.bank_transactions_count} transactions`,
+    `- Automatically matched:  ${summary.auto_matched} of ${summary.bank_transactions_count} transactions`,
   );
-  lines.push(`✓ Suggested matches:      ${summary.suggested_matches}`);
-  lines.push(`✓ Unmatched bank:         ${summary.unmatched_bank}`);
-  lines.push(`✓ Unmatched YNAB:         ${summary.unmatched_ynab}`);
+  lines.push(`- Suggested matches:      ${summary.suggested_matches}`);
+  lines.push(`- Unmatched bank:         ${summary.unmatched_bank}`);
+  lines.push(`- Unmatched YNAB:         ${summary.unmatched_ynab}`);
 
   // Show unmatched bank transactions (if any)
   if (analysis.unmatched_bank.length > 0) {
     lines.push('');
-    lines.push('❌ UNMATCHED BANK TRANSACTIONS:');
+    lines.push('Unmatched bank transactions:');
     const maxToShow = options.maxUnmatchedToShow ?? 5;
     const toShow = analysis.unmatched_bank.slice(0, maxToShow);
 
@@ -145,7 +163,7 @@ function formatTransactionAnalysisSection(
   // Show suggested matches (if any)
   if (analysis.suggested_matches.length > 0) {
     lines.push('');
-    lines.push('💡 SUGGESTED MATCHES:');
+    lines.push('Suggested matches:');
     const maxToShow = options.maxUnmatchedToShow ?? 3;
     const toShow = analysis.suggested_matches.slice(0, maxToShow);
 
@@ -194,8 +212,8 @@ function formatAmount(amountMilli: number): string {
  */
 function formatInsightsSection(insights: ReconciliationInsight[], maxToShow: number = 3): string {
   const lines: string[] = [];
-  lines.push('KEY INSIGHTS');
-  lines.push('═'.repeat(60));
+  lines.push('Key Insights');
+  lines.push(SECTION_DIVIDER);
 
   const toShow = insights.slice(0, maxToShow);
   for (const insight of toShow) {
@@ -222,18 +240,18 @@ function formatInsightsSection(insights: ReconciliationInsight[], maxToShow: num
 }
 
 /**
- * Get emoji icon for severity level
+ * Get text icon for severity level
  */
 function getSeverityIcon(severity: string): string {
   switch (severity) {
     case 'critical':
-      return '🚨';
+      return '[CRITICAL]';
     case 'warning':
-      return '⚠️';
+      return '[WARN]';
     case 'info':
-      return 'ℹ️';
+      return '[INFO]';
     default:
-      return '•';
+      return '[NOTE]';
   }
 }
 
@@ -260,13 +278,13 @@ function formatEvidenceSummary(evidence: Record<string, unknown>): string | null
  */
 function formatExecutionSection(execution: LegacyReconciliationResult): string {
   const lines: string[] = [];
-  lines.push('EXECUTION SUMMARY');
-  lines.push('═'.repeat(60));
+  lines.push('Execution Summary');
+  lines.push(SECTION_DIVIDER);
 
   const summary = execution.summary;
-  lines.push(`• Transactions created:  ${summary.transactions_created}`);
-  lines.push(`• Transactions updated:  ${summary.transactions_updated}`);
-  lines.push(`• Date adjustments:      ${summary.dates_adjusted}`);
+  lines.push(`Transactions created:  ${summary.transactions_created}`);
+  lines.push(`Transactions updated:  ${summary.transactions_updated}`);
+  lines.push(`Date adjustments:      ${summary.dates_adjusted}`);
 
   // Show top recommendations if any
   if (execution.recommendations.length > 0) {
@@ -275,7 +293,7 @@ function formatExecutionSection(execution: LegacyReconciliationResult): string {
     const maxRecs = 3;
     const toShow = execution.recommendations.slice(0, maxRecs);
     for (const rec of toShow) {
-      lines.push(`  • ${rec}`);
+      lines.push(`  - ${rec}`);
     }
     if (execution.recommendations.length > maxRecs) {
       lines.push(`  ... and ${execution.recommendations.length - maxRecs} more`);
@@ -284,9 +302,9 @@ function formatExecutionSection(execution: LegacyReconciliationResult): string {
 
   lines.push('');
   if (summary.dry_run) {
-    lines.push('⚠️  Dry run only — no YNAB changes were applied.');
+    lines.push('NOTE: Dry run only - no YNAB changes were applied.');
   } else {
-    lines.push('✅ Changes applied to YNAB. Review structured output for action details.');
+    lines.push('Changes applied to YNAB. Review structured output for action details.');
   }
 
   return lines.join('\n');
@@ -300,8 +318,8 @@ function formatRecommendationsSection(
   execution?: LegacyReconciliationResult,
 ): string {
   const lines: string[] = [];
-  lines.push('RECOMMENDED ACTIONS');
-  lines.push('═'.repeat(60));
+  lines.push('Recommended Actions');
+  lines.push(SECTION_DIVIDER);
 
   // If we have execution results, recommendations are already shown
   if (execution && !execution.summary.dry_run) {
@@ -312,11 +330,11 @@ function formatRecommendationsSection(
   // Show next steps from analysis
   if (analysis.next_steps.length > 0) {
     for (const step of analysis.next_steps) {
-      lines.push(`• ${step}`);
+      lines.push(`- ${step}`);
     }
   } else {
-    lines.push('• No specific actions recommended.');
-    lines.push('• Review the structured output for detailed match information.');
+    lines.push('No specific actions recommended.');
+    lines.push('Review the structured output for detailed match information.');
   }
 
   return lines.join('\n');

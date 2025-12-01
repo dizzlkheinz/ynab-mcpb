@@ -113,6 +113,11 @@ function truncateMemo(memo: string | null | undefined): string {
   return memo.substring(0, MAX_MEMO_LENGTH - 3) + '...';
 }
 
+interface StatementWindow {
+  start?: Date;
+  end?: Date;
+}
+
 interface PreparedBulkCreateEntry {
   bankTransaction: BankTransaction;
   saveTransaction: SaveTransaction;
@@ -142,6 +147,53 @@ function generateBulkImportId(
   const raw = `${accountId}|${date}|${amountMilli}|${normalizedPayee}`;
   const digest = createHash('sha256').update(raw).digest('hex').slice(0, 24);
   return `YNAB:bulk:${digest}`;
+}
+
+function parseISODate(dateStr: string | undefined): Date | undefined {
+  if (!dateStr) return undefined;
+  const d = new Date(dateStr);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+function resolveStatementWindow(
+  params: ReconcileAccountRequest,
+  analysisDateRange?: string | undefined,
+): StatementWindow | undefined {
+  const start = parseISODate(params.statement_start_date);
+  const end =
+    parseISODate(params.statement_end_date ?? params.statement_date) ??
+    // If only start provided, end stays undefined
+    undefined;
+
+  if (start || end) {
+    const window: StatementWindow = {};
+    if (start) window.start = start;
+    if (end) window.end = end;
+    return window;
+  }
+
+  if (analysisDateRange && analysisDateRange.includes(' to ')) {
+    const [rawStart, rawEnd] = analysisDateRange.split(' to ').map((part) => part.trim());
+    const parsedStart = parseISODate(rawStart);
+    const parsedEnd = parseISODate(rawEnd);
+    if (parsedStart || parsedEnd) {
+      const window: StatementWindow = {};
+      if (parsedStart) window.start = parsedStart;
+      if (parsedEnd) window.end = parsedEnd;
+      return window;
+    }
+  }
+
+  return undefined;
+}
+
+function isWithinStatementWindow(dateStr: string, window: StatementWindow): boolean {
+  const date = parseISODate(dateStr);
+  if (!date) return false;
+
+  if (window.start && date < window.start) return false;
+  if (window.end && date > window.end) return false;
+  return true;
 }
 
 export async function executeReconciliation(options: ExecutionOptions): Promise<ExecutionResult> {
@@ -202,7 +254,12 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     ? sortByDateDescending(analysis.unmatched_bank)
     : [];
   const orderedAutoMatches = sortMatchesByBankDateDescending(analysis.auto_matches);
-  const orderedUnmatchedYNAB = sortByDateDescending(analysis.unmatched_ynab);
+  const statementWindow = resolveStatementWindow(params, analysis.summary.statement_date_range);
+  const orderedUnmatchedYNAB = sortByDateDescending(
+    statementWindow
+      ? analysis.unmatched_ynab.filter((txn) => isWithinStatementWindow(txn.date, statementWindow))
+      : analysis.unmatched_ynab,
+  );
 
   let bulkOperationDetails: BulkOperationDetails | undefined;
 
