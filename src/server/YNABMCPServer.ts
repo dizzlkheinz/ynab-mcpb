@@ -7,6 +7,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ListPromptsRequestSchema,
   ReadResourceRequestSchema,
   GetPromptRequestSchema,
@@ -226,6 +227,7 @@ export class YNABMCPServer {
     this.resourceManager = new ResourceManager({
       ynabAPI: this.ynabAPI,
       responseFormatter,
+      cacheManager,
     });
 
     this.promptManager = new PromptManager();
@@ -307,6 +309,11 @@ export class YNABMCPServer {
     // Handle list resources requests
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
       return this.resourceManager.listResources();
+    });
+
+    // Handle list resource templates requests
+    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
+      return this.resourceManager.listResourceTemplates();
     });
 
     // Handle read resource requests

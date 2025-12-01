@@ -22,6 +22,7 @@ interface AdapterOptions {
   currencyCode?: string;
   csvFormat?: CsvFormatPayload;
   auditMetadata?: Record<string, unknown>;
+  notes?: string[];
 }
 
 interface DualChannelPayload {
@@ -258,6 +259,7 @@ const buildHumanNarrative = (
     includeDetailedMatches: false,
     maxUnmatchedToShow: 5,
     maxInsightsToShow: 3,
+    notes: options.notes,
   };
 
   return formatHumanReadableReport(analysis, formatterOptions, execution);
