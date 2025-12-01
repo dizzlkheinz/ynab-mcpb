@@ -187,7 +187,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
         },
       ];
     },
-  }
+  },
 ];
 
 /**
@@ -226,11 +226,11 @@ export class ResourceManager {
    */
   listResources(): { resources: MCPResource[] } {
     return {
-      resources: this.resourceDefinitions.map(r => ({
+      resources: this.resourceDefinitions.map((r) => ({
         uri: r.uri,
         name: r.name,
         description: r.description,
-        mimeType: r.mimeType
+        mimeType: r.mimeType,
       })),
     };
   }
@@ -240,11 +240,11 @@ export class ResourceManager {
    */
   listResourceTemplates(): { resourceTemplates: MCPResourceTemplate[] } {
     return {
-      resourceTemplates: this.resourceTemplates.map(t => ({
+      resourceTemplates: this.resourceTemplates.map((t) => ({
         uriTemplate: t.uriTemplate,
         name: t.name,
         description: t.description,
-        mimeType: t.mimeType
+        mimeType: t.mimeType,
       })),
     };
   }
@@ -288,7 +288,7 @@ export class ResourceManager {
    */
   private matchTemplate(template: string, uri: string): Record<string, string> | null {
     // Validate template format (only allow safe characters and template syntax)
-    if (!/^[a-z0-9:\/\-_{}]+$/i.test(template)) {
+    if (!/^[a-z0-9:/\-_{}]+$/i.test(template)) {
       throw new Error('Invalid template format: contains unsafe characters');
     }
 

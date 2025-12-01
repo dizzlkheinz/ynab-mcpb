@@ -154,29 +154,29 @@ export async function handleReconcileAccount(
   deltaFetcherOrParams: DeltaFetcher | ReconcileAccountRequest,
   maybeParams?: ReconcileAccountRequest,
 ): Promise<CallToolResult> {
-      const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-        ynabAPI,
-        deltaFetcherOrParams,
-        maybeParams,
-      );
-      const forceFullRefresh = params.force_full_refresh ?? true;
-      return await withToolErrorHandling(
-        async () => {
-          // Build matching configuration from parameters (V2 Format)
-          const config: MatchingConfig = {
-            weights: {
-              amount: 0.5,
-              date: 0.15,
-              payee: 0.35,
-            },
-            dateToleranceDays: params.date_tolerance_days ?? 7,
-            amountToleranceMilliunits: (params.amount_tolerance_cents ?? 1) * 10,
-            autoMatchThreshold: params.auto_match_threshold ?? 85,
-            suggestedMatchThreshold: params.suggestion_threshold ?? 60,
-            minimumCandidateScore: 40,
-            exactAmountBonus: 10,
-            exactDateBonus: 5,
-            exactPayeeBonus: 10,
+  const { deltaFetcher, params } = resolveDeltaFetcherArgs(
+    ynabAPI,
+    deltaFetcherOrParams,
+    maybeParams,
+  );
+  const forceFullRefresh = params.force_full_refresh ?? true;
+  return await withToolErrorHandling(
+    async () => {
+      // Build matching configuration from parameters (V2 Format)
+      const config: MatchingConfig = {
+        weights: {
+          amount: 0.5,
+          date: 0.15,
+          payee: 0.35,
+        },
+        dateToleranceDays: params.date_tolerance_days ?? 7,
+        amountToleranceMilliunits: (params.amount_tolerance_cents ?? 1) * 10,
+        autoMatchThreshold: params.auto_match_threshold ?? 85,
+        suggestedMatchThreshold: params.suggestion_threshold ?? 60,
+        minimumCandidateScore: 40,
+        exactAmountBonus: 10,
+        exactDateBonus: 5,
+        exactPayeeBonus: 10,
       };
 
       const accountResult = forceFullRefresh

@@ -166,7 +166,10 @@ function resolveStatementWindow(
     undefined;
 
   if (start || end) {
-    return { start: start ?? undefined, end: end ?? undefined };
+    const window: StatementWindow = {};
+    if (start) window.start = start;
+    if (end) window.end = end;
+    return window;
   }
 
   if (analysisDateRange && analysisDateRange.includes(' to ')) {
@@ -174,7 +177,10 @@ function resolveStatementWindow(
     const parsedStart = parseISODate(rawStart);
     const parsedEnd = parseISODate(rawEnd);
     if (parsedStart || parsedEnd) {
-      return { start: parsedStart ?? undefined, end: parsedEnd ?? undefined };
+      const window: StatementWindow = {};
+      if (parsedStart) window.start = parsedStart;
+      if (parsedEnd) window.end = parsedEnd;
+      return window;
     }
   }
 
