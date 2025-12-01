@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ResourceManager } from '../resources';
+import { ResourceManager } from '../resources.js';
+import type { CacheManager } from '../cacheManager.js';
 import type * as ynab from 'ynab';
 
 // Mock YNAB API
@@ -22,6 +23,10 @@ const mockResponseFormatter = {
   format: vi.fn((data) => JSON.stringify(data)),
 };
 
+const mockCacheManager = {
+  wrap: vi.fn(async (_key, { loader }) => loader()),
+} as unknown as CacheManager;
+
 describe('ResourceManager Templates', () => {
   let resourceManager: ResourceManager;
 
@@ -30,6 +35,7 @@ describe('ResourceManager Templates', () => {
     resourceManager = new ResourceManager({
       ynabAPI: mockYnabAPI,
       responseFormatter: mockResponseFormatter,
+      cacheManager: mockCacheManager,
     });
   });
 
@@ -129,7 +135,7 @@ describe('ResourceManager Templates', () => {
       (mockYnabAPI.budgets.getBudgetById as any).mockRejectedValue(new Error('Budget not found'));
 
       await expect(resourceManager.readResource('ynab://budgets/invalid-id')).rejects.toThrow(
-        'Failed to resolve template resource ynab://budgets/invalid-id: Budget not found',
+        'Failed to resolve template resource ynab://budgets/invalid-id: Failed to fetch budget invalid-id: Budget not found',
       );
     });
 
@@ -140,7 +146,9 @@ describe('ResourceManager Templates', () => {
 
       await expect(
         resourceManager.readResource('ynab://budgets/budget-id/accounts/invalid-account'),
-      ).rejects.toThrow('Failed to resolve template resource');
+      ).rejects.toThrow(
+        'Failed to resolve template resource ynab://budgets/budget-id/accounts/invalid-account: Failed to fetch account invalid-account in budget budget-id: Account not found',
+      );
     });
 
     it('should reject URIs with backslash characters', async () => {
@@ -160,7 +168,6 @@ describe('ResourceManager Templates', () => {
   describe('Template Validation', () => {
     it('should validate template format when registering', async () => {
       // This test verifies that malformed templates are caught
-      // The validation happens in matchTemplate, so we test it indirectly
       const maliciousTemplate = {
         uriTemplate: 'ynab://budgets/{budget_id}$(malicious)',
         name: 'Malicious Template',
@@ -169,12 +176,23 @@ describe('ResourceManager Templates', () => {
         handler: async () => [],
       };
 
-      resourceManager.registerTemplate(maliciousTemplate);
+      expect(() => resourceManager.registerTemplate(maliciousTemplate)).toThrow(
+        'Invalid template format: contains unsafe characters',
+      );
+    });
 
-      // The template should be registered but fail during matching
-      await expect(
-        resourceManager.readResource('ynab://budgets/test$(malicious)'),
-      ).rejects.toThrow();
+    it('should reject template registration with invalid parameter names', () => {
+      const invalidParamTemplate = {
+        uriTemplate: 'ynab://budgets/{Budget-Id}',
+        name: 'Invalid Param Template',
+        description: 'Should be rejected due to invalid param casing',
+        mimeType: 'application/json',
+        handler: async () => [],
+      };
+
+      expect(() => resourceManager.registerTemplate(invalidParamTemplate)).toThrow(
+        "Invalid template parameter name 'Budget-Id'",
+      );
     });
   });
 });

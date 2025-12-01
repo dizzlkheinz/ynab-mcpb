@@ -227,6 +227,7 @@ export class YNABMCPServer {
     this.resourceManager = new ResourceManager({
       ynabAPI: this.ynabAPI,
       responseFormatter,
+      cacheManager,
     });
 
     this.promptManager = new PromptManager();
