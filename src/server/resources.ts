@@ -9,6 +9,7 @@ import type * as ynab from 'ynab';
 import {
   ResourceTemplate as MCPResourceTemplate,
   Resource as MCPResource,
+  ResourceContents,
 } from '@modelcontextprotocol/sdk/types.js';
 
 /**
@@ -24,7 +25,7 @@ interface ResponseFormatter {
 export type ResourceHandler = (
   uri: string,
   dependencies: ResourceDependencies,
-) => Promise<MCPResource[]>;
+) => Promise<ResourceContents[]>;
 
 /**
  * Template handler function signature
@@ -33,7 +34,7 @@ export type TemplateHandler = (
   uri: string,
   params: Record<string, string>,
   dependencies: ResourceDependencies,
-) => Promise<MCPResource[]>;
+) => Promise<ResourceContents[]>;
 
 /**
  * Resource definition structure
@@ -137,7 +138,8 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
     description: 'Detailed information for a specific budget',
     mimeType: 'application/json',
     handler: async (uri, params, { ynabAPI, responseFormatter }) => {
-      const { budget_id } = params;
+      const budget_id = params['budget_id'];
+      if (!budget_id) throw new Error('Missing budget_id parameter');
       const response = await ynabAPI.budgets.getBudgetById(budget_id);
       return [
         {
@@ -154,7 +156,8 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
     description: 'List of accounts for a specific budget',
     mimeType: 'application/json',
     handler: async (uri, params, { ynabAPI, responseFormatter }) => {
-      const { budget_id } = params;
+      const budget_id = params['budget_id'];
+      if (!budget_id) throw new Error('Missing budget_id parameter');
       const response = await ynabAPI.accounts.getAccounts(budget_id);
       return [
         {
@@ -166,28 +169,15 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
     },
   },
   {
-    uriTemplate: 'ynab://accounts/{account_id}',
-    name: 'Account Details',
-    description: 'Detailed information for a specific account (requires budget_id context if possible, otherwise searches)',
-    mimeType: 'application/json',
-    handler: async (uri, params, { ynabAPI, responseFormatter }) => {
-       // Note: YNAB API requires budget_id to get an account.
-       // This template might require finding the budget first or we assume the URI structure might need improvement.
-       // Ideally: ynab://budgets/{budget_id}/accounts/{account_id}
-       // But if we want direct access, we'd need to know the budget.
-       // For now, let's implement the hierarchical one as primary and this one as a "search" if feasible,
-       // or simply assume the user must use the hierarchical one.
-       // Let's stick to the hierarchical one for correctness with YNAB API.
-       throw new Error('Please use ynab://budgets/{budget_id}/accounts/{account_id} to access account details.');
-    }
-  },
-  {
     uriTemplate: 'ynab://budgets/{budget_id}/accounts/{account_id}',
-    name: 'Account Details (Hierarchical)',
+    name: 'Account Details',
     description: 'Detailed information for a specific account within a budget',
     mimeType: 'application/json',
     handler: async (uri, params, { ynabAPI, responseFormatter }) => {
-      const { budget_id, account_id } = params;
+      const budget_id = params['budget_id'];
+      const account_id = params['account_id'];
+      if (!budget_id) throw new Error('Missing budget_id parameter');
+      if (!account_id) throw new Error('Missing account_id parameter');
       const response = await ynabAPI.accounts.getAccountById(budget_id, account_id);
       return [
         {
@@ -213,8 +203,7 @@ export class ResourceManager {
     this.dependencies = dependencies;
     this.resourceHandlers = { ...defaultResourceHandlers };
     this.resourceDefinitions = [...defaultResourceDefinitions];
-    // Filter out the incomplete implementation from defaults for now
-    this.resourceTemplates = defaultResourceTemplates.filter(t => !t.uriTemplate.includes('ynab://accounts/{account_id}'));
+    this.resourceTemplates = [...defaultResourceTemplates];
   }
 
   /**
@@ -264,7 +253,7 @@ export class ResourceManager {
    * Handles resource read requests
    */
   async readResource(uri: string): Promise<{
-    contents: MCPResource[];
+    contents: ResourceContents[];
   }> {
     // 1. Try exact match first
     const handler = this.resourceHandlers[uri];
@@ -276,7 +265,13 @@ export class ResourceManager {
     for (const template of this.resourceTemplates) {
       const params = this.matchTemplate(template.uriTemplate, uri);
       if (params) {
-        return { contents: await template.handler(uri, params, this.dependencies) };
+        try {
+          return { contents: await template.handler(uri, params, this.dependencies) };
+        } catch (error) {
+          throw new Error(
+            `Failed to resolve template resource ${uri}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
     }
 
@@ -285,22 +280,43 @@ export class ResourceManager {
 
   /**
    * Simple URI template matcher
-   * Supports {param} syntax
+   * Supports {param} syntax with validation to prevent regex injection
+   *
+   * @param template - URI template with {param} placeholders
+   * @param uri - Actual URI to match against template
+   * @returns Object with extracted parameters or null if no match
    */
   private matchTemplate(template: string, uri: string): Record<string, string> | null {
-    // Escape special regex characters
-    // We do NOT escape { and } in the first pass because we use them as delimiters
-    const escaped = template.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
+    // Validate template format (only allow safe characters and template syntax)
+    if (!/^[a-z0-9:\/\-_{}]+$/i.test(template)) {
+      throw new Error('Invalid template format: contains unsafe characters');
+    }
 
-    // Convert {name} to (?<name>[^/]+)
-    // We match {name} literally.
-    const regexPattern = escaped.replace(/{([^}]+)}/g, '(?<$1>[^/]+)');
+    // Extract and validate parameter names
+    const paramNames: string[] = [];
+    const regexPattern = template
+      .replace(/[.*+?^$()|[\]\\]/g, '\\$&') // Escape special regex chars
+      .replace(/{([a-z_][a-z0-9_]*)}/gi, (_, name) => {
+        paramNames.push(name);
+        return '([^/]+)'; // Capture group for parameter value
+      });
 
     const regex = new RegExp(`^${regexPattern}$`);
     const match = uri.match(regex);
 
-    if (match && match.groups) {
-      return match.groups;
+    if (match) {
+      const result: Record<string, string> = {};
+      paramNames.forEach((name, i) => {
+        const value = match[i + 1];
+        if (value) {
+          // Validate parameter values don't contain path traversal or invalid chars
+          if (value.includes('..') || value.includes('\\')) {
+            throw new Error(`Invalid parameter value: ${name}=${value}`);
+          }
+          result[name] = value;
+        }
+      });
+      return result;
     }
 
     return null;
