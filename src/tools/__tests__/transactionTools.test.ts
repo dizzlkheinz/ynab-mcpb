@@ -19,6 +19,25 @@ import {
   DeleteTransactionSchema,
 } from '../transactionTools.js';
 
+// Mock the YNAB API - declare first so it can be used in deltaSupport mock
+const mockYnabAPI = {
+  transactions: {
+    getTransactions: vi.fn(),
+    getTransactionsByAccount: vi.fn(),
+    getTransactionsByCategory: vi.fn(),
+    getTransactionById: vi.fn(),
+    createTransaction: vi.fn(),
+    createTransactions: vi.fn(),
+    updateTransaction: vi.fn(),
+    updateTransactions: vi.fn(),
+    deleteTransaction: vi.fn(),
+  },
+  accounts: {
+    getAccountById: vi.fn(),
+    getAccounts: vi.fn(),
+  },
+} as unknown as ynab.API;
+
 // Mock the cache manager
 vi.mock('../../server/cacheManager.js', () => ({
   cacheManager: {
@@ -40,23 +59,62 @@ vi.mock('../../server/cacheManager.js', () => ({
   },
 }));
 
-// Mock the YNAB API
-const mockYnabAPI = {
-  transactions: {
-    getTransactions: vi.fn(),
-    getTransactionsByAccount: vi.fn(),
-    getTransactionsByCategory: vi.fn(),
-    getTransactionById: vi.fn(),
-    createTransaction: vi.fn(),
-    createTransactions: vi.fn(),
-    updateTransaction: vi.fn(),
-    updateTransactions: vi.fn(),
-    deleteTransaction: vi.fn(),
-  },
-  accounts: {
-    getAccountById: vi.fn(),
-  },
-} as unknown as ynab.API;
+// Mock deltaSupport to create a simple DeltaFetcher that calls the API directly
+vi.mock('../deltaSupport.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../deltaSupport.js')>();
+  return {
+    ...original,
+    resolveDeltaFetcherArgs: vi.fn((_ynabAPI, _deltaFetcherOrParams, maybeParams) => {
+      const params = maybeParams ?? _deltaFetcherOrParams;
+      // Create a simple mock delta fetcher that calls the API directly
+      const mockDeltaFetcher = {
+        fetchAccounts: vi.fn(async (budgetId: string) => {
+          const response = await mockYnabAPI.accounts.getAccounts(budgetId);
+          return {
+            data: response.data.accounts,
+            wasCached: false,
+            usedDelta: false,
+            serverKnowledge: response.data.server_knowledge ?? 0,
+          };
+        }),
+        fetchTransactions: vi.fn(async (budgetId: string, sinceDate?: string, type?: string) => {
+          // Pass all 4 arguments to match YNAB API signature
+          const response = await mockYnabAPI.transactions.getTransactions(
+            budgetId,
+            sinceDate,
+            type,
+            undefined,
+          );
+          return {
+            data: response.data.transactions,
+            wasCached: false,
+            usedDelta: false,
+            serverKnowledge: response.data.server_knowledge ?? 0,
+          };
+        }),
+        fetchTransactionsByAccount: vi.fn(
+          async (budgetId: string, accountId: string, sinceDate?: string) => {
+            // Pass all 5 arguments to match YNAB API signature
+            const response = await mockYnabAPI.transactions.getTransactionsByAccount(
+              budgetId,
+              accountId,
+              sinceDate,
+              undefined,
+              undefined,
+            );
+            return {
+              data: response.data.transactions,
+              wasCached: false,
+              usedDelta: false,
+              serverKnowledge: response.data.server_knowledge ?? 0,
+            };
+          },
+        ),
+      };
+      return { deltaFetcher: mockDeltaFetcher, params };
+    }),
+  };
+});
 
 // Import mocked cache manager
 const { cacheManager, CacheManager } = await import('../../server/cacheManager.js');
@@ -238,12 +296,19 @@ describe('transactionTools', () => {
     });
 
     it('should filter by account_id when provided', async () => {
+      const mockAccountsResponse = {
+        data: {
+          accounts: [{ id: 'account-456', name: 'Test Account', deleted: false }],
+          server_knowledge: 100,
+        },
+      };
       const mockResponse = {
         data: {
           transactions: [mockTransaction],
         },
       };
 
+      (mockYnabAPI.accounts.getAccounts as any).mockResolvedValue(mockAccountsResponse);
       (mockYnabAPI.transactions.getTransactionsByAccount as any).mockResolvedValue(mockResponse);
 
       const params = {
@@ -252,6 +317,7 @@ describe('transactionTools', () => {
       };
       const result = await handleListTransactions(mockYnabAPI, params);
 
+      expect(mockYnabAPI.accounts.getAccounts).toHaveBeenCalledWith('budget-123');
       expect(mockYnabAPI.transactions.getTransactionsByAccount).toHaveBeenCalledWith(
         'budget-123',
         'account-456',
@@ -383,12 +449,19 @@ describe('transactionTools', () => {
         } as ynab.TransactionDetail);
       }
 
+      const mockAccountsResponse = {
+        data: {
+          accounts: [{ id: 'test-account', name: 'Test Account', deleted: false }],
+          server_knowledge: 100,
+        },
+      };
       const mockResponse = {
         data: {
           transactions: largeTransactionList,
         },
       };
 
+      (mockYnabAPI.accounts.getAccounts as any).mockResolvedValue(mockAccountsResponse);
       (mockYnabAPI.transactions.getTransactionsByAccount as any).mockResolvedValue(mockResponse);
 
       const result = await handleListTransactions(mockYnabAPI, {

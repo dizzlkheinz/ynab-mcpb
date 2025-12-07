@@ -762,9 +762,7 @@ export async function handleListTransactions(
           (account) => account.id === params.account_id,
         );
         if (!accountExists) {
-          throw new Error(
-            `Account ${params.account_id} not found in budget ${params.budget_id}`,
-          );
+          throw new Error(`Account ${params.account_id} not found in budget ${params.budget_id}`);
         }
 
         const result = await deltaFetcher.fetchTransactionsByAccount(
