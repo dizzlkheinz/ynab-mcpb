@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integration, enabling AI assistants to interact with YNAB budgets, accounts, transactions, and categories. The codebase uses TypeScript with a modular architecture introduced in v0.8.x.
+This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integration, enabling AI assistants to interact with YNAB budgets, accounts, transactions, and categories. The codebase uses TypeScript with a modular, service-oriented architecture.
+
+**Current Version:** 0.16.0
 
 ## Essential Commands
 
@@ -23,13 +25,26 @@ See [docs/development/BUILD.md](docs/development/BUILD.md) for detailed build in
 ### Testing
 
 ```bash
-npm test                   # Run all unit tests + filter results
-npm run test:unit          # Unit tests only (fast, mocked dependencies)
-npm run test:integration   # Integration tests with mocked YNAB API
-npm run test:e2e           # End-to-end tests (requires real YNAB token)
-npm run test:performance   # Performance and load tests
-npm run test:coverage      # Generate coverage report (requires 80% coverage)
-npm run test:watch         # Watch mode for test development
+npm test                           # Run all unit tests + filter results
+npm run test:unit                  # Unit tests only (fast, mocked dependencies)
+npm run test:integration           # Integration tests (core only)
+npm run test:integration:core      # Core integration tests
+npm run test:integration:domain    # Domain-specific integration tests
+npm run test:integration:full      # Full integration test suite (throttled)
+npm run test:integration:budgets   # Budget-specific integration tests
+npm run test:integration:accounts  # Account-specific integration tests
+npm run test:integration:transactions  # Transaction-specific integration tests
+npm run test:integration:categories    # Category-specific integration tests
+npm run test:integration:payees    # Payee-specific integration tests
+npm run test:integration:months    # Month-specific integration tests
+npm run test:integration:delta     # Delta caching integration tests
+npm run test:integration:reconciliation  # Reconciliation integration tests
+npm run test:e2e                   # End-to-end tests (requires real YNAB token)
+npm run test:performance           # Performance and load tests
+npm run test:coverage              # Generate coverage report (requires 80% coverage)
+npm run test:watch                 # Watch mode for test development
+npm run test:comprehensive         # Run comprehensive test suite
+npm run test:all                   # Run all tests (unit, integration, e2e, performance)
 ```
 
 See [docs/guides/TESTING.md](docs/guides/TESTING.md) for comprehensive testing documentation.
@@ -48,31 +63,37 @@ npm run format:check       # Check formatting without modifying files
 ```bash
 npm run package:mcpb        # Build production MCPB package for Claude Desktop
 npm run generate:mcpb       # Generate MCPB file from built bundle
-npm run bundle             # Bundle with esbuild (development)
-npm run bundle:prod        # Bundle with minification (production)
+npm run bundle              # Bundle with esbuild (development)
+npm run bundle:prod         # Bundle with minification (production)
+npm run prepare             # Prepare package for publication (runs build:prod)
+npm run prepublishOnly      # Pre-publish checks (runs tests + build)
 ```
 
 See [docs/guides/DEPLOYMENT.md](docs/guides/DEPLOYMENT.md) for deployment instructions.
 
 ## Architecture Overview
 
-The v0.8.x architecture is modular and service-oriented:
+The architecture is modular and service-oriented:
 
 ### Core Server Components (`src/server/`)
 
 - **YNABMCPServer.ts** - Main orchestration server, coordinates all services
 - **toolRegistry.ts** - Centralized tool metadata, validation, and execution
 - **cacheManager.ts** - Enhanced caching with LRU eviction, observability, and stale-while-revalidate
+- **deltaCache.ts** - Delta request management with server knowledge tracking and merge operations
+- **deltaCache.merge.ts** - Entity merging functions for delta responses (transactions, categories, accounts)
+- **serverKnowledgeStore.ts** - Tracks last known server_knowledge values per cache key for delta requests
 - **budgetResolver.ts** - Consistent budget ID resolution across all tools
 - **errorHandler.ts** - Centralized error handling with dependency injection
 - **config.ts** - Environment validation and server configuration
-- **resources.ts** - MCP resource definitions and handlers
+- **resources.ts** - MCP resource definitions and handlers (includes resource templates)
 - **prompts.ts** - MCP prompt definitions and handlers
 - **diagnostics.ts** - System diagnostics and health monitoring
 - **securityMiddleware.ts** - Security validation and wrapper functions
 - **responseFormatter.ts** - JSON response formatting (minification/pretty-print)
 - **rateLimiter.ts** - Rate limiting for YNAB API compliance
 - **requestLogger.ts** - Request/response logging middleware
+- **cacheKeys.ts** - Centralized cache key generation utilities
 
 ### Tool Implementation (`src/tools/`)
 
@@ -86,12 +107,25 @@ Tools are organized by domain with some using modular sub-directories:
 - **monthTools.ts** - Monthly budget data
 - **utilityTools.ts** - User info and amount conversion
 - **exportTransactions.ts** - Transaction export to JSON files
-- **reconcileAccount.ts** - Comprehensive account reconciliation
+- **reconcileAdapter.ts** - Legacy adapter for reconciliation tool
+- **deltaFetcher.ts** - Delta request utilities for efficient API updates
+- **deltaSupport.ts** - Delta request support utilities and helpers
 
 **Modular Tool Directories:**
 
 - **compareTransactions/** - CSV comparison tools split into parser, matcher, formatter
-- **financialOverview/** - Financial analysis split into schemas, handlers, insights, trends, formatter
+- **reconciliation/** - Comprehensive account reconciliation system (v2 architecture)
+  - csvParser.ts - CSV parsing with bank presets (TD, RBC, Scotiabank, etc.)
+  - matcher.ts - Fuzzy matching engine with configurable scoring
+  - analyzer.ts - Transaction analysis and discrepancy detection
+  - executor.ts - Bulk transaction operations (create/update/unclear)
+  - recommendationEngine.ts - Smart reconciliation recommendations
+  - reportFormatter.ts - Human-readable reconciliation reports
+  - signDetector.ts - Auto-detection of debit/credit sign conventions
+  - payeeNormalizer.ts - Payee name normalization for matching
+  - ynabAdapter.ts - YNAB API integration layer
+- **schemas/** - Zod schemas for input/output validation
+  - outputs/ - Output schema definitions for all tools
 
 ### Type Definitions (`src/types/`)
 
@@ -119,7 +153,7 @@ registry.register({
 });
 ```
 
-### Enhanced Caching (v0.8.x)
+### Enhanced Caching with Delta Support
 
 Use `cacheManager.wrap()` for automatic caching with observability:
 
@@ -138,6 +172,29 @@ Cache TTL constants are defined in `cacheManager.ts`:
 - `CACHE_TTLS.CATEGORIES` - 30 minutes
 - `CACHE_TTLS.SHORT` - 5 minutes (transactions)
 - `CACHE_TTLS.LONG` - 1 hour
+
+### Delta Caching Pattern
+
+The server supports YNAB delta requests to fetch only changed data since the last request:
+
+```typescript
+import { DeltaCache } from './server/deltaCache.js';
+import { ServerKnowledgeStore } from './server/serverKnowledgeStore.js';
+
+// Delta cache automatically manages server_knowledge tracking
+const result = await deltaCache.fetchWithDelta({
+  cacheKey: 'transactions:budget123',
+  fetchFn: (lastKnowledge) => api.getTransactions(budgetId, lastKnowledge),
+  mergeFn: DeltaCache.mergeTransactions, // Built-in merge functions available
+});
+```
+
+The delta cache system:
+- Tracks `server_knowledge` values per cache key via `ServerKnowledgeStore`
+- Automatically merges delta responses with cached snapshots
+- Provides built-in merge functions for transactions, categories, and accounts
+- Resets knowledge on server restart to ensure consistency
+- Handles large knowledge gaps and edge cases
 
 ### Budget Resolution Pattern
 
@@ -173,6 +230,20 @@ constructor(
   private budgetResolver: BudgetResolver
 ) {}
 ```
+
+## MCP Resources
+
+The server provides MCP resources for dynamic data access:
+
+### Resource Templates
+
+Resource templates allow AI assistants to discover and access YNAB data using URI patterns:
+
+- `ynab://budgets/{budget_id}` - Get detailed budget information
+- `ynab://budgets/{budget_id}/accounts` - List accounts for a specific budget
+- `ynab://budgets/{budget_id}/accounts/{account_id}` - Get detailed account information
+
+Resources support full caching with configurable TTLs and return structured data that AI assistants can use for analysis and recommendations.
 
 ## Tool Annotations
 
@@ -214,7 +285,7 @@ The system defines 5 preset annotation patterns in `src/tools/toolCategories.ts`
 
 ### Complete Tool Classification
 
-All 30 tools are classified into the following categories:
+All tools are classified into the following categories:
 
 **Read-Only External (15 tools):**
 
@@ -403,12 +474,35 @@ The MCPB includes:
 - **Versioning**: Semantic versioning (currently 0.x.y - pre-1.0 API)
 - **Commit style**: Conventional commits encouraged (feat:, fix:, chore:, etc.)
 
+## Reconciliation System
+
+The reconciliation tool (`reconcile_account`) is a comprehensive account reconciliation system with advanced features:
+
+### Key Components
+
+- **CSV Parser** - Supports multiple bank formats with presets for Canadian banks (TD, RBC, Scotiabank, Wealthsimple, Tangerine)
+- **Fuzzy Matcher** - Uses token-set-ratio matching for merchant name variations
+- **Analyzer** - Detects discrepancies, duplicates, and missing transactions
+- **Executor** - Handles bulk create/update/unclear operations with comprehensive error handling
+- **Recommendation Engine** - Provides smart reconciliation suggestions
+- **Sign Detector** - Auto-detects debit/credit sign conventions from CSV data
+
+### Configuration
+
+- Amount tolerance: 1 cent (10 milliunits) by default
+- Date tolerance: 7 days (accommodates bank posting delays)
+- Scoring weights: amount 50%, payee 35%, date 15%
+- Auto-match threshold: 85%
+
+See `docs/technical/reconciliation-system-architecture.md` for detailed documentation.
+
 ## Important Notes
 
-- **Backward Compatibility**: v0.8.x maintains 100% API compatibility with v0.7.x
 - **Cache Invalidation**: Write operations (create, update, delete) should invalidate related caches
 - **Date Format**: Always use ISO format `YYYY-MM-DD` for dates
 - **Budget ID Resolution**: Most tools auto-resolve budget_id from default budget if not provided
 - **Error Responses**: All errors return consistent JSON format via `ErrorHandler`
 - **Security**: Input validation via Zod schemas, security middleware wraps all tool executions
-- **Rate Limiting**: YNAB API has rate limits - use caching aggressively
+- **Rate Limiting**: YNAB API has rate limits - use delta caching and aggressive caching strategies
+- **Delta Requests**: Delta cache automatically manages server_knowledge tracking for efficient updates
+- **Resource Templates**: Use `ynab://` URI patterns for dynamic resource access
