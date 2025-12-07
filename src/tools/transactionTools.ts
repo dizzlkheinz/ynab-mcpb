@@ -755,6 +755,18 @@ export async function handleListTransactions(
       let usedDelta = false;
 
       if (params.account_id) {
+        // Validate that the account exists before fetching transactions
+        // YNAB API returns empty array for invalid account IDs instead of an error
+        const accountsResult = await deltaFetcher.fetchAccounts(params.budget_id);
+        const accountExists = accountsResult.data.some(
+          (account) => account.id === params.account_id,
+        );
+        if (!accountExists) {
+          throw new Error(
+            `Account ${params.account_id} not found in budget ${params.budget_id}`,
+          );
+        }
+
         const result = await deltaFetcher.fetchTransactionsByAccount(
           params.budget_id,
           params.account_id,
