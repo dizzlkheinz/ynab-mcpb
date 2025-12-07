@@ -5,6 +5,7 @@ import { ValidationError } from '../utils/errors.js';
 
 const envSchema = z.object({
   YNAB_ACCESS_TOKEN: z.string().trim().min(1, 'YNAB_ACCESS_TOKEN must be a non-empty string'),
+  YNAB_DEFAULT_BUDGET_ID: z.string().uuid('YNAB_DEFAULT_BUDGET_ID must be a valid UUID').optional(),
   MCP_PORT: z.coerce.number().int().positive().optional(),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 });

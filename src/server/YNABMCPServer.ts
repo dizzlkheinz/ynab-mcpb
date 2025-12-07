@@ -140,7 +140,7 @@ export class YNABMCPServer {
     this.exitOnError = exitOnError;
     this.configInstance = loadConfig();
     // Config is now imported and validated at startup
-    this.defaultBudgetId = process.env['YNAB_DEFAULT_BUDGET_ID'];
+    this.defaultBudgetId = this.configInstance.YNAB_DEFAULT_BUDGET_ID;
 
     // Initialize YNAB API
     this.ynabAPI = new ynab.API(this.configInstance.YNAB_ACCESS_TOKEN);
