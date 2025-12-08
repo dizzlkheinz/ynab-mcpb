@@ -10,6 +10,11 @@ import type { DeltaCache } from '../server/deltaCache.js';
 import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
 import { CacheKeys } from '../server/cacheKeys.js';
 import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.js';
+import type { ToolFactory } from '../types/toolRegistration.js';
+import { createAdapters, createBudgetResolver } from './adapters.js';
+import { ToolAnnotationPresets } from './toolCategories.js';
+import { GetCategoryOutputSchema, ListCategoriesOutputSchema } from './schemas/outputs/index.js';
+import { LooseObjectSchema } from './schemas/common.js';
 
 /**
  * Schema for ynab:list_categories tool parameters
@@ -335,6 +340,60 @@ export async function handleUpdateCategory(
     return handleCategoryError(error, 'Failed to update category');
   }
 }
+
+// Fallback to ensure runtime availability even if module resolution fails in certain runners
+/**
+ * Registers all category-related tools with the registry.
+ */
+export const registerCategoryTools: ToolFactory = (registry, context) => {
+  const { adapt, adaptWithDelta, adaptWrite } = createAdapters(context);
+  const budgetResolver = createBudgetResolver(context);
+
+  registry.register({
+    name: 'list_categories',
+    description: 'List all categories for a specific budget',
+    inputSchema: ListCategoriesSchema,
+    outputSchema: ListCategoriesOutputSchema,
+    handler: adaptWithDelta(handleListCategories),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof ListCategoriesSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: List Categories',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'get_category',
+    description: 'Get detailed information for a specific category',
+    inputSchema: GetCategorySchema,
+    outputSchema: GetCategoryOutputSchema,
+    handler: adapt(handleGetCategory),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof GetCategorySchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: Get Category Details',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'update_category',
+    description: 'Update the budgeted amount for a category in the current month',
+    inputSchema: UpdateCategorySchema,
+    outputSchema: LooseObjectSchema,
+    handler: adaptWrite(handleUpdateCategory),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof UpdateCategorySchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+        title: 'YNAB: Update Category Budget',
+      },
+    },
+  });
+};
 
 /**
  * Handles errors from category-related API calls

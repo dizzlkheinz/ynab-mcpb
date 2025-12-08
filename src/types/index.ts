@@ -65,3 +65,6 @@ export type { MCPToolAnnotations } from './toolAnnotations.js';
 
 // Re-export tool registry types for convenience
 export type { ToolDefinition } from '../server/toolRegistry.js';
+
+// Re-export tool registration factory types
+export type { ToolContext, ToolFactory, BudgetIdResolverFactory } from './toolRegistration.js';

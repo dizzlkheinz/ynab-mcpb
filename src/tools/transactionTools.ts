@@ -6,6 +6,14 @@ import type { SaveTransactionsResponseData } from 'ynab/dist/models/SaveTransact
 import { z } from 'zod/v4';
 import { createHash } from 'crypto';
 import { ValidationError, withToolErrorHandling } from '../types/index.js';
+import type { ToolFactory } from '../types/toolRegistration.js';
+import { createAdapters, createBudgetResolver } from './adapters.js';
+import { ToolAnnotationPresets } from './toolCategories.js';
+import { LooseObjectSchema } from './schemas/common.js';
+import {
+  GetTransactionOutputSchema,
+  ExportTransactionsOutputSchema,
+} from './schemas/outputs/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import { amountToMilliunits, milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
@@ -14,6 +22,7 @@ import type { DeltaFetcher } from './deltaFetcher.js';
 import type { DeltaCache } from '../server/deltaCache.js';
 import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
 import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.js';
+import { handleExportTransactions, ExportTransactionsSchema } from './exportTransactions.js';
 
 /**
  * Utility function to ensure transaction is not null/undefined
@@ -2506,3 +2515,148 @@ function handleTransactionError(error: unknown, defaultMessage: string): CallToo
     ],
   };
 }
+
+/**
+ * Registers transaction-domain tools with the provided registry.
+ */
+export const registerTransactionTools: ToolFactory = (registry, context) => {
+  const { adapt, adaptWithDelta, adaptWrite } = createAdapters(context);
+  const budgetResolver = createBudgetResolver(context);
+
+  registry.register({
+    name: 'list_transactions',
+    description: 'List transactions for a budget with optional filtering',
+    inputSchema: ListTransactionsSchema,
+    outputSchema: LooseObjectSchema,
+    handler: adaptWithDelta(handleListTransactions),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof ListTransactionsSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: List Transactions',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'export_transactions',
+    description: 'Export all transactions to a JSON file with descriptive filename',
+    inputSchema: ExportTransactionsSchema,
+    outputSchema: ExportTransactionsOutputSchema,
+    handler: adapt(handleExportTransactions),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof ExportTransactionsSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: Export Transactions',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'get_transaction',
+    description: 'Get detailed information for a specific transaction',
+    inputSchema: GetTransactionSchema,
+    outputSchema: GetTransactionOutputSchema,
+    handler: adapt(handleGetTransaction),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof GetTransactionSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: Get Transaction Details',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'create_transaction',
+    description: 'Create a new transaction in the specified budget and account',
+    inputSchema: CreateTransactionSchema,
+    outputSchema: LooseObjectSchema,
+    handler: adaptWrite(handleCreateTransaction),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof CreateTransactionSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
+        title: 'YNAB: Create Transaction',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'create_transactions',
+    description:
+      'Create multiple transactions in a single batch (1-100 items) with duplicate detection, dry-run validation, and automatic response size management with correlation metadata.',
+    inputSchema: CreateTransactionsSchema,
+    outputSchema: LooseObjectSchema,
+    handler: adaptWrite(handleCreateTransactions),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof CreateTransactionsSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
+        title: 'YNAB: Create Multiple Transactions',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'create_receipt_split_transaction',
+    description: 'Create a split transaction from receipt items with proportional tax allocation',
+    inputSchema: CreateReceiptSplitTransactionSchema,
+    outputSchema: LooseObjectSchema,
+    handler: adaptWrite(handleCreateReceiptSplitTransaction),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
+        title: 'YNAB: Create Split Transaction from Receipt',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'update_transaction',
+    description: 'Update an existing transaction',
+    inputSchema: UpdateTransactionSchema,
+    outputSchema: LooseObjectSchema,
+    handler: adaptWrite(handleUpdateTransaction),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof UpdateTransactionSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+        title: 'YNAB: Update Transaction',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'update_transactions',
+    description:
+      'Update multiple transactions in a single batch (1-100 items) with dry-run validation, automatic cache invalidation, and response size management. Supports optional original_account_id and original_date metadata for efficient cache invalidation.',
+    inputSchema: UpdateTransactionsSchema,
+    outputSchema: LooseObjectSchema,
+    handler: adaptWrite(handleUpdateTransactions),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof UpdateTransactionsSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+        title: 'YNAB: Update Multiple Transactions',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'delete_transaction',
+    description: 'Delete a transaction from the specified budget',
+    inputSchema: DeleteTransactionSchema,
+    outputSchema: LooseObjectSchema,
+    handler: adaptWrite(handleDeleteTransaction),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof DeleteTransactionSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.WRITE_EXTERNAL_DELETE,
+        title: 'YNAB: Delete Transaction',
+      },
+    },
+  });
+};

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integration, enabling AI assistants to interact with YNAB budgets, accounts, transactions, and categories. The codebase uses TypeScript with a modular, service-oriented architecture.
 
-**Current Version:** 0.16.0
+**Current Version:** 0.16.2
 
 ## Essential Commands
 
@@ -94,6 +94,14 @@ The architecture is modular and service-oriented:
 - **rateLimiter.ts** - Rate limiting for YNAB API compliance
 - **requestLogger.ts** - Request/response logging middleware
 - **cacheKeys.ts** - Centralized cache key generation utilities
+
+### Tool Registration Pattern (2025-12)
+
+- `ToolContext` (`src/types/toolRegistration.ts`) centralizes shared deps (ynabAPI, deltaFetcher/cache, knowledge store, default budget accessors, cache/diagnostic managers).
+- Adapter helpers (`src/tools/adapters.ts`): `adapt`, `adaptNoInput`, `adaptWithDelta`, `adaptWrite`, and `createBudgetResolver` to inject default budget IDs; covered by unit tests in `src/tools/__tests__/adapters.test.ts`.
+- Domain factories (`register*Tools`) live in each tool file: budget, account, transaction, category, payee, month, utility, reconciliation. `setupToolRegistry` now delegates to these factories.
+- Shared schemas: `emptyObjectSchema`, `LooseObjectSchema` in `src/tools/schemas/common.ts`.
+- Server-owned inline tools that stay in `YNABMCPServer`: `set_default_budget`, `get_default_budget`, `diagnostic_info`, `clear_cache`, `set_output_format` (they depend on server internals).
 
 ### Tool Implementation (`src/tools/`)
 
@@ -190,6 +198,7 @@ const result = await deltaCache.fetchWithDelta({
 ```
 
 The delta cache system:
+
 - Tracks `server_knowledge` values per cache key via `ServerKnowledgeStore`
 - Automatically merges delta responses with cached snapshots
 - Provides built-in merge functions for transactions, categories, and accounts

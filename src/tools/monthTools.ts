@@ -8,6 +8,10 @@ import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.j
 import type { DeltaFetcher } from './deltaFetcher.js';
 import { CacheKeys } from '../server/cacheKeys.js';
 import { resolveDeltaFetcherArgs } from './deltaSupport.js';
+import type { ToolFactory } from '../types/toolRegistration.js';
+import { createAdapters, createBudgetResolver } from './adapters.js';
+import { ToolAnnotationPresets } from './toolCategories.js';
+import { GetMonthOutputSchema, ListMonthsOutputSchema } from './schemas/outputs/index.js';
 
 /**
  * Schema for ynab:get_month tool parameters
@@ -168,3 +172,41 @@ export async function handleListMonths(
     'listing months',
   );
 }
+
+/**
+ * Registers all month-related tools with the registry.
+ */
+export const registerMonthTools: ToolFactory = (registry, context) => {
+  const { adapt, adaptWithDelta } = createAdapters(context);
+  const budgetResolver = createBudgetResolver(context);
+
+  registry.register({
+    name: 'get_month',
+    description: 'Get budget data for a specific month',
+    inputSchema: GetMonthSchema,
+    outputSchema: GetMonthOutputSchema,
+    handler: adapt(handleGetMonth),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof GetMonthSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: Get Month Details',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'list_months',
+    description: 'List all months summary data for a budget',
+    inputSchema: ListMonthsSchema,
+    outputSchema: ListMonthsOutputSchema,
+    handler: adaptWithDelta(handleListMonths),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof ListMonthsSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: List Months',
+      },
+    },
+  });
+};
