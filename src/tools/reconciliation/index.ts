@@ -11,7 +11,7 @@ import { withToolErrorHandling } from '../../types/index.js';
 import type { ToolFactory } from '../../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from '../adapters.js';
 import { ToolAnnotationPresets } from '../toolCategories.js';
-import { LooseObjectSchema } from '../schemas/common.js';
+import { looseObjectSchema } from '../schemas/common.js';
 import {
   CompareTransactionsSchema,
   handleCompareTransactions,
@@ -494,7 +494,7 @@ export const registerReconciliationTools: ToolFactory = (registry, context) => {
     description:
       'Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).',
     inputSchema: ReconcileAccountSchema,
-    outputSchema: LooseObjectSchema,
+    outputSchema: looseObjectSchema,
     handler: adaptWithDelta(handleReconcileAccount),
     defaultArgumentResolver: budgetResolver<z.infer<typeof ReconcileAccountSchema>>(),
     metadata: {

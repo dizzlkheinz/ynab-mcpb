@@ -21,6 +21,9 @@ import type { CacheManager } from '../server/cacheManager.js';
 /**
  * Context object passed to tool factory functions. Contains the dependencies
  * required by tool adapters and handlers.
+ *
+ * @stable This interface is part of the public tool registration contract.
+ * Changes to this interface may affect all domain tool factories.
  */
 export interface ToolContext {
   ynabAPI: ynab.API;

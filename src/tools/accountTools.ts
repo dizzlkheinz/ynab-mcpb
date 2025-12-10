@@ -14,7 +14,7 @@ import type { ToolFactory } from '../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from './adapters.js';
 import { ToolAnnotationPresets } from './toolCategories.js';
 import { ListAccountsOutputSchema, GetAccountOutputSchema } from './schemas/outputs/index.js';
-import { LooseObjectSchema } from './schemas/common.js';
+import { looseObjectSchema } from './schemas/common.js';
 
 /**
  * Schema for ynab:list_accounts tool parameters
@@ -333,7 +333,7 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
     name: 'create_account',
     description: 'Create a new account in the specified budget',
     inputSchema: CreateAccountSchema,
-    outputSchema: LooseObjectSchema,
+    outputSchema: looseObjectSchema,
     handler: adaptWrite(handleCreateAccount),
     defaultArgumentResolver: budgetResolver<z.infer<typeof CreateAccountSchema>>(),
     metadata: {

@@ -20,8 +20,6 @@ npm run dev                # TypeScript watch mode for development
 npm run type-check         # Run TypeScript type checking without emitting files
 ```
 
-See [docs/development/BUILD.md](docs/development/BUILD.md) for detailed build information.
-
 ### Testing
 
 ```bash
@@ -47,8 +45,6 @@ npm run test:comprehensive         # Run comprehensive test suite
 npm run test:all                   # Run all tests (unit, integration, e2e, performance)
 ```
 
-See [docs/guides/TESTING.md](docs/guides/TESTING.md) for comprehensive testing documentation.
-
 ### Code Quality
 
 ```bash
@@ -68,8 +64,6 @@ npm run bundle:prod         # Bundle with minification (production)
 npm run prepare             # Prepare package for publication (runs build:prod)
 npm run prepublishOnly      # Pre-publish checks (runs tests + build)
 ```
-
-See [docs/guides/DEPLOYMENT.md](docs/guides/DEPLOYMENT.md) for deployment instructions.
 
 ## Architecture Overview
 
@@ -100,7 +94,7 @@ The architecture is modular and service-oriented:
 - `ToolContext` (`src/types/toolRegistration.ts`) centralizes shared deps (ynabAPI, deltaFetcher/cache, knowledge store, default budget accessors, cache/diagnostic managers).
 - Adapter helpers (`src/tools/adapters.ts`): `adapt`, `adaptNoInput`, `adaptWithDelta`, `adaptWrite`, and `createBudgetResolver` to inject default budget IDs; covered by unit tests in `src/tools/__tests__/adapters.test.ts`.
 - Domain factories (`register*Tools`) live in each tool file: budget, account, transaction, category, payee, month, utility, reconciliation. `setupToolRegistry` now delegates to these factories.
-- Shared schemas: `emptyObjectSchema`, `LooseObjectSchema` in `src/tools/schemas/common.ts`.
+- Shared schemas: `emptyObjectSchema`, `looseObjectSchema` in `src/tools/schemas/common.ts`.
 - Server-owned inline tools that stay in `YNABMCPServer`: `set_default_budget`, `get_default_budget`, `diagnostic_info`, `clear_cache`, `set_output_format` (they depend on server internals).
 
 ### Tool Implementation (`src/tools/`)
@@ -294,10 +288,7 @@ The system defines 5 preset annotation patterns in `src/tools/toolCategories.ts`
 
 ### Complete Tool Classification
 
-For the full current list of all 30 registered tools, see
-docs/technical/tool-registration-factory-pattern.md#appendix-current-tool-inventory.
-
-All tools are classified into the following categories:
+All 30 tools are classified into the following categories:
 
 **Read-Only External (15 tools):**
 
@@ -449,7 +440,7 @@ Strict mode enabled with extensive safety checks:
 3. Register tool in `YNABMCPServer.ts` using `ToolRegistry`
 4. Add unit tests in `src/tools/__tests__/myTools.test.ts`
 5. Add integration tests in `src/tools/__tests__/myTools.integration.test.ts`
-6. Update API documentation in `docs/API.md`
+6. Update API documentation in `docs/reference/API.md`
 
 ### Modifying Cache Behavior
 

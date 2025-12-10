@@ -15,4 +15,4 @@ export const emptyObjectSchema = z.object({}).strict();
  * Permissive object schema used when hosts require a top-level object but we
  * intentionally allow passthrough properties (e.g., mutation tool outputs).
  */
-export const LooseObjectSchema = z.object({}).passthrough();
+export const looseObjectSchema = z.object({}).passthrough();
