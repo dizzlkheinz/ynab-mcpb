@@ -10,6 +10,11 @@ import type { DeltaCache } from '../server/deltaCache.js';
 import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
 import { CacheKeys } from '../server/cacheKeys.js';
 import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.js';
+import type { ToolFactory } from '../types/toolRegistration.js';
+import { createAdapters, createBudgetResolver } from './adapters.js';
+import { ToolAnnotationPresets } from './toolCategories.js';
+import { ListAccountsOutputSchema, GetAccountOutputSchema } from './schemas/outputs/index.js';
+import { LooseObjectSchema } from './schemas/common.js';
 
 /**
  * Schema for ynab:list_accounts tool parameters
@@ -286,3 +291,56 @@ export async function handleCreateAccount(
     'creating account',
   );
 }
+
+/**
+ * Registers all account-related tools with the registry.
+ */
+export const registerAccountTools: ToolFactory = (registry, context) => {
+  const { adapt, adaptWithDelta, adaptWrite } = createAdapters(context);
+  const budgetResolver = createBudgetResolver(context);
+
+  registry.register({
+    name: 'list_accounts',
+    description: 'List all accounts for a specific budget',
+    inputSchema: ListAccountsSchema,
+    outputSchema: ListAccountsOutputSchema,
+    handler: adaptWithDelta(handleListAccounts),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof ListAccountsSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: List Accounts',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'get_account',
+    description: 'Get detailed information for a specific account',
+    inputSchema: GetAccountSchema,
+    outputSchema: GetAccountOutputSchema,
+    handler: adapt(handleGetAccount),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof GetAccountSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: Get Account Details',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'create_account',
+    description: 'Create a new account in the specified budget',
+    inputSchema: CreateAccountSchema,
+    outputSchema: LooseObjectSchema,
+    handler: adaptWrite(handleCreateAccount),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof CreateAccountSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
+        title: 'YNAB: Create Account',
+      },
+    },
+  });
+};

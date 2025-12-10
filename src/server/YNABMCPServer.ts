@@ -12,7 +12,7 @@ import {
   ReadResourceRequestSchema,
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
 import {
   AuthenticationError,
@@ -20,73 +20,23 @@ import {
   ValidationError as ConfigValidationError,
 } from '../utils/errors.js';
 import { YNABErrorCode, ValidationError } from '../types/index.js';
+import type { ToolContext } from '../types/toolRegistration.js';
 import { loadConfig, type AppConfig } from './config.js';
 import { createErrorHandler, ErrorHandler } from './errorHandler.js';
 import { BudgetResolver } from './budgetResolver.js';
 import { SecurityMiddleware, withSecurityWrapper } from './securityMiddleware.js';
-import { handleListBudgets, handleGetBudget, GetBudgetSchema } from '../tools/budgetTools.js';
-import {
-  handleListAccounts,
-  handleGetAccount,
-  handleCreateAccount,
-  ListAccountsSchema,
-  GetAccountSchema,
-  CreateAccountSchema,
-} from '../tools/accountTools.js';
-import {
-  handleListTransactions,
-  handleGetTransaction,
-  handleCreateTransaction,
-  handleCreateTransactions,
-  handleCreateReceiptSplitTransaction,
-  handleUpdateTransaction,
-  handleUpdateTransactions,
-  handleDeleteTransaction,
-  ListTransactionsSchema,
-  GetTransactionSchema,
-  CreateTransactionSchema,
-  CreateTransactionsSchema,
-  CreateReceiptSplitTransactionSchema,
-  UpdateTransactionSchema,
-  UpdateTransactionsSchema,
-  DeleteTransactionSchema,
-} from '../tools/transactionTools.js';
-import { handleExportTransactions, ExportTransactionsSchema } from '../tools/exportTransactions.js';
-import {
-  handleCompareTransactions,
-  CompareTransactionsSchema,
-} from '../tools/compareTransactions/index.js';
-import { handleReconcileAccount, ReconcileAccountSchema } from '../tools/reconciliation/index.js';
-import {
-  handleListCategories,
-  handleGetCategory,
-  handleUpdateCategory,
-  ListCategoriesSchema,
-  GetCategorySchema,
-  UpdateCategorySchema,
-} from '../tools/categoryTools.js';
-import {
-  handleListPayees,
-  handleGetPayee,
-  ListPayeesSchema,
-  GetPayeeSchema,
-} from '../tools/payeeTools.js';
-import {
-  handleGetMonth,
-  handleListMonths,
-  GetMonthSchema,
-  ListMonthsSchema,
-} from '../tools/monthTools.js';
-import { handleGetUser, handleConvertAmount, ConvertAmountSchema } from '../tools/utilityTools.js';
+import { registerBudgetTools } from '../tools/budgetTools.js';
+import { registerAccountTools } from '../tools/accountTools.js';
+import { registerTransactionTools } from '../tools/transactionTools.js';
+import { registerReconciliationTools } from '../tools/reconciliation/index.js';
+import { registerCategoryTools } from '../tools/categoryTools.js';
+import { registerPayeeTools } from '../tools/payeeTools.js';
+import { registerMonthTools } from '../tools/monthTools.js';
+import { registerUtilityTools } from '../tools/utilityTools.js';
+import { emptyObjectSchema } from '../tools/schemas/common.js';
 import { cacheManager, CacheManager } from './cacheManager.js';
 import { responseFormatter } from './responseFormatter.js';
-import {
-  ToolRegistry,
-  DefaultArgumentResolutionError,
-  type ToolDefinition,
-  type DefaultArgumentResolver,
-  type ToolExecutionPayload,
-} from './toolRegistry.js';
+import { ToolRegistry, type ToolDefinition } from './toolRegistry.js';
 import { ResourceManager } from './resources.js';
 import { PromptManager } from './prompts.js';
 import { DiagnosticManager } from './diagnostics.js';
@@ -95,26 +45,11 @@ import { DeltaCache } from './deltaCache.js';
 import { DeltaFetcher } from '../tools/deltaFetcher.js';
 import { ToolAnnotationPresets } from '../tools/toolCategories.js';
 import {
-  GetUserOutputSchema,
-  ConvertAmountOutputSchema,
   GetDefaultBudgetOutputSchema,
   SetDefaultBudgetOutputSchema,
   ClearCacheOutputSchema,
   SetOutputFormatOutputSchema,
   DiagnosticInfoOutputSchema,
-  GetBudgetOutputSchema,
-  ListBudgetsOutputSchema,
-  ListAccountsOutputSchema,
-  GetAccountOutputSchema,
-  GetTransactionOutputSchema,
-  ExportTransactionsOutputSchema,
-  CompareTransactionsOutputSchema,
-  ListCategoriesOutputSchema,
-  GetCategoryOutputSchema,
-  ListPayeesOutputSchema,
-  GetPayeeOutputSchema,
-  GetMonthOutputSchema,
-  ListMonthsOutputSchema,
 } from '../tools/schemas/outputs/index.js';
 
 /**
@@ -392,58 +327,17 @@ export class YNABMCPServer {
       this.toolRegistry.register(definition);
     };
 
-    const adapt =
-      <TInput extends Record<string, unknown>>(
-        handler: (ynabAPI: ynab.API, params: TInput) => Promise<CallToolResult>,
-      ) =>
-      async ({ input }: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
-        handler(this.ynabAPI, input);
-
-    const adaptNoInput =
-      (handler: (ynabAPI: ynab.API) => Promise<CallToolResult>) =>
-      async (_payload: ToolExecutionPayload<Record<string, unknown>>): Promise<CallToolResult> =>
-        handler(this.ynabAPI);
-
-    const adaptWithDelta =
-      <TInput extends Record<string, unknown>>(
-        handler: (
-          ynabAPI: ynab.API,
-          deltaFetcher: DeltaFetcher,
-          params: TInput,
-        ) => Promise<CallToolResult>,
-      ) =>
-      async ({ input }: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
-        handler(this.ynabAPI, this.deltaFetcher, input);
-
-    const adaptWrite =
-      <TInput extends Record<string, unknown>>(
-        handler: (
-          ynabAPI: ynab.API,
-          deltaCache: DeltaCache,
-          knowledgeStore: ServerKnowledgeStore,
-          params: TInput,
-        ) => Promise<CallToolResult>,
-      ) =>
-      async ({ input }: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
-        handler(this.ynabAPI, this.deltaCache, this.serverKnowledgeStore, input);
-
-    const resolveBudgetId = <
-      TInput extends { budget_id?: string | undefined },
-    >(): DefaultArgumentResolver<TInput> => {
-      return ({ rawArguments }) => {
-        const provided =
-          typeof rawArguments['budget_id'] === 'string' && rawArguments['budget_id'].length > 0
-            ? (rawArguments['budget_id'] as string)
-            : undefined;
-        const result = BudgetResolver.resolveBudgetId(provided, this.defaultBudgetId);
-        if (typeof result === 'string') {
-          return { budget_id: result } as Partial<TInput>;
-        }
-        throw new DefaultArgumentResolutionError(result);
-      };
+    const toolContext: ToolContext = {
+      ynabAPI: this.ynabAPI,
+      deltaFetcher: this.deltaFetcher,
+      deltaCache: this.deltaCache,
+      serverKnowledgeStore: this.serverKnowledgeStore,
+      getDefaultBudgetId: () => this.defaultBudgetId,
+      setDefaultBudget: (budgetId: string) => this.setDefaultBudget(budgetId),
+      cacheManager,
+      diagnosticManager: this.diagnosticManager,
     };
 
-    const emptyObjectSchema = z.object({}).strict();
     const setDefaultBudgetSchema = z.object({ budget_id: z.string().min(1) }).strict();
     const diagnosticInfoSchema = z
       .object({
@@ -461,36 +355,14 @@ export class YNABMCPServer {
         pretty_spaces: z.number().int().min(0).max(10).optional(),
       })
       .strict();
-    // Permissive object schema used where hosts require a top-level object type
-    const LooseObjectSchema = z.object({}).passthrough();
-
-    register({
-      name: 'list_budgets',
-      description: "List all budgets associated with the user's account",
-      inputSchema: emptyObjectSchema,
-      outputSchema: ListBudgetsOutputSchema,
-      handler: adaptWithDelta(handleListBudgets),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: List Budgets',
-        },
-      },
-    });
-
-    register({
-      name: 'get_budget',
-      description: 'Get detailed information for a specific budget',
-      inputSchema: GetBudgetSchema,
-      outputSchema: GetBudgetOutputSchema,
-      handler: adapt(handleGetBudget),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: Get Budget Details',
-        },
-      },
-    });
+    registerBudgetTools(this.toolRegistry, toolContext);
+    registerPayeeTools(this.toolRegistry, toolContext);
+    registerCategoryTools(this.toolRegistry, toolContext);
+    registerAccountTools(this.toolRegistry, toolContext);
+    registerMonthTools(this.toolRegistry, toolContext);
+    registerTransactionTools(this.toolRegistry, toolContext);
+    registerReconciliationTools(this.toolRegistry, toolContext);
+    registerUtilityTools(this.toolRegistry, toolContext);
 
     register({
       name: 'set_default_budget',
@@ -565,354 +437,6 @@ export class YNABMCPServer {
           // Compare with set_default_budget which calls ynabAPI.budgets.getBudgetById().
           ...ToolAnnotationPresets.UTILITY_LOCAL,
           title: 'YNAB: Get Default Budget',
-        },
-      },
-    });
-
-    register({
-      name: 'list_accounts',
-      description: 'List all accounts for a specific budget (uses default budget if not specified)',
-      inputSchema: ListAccountsSchema,
-      outputSchema: ListAccountsOutputSchema,
-      handler: adaptWithDelta(handleListAccounts),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListAccountsSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: List Accounts',
-        },
-      },
-    });
-
-    register({
-      name: 'get_account',
-      description: 'Get detailed information for a specific account',
-      inputSchema: GetAccountSchema,
-      outputSchema: GetAccountOutputSchema,
-      handler: adapt(handleGetAccount),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetAccountSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: Get Account Details',
-        },
-      },
-    });
-
-    register({
-      name: 'create_account',
-      description: 'Create a new account in the specified budget',
-      inputSchema: CreateAccountSchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWrite(handleCreateAccount),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateAccountSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
-          title: 'YNAB: Create Account',
-        },
-      },
-    });
-
-    register({
-      name: 'list_transactions',
-      description: 'List transactions for a budget with optional filtering',
-      inputSchema: ListTransactionsSchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWithDelta(handleListTransactions),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListTransactionsSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: List Transactions',
-        },
-      },
-    });
-
-    register({
-      name: 'export_transactions',
-      description: 'Export all transactions to a JSON file with descriptive filename',
-      inputSchema: ExportTransactionsSchema,
-      outputSchema: ExportTransactionsOutputSchema,
-      handler: adapt(handleExportTransactions),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ExportTransactionsSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: Export Transactions',
-        },
-      },
-    });
-
-    register({
-      name: 'compare_transactions',
-      description:
-        'Compare bank transactions from CSV with YNAB transactions to find missing entries',
-      inputSchema: CompareTransactionsSchema,
-      outputSchema: CompareTransactionsOutputSchema,
-      handler: adapt(handleCompareTransactions),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof CompareTransactionsSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: Compare Transactions',
-        },
-      },
-    });
-
-    register({
-      name: 'reconcile_account',
-      description:
-        'Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).',
-      inputSchema: ReconcileAccountSchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWithDelta(handleReconcileAccount),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ReconcileAccountSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
-          title: 'YNAB: Reconcile Account',
-        },
-      },
-    });
-
-    register({
-      name: 'get_transaction',
-      description: 'Get detailed information for a specific transaction',
-      inputSchema: GetTransactionSchema,
-      outputSchema: GetTransactionOutputSchema,
-      handler: adapt(handleGetTransaction),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetTransactionSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: Get Transaction Details',
-        },
-      },
-    });
-
-    register({
-      name: 'create_transaction',
-      description: 'Create a new transaction in the specified budget and account',
-      inputSchema: CreateTransactionSchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWrite(handleCreateTransaction),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
-          title: 'YNAB: Create Transaction',
-        },
-      },
-    });
-
-    register({
-      name: 'create_transactions',
-      description:
-        'Create multiple transactions in a single batch (1-100 items) with duplicate detection, dry-run validation, and automatic response size management with correlation metadata.',
-      inputSchema: CreateTransactionsSchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWrite(handleCreateTransactions),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof CreateTransactionsSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
-          title: 'YNAB: Create Multiple Transactions',
-        },
-      },
-    });
-
-    register({
-      name: 'update_transactions',
-      description:
-        'Update multiple transactions in a single batch (1-100 items) with dry-run validation, automatic cache invalidation, and response size management. Supports optional original_account_id and original_date metadata for efficient cache invalidation.',
-      inputSchema: UpdateTransactionsSchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWrite(handleUpdateTransactions),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionsSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
-          title: 'YNAB: Update Multiple Transactions',
-        },
-      },
-    });
-
-    register({
-      name: 'create_receipt_split_transaction',
-      description: 'Create a split transaction from receipt items with proportional tax allocation',
-      inputSchema: CreateReceiptSplitTransactionSchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWrite(handleCreateReceiptSplitTransaction),
-      defaultArgumentResolver:
-        resolveBudgetId<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
-          title: 'YNAB: Create Split Transaction from Receipt',
-        },
-      },
-    });
-
-    register({
-      name: 'update_transaction',
-      description: 'Update an existing transaction',
-      inputSchema: UpdateTransactionSchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWrite(handleUpdateTransaction),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateTransactionSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
-          title: 'YNAB: Update Transaction',
-        },
-      },
-    });
-
-    register({
-      name: 'delete_transaction',
-      description: 'Delete a transaction from the specified budget',
-      inputSchema: DeleteTransactionSchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWrite(handleDeleteTransaction),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof DeleteTransactionSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.WRITE_EXTERNAL_DELETE,
-          title: 'YNAB: Delete Transaction',
-        },
-      },
-    });
-
-    register({
-      name: 'list_categories',
-      description: 'List all categories for a specific budget',
-      inputSchema: ListCategoriesSchema,
-      outputSchema: ListCategoriesOutputSchema,
-      handler: adaptWithDelta(handleListCategories),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListCategoriesSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: List Categories',
-        },
-      },
-    });
-
-    register({
-      name: 'get_category',
-      description: 'Get detailed information for a specific category',
-      inputSchema: GetCategorySchema,
-      outputSchema: GetCategoryOutputSchema,
-      handler: adapt(handleGetCategory),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetCategorySchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: Get Category Details',
-        },
-      },
-    });
-
-    register({
-      name: 'update_category',
-      description: 'Update the budgeted amount for a category in the current month',
-      inputSchema: UpdateCategorySchema,
-      outputSchema: LooseObjectSchema,
-      handler: adaptWrite(handleUpdateCategory),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof UpdateCategorySchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
-          title: 'YNAB: Update Category Budget',
-        },
-      },
-    });
-
-    register({
-      name: 'list_payees',
-      description: 'List all payees for a specific budget',
-      inputSchema: ListPayeesSchema,
-      outputSchema: ListPayeesOutputSchema,
-      handler: adaptWithDelta(handleListPayees),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListPayeesSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: List Payees',
-        },
-      },
-    });
-
-    register({
-      name: 'get_payee',
-      description: 'Get detailed information for a specific payee',
-      inputSchema: GetPayeeSchema,
-      outputSchema: GetPayeeOutputSchema,
-      handler: adapt(handleGetPayee),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetPayeeSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: Get Payee Details',
-        },
-      },
-    });
-
-    register({
-      name: 'get_month',
-      description: 'Get budget data for a specific month',
-      inputSchema: GetMonthSchema,
-      outputSchema: GetMonthOutputSchema,
-      handler: adapt(handleGetMonth),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof GetMonthSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: Get Month Budget Data',
-        },
-      },
-    });
-
-    register({
-      name: 'list_months',
-      description: 'List all months summary data for a budget',
-      inputSchema: ListMonthsSchema,
-      outputSchema: ListMonthsOutputSchema,
-      handler: adaptWithDelta(handleListMonths),
-      defaultArgumentResolver: resolveBudgetId<z.infer<typeof ListMonthsSchema>>(),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: List Months',
-        },
-      },
-    });
-
-    register({
-      name: 'get_user',
-      description: 'Get information about the authenticated user',
-      inputSchema: emptyObjectSchema,
-      outputSchema: GetUserOutputSchema,
-      handler: adaptNoInput(handleGetUser),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-          title: 'YNAB: Get User Information',
-        },
-      },
-    });
-
-    register({
-      name: 'convert_amount',
-      description: 'Convert between dollars and milliunits with integer arithmetic for precision',
-      inputSchema: ConvertAmountSchema,
-      outputSchema: ConvertAmountOutputSchema,
-      handler: async ({ input }) => handleConvertAmount(input),
-      metadata: {
-        annotations: {
-          ...ToolAnnotationPresets.UTILITY_LOCAL,
-          title: 'YNAB: Convert Amount',
         },
       },
     });

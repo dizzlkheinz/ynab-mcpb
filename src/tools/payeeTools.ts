@@ -7,6 +7,10 @@ import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.j
 import type { DeltaFetcher } from './deltaFetcher.js';
 import { CacheKeys } from '../server/cacheKeys.js';
 import { resolveDeltaFetcherArgs } from './deltaSupport.js';
+import type { ToolFactory } from '../types/toolRegistration.js';
+import { createAdapters, createBudgetResolver } from './adapters.js';
+import { ToolAnnotationPresets } from './toolCategories.js';
+import { ListPayeesOutputSchema, GetPayeeOutputSchema } from './schemas/outputs/index.js';
 
 /**
  * Schema for ynab:list_payees tool parameters
@@ -144,3 +148,41 @@ export async function handleGetPayee(
     'getting payee details',
   );
 }
+
+/**
+ * Registers all payee-related tools with the registry.
+ */
+export const registerPayeeTools: ToolFactory = (registry, context) => {
+  const { adapt, adaptWithDelta } = createAdapters(context);
+  const budgetResolver = createBudgetResolver(context);
+
+  registry.register({
+    name: 'list_payees',
+    description: 'List all payees for a specific budget',
+    inputSchema: ListPayeesSchema,
+    outputSchema: ListPayeesOutputSchema,
+    handler: adaptWithDelta(handleListPayees),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof ListPayeesSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: List Payees',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'get_payee',
+    description: 'Get detailed information for a specific payee',
+    inputSchema: GetPayeeSchema,
+    outputSchema: GetPayeeOutputSchema,
+    handler: adapt(handleGetPayee),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof GetPayeeSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: Get Payee Details',
+      },
+    },
+  });
+};

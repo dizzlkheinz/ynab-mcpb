@@ -22,10 +22,13 @@ const env = {
 };
 
 const vitestArgs = ['vitest', 'run', '--project', 'integration:domain', ...passthroughArgs];
-const runner = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const runner = 'npx';
+const useShell = process.platform === 'win32';
+
 const child = spawn(runner, vitestArgs, {
   stdio: 'inherit',
   env,
+  shell: useShell,
 });
 
 child.on('close', (code) => {

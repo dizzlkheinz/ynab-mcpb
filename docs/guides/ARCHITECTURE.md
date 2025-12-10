@@ -6,6 +6,7 @@ This guide explains the modular architecture, core components, and architectural
 
 - [Modular Architecture](#modular-architecture)
 - [Core Components](#core-components)
+- [Tool Factory Pattern](#tool-factory-pattern)
 - [Dependency Injection Pattern](#dependency-injection-pattern)
 - [Developing Tools](#developing-tools)
 - [Cache Management](#cache-management)
@@ -88,6 +89,153 @@ Focused modules handling specific server concerns:
 - **Resource Manager**: MCP resource definitions and handlers
 - **Prompt Manager**: MCP prompt definitions and handlers
 - **Diagnostic Manager**: System diagnostics and health monitoring
+
+## Tool Factory Pattern
+
+Tool registration uses a factory pattern that improves encapsulation, scalability, and maintainability. Domain-scoped factory functions register tools with the centralized registry.
+
+### Factory Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                      YNABMCPServer.ts                           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  1. Create ToolContext with all dependencies            │   │
+│  │  2. Call domain factory functions                       │   │
+│  │  3. Register server-owned tools inline                  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│  budgetTools.ts │  │ accountTools.ts │  │transactionTools │
+│  ───────────────│  │  ──────────────│  │  ──────────────│
+│  - Schemas      │  │  - Schemas     │  │  - Schemas     │
+│  - Handlers     │  │  - Handlers    │  │  - Handlers    │
+│  - registerXxx()│  │  - registerXxx()│  │  - registerXxx()│
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+### ToolContext Interface
+
+The `ToolContext` provides all dependencies tools might need:
+
+```typescript
+// src/types/toolRegistration.ts
+export interface ToolContext {
+  ynabAPI: ynab.API;
+  deltaFetcher: DeltaFetcher;
+  deltaCache: DeltaCache;
+  serverKnowledgeStore: ServerKnowledgeStore;
+  getDefaultBudgetId: () => string | undefined;
+  setDefaultBudget: (budgetId: string) => void;
+  cacheManager: CacheManager;
+  diagnosticManager?: DiagnosticManager;
+}
+```
+
+### Adapter Utilities
+
+Adapters reduce boilerplate in tool factory functions:
+
+| Adapter | Description | Example Tools |
+|---------|-------------|---------------|
+| `adapt` | Read-only, YNAB API only | `get_budget`, `get_account` |
+| `adaptNoInput` | No input parameters | `get_user` |
+| `adaptWithDelta` | Read-only with delta fetching | `list_budgets`, `list_accounts` |
+| `adaptWrite` | Write operations with cache invalidation | `create_transaction`, `update_category` |
+
+```typescript
+// src/tools/adapters.ts
+export function createAdapters(context: ToolContext) {
+  const { ynabAPI, deltaFetcher, deltaCache, serverKnowledgeStore } = context;
+
+  return {
+    adapt: <TInput>(handler) => async ({ input }) => handler(ynabAPI, input),
+    adaptNoInput: (handler) => async () => handler(ynabAPI),
+    adaptWithDelta: <TInput>(handler) => async ({ input }) =>
+      handler(ynabAPI, deltaFetcher, input),
+    adaptWrite: <TInput>(handler) => async ({ input }) =>
+      handler(ynabAPI, deltaCache, serverKnowledgeStore, input),
+  };
+}
+```
+
+### Factory Function Example
+
+```typescript
+// src/tools/budgetTools.ts
+export const registerBudgetTools: ToolFactory = (registry, context) => {
+  const { adapt, adaptWithDelta } = createAdapters(context);
+
+  registry.register({
+    name: 'list_budgets',
+    description: "List all budgets associated with the user's account",
+    inputSchema: emptyObjectSchema,
+    outputSchema: ListBudgetsOutputSchema,
+    handler: adaptWithDelta(handleListBudgets),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: List Budgets',
+      },
+    },
+  });
+};
+```
+
+### Server Setup
+
+```typescript
+// src/server/YNABMCPServer.ts
+private setupToolRegistry(): void {
+  const context: ToolContext = {
+    ynabAPI: this.ynabAPI,
+    deltaFetcher: this.deltaFetcher,
+    deltaCache: this.deltaCache,
+    serverKnowledgeStore: this.serverKnowledgeStore,
+    getDefaultBudgetId: () => this.defaultBudgetId,
+    setDefaultBudget: (id: string) => this.setDefaultBudget(id),
+    cacheManager: cacheManager,
+    diagnosticManager: this.diagnosticManager,
+  };
+
+  // Register domain tools via factories
+  registerBudgetTools(this.toolRegistry, context);
+  registerAccountTools(this.toolRegistry, context);
+  registerTransactionTools(this.toolRegistry, context);
+  // ... other domain factories
+
+  // Server-owned tools remain inline
+  this.registerServerOwnedTools();
+}
+```
+
+### Tool Inventory
+
+**Domain Tools (25 tools)** - Registered via factory functions:
+
+| Domain | Tools |
+|--------|-------|
+| Budget | `list_budgets`, `get_budget` |
+| Account | `list_accounts`, `get_account`, `create_account` |
+| Transaction | `list_transactions`, `export_transactions`, `get_transaction`, `create_transaction`, `create_transactions`, `update_transaction`, `update_transactions`, `delete_transaction`, `create_receipt_split_transaction` |
+| Category | `list_categories`, `get_category`, `update_category` |
+| Payee | `list_payees`, `get_payee` |
+| Month | `get_month`, `list_months` |
+| Reconciliation | `compare_transactions`, `reconcile_account` |
+| Utility | `get_user`, `convert_amount` |
+
+**Server-Owned Tools (5 tools)** - Remain inline in YNABMCPServer:
+
+| Tool | Reason |
+|------|--------|
+| `set_default_budget` | Accesses server state and cache warming |
+| `get_default_budget` | Accesses server state |
+| `clear_cache` | Direct cache manipulation |
+| `diagnostic_info` | Accesses multiple server internals |
+| `set_output_format` | Modifies response formatter state |
 
 ## Dependency Injection Pattern
 
