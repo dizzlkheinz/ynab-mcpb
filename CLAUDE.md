@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integration, enabling AI assistants to interact with YNAB budgets, accounts, transactions, and categories. The codebase uses TypeScript with a modular, service-oriented architecture.
 
-**Current Version:** 0.16.2
+**Current Version:** 0.17.0
 
 ## Essential Commands
 
@@ -310,17 +310,6 @@ All 30 tools are classified into the following categories:
 
 - `get_default_budget`, `convert_amount`, `diagnostic_info`, `clear_cache`, `set_output_format`
 
-### Expected Benefits
-
-The tool annotation system provides several advantages:
-
-- **Enhanced AI Client UX** - AI assistants like Claude can show warnings/confirmations for destructive tools
-- **Safer Workflows** - AI understands which tools are dangerous and can prompt for confirmation before execution
-- **Better Tool Discovery** - Annotations help AI clients understand tool capabilities and constraints
-- **Future-Proof Integration** - As more MCP clients emerge, they'll respect these standard annotations
-- **Self-Documenting API** - Metadata provides clear documentation of tool behavior without reading implementation
-- **Zero Breaking Changes** - Fully backward compatible, annotations are advisory only and don't affect tool execution
-
 ### Usage Example
 
 Tool annotations are applied during tool registration using preset patterns:
@@ -455,27 +444,12 @@ Service modules (like diagnostics, resources, prompts) follow a pattern:
 3. Register in `YNABMCPServer` constructor
 4. Add tests in `src/server/__tests__/`
 
-## MCPB Packaging for Claude Desktop
-
-The project builds a `.mcpb` file (MCP extension for Claude Desktop):
-
-```bash
-npm run package:mcpb
-```
-
-Output: `dist/ynab-mcp-server-<version>.mcpb`
-
-The MCPB includes:
-
-- Bundled Node.js code (single file, no node_modules)
-- Manifest with extension metadata
-- Environment variable configuration schema
-
-## Git & Version Control
+## Git Workflow
 
 - **Main branch**: `master`
-- **Versioning**: Semantic versioning (currently 0.x.y - pre-1.0 API)
-- **Commit style**: Conventional commits encouraged (feat:, fix:, chore:, etc.)
+- **Commit style**: Conventional commits (feat:, fix:, chore:, refactor:, test:, docs:)
+- Run `npm test` and `npm run lint` before committing
+- PR titles should follow: `type: description` (e.g., `feat: add bulk transaction import`)
 
 ## Reconciliation System
 
@@ -499,13 +473,19 @@ The reconciliation tool (`reconcile_account`) is a comprehensive account reconci
 
 See `docs/technical/reconciliation-system-architecture.md` for detailed documentation.
 
+## Boundaries
+
+- ✅ **Always do**: Run `npm test` before commits, use milliunits for YNAB amounts, follow existing patterns
+- ✅ **Always do**: Use `.js` extensions in imports, validate inputs with Zod schemas
+- ⚠️ **Ask first**: Adding new dependencies, changing API response formats, modifying cache TTLs
+- 🚫 **Never do**: Commit `.env` or secrets, edit `dist/` or `node_modules/`, skip type checking
+- 🚫 **Never do**: Remove failing tests without fixing, use `any` type without justification
+
 ## Important Notes
 
-- **Cache Invalidation**: Write operations (create, update, delete) should invalidate related caches
+- **Amount Handling**: YNAB uses milliunits (1 dollar = 1000 milliunits) - always convert
 - **Date Format**: Always use ISO format `YYYY-MM-DD` for dates
 - **Budget ID Resolution**: Most tools auto-resolve budget_id from default budget if not provided
 - **Error Responses**: All errors return consistent JSON format via `ErrorHandler`
-- **Security**: Input validation via Zod schemas, security middleware wraps all tool executions
+- **Cache Invalidation**: Write operations (create, update, delete) should invalidate related caches
 - **Rate Limiting**: YNAB API has rate limits - use delta caching and aggressive caching strategies
-- **Delta Requests**: Delta cache automatically manages server_knowledge tracking for efficient updates
-- **Resource Templates**: Use `ynab://` URI patterns for dynamic resource access

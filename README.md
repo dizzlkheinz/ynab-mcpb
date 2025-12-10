@@ -158,7 +158,7 @@ Example:
 }
 ```
 
-For advanced configuration options (caching, output formatting), see the [Configuration Guide](docs/getting-started/CONFIGURATION.md).
+For advanced configuration options (caching, output formatting), see the `.env.example` file in the repository.
 
 ## What's Available
 
@@ -183,12 +183,16 @@ The server gives Claude access to 30 tools organized by function. You don't need
 - Find missing transactions
 - Track budget performance
 
+**MCP Resources**
+
+- Access budget and account data via URI patterns (e.g., `ynab://budgets/{id}`)
+- Static resources: `ynab://budgets`, `ynab://user`
+
 For the complete list with technical details, see the [API Reference](docs/reference/API.md).
 
 ## Need Help?
 
-- **[Troubleshooting Guide](docs/reference/TROUBLESHOOTING.md)** - Common issues and solutions
-- **[Full Documentation](docs/README.md)** - Complete guides and API reference
+- **[API Reference](docs/reference/API.md)** - Complete tool documentation
 - **[GitHub Issues](https://github.com/dizzlkheinz/ynab-mcpb/issues)** - Report bugs or request features
 
 ## For Developers
@@ -229,12 +233,6 @@ Want to contribute or build from source?
    npm test
    ```
 
-### Additional Resources
-
-- **[Development Guide](docs/guides/DEVELOPMENT.md)** - Setup and best practices
-- **[Architecture Overview](docs/guides/ARCHITECTURE.md)** - How the code is organized
-- **[Testing Guide](docs/guides/TESTING.md)** - Running and writing tests
-
 ## Security & Privacy
 
 Your YNAB access token is stored securely and never logged. All communication with YNAB's API uses HTTPS, and the server validates all inputs to prevent errors and security issues.
@@ -248,7 +246,7 @@ Contributions welcome! Please:
 3. Add tests for new features
 4. Submit a pull request
 
-See the [Development Guide](docs/guides/DEVELOPMENT.md) for details.
+See `CLAUDE.md` for development details and architecture overview.
 
 ## License
 
