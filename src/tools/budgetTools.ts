@@ -5,6 +5,10 @@ import { withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import type { DeltaFetcher } from './deltaFetcher.js';
 import { resolveDeltaFetcherArgs } from './deltaSupport.js';
+import type { ToolFactory } from '../types/toolRegistration.js';
+import { createAdapters } from './adapters.js';
+import { ToolAnnotationPresets } from './toolCategories.js';
+import { emptyObjectSchema } from './schemas/common.js';
 
 /**
  * Schema for ynab:get_budget tool parameters
@@ -110,3 +114,36 @@ export async function handleGetBudget(
     'getting budget details',
   );
 }
+
+/**
+ * Registers all budget-related tools with the provided registry.
+ */
+export const registerBudgetTools: ToolFactory = (registry, context) => {
+  const { adapt, adaptWithDelta } = createAdapters(context);
+
+  registry.register({
+    name: 'list_budgets',
+    description: "List all budgets associated with the user's account",
+    inputSchema: emptyObjectSchema,
+    handler: adaptWithDelta(handleListBudgets),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: List Budgets',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'get_budget',
+    description: 'Get detailed information for a specific budget',
+    inputSchema: GetBudgetSchema,
+    handler: adapt(handleGetBudget),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: Get Budget Details',
+      },
+    },
+  });
+};

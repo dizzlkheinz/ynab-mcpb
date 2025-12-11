@@ -85,7 +85,7 @@ describe('Utility Tools', () => {
     it('should convert dollars to milliunits correctly', async () => {
       const params = { amount: 10.5, to_milliunits: true };
 
-      const result = await handleConvertAmount(params);
+      const result = await handleConvertAmount(mockYnabAPI, params);
       const response = JSON.parse(result.content[0].text);
 
       expect(response.conversion.original_amount).toBe(10.5);
@@ -97,7 +97,7 @@ describe('Utility Tools', () => {
     it('should convert milliunits to dollars correctly', async () => {
       const params = { amount: 10500, to_milliunits: false };
 
-      const result = await handleConvertAmount(params);
+      const result = await handleConvertAmount(mockYnabAPI, params);
       const response = JSON.parse(result.content[0].text);
 
       expect(response.conversion.original_amount).toBe(10500);
@@ -109,7 +109,7 @@ describe('Utility Tools', () => {
     it('should handle zero amounts', async () => {
       const params = { amount: 0, to_milliunits: true };
 
-      const result = await handleConvertAmount(params);
+      const result = await handleConvertAmount(mockYnabAPI, params);
       const response = JSON.parse(result.content[0].text);
 
       expect(response.conversion.original_amount).toBe(0);
@@ -120,7 +120,7 @@ describe('Utility Tools', () => {
     it('should handle negative amounts', async () => {
       const params = { amount: -5.25, to_milliunits: true };
 
-      const result = await handleConvertAmount(params);
+      const result = await handleConvertAmount(mockYnabAPI, params);
       const response = JSON.parse(result.content[0].text);
 
       expect(response.conversion.original_amount).toBe(-5.25);
@@ -131,7 +131,7 @@ describe('Utility Tools', () => {
     it('should handle floating-point precision correctly', async () => {
       const params = { amount: 0.01, to_milliunits: true };
 
-      const result = await handleConvertAmount(params);
+      const result = await handleConvertAmount(mockYnabAPI, params);
       const response = JSON.parse(result.content[0].text);
 
       expect(response.conversion.converted_amount).toBe(10);
@@ -140,7 +140,7 @@ describe('Utility Tools', () => {
     it('should handle large amounts', async () => {
       const params = { amount: 999999.99, to_milliunits: true };
 
-      const result = await handleConvertAmount(params);
+      const result = await handleConvertAmount(mockYnabAPI, params);
       const response = JSON.parse(result.content[0].text);
 
       expect(response.conversion.converted_amount).toBe(999999990);
@@ -149,7 +149,7 @@ describe('Utility Tools', () => {
     it('should round to nearest milliunit when converting from dollars', async () => {
       const params = { amount: 10.5555, to_milliunits: true };
 
-      const result = await handleConvertAmount(params);
+      const result = await handleConvertAmount(mockYnabAPI, params);
       const response = JSON.parse(result.content[0].text);
 
       expect(response.conversion.converted_amount).toBe(10556); // Rounded from 10555.5

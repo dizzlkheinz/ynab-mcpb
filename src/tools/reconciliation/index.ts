@@ -8,6 +8,13 @@ import { z } from 'zod/v4';
 import type * as ynab from 'ynab';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { withToolErrorHandling } from '../../types/index.js';
+import type { ToolFactory } from '../../types/toolRegistration.js';
+import { createAdapters, createBudgetResolver } from '../adapters.js';
+import { ToolAnnotationPresets } from '../toolCategories.js';
+import {
+  CompareTransactionsSchema,
+  handleCompareTransactions,
+} from '../compareTransactions/index.js';
 import { analyzeReconciliation } from './analyzer.js';
 import type { MatchingConfig } from './matcher.js';
 import { buildReconciliationPayload } from '../reconcileAdapter.js';
@@ -456,6 +463,44 @@ export async function handleReconcileAccount(
     'analyzing account reconciliation',
   );
 }
+
+/**
+ * Registers reconciliation-domain tools (compare + reconcile) with the registry.
+ */
+export const registerReconciliationTools: ToolFactory = (registry, context) => {
+  const { adapt, adaptWithDelta } = createAdapters(context);
+  const budgetResolver = createBudgetResolver(context);
+
+  registry.register({
+    name: 'compare_transactions',
+    description:
+      'Compare bank transactions from CSV with YNAB transactions to find missing entries',
+    inputSchema: CompareTransactionsSchema,
+    handler: adapt(handleCompareTransactions),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof CompareTransactionsSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+        title: 'YNAB: Compare Transactions',
+      },
+    },
+  });
+
+  registry.register({
+    name: 'reconcile_account',
+    description:
+      'Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).',
+    inputSchema: ReconcileAccountSchema,
+    handler: adaptWithDelta(handleReconcileAccount),
+    defaultArgumentResolver: budgetResolver<z.infer<typeof ReconcileAccountSchema>>(),
+    metadata: {
+      annotations: {
+        ...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+        title: 'YNAB: Reconcile Account',
+      },
+    },
+  });
+};
 
 function mapCsvDateFormatToHint(
   format: string | undefined,
