@@ -183,7 +183,7 @@ The server gives Claude access to 30 tools organized by function. You don't need
 - Find missing transactions
 - Track budget performance
 
-**MCP Resources**
+## MCP Resources
 
 - Access budget and account data via URI patterns (e.g., `ynab://budgets/{id}`)
 - Static resources: `ynab://budgets`, `ynab://user`

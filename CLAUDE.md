@@ -108,6 +108,9 @@ Tools are organized by domain with some using modular sub-directories:
 - **payeeTools.ts** - Payee listing and retrieval
 - **monthTools.ts** - Monthly budget data
 - **utilityTools.ts** - User info and amount conversion
+- **adapters.ts** - Tool adapter implementations
+- **toolCategories.ts** - Tool categorization utilities
+- **compareTransactions.ts** - Transaction comparison tool entry point
 - **exportTransactions.ts** - Transaction export to JSON files
 - **reconcileAdapter.ts** - Legacy adapter for reconciliation tool
 - **deltaFetcher.ts** - Delta request utilities for efficient API updates

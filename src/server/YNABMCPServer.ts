@@ -357,6 +357,8 @@ export class YNABMCPServer {
     registerReconciliationTools(this.toolRegistry, toolContext);
     registerUtilityTools(this.toolRegistry, toolContext);
 
+    // Server-owned inline tools stay here because they depend on instance state (default budget,
+    // diagnostics manager, cache manager, response formatter) rather than the factory context.
     register({
       name: 'set_default_budget',
       description: 'Set the default budget for subsequent operations',
