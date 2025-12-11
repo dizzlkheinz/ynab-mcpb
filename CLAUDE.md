@@ -429,7 +429,8 @@ Strict mode enabled with extensive safety checks:
 
 1. Create Zod schema in appropriate tool file (e.g., `src/tools/myTools.ts`)
 2. Implement handler function following existing patterns
-3. Register tool in `YNABMCPServer.ts` using `ToolRegistry`
+3. Register the tool in the appropriate domain factory (e.g., `registerBudgetTools` in
+   `src/tools/budgetTools.ts`) using `ToolRegistry`
 4. Add unit tests in `src/tools/__tests__/myTools.test.ts`
 5. Add integration tests in `src/tools/__tests__/myTools.integration.test.ts`
 6. Update API documentation in `docs/reference/API.md`
@@ -480,7 +481,7 @@ See `docs/technical/reconciliation-system-architecture.md` for detailed document
 
 - ✅ **Always do**: Run `npm test` before commits, use milliunits for YNAB amounts, follow existing patterns
 - ✅ **Always do**: Use `.js` extensions in imports, validate inputs with Zod schemas
-- ⚠️ **Ask first**: Adding new dependencies, changing API response formats, modifying cache TTLs
+- ⚠️ **Ask first**: Adding new dependencies, changing API response formats, modifying cache TTLs (see `src/server/cacheManager.ts`)
 - 🚫 **Never do**: Commit `.env` or secrets, edit `dist/` or `node_modules/`, skip type checking
 - 🚫 **Never do**: Remove failing tests without fixing, use `any` type without justification
 
