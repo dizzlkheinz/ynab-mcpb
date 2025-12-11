@@ -1,16 +1,18 @@
 name: Publish to npm
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
         description: 'Tag or ref to publish (e.g., v0.17.0)'
         required: true
+  release:
+    types: [published]
 
 jobs:
   publish:
+    # Required to satisfy npm Trusted Publisher matching (environment name left blank in npm)
+    environment: npm-publish
     runs-on: ubuntu-latest
     permissions:
       contents: read
