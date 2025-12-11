@@ -13,11 +13,6 @@ import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.j
 import type { ToolFactory } from '../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from './adapters.js';
 import { ToolAnnotationPresets } from './toolCategories.js';
-import {
-  GetCategoryOutputSchema,
-  ListCategoriesOutputSchema,
-  UpdateCategoryOutputSchema,
-} from './schemas/outputs/index.js';
 
 /**
  * Schema for ynab:list_categories tool parameters
@@ -355,7 +350,6 @@ export const registerCategoryTools: ToolFactory = (registry, context) => {
     name: 'list_categories',
     description: 'List all categories for a specific budget',
     inputSchema: ListCategoriesSchema,
-    outputSchema: ListCategoriesOutputSchema,
     handler: adaptWithDelta(handleListCategories),
     defaultArgumentResolver: budgetResolver<ListCategoriesParams>(),
     metadata: {
@@ -370,7 +364,6 @@ export const registerCategoryTools: ToolFactory = (registry, context) => {
     name: 'get_category',
     description: 'Get detailed information for a specific category',
     inputSchema: GetCategorySchema,
-    outputSchema: GetCategoryOutputSchema,
     handler: adapt(handleGetCategory),
     defaultArgumentResolver: budgetResolver<GetCategoryParams>(),
     metadata: {
@@ -385,7 +378,6 @@ export const registerCategoryTools: ToolFactory = (registry, context) => {
     name: 'update_category',
     description: 'Update the budgeted amount for a category in the current month',
     inputSchema: UpdateCategorySchema,
-    outputSchema: UpdateCategoryOutputSchema,
     handler: adaptWrite(handleUpdateCategory),
     defaultArgumentResolver: budgetResolver<UpdateCategoryParams>(),
     metadata: {

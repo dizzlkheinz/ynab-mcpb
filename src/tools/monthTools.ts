@@ -11,7 +11,6 @@ import { resolveDeltaFetcherArgs } from './deltaSupport.js';
 import type { ToolFactory } from '../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from './adapters.js';
 import { ToolAnnotationPresets } from './toolCategories.js';
-import { GetMonthOutputSchema, ListMonthsOutputSchema } from './schemas/outputs/index.js';
 
 /**
  * Schema for ynab:get_month tool parameters
@@ -184,7 +183,6 @@ export const registerMonthTools: ToolFactory = (registry, context) => {
     name: 'get_month',
     description: 'Get budget data for a specific month',
     inputSchema: GetMonthSchema,
-    outputSchema: GetMonthOutputSchema,
     handler: adapt(handleGetMonth),
     defaultArgumentResolver: budgetResolver<z.infer<typeof GetMonthSchema>>(),
     metadata: {
@@ -199,7 +197,6 @@ export const registerMonthTools: ToolFactory = (registry, context) => {
     name: 'list_months',
     description: 'List all months summary data for a budget',
     inputSchema: ListMonthsSchema,
-    outputSchema: ListMonthsOutputSchema,
     handler: adaptWithDelta(handleListMonths),
     defaultArgumentResolver: budgetResolver<z.infer<typeof ListMonthsSchema>>(),
     metadata: {

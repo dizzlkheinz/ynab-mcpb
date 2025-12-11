@@ -13,8 +13,6 @@ import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.j
 import type { ToolFactory } from '../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from './adapters.js';
 import { ToolAnnotationPresets } from './toolCategories.js';
-import { ListAccountsOutputSchema, GetAccountOutputSchema } from './schemas/outputs/index.js';
-import { looseObjectSchema } from './schemas/common.js';
 
 /**
  * Schema for ynab:list_accounts tool parameters
@@ -303,7 +301,6 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
     name: 'list_accounts',
     description: 'List all accounts for a specific budget',
     inputSchema: ListAccountsSchema,
-    outputSchema: ListAccountsOutputSchema,
     handler: adaptWithDelta(handleListAccounts),
     defaultArgumentResolver: budgetResolver<z.infer<typeof ListAccountsSchema>>(),
     metadata: {
@@ -318,7 +315,6 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
     name: 'get_account',
     description: 'Get detailed information for a specific account',
     inputSchema: GetAccountSchema,
-    outputSchema: GetAccountOutputSchema,
     handler: adapt(handleGetAccount),
     defaultArgumentResolver: budgetResolver<z.infer<typeof GetAccountSchema>>(),
     metadata: {
@@ -333,7 +329,6 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
     name: 'create_account',
     description: 'Create a new account in the specified budget',
     inputSchema: CreateAccountSchema,
-    outputSchema: looseObjectSchema,
     handler: adaptWrite(handleCreateAccount),
     defaultArgumentResolver: budgetResolver<z.infer<typeof CreateAccountSchema>>(),
     metadata: {

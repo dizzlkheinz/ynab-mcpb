@@ -9,7 +9,6 @@ import type { ToolFactory } from '../types/toolRegistration.js';
 import { createAdapters } from './adapters.js';
 import { ToolAnnotationPresets } from './toolCategories.js';
 import { emptyObjectSchema } from './schemas/common.js';
-import { GetBudgetOutputSchema, ListBudgetsOutputSchema } from './schemas/outputs/index.js';
 
 /**
  * Schema for ynab:get_budget tool parameters
@@ -126,7 +125,6 @@ export const registerBudgetTools: ToolFactory = (registry, context) => {
     name: 'list_budgets',
     description: "List all budgets associated with the user's account",
     inputSchema: emptyObjectSchema,
-    outputSchema: ListBudgetsOutputSchema,
     handler: adaptWithDelta(handleListBudgets),
     metadata: {
       annotations: {
@@ -140,7 +138,6 @@ export const registerBudgetTools: ToolFactory = (registry, context) => {
     name: 'get_budget',
     description: 'Get detailed information for a specific budget',
     inputSchema: GetBudgetSchema,
-    outputSchema: GetBudgetOutputSchema,
     handler: adapt(handleGetBudget),
     metadata: {
       annotations: {

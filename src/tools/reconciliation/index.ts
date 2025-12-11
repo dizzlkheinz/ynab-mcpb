@@ -11,12 +11,10 @@ import { withToolErrorHandling } from '../../types/index.js';
 import type { ToolFactory } from '../../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from '../adapters.js';
 import { ToolAnnotationPresets } from '../toolCategories.js';
-import { looseObjectSchema } from '../schemas/common.js';
 import {
   CompareTransactionsSchema,
   handleCompareTransactions,
 } from '../compareTransactions/index.js';
-import { CompareTransactionsOutputSchema } from '../schemas/outputs/index.js';
 import { analyzeReconciliation } from './analyzer.js';
 import type { MatchingConfig } from './matcher.js';
 import { buildReconciliationPayload } from '../reconcileAdapter.js';
@@ -478,7 +476,6 @@ export const registerReconciliationTools: ToolFactory = (registry, context) => {
     description:
       'Compare bank transactions from CSV with YNAB transactions to find missing entries',
     inputSchema: CompareTransactionsSchema,
-    outputSchema: CompareTransactionsOutputSchema,
     handler: adapt(handleCompareTransactions),
     defaultArgumentResolver: budgetResolver<z.infer<typeof CompareTransactionsSchema>>(),
     metadata: {
@@ -494,7 +491,6 @@ export const registerReconciliationTools: ToolFactory = (registry, context) => {
     description:
       'Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).',
     inputSchema: ReconcileAccountSchema,
-    outputSchema: looseObjectSchema,
     handler: adaptWithDelta(handleReconcileAccount),
     defaultArgumentResolver: budgetResolver<z.infer<typeof ReconcileAccountSchema>>(),
     metadata: {

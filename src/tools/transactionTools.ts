@@ -9,11 +9,6 @@ import { ValidationError, withToolErrorHandling } from '../types/index.js';
 import type { ToolFactory } from '../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from './adapters.js';
 import { ToolAnnotationPresets } from './toolCategories.js';
-import { looseObjectSchema } from './schemas/common.js';
-import {
-  GetTransactionOutputSchema,
-  ExportTransactionsOutputSchema,
-} from './schemas/outputs/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
 import { amountToMilliunits, milliunitsToAmount } from '../utils/amountUtils.js';
 import { cacheManager, CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
@@ -2527,7 +2522,6 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     name: 'list_transactions',
     description: 'List transactions for a budget with optional filtering',
     inputSchema: ListTransactionsSchema,
-    outputSchema: looseObjectSchema,
     handler: adaptWithDelta(handleListTransactions),
     defaultArgumentResolver: budgetResolver<z.infer<typeof ListTransactionsSchema>>(),
     metadata: {
@@ -2542,7 +2536,6 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     name: 'export_transactions',
     description: 'Export all transactions to a JSON file with descriptive filename',
     inputSchema: ExportTransactionsSchema,
-    outputSchema: ExportTransactionsOutputSchema,
     handler: adapt(handleExportTransactions),
     defaultArgumentResolver: budgetResolver<z.infer<typeof ExportTransactionsSchema>>(),
     metadata: {
@@ -2557,7 +2550,6 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     name: 'get_transaction',
     description: 'Get detailed information for a specific transaction',
     inputSchema: GetTransactionSchema,
-    outputSchema: GetTransactionOutputSchema,
     handler: adapt(handleGetTransaction),
     defaultArgumentResolver: budgetResolver<z.infer<typeof GetTransactionSchema>>(),
     metadata: {
@@ -2572,7 +2564,6 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     name: 'create_transaction',
     description: 'Create a new transaction in the specified budget and account',
     inputSchema: CreateTransactionSchema,
-    outputSchema: looseObjectSchema,
     handler: adaptWrite(handleCreateTransaction),
     defaultArgumentResolver: budgetResolver<z.infer<typeof CreateTransactionSchema>>(),
     metadata: {
@@ -2588,7 +2579,6 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     description:
       'Create multiple transactions in a single batch (1-100 items) with duplicate detection, dry-run validation, and automatic response size management with correlation metadata.',
     inputSchema: CreateTransactionsSchema,
-    outputSchema: looseObjectSchema,
     handler: adaptWrite(handleCreateTransactions),
     defaultArgumentResolver: budgetResolver<z.infer<typeof CreateTransactionsSchema>>(),
     metadata: {
@@ -2603,7 +2593,6 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     name: 'create_receipt_split_transaction',
     description: 'Create a split transaction from receipt items with proportional tax allocation',
     inputSchema: CreateReceiptSplitTransactionSchema,
-    outputSchema: looseObjectSchema,
     handler: adaptWrite(handleCreateReceiptSplitTransaction),
     defaultArgumentResolver: budgetResolver<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
     metadata: {
@@ -2618,7 +2607,6 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     name: 'update_transaction',
     description: 'Update an existing transaction',
     inputSchema: UpdateTransactionSchema,
-    outputSchema: looseObjectSchema,
     handler: adaptWrite(handleUpdateTransaction),
     defaultArgumentResolver: budgetResolver<z.infer<typeof UpdateTransactionSchema>>(),
     metadata: {
@@ -2634,7 +2622,6 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     description:
       'Update multiple transactions in a single batch (1-100 items) with dry-run validation, automatic cache invalidation, and response size management. Supports optional original_account_id and original_date metadata for efficient cache invalidation.',
     inputSchema: UpdateTransactionsSchema,
-    outputSchema: looseObjectSchema,
     handler: adaptWrite(handleUpdateTransactions),
     defaultArgumentResolver: budgetResolver<z.infer<typeof UpdateTransactionsSchema>>(),
     metadata: {
@@ -2649,7 +2636,6 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     name: 'delete_transaction',
     description: 'Delete a transaction from the specified budget',
     inputSchema: DeleteTransactionSchema,
-    outputSchema: looseObjectSchema,
     handler: adaptWrite(handleDeleteTransaction),
     defaultArgumentResolver: budgetResolver<z.infer<typeof DeleteTransactionSchema>>(),
     metadata: {

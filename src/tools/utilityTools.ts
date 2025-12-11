@@ -5,7 +5,6 @@ import { responseFormatter } from '../server/responseFormatter.js';
 import { withToolErrorHandling } from '../types/index.js';
 import { createAdapters } from './adapters.js';
 import { emptyObjectSchema } from './schemas/common.js';
-import { ConvertAmountOutputSchema, GetUserOutputSchema } from './schemas/outputs/index.js';
 import { ToolAnnotationPresets } from './toolCategories.js';
 import type { ToolFactory } from '../types/toolRegistration.js';
 
@@ -107,7 +106,6 @@ export const registerUtilityTools: ToolFactory = (registry, context) => {
     name: 'get_user',
     description: 'Get information about the authenticated user',
     inputSchema: emptyObjectSchema,
-    outputSchema: GetUserOutputSchema,
     handler: adaptNoInput(handleGetUser),
     metadata: {
       annotations: {
@@ -121,7 +119,6 @@ export const registerUtilityTools: ToolFactory = (registry, context) => {
     name: 'convert_amount',
     description: 'Convert between dollars and milliunits with integer arithmetic for precision',
     inputSchema: ConvertAmountSchema,
-    outputSchema: ConvertAmountOutputSchema,
     handler: adapt(handleConvertAmount),
     metadata: {
       annotations: {

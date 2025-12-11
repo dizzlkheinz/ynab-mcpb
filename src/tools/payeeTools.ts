@@ -10,7 +10,6 @@ import { resolveDeltaFetcherArgs } from './deltaSupport.js';
 import type { ToolFactory } from '../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from './adapters.js';
 import { ToolAnnotationPresets } from './toolCategories.js';
-import { ListPayeesOutputSchema, GetPayeeOutputSchema } from './schemas/outputs/index.js';
 
 /**
  * Schema for ynab:list_payees tool parameters
@@ -160,7 +159,6 @@ export const registerPayeeTools: ToolFactory = (registry, context) => {
     name: 'list_payees',
     description: 'List all payees for a specific budget',
     inputSchema: ListPayeesSchema,
-    outputSchema: ListPayeesOutputSchema,
     handler: adaptWithDelta(handleListPayees),
     defaultArgumentResolver: budgetResolver<z.infer<typeof ListPayeesSchema>>(),
     metadata: {
@@ -175,7 +173,6 @@ export const registerPayeeTools: ToolFactory = (registry, context) => {
     name: 'get_payee',
     description: 'Get detailed information for a specific payee',
     inputSchema: GetPayeeSchema,
-    outputSchema: GetPayeeOutputSchema,
     handler: adapt(handleGetPayee),
     defaultArgumentResolver: budgetResolver<z.infer<typeof GetPayeeSchema>>(),
     metadata: {
