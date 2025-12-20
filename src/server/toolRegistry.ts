@@ -54,12 +54,27 @@ export interface ToolMetadataOptions {
   annotations?: MCPToolAnnotations;
 }
 
+/**
+ * Progress notification callback for long-running operations.
+ * Follows MCP spec: notifications/progress
+ */
+export type ProgressCallback = (params: {
+  progress: number;
+  total?: number;
+  message?: string;
+}) => Promise<void>;
+
 export interface ToolExecutionContext {
   accessToken: string;
   name: string;
   operation: string;
   rawArguments: Record<string, unknown>;
   cache?: ToolRegistryCacheHelpers;
+  /**
+   * Optional progress callback for emitting MCP progress notifications.
+   * Available when the client provides a progressToken in the request.
+   */
+  sendProgress?: ProgressCallback;
 }
 
 export interface ToolExecutionPayload<TInput extends Record<string, unknown>> {
@@ -97,6 +112,11 @@ export interface ToolExecutionOptions {
   accessToken: string;
   arguments?: Record<string, unknown>;
   minifyOverride?: boolean;
+  /**
+   * Optional progress callback for emitting MCP progress notifications.
+   * Should be provided when the request includes a progressToken.
+   */
+  sendProgress?: ProgressCallback;
 }
 
 export interface ToolRegistryDependencies {
@@ -273,6 +293,9 @@ export class ToolRegistry {
             if (this.deps.cacheHelpers) {
               context.cache = this.deps.cacheHelpers;
             }
+            if (options.sendProgress) {
+              context.sendProgress = options.sendProgress;
+            }
             const handlerResult = await tool.handler({
               input: validated,
               context,
@@ -357,6 +380,13 @@ export class ToolRegistry {
     return undefined;
   }
 
+  /**
+   * Regex pattern for MCP-compliant tool names.
+   * Tool names SHOULD be 1-128 chars, case-sensitive, only [a-zA-Z0-9_.-]
+   * @see https://spec.modelcontextprotocol.io/specification/2024-11-05/server/tools/
+   */
+  private static readonly MCP_TOOL_NAME_REGEX = /^[a-zA-Z0-9_.-]{1,128}$/;
+
   private assertValidDefinition<
     TInput extends Record<string, unknown>,
     TOutput extends Record<string, unknown>,
@@ -367,6 +397,14 @@ export class ToolRegistry {
 
     if (!definition.name || typeof definition.name !== 'string') {
       throw new Error('Tool definition requires a non-empty name');
+    }
+
+    // Validate tool name follows MCP specification guidelines
+    if (!ToolRegistry.MCP_TOOL_NAME_REGEX.test(definition.name)) {
+      throw new Error(
+        `Tool name '${definition.name}' violates MCP guidelines: ` +
+          `must be 1-128 chars using only [a-zA-Z0-9_.-]`,
+      );
     }
 
     if (!definition.description || typeof definition.description !== 'string') {

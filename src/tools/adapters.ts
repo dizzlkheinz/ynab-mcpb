@@ -6,7 +6,11 @@
  */
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { ToolExecutionPayload, DefaultArgumentResolver } from '../server/toolRegistry.js';
+import type {
+  ToolExecutionPayload,
+  DefaultArgumentResolver,
+  ProgressCallback,
+} from '../server/toolRegistry.js';
 import { BudgetResolver } from '../server/budgetResolver.js';
 import { DefaultArgumentResolutionError } from '../server/toolRegistry.js';
 import type {
@@ -16,6 +20,7 @@ import type {
   WriteHandler,
   NoInputHandler,
 } from '../types/toolRegistration.js';
+import type { DeltaFetcher } from './deltaFetcher.js';
 
 /**
  * Creates adapter functions bound to the provided context. These helpers reduce
@@ -40,6 +45,22 @@ export function createAdapters(context: ToolContext) {
       <TInput extends Record<string, unknown>>(handler: DeltaHandler<TInput>) =>
       async ({ input }: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
         handler(ynabAPI, deltaFetcher, input),
+
+    /**
+     * Adapter for delta operations that may emit progress notifications.
+     * Passes the optional sendProgress callback from the execution context.
+     */
+    adaptWithDeltaAndProgress:
+      <TInput extends Record<string, unknown>>(
+        handler: (
+          api: typeof ynabAPI,
+          deltaFetcher: DeltaFetcher,
+          params: TInput,
+          sendProgress?: ProgressCallback,
+        ) => Promise<CallToolResult>,
+      ) =>
+      async ({ input, context }: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
+        handler(ynabAPI, deltaFetcher, input, context.sendProgress),
 
     adaptWrite:
       <TInput extends Record<string, unknown>>(handler: WriteHandler<TInput>) =>

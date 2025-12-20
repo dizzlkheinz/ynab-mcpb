@@ -38,7 +38,7 @@ import { registerUtilityTools } from '../tools/utilityTools.js';
 import { emptyObjectSchema } from '../tools/schemas/common.js';
 import { cacheManager, CacheManager } from './cacheManager.js';
 import { responseFormatter } from './responseFormatter.js';
-import { ToolRegistry, type ToolDefinition } from './toolRegistry.js';
+import { ToolRegistry, type ToolDefinition, type ProgressCallback } from './toolRegistry.js';
 import { ResourceManager } from './resources.js';
 import { PromptManager } from './prompts.js';
 import { DiagnosticManager } from './diagnostics.js';
@@ -86,9 +86,12 @@ export class YNABMCPServer {
       },
       {
         capabilities: {
-          tools: {},
-          resources: {},
-          prompts: {},
+          tools: { listChanged: false },
+          resources: {
+            subscribe: false, // YNAB API has no webhooks; subscriptions not applicable
+            listChanged: false,
+          },
+          prompts: { listChanged: false },
         },
       },
     );
@@ -273,7 +276,7 @@ export class YNABMCPServer {
     });
 
     // Handle tool call requests
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       if (!this.toolRegistry.hasTool(request.params.name)) {
         throw new McpError(ErrorCode.InvalidParams, `Unknown tool: ${request.params.name}`);
       }
@@ -297,6 +300,7 @@ export class YNABMCPServer {
         accessToken: string;
         arguments: Record<string, unknown>;
         minifyOverride?: boolean;
+        sendProgress?: ProgressCallback;
       } = {
         name: request.params.name,
         accessToken: this.configInstance.YNAB_ACCESS_TOKEN,
@@ -305,6 +309,23 @@ export class YNABMCPServer {
 
       if (minifyOverride !== undefined) {
         executionOptions.minifyOverride = minifyOverride;
+      }
+
+      // Create progress callback if client provided a progressToken
+      const progressToken = (request.params as { _meta?: { progressToken?: string | number } })
+        ._meta?.progressToken;
+      if (progressToken !== undefined && extra.sendNotification) {
+        executionOptions.sendProgress = async (params) => {
+          await extra.sendNotification({
+            method: 'notifications/progress',
+            params: {
+              progressToken,
+              progress: params.progress,
+              ...(params.total !== undefined && { total: params.total }),
+              ...(params.message !== undefined && { message: params.message }),
+            },
+          });
+        };
       }
 
       return await this.toolRegistry.executeTool(executionOptions);
