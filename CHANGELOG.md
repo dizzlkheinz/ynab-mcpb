@@ -160,7 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Structured Output Schemas** - Zod-based output validation for all 30 tools
+- **Structured Output Schemas** - Zod-based output validation for all tools
   - Output schemas in `src/tools/schemas/outputs/` with centralized exports
   - Automatic validation in ToolRegistry (toolRegistry.ts:401-483) using `z.safeParse()`
   - Type-safe responses with TypeScript inference

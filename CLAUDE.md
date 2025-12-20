@@ -172,11 +172,14 @@ return cacheManager.wrap('cache_key', {
 
 Cache TTL constants are defined in `cacheManager.ts`:
 
-- `CACHE_TTLS.BUDGETS` - 1 hour (rarely changes)
-- `CACHE_TTLS.ACCOUNTS` - 30 minutes
-- `CACHE_TTLS.CATEGORIES` - 30 minutes
-- `CACHE_TTLS.SHORT` - 5 minutes (transactions)
-- `CACHE_TTLS.LONG` - 1 hour
+- `CACHE_TTLS.BUDGETS` - 10 minutes (rarely changes)
+- `CACHE_TTLS.ACCOUNTS` - 5 minutes
+- `CACHE_TTLS.CATEGORIES` - 5 minutes
+- `CACHE_TTLS.PAYEES` - 10 minutes
+- `CACHE_TTLS.TRANSACTIONS` - 2 minutes
+- `CACHE_TTLS.SCHEDULED_TRANSACTIONS` - 5 minutes
+- `CACHE_TTLS.USER_INFO` - 30 minutes
+- `CACHE_TTLS.MONTHS` - 5 minutes
 
 ### Delta Caching Pattern
 
@@ -387,7 +390,7 @@ Required:
 Optional (Caching):
 
 - `YNAB_MCP_CACHE_MAX_ENTRIES` (default: 1000)
-- `YNAB_MCP_CACHE_DEFAULT_TTL_MS` (default: 1800000 / 30 min)
+- `YNAB_MCP_CACHE_DEFAULT_TTL_MS` (default: 300000 / 5 min)
 - `YNAB_MCP_CACHE_STALE_MS` (default: 120000 / 2 min)
 
 Optional (Output):

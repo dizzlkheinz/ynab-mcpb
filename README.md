@@ -162,7 +162,7 @@ For advanced configuration options (caching, output formatting), see the `.env.e
 
 ## What's Available
 
-The server gives Claude access to 30 tools organized by function. You don't need to know the tool names - just ask Claude in natural language and it will use the right tools.
+The server gives Claude access to 29 tools organized by function. You don't need to know the tool names - just ask Claude in natural language and it will use the right tools.
 
 **Budget & Account Info**
 

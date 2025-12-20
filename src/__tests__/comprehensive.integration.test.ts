@@ -351,7 +351,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
   });
 
   describe('Complete Transaction Management Integration', () => {
-    // TODO: Re-enable after DeltaFetcher cache integration alignment (see docs/plans/2025-11-15-cache-test-alignment.md)
+    // TODO: Re-enable after DeltaFetcher cache integration alignment.
     it.skip(
       'should handle complete transaction workflow',
       { meta: { tier: 'domain', domain: 'workflows' } },
@@ -851,7 +851,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       }
     });
 
-    // TODO: Re-enable after DeltaFetcher cache integration alignment (see docs/plans/2025-11-15-cache-test-alignment.md)
+    // TODO: Re-enable after DeltaFetcher cache integration alignment.
     it.skip(
       'should cache budget list requests and improve performance on subsequent calls',
       { meta: { tier: 'domain', domain: 'workflows' } },
@@ -982,7 +982,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       },
     );
 
-    // TODO: Re-enable after DeltaFetcher cache integration alignment (see docs/plans/2025-11-15-cache-test-alignment.md)
+    // TODO: Re-enable after DeltaFetcher cache integration alignment.
     it.skip(
       'should not cache filtered transaction requests',
       { meta: { tier: 'domain', domain: 'workflows' } },
@@ -1115,7 +1115,7 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
       },
     );
 
-    // TODO: Re-enable after DeltaFetcher cache integration alignment (see docs/plans/2025-11-15-cache-test-alignment.md)
+    // TODO: Re-enable after DeltaFetcher cache integration alignment.
     it.skip(
       'should respect cache TTL and return fresh data after expiration',
       { meta: { tier: 'domain', domain: 'workflows' } },

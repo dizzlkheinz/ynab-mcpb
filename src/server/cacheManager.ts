@@ -145,14 +145,15 @@ export class CacheManager {
     } else {
       const providedTtl = ttlOrOptions?.ttl;
       ttl = providedTtl !== undefined ? providedTtl : this.defaultTTL;
-      if (ttlOrOptions && 'staleWhileRevalidate' in ttlOrOptions) {
+      const hasStaleWhileRevalidate =
+        ttlOrOptions !== undefined && 'staleWhileRevalidate' in ttlOrOptions;
+      if (hasStaleWhileRevalidate) {
         staleWhileRevalidate = ttlOrOptions.staleWhileRevalidate;
+        if (staleWhileRevalidate === undefined && this.defaultStaleWindow > 0) {
+          staleWhileRevalidate = this.defaultStaleWindow;
+        }
       } else {
-        staleWhileRevalidate = ttlOrOptions?.staleWhileRevalidate;
-      }
-      // Apply default stale window only when options object is provided and staleWhileRevalidate is undefined
-      if (staleWhileRevalidate === undefined && this.defaultStaleWindow > 0) {
-        staleWhileRevalidate = this.defaultStaleWindow;
+        staleWhileRevalidate = undefined;
       }
     }
     const entry: CacheEntry<T> = {

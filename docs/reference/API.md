@@ -20,7 +20,7 @@ This document provides comprehensive documentation for all tools available in th
 
 ## Overview
 
-The YNAB MCP Server provides 30 tools that enable AI assistants to interact with YNAB data. All tools follow consistent patterns for parameters, responses, and error handling.
+The YNAB MCP Server provides 29 tools that enable AI assistants to interact with YNAB data. All tools follow consistent patterns for parameters, responses, and error handling.
 
 ### Tool Naming Convention
 
@@ -53,6 +53,10 @@ The server automatically converts YNAB's internal milliunits to dollars in all r
 - The server automatically converts to YNAB's internal milliunit format
 
 **Note**: YNAB's internal representation uses milliunits (1/1000th of currency unit), but this is now transparent to users - all inputs and outputs use standard dollar amounts
+
+### Output Formatting Overrides
+
+All tool calls accept optional boolean hints `minify`, `_minify`, or `__minify` in their arguments to override JSON formatting for that call. These keys are removed before validation and do not affect tool behavior.
 
 ### Dates
 
@@ -186,9 +190,9 @@ URI: ynab://budgets/12345678-1234-1234-1234-123456789012/accounts/87654321-4321-
 ### Caching
 
 All MCP resources are cached for optimal performance:
-- **Budgets**: 1 hour TTL (rarely change)
-- **Accounts**: 30 minutes TTL (balances update periodically)
-- **User info**: 1 hour TTL (static data)
+- **Budgets**: 10 minutes TTL (rarely change)
+- **Accounts**: 5 minutes TTL (balances update periodically)
+- **User info**: 30 minutes TTL (static data)
 
 ### Resource vs Tool: When to Use What
 
@@ -291,7 +295,7 @@ Lists all accounts for a specific budget.
   "content": [
     {
       "type": "text",
-      "text": "{\n  \"accounts\": [\n    {\n      \"id\": \"87654321-4321-4321-4321-210987654321\",\n      \"name\": \"Checking Account\",\n      \"type\": \"checking\",\n      \"on_budget\": true,\n      \"closed\": false,\n      \"note\": null,\n      \"balance\": 150000,\n      \"cleared_balance\": 145000,\n      \"uncleared_balance\": 5000,\n      \"transfer_payee_id\": \"transfer-payee-id\",\n      \"direct_import_linked\": false,\n      \"direct_import_in_error\": false,\n      \"last_reconciled_at\": null,\n      \"debt_original_balance\": null,\n      \"debt_interest_rates\": {},\n      \"debt_minimum_payments\": {},\n      \"debt_escrow_amounts\": {}\n    }\n  ]\n}"
+      "text": "{\n  \"accounts\": [\n    {\n      \"id\": \"87654321-4321-4321-4321-210987654321\",\n      \"name\": \"Checking Account\",\n      \"type\": \"checking\",\n      \"on_budget\": true,\n      \"closed\": false,\n      \"note\": null,\n      \"balance\": 150.0,\n      \"cleared_balance\": 145.0,\n      \"uncleared_balance\": 5.0,\n      \"transfer_payee_id\": \"transfer-payee-id\",\n      \"direct_import_linked\": false,\n      \"direct_import_in_error\": false,\n      \"last_reconciled_at\": null,\n      \"debt_original_balance\": null,\n      \"debt_interest_rates\": {},\n      \"debt_minimum_payments\": {},\n      \"debt_escrow_amounts\": {}\n    }\n  ]\n}"
     }
   ]
 }
@@ -331,7 +335,7 @@ Creates a new account in the specified budget.
   - `lineOfCredit` - Line of credit
   - `otherAsset` - Other asset account
   - `otherLiability` - Other liability account
-- `balance` (number, optional): Initial balance in milliunits
+- `balance` (number, optional): Initial balance in dollars
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
 
 **Example Request:**
@@ -342,7 +346,7 @@ Creates a new account in the specified budget.
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "name": "New Savings Account",
     "type": "savings",
-    "balance": 100000
+    "balance": 100.0
   }
 }
 ```
@@ -353,7 +357,7 @@ Creates a new account in the specified budget.
   "content": [
     {
       "type": "text",
-      "text": "{\n  \"account\": {\n    \"id\": \"new-account-id\",\n    \"name\": \"New Savings Account\",\n    \"type\": \"savings\",\n    \"on_budget\": true,\n    \"closed\": false,\n    \"balance\": 100000,\n    \"cleared_balance\": 100000,\n    \"uncleared_balance\": 0\n  }\n}"
+      "text": "{\n  \"account\": {\n    \"id\": \"new-account-id\",\n    \"name\": \"New Savings Account\",\n    \"type\": \"savings\",\n    \"on_budget\": true,\n    \"closed\": false,\n    \"balance\": 100.0,\n    \"cleared_balance\": 100.0,\n    \"uncleared_balance\": 0\n  }\n}"
     }
   ]
 }
@@ -390,7 +394,7 @@ Lists transactions for a budget with optional filtering.
   "content": [
     {
       "type": "text",
-      "text": "{\n  \"transactions\": [\n    {\n      \"id\": \"transaction-id\",\n      \"date\": \"2024-01-15\",\n      \"amount\": -5000,\n      \"memo\": \"Coffee shop\",\n      \"cleared\": \"cleared\",\n      \"approved\": true,\n      \"flag_color\": null,\n      \"account_id\": \"87654321-4321-4321-4321-210987654321\",\n      \"payee_id\": \"payee-id\",\n      \"category_id\": \"category-id\",\n      \"transfer_account_id\": null,\n      \"transfer_transaction_id\": null,\n      \"matched_transaction_id\": null,\n      \"import_id\": null,\n      \"import_payee_name\": null,\n      \"import_payee_name_original\": null,\n      \"debt_transaction_type\": null,\n      \"deleted\": false\n    }\n  ]\n}"
+      "text": "{\n  \"transactions\": [\n    {\n      \"id\": \"transaction-id\",\n      \"date\": \"2024-01-15\",\n      \"amount\": -5.0,\n      \"memo\": \"Coffee shop\",\n      \"cleared\": \"cleared\",\n      \"approved\": true,\n      \"flag_color\": null,\n      \"account_id\": \"87654321-4321-4321-4321-210987654321\",\n      \"payee_id\": \"payee-id\",\n      \"category_id\": \"category-id\",\n      \"transfer_account_id\": null,\n      \"transfer_transaction_id\": null,\n      \"matched_transaction_id\": null,\n      \"import_id\": null,\n      \"import_payee_name\": null,\n      \"import_payee_name_original\": null,\n      \"debt_transaction_type\": null,\n      \"deleted\": false\n    }\n  ]\n}"
     }
   ]
 }
@@ -426,7 +430,7 @@ Exports all transactions to a JSON file with descriptive filename and platform-s
   "content": [
     {
       "type": "text",
-      "text": "{\n  \"message\": \"Successfully exported 1247 transactions\",\n  \"filename\": \"ynab_since_2024-01-01_1247items_2024-09-10_14-30-15.json\",\n  \"full_path\": \"C:\\\\Users\\\\YourName\\\\Downloads\\\\ynab_since_2024-01-01_1247items_2024-09-10_14-30-15.json\",\n  \"export_directory\": \"C:\\\\Users\\\\YourName\\\\Downloads\",\n  \"filename_explanation\": \"Filename format: ynab_{filters}_{count}items_{timestamp}.json - identifies what data was exported, when, and how many transactions\",\n  \"preview_count\": 10,\n  \"total_count\": 1247,\n  \"preview_transactions\": [\n    {\n      \"id\": \"transaction-id\",\n      \"date\": \"2024-01-15\",\n      \"amount\": -5000,\n      \"memo\": \"Coffee shop\",\n      \"payee_name\": \"Starbucks\",\n      \"category_name\": \"Dining Out\"\n    }\n  ]\n}"
+      "text": "{\n  \"message\": \"Successfully exported 1247 transactions\",\n  \"filename\": \"ynab_since_2024-01-01_1247items_2024-09-10_14-30-15.json\",\n  \"full_path\": \"C:\\\\Users\\\\YourName\\\\Downloads\\\\ynab_since_2024-01-01_1247items_2024-09-10_14-30-15.json\",\n  \"export_directory\": \"C:\\\\Users\\\\YourName\\\\Downloads\",\n  \"filename_explanation\": \"Filename format: ynab_{filters}_{count}items_{timestamp}.json - identifies what data was exported, when, and how many transactions\",\n  \"preview_count\": 10,\n  \"total_count\": 1247,\n  \"preview_transactions\": [\n    {\n      \"id\": \"transaction-id\",\n      \"date\": \"2024-01-15\",\n      \"amount\": -5.0,\n      \"memo\": \"Coffee shop\",\n      \"payee_name\": \"Starbucks\",\n      \"category_name\": \"Dining Out\"\n    }\n  ]\n}"
     }
   ]
 }
@@ -678,16 +682,17 @@ The `reconcile_account_v2` tool now includes an optional `recommendations` array
 
 Recommendations include complete parameters for YNAB MCP tool calls:
 
-**CRITICAL**: Recommendation `parameters.amount` values are in **milliunits** (YNAB's internal format where 1 dollar = 1000 milliunits). These values are ready to pass directly to `create_transaction` without conversion. However, `estimated_impact.value` remains in decimal dollars for human readability.
+**CRITICAL**: Recommendation `parameters.amount` values are in **milliunits** (YNAB's internal format where 1 dollar = 1000 milliunits). These values are intended for reconciliation execution; convert to dollars before calling `create_transaction`. `estimated_impact.value` remains in decimal dollars for human readability.
 
 ```typescript
 // For create_transaction recommendations:
-// Note: Recommendation amounts are already in milliunits, ready to use directly
+// Note: Recommendation amounts are already in milliunits; convert to dollars before tool calls
 const rec = recommendations.find(r => r.action_type === 'create_transaction');
 if (rec) {
   await create_transaction({
     budget_id: 'your-budget-id',
-    ...rec.parameters // Parameters already contain amounts in milliunits
+    ...rec.parameters,
+    amount: rec.parameters.amount / 1000 // Convert milliunits to dollars
   });
 }
 
@@ -880,7 +885,7 @@ Creates a new transaction in the specified budget and account.
 **Parameters:**
 - `budget_id` (string, required): The ID of the budget
 - `account_id` (string, required): The ID of the account
-- `amount` (number, required): Transaction amount in milliunits (negative for outflows)
+- `amount` (number, required): Transaction amount in dollars (negative for outflows)
 - `date` (string, required): Transaction date in ISO format (YYYY-MM-DD)
 - `payee_name` (string, optional): The payee name
 - `payee_id` (string, optional): The payee ID
@@ -890,7 +895,7 @@ Creates a new transaction in the specified budget and account.
 - `approved` (boolean, optional): Whether the transaction is approved
 - `flag_color` (string, optional): Transaction flag color (`red`, `orange`, `yellow`, `green`, `blue`, `purple`)
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
-- `subtransactions` (array, optional): Split line items; each entry accepts `amount` (milliunits), plus optional `memo`, `category_id`, `payee_id`, and `payee_name`
+- `subtransactions` (array, optional): Split line items; each entry accepts `amount` (dollars), plus optional `memo`, `category_id`, `payee_id`, and `payee_name`
 
 When `subtransactions` are supplied, their `amount` values must sum to the parent `amount`, matching YNAB API requirements.
 
@@ -901,7 +906,7 @@ When `subtransactions` are supplied, their `amount` values must sum to the paren
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "account_id": "87654321-4321-4321-4321-210987654321",
-    "amount": -5000,
+    "amount": -5.0,
     "date": "2024-01-15",
     "payee_name": "Coffee Shop",
     "category_id": "category-id",
@@ -919,12 +924,12 @@ When `subtransactions` are supplied, their `amount` values must sum to the paren
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "account_id": "87654321-4321-4321-4321-210987654321",
-    "amount": -125000,
+    "amount": -125.0,
     "date": "2024-02-01",
     "memo": "Rent and utilities",
     "subtransactions": [
-      { "amount": -100000, "category_id": "rent-category", "memo": "Rent" },
-      { "amount": -25000, "category_id": "utilities-category", "memo": "Utilities" }
+      { "amount": -100.0, "category_id": "rent-category", "memo": "Rent" },
+      { "amount": -25.0, "category_id": "utilities-category", "memo": "Utilities" }
     ]
   }
 }
@@ -1038,7 +1043,7 @@ Updates an existing transaction.
 - `budget_id` (string, required): The ID of the budget
 - `transaction_id` (string, required): The ID of the transaction to update
 - `account_id` (string, optional): Update the account ID
-- `amount` (number, optional): Update the amount in milliunits
+- `amount` (number, optional): Update the amount in dollars
 - `date` (string, optional): Update the date (YYYY-MM-DD)
 - `payee_name` (string, optional): Update the payee name
 - `payee_id` (string, optional): Update the payee ID
@@ -1056,7 +1061,7 @@ Updates an existing transaction.
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "transaction_id": "transaction-id",
-    "amount": -6000,
+    "amount": -6.0,
     "memo": "Updated memo",
     "flag_color": "red"
   }
@@ -1108,7 +1113,7 @@ Lists all categories for a specific budget.
   "content": [
     {
       "type": "text",
-      "text": "{\n  \"category_groups\": [\n    {\n      \"id\": \"group-id\",\n      \"name\": \"Monthly Bills\",\n      \"hidden\": false,\n      \"deleted\": false,\n      \"categories\": [\n        {\n          \"id\": \"category-id\",\n          \"category_group_id\": \"group-id\",\n          \"name\": \"Rent/Mortgage\",\n          \"hidden\": false,\n          \"original_category_group_id\": null,\n          \"note\": null,\n          \"budgeted\": 150000,\n          \"activity\": -150000,\n          \"balance\": 0,\n          \"goal_type\": null,\n          \"goal_creation_month\": null,\n          \"goal_target\": null,\n          \"goal_target_month\": null,\n          \"goal_percentage_complete\": null,\n          \"goal_months_to_budget\": null,\n          \"goal_under_funded\": null,\n          \"goal_overall_funded\": null,\n          \"goal_overall_left\": null,\n          \"deleted\": false\n        }\n      ]\n    }\n  ]\n}"
+      "text": "{\n  \"category_groups\": [\n    {\n      \"id\": \"group-id\",\n      \"name\": \"Monthly Bills\",\n      \"hidden\": false,\n      \"deleted\": false,\n      \"categories\": [\n        {\n          \"id\": \"category-id\",\n          \"category_group_id\": \"group-id\",\n          \"name\": \"Rent/Mortgage\",\n          \"hidden\": false,\n          \"original_category_group_id\": null,\n          \"note\": null,\n          \"budgeted\": 150.0,\n          \"activity\": -150.0,\n          \"balance\": 0,\n          \"goal_type\": null,\n          \"goal_creation_month\": null,\n          \"goal_target\": null,\n          \"goal_target_month\": null,\n          \"goal_percentage_complete\": null,\n          \"goal_months_to_budget\": null,\n          \"goal_under_funded\": null,\n          \"goal_overall_funded\": null,\n          \"goal_overall_left\": null,\n          \"deleted\": false\n        }\n      ]\n    }\n  ]\n}"
     }
   ]
 }
@@ -1129,7 +1134,7 @@ Updates the budgeted amount for a category in the current month.
 **Parameters:**
 - `budget_id` (string, required): The ID of the budget
 - `category_id` (string, required): The ID of the category
-- `budgeted` (number, required): The budgeted amount in milliunits
+- `budgeted` (number, required): The budgeted amount in dollars
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
 
 **Example Request:**
@@ -1139,7 +1144,7 @@ Updates the budgeted amount for a category in the current month.
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "category_id": "category-id",
-    "budgeted": 50000
+    "budgeted": 50.0
   }
 }
 ```
@@ -1471,9 +1476,9 @@ if (!dateRegex.test(date)) {
   throw new Error('Date must be in YYYY-MM-DD format');
 }
 
-// Validate amount is in milliunits
-if (!Number.isInteger(amount)) {
-  throw new Error('Amount must be an integer in milliunits');
+// Validate amount is in dollars
+if (!Number.isFinite(amount)) {
+  throw new Error('Amount must be a number in dollars');
 }
 ```
 
@@ -1537,3 +1542,17 @@ const transactions = await mcpClient.callTool('list_transactions', {
 ```
 
 This API reference provides comprehensive documentation for all available tools. For additional information, see the [Developer Guide](DEVELOPER.md) for best practices and common usage patterns.
+
+
+
+
+
+
+
+
+
+
+
+
+
+

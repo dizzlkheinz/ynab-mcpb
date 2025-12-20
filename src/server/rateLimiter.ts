@@ -152,5 +152,8 @@ export class RateLimitError extends Error {
  * Global rate limiter instance
  */
 export const globalRateLimiter = new RateLimiter({
-  enableLogging: process.env['NODE_ENV'] !== 'production',
+  enableLogging:
+    process.env['RATE_LIMIT_LOGGING'] === 'true' ||
+    process.env['LOG_LEVEL'] === 'debug' ||
+    process.env['VERBOSE_TESTS'] === 'true',
 });

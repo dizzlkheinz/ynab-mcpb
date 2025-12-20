@@ -66,7 +66,7 @@ describe('Tool Registration', () => {
   // Config is mocked at module level, no env setup needed
 
   describe('Tool Count Verification', () => {
-    it('registers exactly 30 tools', () => {
+    it('registers exactly 29 tools', () => {
       const server = new YNABMCPServer(false);
       const tools = server.getToolRegistry().listTools();
       expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
