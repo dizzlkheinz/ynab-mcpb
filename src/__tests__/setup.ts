@@ -13,6 +13,39 @@ if (!process.env['SKIP_E2E_TESTS']) {
   process.env['SKIP_E2E_TESTS'] = hasAccessToken ? 'false' : 'true';
 }
 
+// Set test environment variables immediately
+process.env['NODE_ENV'] = 'test';
+if (!process.env['LOG_LEVEL']) {
+  process.env['LOG_LEVEL'] = 'error';
+}
+
+// Disable console output for cleaner test output unless VERBOSE_TESTS is set
+if (!process.env['VERBOSE_TESTS']) {
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+  const originalConsoleLog = console.log;
+
+  console.error = (...args: any[]) => {
+    const firstArg = args[0];
+    const isString = typeof firstArg === 'string';
+    // Only show errors that are part of test assertions, actual errors, or explicitly marked [ERROR]
+    if (
+      (isString && (firstArg.includes('❌') || firstArg.includes('Test') || firstArg.includes('[ERROR]'))) ||
+      firstArg instanceof Error
+    ) {
+      originalConsoleError(...args);
+    }
+  };
+
+  console.warn = () => {
+    // Suppress warnings by default
+  };
+
+  console.log = () => {
+    // Suppress logs by default
+  };
+}
+
 type TierFilter = 'core' | 'domain' | 'full';
 interface TestMeta {
   tier?: TierFilter;
@@ -47,26 +80,14 @@ const shouldRunDomain = (domain?: string): boolean => {
  * Global test setup
  */
 beforeAll(async () => {
-  // Set test environment variables
-  process.env['NODE_ENV'] = 'test';
-
   // Set default test token if not provided
   if (!process.env['YNAB_ACCESS_TOKEN']) {
     process.env['YNAB_ACCESS_TOKEN'] = 'test-token-for-mocked-tests';
   }
 
-  // Disable console.error for cleaner test output (except for specific tests)
-  if (!process.env['VERBOSE_TESTS']) {
-    const originalConsoleError = console.error;
-    console.error = (...args: any[]) => {
-      // Only show errors that are part of test assertions
-      if (args[0]?.includes?.('❌') || args[0]?.includes?.('Test')) {
-        originalConsoleError(...args);
-      }
-    };
+  if (process.env['VERBOSE_TESTS']) {
+    console.warn('🧪 Test environment initialized');
   }
-
-  console.warn('🧪 Test environment initialized');
 });
 
 /**
