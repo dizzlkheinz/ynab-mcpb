@@ -2,8 +2,8 @@
  * @fileoverview Output schemas for utility tools
  *
  * This file contains comprehensive Zod schemas for validating the output
- * of utility tools including user info, amount conversion, budget defaults,
- * cache management, output formatting, and diagnostic information.
+ * of utility tools including user info, budget defaults, cache management,
+ * output formatting, and diagnostic information.
  *
  * All schemas include TypeScript type inference for type-safe usage throughout
  * the codebase. Reference the corresponding handler implementations for
@@ -45,47 +45,6 @@ export const GetUserOutputSchema = z.object({
 });
 
 export type GetUserOutput = z.infer<typeof GetUserOutputSchema>;
-
-// ============================================================================
-// CONVERT AMOUNT OUTPUT
-// ============================================================================
-
-/**
- * Schema for amount conversion details
- *
- * Contains the conversion result between dollars and YNAB milliunits.
- */
-export const ConversionSchema = z.object({
-  original_amount: z.number(),
-  converted_amount: z.number(),
-  to_milliunits: z.boolean(),
-  description: z.string(),
-});
-
-/**
- * Output schema for convert_amount tool
- *
- * Converts between dollars and YNAB milliunits (1 dollar = 1000 milliunits).
- *
- * @see src/tools/utilityTools.ts:51-90 - Handler implementation
- *
- * @example
- * ```typescript
- * const output: ConvertAmountOutput = {
- *   conversion: {
- *     original_amount: 25.50,
- *     converted_amount: 25500,
- *     to_milliunits: true,
- *     description: "$25.50 converted to 25500 milliunits"
- *   }
- * };
- * ```
- */
-export const ConvertAmountOutputSchema = z.object({
-  conversion: ConversionSchema,
-});
-
-export type ConvertAmountOutput = z.infer<typeof ConvertAmountOutputSchema>;
 
 // ============================================================================
 // GET DEFAULT BUDGET OUTPUT

@@ -45,7 +45,6 @@ describe('YNABMCPServer', () => {
     'get_month',
     'list_months',
     'get_user',
-    'convert_amount',
     'diagnostic_info',
     'clear_cache',
     'set_output_format',

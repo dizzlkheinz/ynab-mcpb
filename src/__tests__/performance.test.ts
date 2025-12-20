@@ -623,12 +623,6 @@ describe('YNAB MCP Server - Performance Tests', () => {
 
       // Test multiple validation scenarios
       const validationTests = [
-        // Valid parameters
-        executeToolCall(server, 'ynab:convert_amount', {
-          amount: 25.5,
-          to_milliunits: true,
-        }),
-
         // Invalid parameters (should fail quickly)
         executeToolCall(server, 'ynab:get_budget', {
           budget_id: '', // Empty string should fail validation
@@ -648,10 +642,9 @@ describe('YNAB MCP Server - Performance Tests', () => {
 
       const totalTime = endTime - startTime;
 
-      expect(parsed).toHaveLength(3);
-      expect(parsed[0]).toBeDefined(); // Valid call should succeed
-      const firstError = parsed[1].error ?? parsed[1].data?.error;
-      const secondError = parsed[2].error ?? parsed[2].data?.error;
+      expect(parsed).toHaveLength(2);
+      const firstError = parsed[0].error ?? parsed[0].data?.error;
+      const secondError = parsed[1].error ?? parsed[1].data?.error;
       expect(firstError?.code).toBe(SecurityErrorCode.VALIDATION_ERROR); // Invalid calls should fail
       expect(secondError?.code).toBe(SecurityErrorCode.VALIDATION_ERROR);
       expect(totalTime).toBeLessThan(1000); // Validation should be fast
@@ -715,7 +708,6 @@ describe('YNAB MCP Server - Performance Tests', () => {
           executeToolCall(server, 'ynab:list_accounts', { budget_id: 'test' }),
           executeToolCall(server, 'ynab:list_transactions', { budget_id: 'test' }),
           executeToolCall(server, 'ynab:list_categories', { budget_id: 'test' }),
-          executeToolCall(server, 'ynab:convert_amount', { amount: i * 10, to_milliunits: true }),
         );
       }
 
@@ -724,7 +716,7 @@ describe('YNAB MCP Server - Performance Tests', () => {
 
       const totalTime = endTime - startTime;
 
-      expect(results).toHaveLength(100); // 20 iterations × 5 tools
+      expect(results).toHaveLength(80); // 20 iterations × 4 tools
       results.forEach((result) => expect(result).toBeDefined());
       expect(totalTime).toBeLessThan(10000); // Should complete within 10 seconds
     });

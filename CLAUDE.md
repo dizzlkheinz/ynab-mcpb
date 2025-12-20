@@ -286,12 +286,12 @@ The system defines 5 preset annotation patterns in `src/tools/toolCategories.ts`
   - Characteristics: Write operations, destructive, idempotent, external API
 
 - **UTILITY_LOCAL** - Local utility tools without external API calls
-  - Examples: `convert_amount`, `clear_cache`, `diagnostic_info`
+  - Examples: `clear_cache`, `diagnostic_info`, `set_output_format`
   - Characteristics: Local operations, no external API dependencies
 
 ### Complete Tool Classification
 
-All 30 tools are classified into the following categories:
+All 29 tools are classified into the following categories:
 
 **Read-Only External (15 tools):**
 
@@ -309,9 +309,9 @@ All 30 tools are classified into the following categories:
 
 - `delete_transaction` ⚠️
 
-**Utility Local (5 tools):**
+**Utility Local (4 tools):**
 
-- `get_default_budget`, `convert_amount`, `diagnostic_info`, `clear_cache`, `set_output_format`
+- `get_default_budget`, `diagnostic_info`, `clear_cache`, `set_output_format`
 
 ### Usage Example
 

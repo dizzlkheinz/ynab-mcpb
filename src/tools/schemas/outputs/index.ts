@@ -25,8 +25,6 @@
 export {
   GetUserOutputSchema,
   type GetUserOutput,
-  ConvertAmountOutputSchema,
-  type ConvertAmountOutput,
   GetDefaultBudgetOutputSchema,
   type GetDefaultBudgetOutput,
   SetDefaultBudgetOutputSchema,
@@ -44,7 +42,6 @@ export {
 // Nested schemas that may be useful independently
 export {
   UserSchema,
-  ConversionSchema,
   DateFormatSchema,
   CurrencyFormatSchema,
   BudgetDetailSchema,

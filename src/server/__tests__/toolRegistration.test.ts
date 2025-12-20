@@ -46,7 +46,7 @@ const EXPECTED_TOOLS_BY_DOMAIN = {
   payee: ['list_payees', 'get_payee'],
   month: ['get_month', 'list_months'],
   reconciliation: ['compare_transactions', 'reconcile_account'],
-  utility: ['get_user', 'convert_amount'],
+  utility: ['get_user'],
   server: [
     'set_default_budget',
     'get_default_budget',
@@ -60,7 +60,7 @@ const EXPECTED_TOOLS_BY_DOMAIN = {
 const ALL_EXPECTED_TOOLS = Object.values(EXPECTED_TOOLS_BY_DOMAIN).flat();
 
 /** Expected total tool count */
-const EXPECTED_TOOL_COUNT = 30;
+const EXPECTED_TOOL_COUNT = 29;
 
 describe('Tool Registration', () => {
   // Config is mocked at module level, no env setup needed

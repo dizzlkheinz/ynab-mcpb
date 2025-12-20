@@ -748,34 +748,6 @@ describe('YNAB MCP Server - Comprehensive Integration Tests', () => {
         expect(mockYnabAPI.user.getUser).toHaveBeenCalledTimes(1);
       },
     );
-
-    it(
-      'should handle amount conversion',
-      { meta: { tier: 'domain', domain: 'workflows' } },
-      async () => {
-        // Test dollar to milliunits conversion
-        const toMilliunitsResult = await executeToolCall(server, 'ynab:convert_amount', {
-          amount: 25.75,
-          to_milliunits: true,
-        });
-        validateToolResult(toMilliunitsResult);
-
-        const toMilli = parseToolResult(toMilliunitsResult);
-        expect(toMilli.data.conversion.converted_amount).toBe(25750);
-        expect(toMilli.data.conversion.description).toBe('$25.75 = 25750 milliunits');
-
-        // Test milliunits to dollar conversion
-        const toDollarsResult = await executeToolCall(server, 'ynab:convert_amount', {
-          amount: 25750,
-          to_milliunits: false,
-        });
-        validateToolResult(toDollarsResult);
-
-        const dollars = parseToolResult(toDollarsResult);
-        expect(dollars.data.conversion.converted_amount).toBe(25.75);
-        expect(dollars.data.conversion.description).toBe('25750 milliunits = $25.75');
-      },
-    );
   });
 
   describe('Error Handling Integration', () => {

@@ -821,34 +821,6 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
     });
   });
 
-  describe('Utility Tools Workflow', () => {
-    it('should convert amounts between dollars and milliunits', async () => {
-      if (testConfig.skipE2ETests) return;
-
-      // Convert dollars to milliunits
-      const toMilliunitsResult = await executeToolCall(server, 'ynab:convert_amount', {
-        amount: 25.5,
-        to_milliunits: true,
-      });
-      const milliunits = parseToolResult(toMilliunitsResult);
-
-      expect(milliunits.data?.conversion?.converted_amount).toBe(25500);
-      expect(milliunits.data?.conversion?.description).toContain('25500');
-      expect(milliunits.data?.conversion?.to_milliunits).toBe(true);
-
-      // Convert milliunits to dollars
-      const toDollarsResult = await executeToolCall(server, 'ynab:convert_amount', {
-        amount: 25500,
-        to_milliunits: false,
-      });
-      const dollars = parseToolResult(toDollarsResult);
-
-      expect(dollars.data?.conversion?.converted_amount).toBe(25.5);
-      expect(dollars.data?.conversion?.description).toContain('$25.50');
-      expect(dollars.data?.conversion?.to_milliunits).toBe(false);
-    });
-  });
-
   describe('v0.8.x Architecture Integration Tests', () => {
     describe('Cache System Verification', () => {
       it('should demonstrate cache warming after default budget set', async () => {
@@ -1137,7 +1109,6 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
           { name: 'ynab:list_categories', args: { budget_id: testBudgetId } },
           { name: 'ynab:list_payees', args: { budget_id: testBudgetId } },
           { name: 'ynab:get_user', args: {} },
-          { name: 'ynab:convert_amount', args: { amount: 100, to_milliunits: true } },
         ];
 
         for (const tool of v7Tools) {
@@ -1608,21 +1579,6 @@ describeE2E('YNAB MCP Server - End-to-End Workflows', () => {
       });
       if (skipIfRateLimitedResult(result)) return;
       const validation = validateOutputSchema(server, 'compare_transactions', result);
-      expect(validation.hasSchema).toBe(true);
-      expect(validation.valid).toBe(true);
-      if (!validation.valid) {
-        console.error('Schema validation errors:', validation.errors);
-      }
-    });
-
-    it('should validate convert_amount output schema', async () => {
-      if (testConfig.skipE2ETests) return;
-
-      const result = await executeToolCall(server, 'ynab:convert_amount', {
-        amount: 100,
-        to_milliunits: true,
-      });
-      const validation = validateOutputSchema(server, 'convert_amount', result);
       expect(validation.hasSchema).toBe(true);
       expect(validation.valid).toBe(true);
       if (!validation.valid) {

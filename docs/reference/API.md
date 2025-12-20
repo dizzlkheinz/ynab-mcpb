@@ -49,10 +49,10 @@ The server automatically converts YNAB's internal milliunits to dollars in all r
 - Budget amounts: `150.00` (instead of `150000` milliunits)
 
 **Input formats**:
-- When creating transactions, amounts should be provided in milliunits (as per YNAB API requirements)
-- Use the `convert_amount` tool to convert between dollars and milliunits if needed
+- When creating transactions, amounts should be provided in dollars (e.g., `50.25`)
+- The server automatically converts to YNAB's internal milliunit format
 
-**Legacy behavior**: YNAB's internal representation uses milliunits (1/1000th of currency unit), but this is now transparent to users
+**Note**: YNAB's internal representation uses milliunits (1/1000th of currency unit), but this is now transparent to users - all inputs and outputs use standard dollar amounts
 
 ### Dates
 
@@ -1227,60 +1227,6 @@ Gets information about the authenticated user.
 }
 ```
 
-### convert_amount
-
-Converts between dollars and milliunits with integer arithmetic for precision.
-
-**Parameters:**
-- `amount` (number, required): The amount to convert
-- `to_milliunits` (boolean, required): If true, convert from dollars to milliunits. If false, convert from milliunits to dollars
-
-**Example Request (dollars to milliunits):**
-```json
-{
-  "name": "convert_amount",
-  "arguments": {
-    "amount": 50.25,
-    "to_milliunits": true
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"original_amount\": 50.25,\n  \"converted_amount\": 50250,\n  \"conversion_type\": \"dollars_to_milliunits\"\n}"
-    }
-  ]
-}
-```
-
-**Example Request (milliunits to dollars):**
-```json
-{
-  "name": "convert_amount",
-  "arguments": {
-    "amount": 50250,
-    "to_milliunits": false
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"original_amount\": 50250,\n  \"converted_amount\": 50.25,\n  \"conversion_type\": \"milliunits_to_dollars\"\n}"
-    }
-  ]
-}
-```
-
 ## Diagnostic Tools
 
 These tools help inspect the server, environment, and performance. They do not modify YNAB data.
@@ -1549,24 +1495,23 @@ const recentTransactions = await mcpClient.callTool('list_transactions', {
 });
 ```
 
-### 4. Amount Conversions
+### 4. Amount Handling
 
-Use the conversion utility for user-friendly displays:
+All amounts are automatically handled in dollars:
 
 ```javascript
-// Convert milliunits to dollars for display
-const dollarsResult = await mcpClient.callTool('convert_amount', {
-  amount: 50250,
-  to_milliunits: false
-});
-console.log(`Amount: $${dollarsResult.converted_amount}`); // Amount: $50.25
+// All returned amounts are in dollars - no conversion needed
+const accounts = await mcpClient.callTool('list_accounts', { budget_id: budgetId });
+console.log(`Balance: $${accounts.accounts[0].balance}`); // Balance: $1234.56
 
-// Convert user input to milliunits for API calls
-const milliUnitsResult = await mcpClient.callTool('convert_amount', {
-  amount: 50.25,
-  to_milliunits: true
+// When creating transactions, provide amounts in dollars
+await mcpClient.callTool('create_transaction', {
+  budget_id: budgetId,
+  account_id: accountId,
+  amount: -50.25,  // Negative for outflows
+  date: '2024-01-15',
+  payee_name: 'Coffee Shop'
 });
-// Use milliUnitsResult.converted_amount in transaction creation
 ```
 
 ### 5. Caching Strategies

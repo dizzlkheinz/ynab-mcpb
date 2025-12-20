@@ -120,7 +120,6 @@ export const ToolAnnotationPresets = {
    * interacting with the YNAB API.
    *
    * Examples:
-   * - convert_amount: Converts between dollars and milliunits
    * - set_output_format: Configures local output formatting
    * - diagnostic_info: Returns local server diagnostic information
    * - clear_cache: Clears local in-memory cache
