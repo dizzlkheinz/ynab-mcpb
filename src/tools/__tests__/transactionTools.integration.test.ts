@@ -9,6 +9,7 @@ import {
   handleUpdateTransactions,
   CreateTransactionsSchema,
 } from '../transactionTools.js';
+import { waitFor } from '../../__tests__/testUtils.js';
 
 const isSkip = ['true', '1', 'yes', 'y', 'on'].includes(
   (process.env['SKIP_E2E_TESTS'] || '').toLowerCase().trim(),
@@ -325,9 +326,20 @@ describeIntegration('Transaction Tools Integration', () => {
           ],
         });
 
-        const afterList = await fetchBudgetTransactions();
-        const transactions =
-          afterList.transactions || afterList.preview_transactions || afterList.transaction_preview;
+        let transactions: any[] | undefined;
+        await waitFor(
+          async () => {
+            const afterList = await fetchBudgetTransactions();
+            transactions =
+              afterList.transactions ||
+              afterList.preview_transactions ||
+              afterList.transaction_preview;
+            return (transactions as any[])?.some((transaction) => transaction.memo === memo) ?? false;
+          },
+          10000,
+          500,
+        );
+
         expect(transactions).toBeDefined();
         expect((transactions as any[]).some((transaction) => transaction.memo === memo)).toBe(true);
       },
@@ -576,6 +588,19 @@ describeIntegration('Transaction Tools Integration', () => {
         expect(updateResponse.results[1].correlation_key).toBe(transactionIds[1]);
 
         // Verify changes persisted
+        await waitFor(
+          async () => {
+            const getResult1 = await handleGetTransaction(ynabAPI, {
+              budget_id: testBudgetId,
+              transaction_id: transactionIds[0],
+            });
+            const transaction1 = parseToolResult(getResult1).transaction;
+            return transaction1.amount === -7.5 && transaction1.memo === 'Updated memo 1';
+          },
+          10000,
+          500,
+        );
+
         const getResult1 = await handleGetTransaction(ynabAPI, {
           budget_id: testBudgetId,
           transaction_id: transactionIds[0],
@@ -583,6 +608,19 @@ describeIntegration('Transaction Tools Integration', () => {
         const transaction1 = parseToolResult(getResult1).transaction;
         expect(transaction1.amount).toBe(-7.5);
         expect(transaction1.memo).toBe('Updated memo 1');
+
+        await waitFor(
+          async () => {
+            const getResult2 = await handleGetTransaction(ynabAPI, {
+              budget_id: testBudgetId,
+              transaction_id: transactionIds[1],
+            });
+            const transaction2 = parseToolResult(getResult2).transaction;
+            return transaction2.memo === 'Updated memo 2' && transaction2.cleared === 'cleared';
+          },
+          10000,
+          500,
+        );
 
         const getResult2 = await handleGetTransaction(ynabAPI, {
           budget_id: testBudgetId,
@@ -635,6 +673,19 @@ describeIntegration('Transaction Tools Integration', () => {
         expect(updateResponse.summary.updated).toBe(1);
 
         // Verify change
+        await waitFor(
+          async () => {
+            const getResult = await handleGetTransaction(ynabAPI, {
+              budget_id: testBudgetId,
+              transaction_id: transactionId,
+            });
+            const transaction = parseToolResult(getResult).transaction;
+            return transaction.memo === 'Updated without metadata';
+          },
+          10000,
+          500,
+        );
+
         const getResult = await handleGetTransaction(ynabAPI, {
           budget_id: testBudgetId,
           transaction_id: transactionId,
@@ -749,6 +800,11 @@ describeIntegration('Transaction Tools Integration', () => {
         });
 
         const updateResponse = parseToolResult(updateResult);
+        
+        if (updateResponse.error) {
+           throw new Error(`Tool execution failed unexpectedly: ${JSON.stringify(updateResponse.error)}`);
+        }
+        
         expect(updateResponse.summary.total_requested).toBe(2);
         expect(updateResponse.summary.updated).toBe(1);
         expect(updateResponse.summary.failed).toBeGreaterThan(0);
