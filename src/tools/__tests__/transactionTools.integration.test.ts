@@ -334,7 +334,9 @@ describeIntegration('Transaction Tools Integration', () => {
               afterList.transactions ||
               afterList.preview_transactions ||
               afterList.transaction_preview;
-            return (transactions as any[])?.some((transaction) => transaction.memo === memo) ?? false;
+            return (
+              (transactions as any[])?.some((transaction) => transaction.memo === memo) ?? false
+            );
           },
           10000,
           500,
@@ -800,11 +802,13 @@ describeIntegration('Transaction Tools Integration', () => {
         });
 
         const updateResponse = parseToolResult(updateResult);
-        
+
         if (updateResponse.error) {
-           throw new Error(`Tool execution failed unexpectedly: ${JSON.stringify(updateResponse.error)}`);
+          throw new Error(
+            `Tool execution failed unexpectedly: ${JSON.stringify(updateResponse.error)}`,
+          );
         }
-        
+
         expect(updateResponse.summary.total_requested).toBe(2);
         expect(updateResponse.summary.updated).toBe(1);
         expect(updateResponse.summary.failed).toBeGreaterThan(0);

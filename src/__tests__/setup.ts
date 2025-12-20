@@ -22,15 +22,14 @@ if (!process.env['LOG_LEVEL']) {
 // Disable console output for cleaner test output unless VERBOSE_TESTS is set
 if (!process.env['VERBOSE_TESTS']) {
   const originalConsoleError = console.error;
-  const originalConsoleWarn = console.warn;
-  const originalConsoleLog = console.log;
 
   console.error = (...args: any[]) => {
     const firstArg = args[0];
     const isString = typeof firstArg === 'string';
     // Only show errors that are part of test assertions, actual errors, or explicitly marked [ERROR]
     if (
-      (isString && (firstArg.includes('❌') || firstArg.includes('Test') || firstArg.includes('[ERROR]'))) ||
+      (isString &&
+        (firstArg.includes('❌') || firstArg.includes('Test') || firstArg.includes('[ERROR]'))) ||
       firstArg instanceof Error
     ) {
       originalConsoleError(...args);
