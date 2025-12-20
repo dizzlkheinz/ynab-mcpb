@@ -12,6 +12,9 @@ const hasAccessToken = !!process.env['YNAB_ACCESS_TOKEN'];
 if (!process.env['SKIP_E2E_TESTS']) {
   process.env['SKIP_E2E_TESTS'] = hasAccessToken ? 'false' : 'true';
 }
+if (!process.env['YNAB_ACCESS_TOKEN']) {
+  process.env['YNAB_ACCESS_TOKEN'] = 'test-token-for-mocked-tests';
+}
 
 // Set test environment variables immediately
 process.env['NODE_ENV'] = 'test';
@@ -42,6 +45,14 @@ if (!process.env['VERBOSE_TESTS']) {
 
   console.log = () => {
     // Suppress logs by default
+  };
+
+  console.info = () => {
+    // Suppress info logs by default
+  };
+
+  console.debug = () => {
+    // Suppress debug logs by default
   };
 }
 

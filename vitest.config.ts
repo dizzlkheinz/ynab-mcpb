@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
 const integrationFiles = ['src/**/*.integration.test.ts'];
+const isVerbose = !!process.env['VERBOSE_TESTS'];
 
 export default defineConfig({
   test: {
@@ -83,7 +84,7 @@ export default defineConfig({
         },
       },
     },
-    reporters: ['verbose', 'html', './vitest-reporters/split-json-reporter.ts'],
+    reporters: [isVerbose ? 'verbose' : 'dot', 'html', './vitest-reporters/split-json-reporter.ts'],
     outputFile: {
       html: './test-results/index.html',
     },
