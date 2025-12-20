@@ -3,7 +3,6 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { YNABMCPServer } from '../server/YNABMCPServer.js';
 import { executeToolCall, parseToolResult } from './testUtils.js';
 import { executeReconciliation, type AccountSnapshot } from '../tools/reconciliation/executor.js';
 import type { ReconciliationAnalysis } from '../tools/reconciliation/types.js';
@@ -373,7 +372,7 @@ async function measurePerformanceScenario(options: {
 }
 
 describe('YNAB MCP Server - Performance Tests', () => {
-  let server: YNABMCPServer;
+  let server: InstanceType<typeof import('../server/YNABMCPServer.js').YNABMCPServer>;
   let mockYnabAPI: any;
 
   beforeEach(async () => {

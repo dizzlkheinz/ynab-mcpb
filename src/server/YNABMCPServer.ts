@@ -11,6 +11,8 @@ import {
   ListPromptsRequestSchema,
   ReadResourceRequestSchema,
   GetPromptRequestSchema,
+  ErrorCode,
+  McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
@@ -84,9 +86,9 @@ export class YNABMCPServer {
       },
       {
         capabilities: {
-          tools: { listChanged: true },
-          resources: { listChanged: true },
-          prompts: { listChanged: true },
+          tools: {},
+          resources: {},
+          prompts: {},
         },
       },
     );
@@ -247,11 +249,7 @@ export class YNABMCPServer {
     // Handle read resource requests
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       const { uri } = request.params;
-      try {
-        return await this.resourceManager.readResource(uri);
-      } catch (error) {
-        return this.errorHandler.handleError(error, `reading resource: ${uri}`);
-      }
+      return await this.resourceManager.readResource(uri);
     });
 
     // Handle list prompts requests
@@ -276,6 +274,9 @@ export class YNABMCPServer {
 
     // Handle tool call requests
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      if (!this.toolRegistry.hasTool(request.params.name)) {
+        throw new McpError(ErrorCode.InvalidParams, `Unknown tool: ${request.params.name}`);
+      }
       const rawArgs = (request.params.arguments ?? undefined) as
         | Record<string, unknown>
         | undefined;

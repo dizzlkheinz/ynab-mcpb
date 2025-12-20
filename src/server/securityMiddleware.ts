@@ -141,6 +141,7 @@ export class SecurityMiddleware {
    */
   private static createRateLimitErrorResponse(error: RateLimitError): CallToolResult {
     return {
+      isError: true,
       content: [
         {
           type: 'text',

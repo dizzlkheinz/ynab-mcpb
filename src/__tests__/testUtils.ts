@@ -3,7 +3,7 @@
  */
 
 import { expect } from 'vitest';
-import { YNABMCPServer } from '../server/YNABMCPServer.js';
+import type { YNABMCPServer } from '../server/YNABMCPServer.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
@@ -40,6 +40,7 @@ export async function createTestServer(): Promise<YNABMCPServer> {
     throw new Error('YNAB_ACCESS_TOKEN is required for testing');
   }
 
+  const { YNABMCPServer } = await import('../server/YNABMCPServer.js');
   return new YNABMCPServer();
 }
 

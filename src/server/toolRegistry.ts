@@ -176,6 +176,10 @@ export class ToolRegistry {
     });
   }
 
+  hasTool(name: string): boolean {
+    return this.tools.has(name);
+  }
+
   getToolDefinitions(): ToolDefinition[] {
     return Array.from(this.tools.values()).map((tool) => {
       const definition: ToolDefinition = {
