@@ -776,7 +776,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           // Report progress after successful unclear batch
           completedOperations += updatedTransactions.length;
           await reportProgress(
-            `Processing ${completedOperations} of ${totalOperations} transactions`,
+            `Marked ${completedOperations} of ${totalOperations} transactions uncleared`,
           );
         } catch (error) {
           const ynabError = normalizeYnabError(error);

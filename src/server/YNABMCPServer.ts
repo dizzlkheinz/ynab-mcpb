@@ -326,15 +326,19 @@ export class YNABMCPServer {
         ._meta?.progressToken;
       if (progressToken !== undefined && extra.sendNotification) {
         executionOptions.sendProgress = async (params) => {
-          await extra.sendNotification({
-            method: 'notifications/progress',
-            params: {
-              progressToken,
-              progress: params.progress,
-              ...(params.total !== undefined && { total: params.total }),
-              ...(params.message !== undefined && { message: params.message }),
-            },
-          });
+          try {
+            await extra.sendNotification({
+              method: 'notifications/progress',
+              params: {
+                progressToken,
+                progress: params.progress,
+                ...(params.total !== undefined && { total: params.total }),
+                ...(params.message !== undefined && { message: params.message }),
+              },
+            });
+          } catch {
+            // Progress notifications are non-critical; allow tool execution to continue.
+          }
         };
       }
 
