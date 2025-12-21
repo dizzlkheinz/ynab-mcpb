@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2025-12-21
+
 ### Added
 
 - **MCP Completions** - Autocomplete support for budgets, accounts, categories, and payees
