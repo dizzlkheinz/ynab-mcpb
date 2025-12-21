@@ -11,6 +11,7 @@ import {
   ListPromptsRequestSchema,
   ReadResourceRequestSchema,
   GetPromptRequestSchema,
+  CompleteRequestSchema,
   ErrorCode,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -46,6 +47,7 @@ import { ServerKnowledgeStore } from './serverKnowledgeStore.js';
 import { DeltaCache } from './deltaCache.js';
 import { DeltaFetcher } from '../tools/deltaFetcher.js';
 import { ToolAnnotationPresets } from '../tools/toolCategories.js';
+import { CompletionsManager } from './completions.js';
 
 /**
  * YNAB MCP Server class that provides integration with You Need A Budget API
@@ -65,6 +67,7 @@ export class YNABMCPServer {
   private deltaFetcher: DeltaFetcher;
   private diagnosticManager: DiagnosticManager;
   private errorHandler: ErrorHandler;
+  private completionsManager: CompletionsManager;
 
   constructor(exitOnError: boolean = true) {
     this.exitOnError = exitOnError;
@@ -92,6 +95,7 @@ export class YNABMCPServer {
             listChanged: false,
           },
           prompts: { listChanged: false },
+          completions: {},
         },
       },
     );
@@ -177,6 +181,12 @@ export class YNABMCPServer {
       serverKnowledgeStore: this.serverKnowledgeStore,
       deltaCache: this.deltaCache,
     });
+
+    this.completionsManager = new CompletionsManager(
+      this.ynabAPI,
+      cacheManager,
+      () => this.defaultBudgetId,
+    );
 
     this.setupToolRegistry();
     this.setupHandlers();
@@ -329,6 +339,24 @@ export class YNABMCPServer {
       }
 
       return await this.toolRegistry.executeTool(executionOptions);
+    });
+
+    // Handle completion requests for autocomplete
+    this.server.setRequestHandler(CompleteRequestSchema, async (request) => {
+      const { argument, context } = request.params;
+
+      // Get completions from the manager, handling optional context
+      const completionContext = context?.arguments ? { arguments: context.arguments } : undefined;
+      const result = await this.completionsManager.getCompletions(
+        argument.name,
+        argument.value,
+        completionContext,
+      );
+
+      // Return in MCP-compliant format
+      return {
+        completion: result.completion,
+      };
     });
   }
 
