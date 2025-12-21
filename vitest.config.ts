@@ -18,6 +18,8 @@ export default defineConfig({
           exclude: [
             'src/**/*.integration.test.ts',
             'src/**/*.e2e.test.ts',
+            // YNABMCPServer.test.ts requires real YNAB API token and makes API calls,
+            // so it runs as part of integration tests, not unit tests
             'src/server/__tests__/YNABMCPServer.test.ts',
           ],
         },

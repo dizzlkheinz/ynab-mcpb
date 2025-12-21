@@ -109,7 +109,7 @@ describe('ResourceManager Templates', () => {
   it('should fallback to throwing error for unknown URIs', async () => {
     const uri = 'ynab://unknown/resource';
     await expect(resourceManager.readResource(uri)).rejects.toThrow(
-      'Unknown resource: ynab://unknown/resource',
+      'Resource not found: ynab://unknown/resource',
     );
   });
 
@@ -135,7 +135,7 @@ describe('ResourceManager Templates', () => {
       (mockYnabAPI.budgets.getBudgetById as any).mockRejectedValue(new Error('Budget not found'));
 
       await expect(resourceManager.readResource('ynab://budgets/invalid-id')).rejects.toThrow(
-        'Failed to resolve template resource ynab://budgets/invalid-id: Failed to fetch budget invalid-id: Budget not found',
+        'Failed to read resource ynab://budgets/invalid-id: Failed to fetch budget invalid-id: Budget not found',
       );
     });
 
@@ -147,7 +147,7 @@ describe('ResourceManager Templates', () => {
       await expect(
         resourceManager.readResource('ynab://budgets/budget-id/accounts/invalid-account'),
       ).rejects.toThrow(
-        'Failed to resolve template resource ynab://budgets/budget-id/accounts/invalid-account: Failed to fetch account invalid-account in budget budget-id: Account not found',
+        'Failed to read resource ynab://budgets/budget-id/accounts/invalid-account: Failed to fetch account invalid-account in budget budget-id: Account not found',
       );
     });
 

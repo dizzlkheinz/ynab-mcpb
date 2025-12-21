@@ -121,6 +121,7 @@ export class ErrorHandler {
     }
 
     return {
+      isError: true,
       content: [
         {
           type: 'text',

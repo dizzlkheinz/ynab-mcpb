@@ -212,18 +212,18 @@ describe('resources module', () => {
       describe('unknown resources', () => {
         it('should throw error for unknown resource URIs', async () => {
           await expect(resourceManager.readResource('ynab://unknown')).rejects.toThrow(
-            'Unknown resource: ynab://unknown',
+            'Resource not found: ynab://unknown',
           );
         });
 
         it('should throw error for invalid URIs', async () => {
           await expect(resourceManager.readResource('invalid-uri')).rejects.toThrow(
-            'Unknown resource: invalid-uri',
+            'Resource not found: invalid-uri',
           );
         });
 
         it('should throw error for empty URI', async () => {
-          await expect(resourceManager.readResource('')).rejects.toThrow('Unknown resource: ');
+          await expect(resourceManager.readResource('')).rejects.toThrow('Resource not found: ');
         });
       });
     });

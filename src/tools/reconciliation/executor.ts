@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import type * as ynab from 'ynab';
 import type { SaveTransaction } from 'ynab/dist/models/SaveTransaction.js';
 import { YNABAPIError, YNABErrorCode } from '../../server/errorHandler.js';
+import type { ProgressCallback } from '../../server/toolRegistry.js';
 import { toMilli, toMoneyValue, addMilli } from '../../utils/money.js';
 import type { ReconciliationAnalysis, TransactionMatch, BankTransaction } from './types.js';
 import type { ReconcileAccountRequest } from './index.js';
@@ -25,6 +26,11 @@ export interface ExecutionOptions {
   accountId: string;
   initialAccount: AccountSnapshot;
   currencyCode: string;
+  /**
+   * Optional progress callback for emitting MCP progress notifications.
+   * When provided, progress updates are sent during bulk operations.
+   */
+  sendProgress?: ProgressCallback;
 }
 
 export interface ExecutionActionRecord {
@@ -197,7 +203,16 @@ function isWithinStatementWindow(dateStr: string, window: StatementWindow): bool
 }
 
 export async function executeReconciliation(options: ExecutionOptions): Promise<ExecutionResult> {
-  const { analysis, params, ynabAPI, budgetId, accountId, initialAccount, currencyCode } = options;
+  const {
+    analysis,
+    params,
+    ynabAPI,
+    budgetId,
+    accountId,
+    initialAccount,
+    currencyCode,
+    sendProgress,
+  } = options;
   const actions_taken: ExecutionActionRecord[] = [];
 
   const summary: ExecutionSummary = {
@@ -210,6 +225,29 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
     transactions_updated: 0,
     dates_adjusted: 0,
     dry_run: params.dry_run,
+  };
+
+  // Progress tracking for MCP notifications
+  // Pre-filter matches to only count those that will actually be updated
+  // This ensures accurate progress percentages (skipped matches don't inflate total)
+  const matchesNeedingUpdate = analysis.auto_matches.filter((match) => {
+    const flags = computeUpdateFlags(match, params);
+    return flags.needsClearedUpdate || flags.needsDateUpdate;
+  });
+  const totalOperations =
+    (params.auto_create_transactions ? analysis.unmatched_bank.length : 0) +
+    matchesNeedingUpdate.length +
+    (params.auto_unclear_missing ? analysis.unmatched_ynab.length : 0);
+  let completedOperations = 0;
+
+  const reportProgress = async (message: string): Promise<void> => {
+    if (sendProgress && totalOperations > 0) {
+      await sendProgress({
+        progress: completedOperations,
+        total: totalOperations,
+        message,
+      });
+    }
   };
 
   let afterAccount: AccountSnapshot = { ...initialAccount };
@@ -336,6 +374,9 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           recordCreateAction(recordArgs);
           accountSnapshotDirty = true;
           applyClearedDelta(entry.amountMilli);
+          // Report progress for sequential/fallback operations
+          completedOperations += 1;
+          await reportProgress(`Created ${completedOperations} of ${totalOperations} transactions`);
           const trigger = options.chunkIndex
             ? `creating ${entry.bankTransaction.payee ?? 'missing transaction'} (chunk ${options.chunkIndex})`
             : `creating ${entry.bankTransaction.payee ?? 'missing transaction'}`;
@@ -496,6 +537,11 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           try {
             await processBulkChunk(chunk, chunkIndex);
             bulkOperationDetails.bulk_successes += 1;
+            // Report progress after successful chunk processing
+            completedOperations += chunk.length;
+            await reportProgress(
+              `Created ${completedOperations} of ${totalOperations} transactions`,
+            );
           } catch (error) {
             const ynabError = normalizeYnabError(error);
             const failureReason = ynabError.message || 'unknown error';
@@ -619,6 +665,9 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
             });
           }
           accountSnapshotDirty = true;
+          // Report progress after successful batch update
+          completedOperations += updatedTransactions.length;
+          await reportProgress(`Updated ${completedOperations} of ${totalOperations} transactions`);
         } catch (error) {
           const ynabError = normalizeYnabError(error);
           const failureReason = ynabError.message || 'Unknown error occurred';
@@ -724,6 +773,11 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
             });
           }
           accountSnapshotDirty = true;
+          // Report progress after successful unclear batch
+          completedOperations += updatedTransactions.length;
+          await reportProgress(
+            `Marked ${completedOperations} of ${totalOperations} transactions uncleared`,
+          );
         } catch (error) {
           const ynabError = normalizeYnabError(error);
           const failureReason = ynabError.message || 'Unknown error occurred';

@@ -66,7 +66,7 @@
   "author": "",
   "license": "AGPL-3.0",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.3",
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "chrono-node": "^2.9.0",
     "csv-parse": "^6.1.0",
     "d3-array": "^3.2.4",

@@ -10,8 +10,17 @@ import {
   ResourceTemplate as MCPResourceTemplate,
   Resource as MCPResource,
   ResourceContents,
+  ErrorCode,
+  McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 import { CacheManager, CACHE_TTLS } from './cacheManager.js';
+
+/**
+ * Custom MCP error code for resource not found.
+ * Uses JSON-RPC reserved range (-32000 to -32099) for server errors.
+ * @see https://www.jsonrpc.org/specification#error_object
+ */
+const RESOURCE_NOT_FOUND_ERROR_CODE = -32002;
 
 /**
  * Response formatter interface to avoid direct dependency on concrete implementation
@@ -155,7 +164,9 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
     mimeType: 'application/json',
     handler: async (uri, params, { ynabAPI, responseFormatter, cacheManager }) => {
       const budget_id = params['budget_id'];
-      if (!budget_id) throw new Error('Missing budget_id parameter');
+      if (!budget_id) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing budget_id parameter');
+      }
       const cacheKey = CacheManager.generateKey('resources', 'budgets', 'get', budget_id);
       return cacheManager.wrap<ResourceContents[]>(cacheKey, {
         ttl: CACHE_TTLS.BUDGETS,
@@ -184,7 +195,9 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
     mimeType: 'application/json',
     handler: async (uri, params, { ynabAPI, responseFormatter, cacheManager }) => {
       const budget_id = params['budget_id'];
-      if (!budget_id) throw new Error('Missing budget_id parameter');
+      if (!budget_id) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing budget_id parameter');
+      }
       const cacheKey = CacheManager.generateKey('resources', 'accounts', 'list', budget_id);
       return cacheManager.wrap<ResourceContents[]>(cacheKey, {
         ttl: CACHE_TTLS.ACCOUNTS,
@@ -214,8 +227,12 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
     handler: async (uri, params, { ynabAPI, responseFormatter, cacheManager }) => {
       const budget_id = params['budget_id'];
       const account_id = params['account_id'];
-      if (!budget_id) throw new Error('Missing budget_id parameter');
-      if (!account_id) throw new Error('Missing account_id parameter');
+      if (!budget_id) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing budget_id parameter');
+      }
+      if (!account_id) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing account_id parameter');
+      }
       const cacheKey = CacheManager.generateKey(
         'resources',
         'accounts',
@@ -317,24 +334,43 @@ export class ResourceManager {
     // 1. Try exact match first
     const handler = this.resourceHandlers[uri];
     if (handler) {
-      return { contents: await handler(uri, this.dependencies) };
+      return {
+        contents: await this.executeResourceHandler(
+          () => handler(uri, this.dependencies),
+          `resource ${uri}`,
+        ),
+      };
     }
 
     // 2. Try template matching
     for (const template of this.resourceTemplates) {
       const params = this.matchTemplate(template.uriTemplate, uri);
       if (params) {
-        try {
-          return { contents: await template.handler(uri, params, this.dependencies) };
-        } catch (error) {
-          throw new Error(
-            `Failed to resolve template resource ${uri}: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
+        return {
+          contents: await this.executeResourceHandler(
+            () => template.handler(uri, params, this.dependencies),
+            `resource ${uri}`,
+          ),
+        };
       }
     }
 
-    throw new Error(`Unknown resource: ${uri}`);
+    throw new McpError(RESOURCE_NOT_FOUND_ERROR_CODE, `Resource not found: ${uri}`);
+  }
+
+  private async executeResourceHandler(
+    handler: () => Promise<ResourceContents[]>,
+    label: string,
+  ): Promise<ResourceContents[]> {
+    try {
+      return await handler();
+    } catch (error) {
+      if (error instanceof McpError) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      throw new McpError(ErrorCode.InternalError, `Failed to read ${label}: ${message}`);
+    }
   }
 
   /**

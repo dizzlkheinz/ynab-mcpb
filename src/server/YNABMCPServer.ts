@@ -11,6 +11,9 @@ import {
   ListPromptsRequestSchema,
   ReadResourceRequestSchema,
   GetPromptRequestSchema,
+  CompleteRequestSchema,
+  ErrorCode,
+  McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
@@ -36,7 +39,7 @@ import { registerUtilityTools } from '../tools/utilityTools.js';
 import { emptyObjectSchema } from '../tools/schemas/common.js';
 import { cacheManager, CacheManager } from './cacheManager.js';
 import { responseFormatter } from './responseFormatter.js';
-import { ToolRegistry, type ToolDefinition } from './toolRegistry.js';
+import { ToolRegistry, type ToolDefinition, type ProgressCallback } from './toolRegistry.js';
 import { ResourceManager } from './resources.js';
 import { PromptManager } from './prompts.js';
 import { DiagnosticManager } from './diagnostics.js';
@@ -44,6 +47,7 @@ import { ServerKnowledgeStore } from './serverKnowledgeStore.js';
 import { DeltaCache } from './deltaCache.js';
 import { DeltaFetcher } from '../tools/deltaFetcher.js';
 import { ToolAnnotationPresets } from '../tools/toolCategories.js';
+import { CompletionsManager } from './completions.js';
 
 /**
  * YNAB MCP Server class that provides integration with You Need A Budget API
@@ -63,6 +67,7 @@ export class YNABMCPServer {
   private deltaFetcher: DeltaFetcher;
   private diagnosticManager: DiagnosticManager;
   private errorHandler: ErrorHandler;
+  private completionsManager: CompletionsManager;
 
   constructor(exitOnError: boolean = true) {
     this.exitOnError = exitOnError;
@@ -84,9 +89,13 @@ export class YNABMCPServer {
       },
       {
         capabilities: {
-          tools: { listChanged: true },
-          resources: { listChanged: true },
-          prompts: { listChanged: true },
+          tools: { listChanged: false },
+          resources: {
+            subscribe: false, // YNAB API has no webhooks; subscriptions not applicable
+            listChanged: false,
+          },
+          prompts: { listChanged: false },
+          completions: {},
         },
       },
     );
@@ -173,6 +182,12 @@ export class YNABMCPServer {
       deltaCache: this.deltaCache,
     });
 
+    this.completionsManager = new CompletionsManager(
+      this.ynabAPI,
+      cacheManager,
+      () => this.defaultBudgetId,
+    );
+
     this.setupToolRegistry();
     this.setupHandlers();
   }
@@ -247,11 +262,7 @@ export class YNABMCPServer {
     // Handle read resource requests
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       const { uri } = request.params;
-      try {
-        return await this.resourceManager.readResource(uri);
-      } catch (error) {
-        return this.errorHandler.handleError(error, `reading resource: ${uri}`);
-      }
+      return await this.resourceManager.readResource(uri);
     });
 
     // Handle list prompts requests
@@ -275,7 +286,10 @@ export class YNABMCPServer {
     });
 
     // Handle tool call requests
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+      if (!this.toolRegistry.hasTool(request.params.name)) {
+        throw new McpError(ErrorCode.InvalidParams, `Unknown tool: ${request.params.name}`);
+      }
       const rawArgs = (request.params.arguments ?? undefined) as
         | Record<string, unknown>
         | undefined;
@@ -296,6 +310,7 @@ export class YNABMCPServer {
         accessToken: string;
         arguments: Record<string, unknown>;
         minifyOverride?: boolean;
+        sendProgress?: ProgressCallback;
       } = {
         name: request.params.name,
         accessToken: this.configInstance.YNAB_ACCESS_TOKEN,
@@ -306,7 +321,46 @@ export class YNABMCPServer {
         executionOptions.minifyOverride = minifyOverride;
       }
 
+      // Create progress callback if client provided a progressToken
+      const progressToken = (request.params as { _meta?: { progressToken?: string | number } })
+        ._meta?.progressToken;
+      if (progressToken !== undefined && extra.sendNotification) {
+        executionOptions.sendProgress = async (params) => {
+          try {
+            await extra.sendNotification({
+              method: 'notifications/progress',
+              params: {
+                progressToken,
+                progress: params.progress,
+                ...(params.total !== undefined && { total: params.total }),
+                ...(params.message !== undefined && { message: params.message }),
+              },
+            });
+          } catch {
+            // Progress notifications are non-critical; allow tool execution to continue.
+          }
+        };
+      }
+
       return await this.toolRegistry.executeTool(executionOptions);
+    });
+
+    // Handle completion requests for autocomplete
+    this.server.setRequestHandler(CompleteRequestSchema, async (request) => {
+      const { argument, context } = request.params;
+
+      // Get completions from the manager, handling optional context
+      const completionContext = context?.arguments ? { arguments: context.arguments } : undefined;
+      const result = await this.completionsManager.getCompletions(
+        argument.name,
+        argument.value,
+        completionContext,
+      );
+
+      // Return in MCP-compliant format
+      return {
+        completion: result.completion,
+      };
     });
   }
 

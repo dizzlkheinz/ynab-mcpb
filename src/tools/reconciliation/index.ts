@@ -6,7 +6,8 @@
 import { promises as fs } from 'fs';
 import { z } from 'zod/v4';
 import type * as ynab from 'ynab';
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { ProgressCallback } from '../../server/toolRegistry.js';
 import { withToolErrorHandling } from '../../types/index.js';
 import type { ToolFactory } from '../../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from '../adapters.js';
@@ -151,6 +152,7 @@ export async function handleReconcileAccount(
   ynabAPI: ynab.API,
   deltaFetcher: DeltaFetcher,
   params: ReconcileAccountRequest,
+  sendProgress?: ProgressCallback,
 ): Promise<CallToolResult>;
 export async function handleReconcileAccount(
   ynabAPI: ynab.API,
@@ -160,6 +162,7 @@ export async function handleReconcileAccount(
   ynabAPI: ynab.API,
   deltaFetcherOrParams: DeltaFetcher | ReconcileAccountRequest,
   maybeParams?: ReconcileAccountRequest,
+  sendProgress?: ProgressCallback,
 ): Promise<CallToolResult> {
   const { deltaFetcher, params } = resolveDeltaFetcherArgs(
     ynabAPI,
@@ -419,6 +422,7 @@ export async function handleReconcileAccount(
           accountId: params.account_id,
           initialAccount,
           currencyCode,
+          ...(sendProgress !== undefined && { sendProgress }),
         });
       }
 
@@ -468,7 +472,7 @@ export async function handleReconcileAccount(
  * Registers reconciliation-domain tools (compare + reconcile) with the registry.
  */
 export const registerReconciliationTools: ToolFactory = (registry, context) => {
-  const { adapt, adaptWithDelta } = createAdapters(context);
+  const { adapt, adaptWithDeltaAndProgress } = createAdapters(context);
   const budgetResolver = createBudgetResolver(context);
 
   registry.register({
@@ -491,7 +495,7 @@ export const registerReconciliationTools: ToolFactory = (registry, context) => {
     description:
       'Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).',
     inputSchema: ReconcileAccountSchema,
-    handler: adaptWithDelta(handleReconcileAccount),
+    handler: adaptWithDeltaAndProgress(handleReconcileAccount),
     defaultArgumentResolver: budgetResolver<z.infer<typeof ReconcileAccountSchema>>(),
     metadata: {
       annotations: {
