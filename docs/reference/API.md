@@ -8,6 +8,7 @@ This document provides comprehensive documentation for all tools available in th
 - [Authentication](#authentication)
 - [Data Formats](#data-formats)
 - [MCP Resources](#mcp-resources)
+- [MCP Client Features](#mcp-client-features)
 - [Budget Management Tools](#budget-management-tools)
 - [Account Management Tools](#account-management-tools)
 - [Transaction Management Tools](#transaction-management-tools)
@@ -212,6 +213,27 @@ All MCP resources are cached for optimal performance:
 - Get list of budgets: Use `ynab://budgets` resource ✅
 - Get transactions for an account: Use `list_transactions` tool ✅
 - Create a new transaction: Use `create_transaction` tool ✅
+
+## MCP Client Features
+
+These features depend on MCP client support. If your client doesn't surface them, tool calls still work normally.
+
+### Completions (Autocomplete)
+
+The server provides MCP completions for common arguments:
+- `budget_id`
+- `account_id`
+- `account_name`
+- `category`
+- `category_id`
+- `payee`
+- `payee_id`
+
+Clients can use these completions to suggest IDs or names while composing tool calls.
+
+### Progress Notifications
+
+When a client provides a `progressToken` in tool requests, the server emits `notifications/progress` events. Progress updates are most useful for long-running operations such as `reconcile_account`, which can create, update, or unclear large batches of transactions.
 
 ## Budget Management Tools
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **MCP Completions** - Autocomplete support for budgets, accounts, categories, and payees
+  - Improves client-side UX for tools that accept IDs or names
+  - Uses cached data to keep suggestions responsive
+- **Progress Notifications** - Long-running operations can emit MCP progress updates
+  - Reconciliation workflows now report progress during bulk create/update/unclear steps
+  - Clients can surface progress bars when providing a progress token
+
 ## [0.16.0] - 2025-12-01
 
 ### Added

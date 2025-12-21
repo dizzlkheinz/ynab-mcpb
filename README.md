@@ -190,6 +190,11 @@ The server gives Claude access to 29 tools organized by function. You don't need
 
 For the complete list with technical details, see the [API Reference](docs/reference/API.md).
 
+## MCP Client Features
+
+- **Autocomplete (Completions)**: Clients that support MCP completions can suggest budgets, accounts, categories, and payees while filling tool arguments.
+- **Progress Notifications**: Long-running operations (notably reconciliation) emit progress updates when the client provides a progress token.
+
 ## Need Help?
 
 - **[API Reference](docs/reference/API.md)** - Complete tool documentation
