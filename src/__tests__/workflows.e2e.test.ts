@@ -1,7 +1,16 @@
 /**
  * End-to-end smoke tests for YNAB MCP Server
+ *
  * These tests require a real YNAB API key but only perform read operations
  * to verify connectivity and basic functionality without hitting rate limits.
+ *
+ * NOTE: This file was intentionally reduced from comprehensive CRUD workflow tests
+ * to lightweight smoke tests. The full E2E test suite was removed because:
+ * 1. YNAB API rate limits (200 requests/hour) made full E2E runs unreliable in CI
+ * 2. Comprehensive integration tests with mocked APIs provide better coverage
+ * 3. Smoke tests validate real API connectivity without rate limit pressure
+ *
+ * For full workflow testing, see integration tests in src/tools/__tests__/
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';

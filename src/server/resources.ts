@@ -16,6 +16,13 @@ import {
 import { CacheManager, CACHE_TTLS } from './cacheManager.js';
 
 /**
+ * Custom MCP error code for resource not found.
+ * Uses JSON-RPC reserved range (-32000 to -32099) for server errors.
+ * @see https://www.jsonrpc.org/specification#error_object
+ */
+const RESOURCE_NOT_FOUND_ERROR_CODE = -32002;
+
+/**
  * Response formatter interface to avoid direct dependency on concrete implementation
  */
 interface ResponseFormatter {
@@ -348,7 +355,7 @@ export class ResourceManager {
       }
     }
 
-    throw new McpError(-32002, `Resource not found: ${uri}`);
+    throw new McpError(RESOURCE_NOT_FOUND_ERROR_CODE, `Resource not found: ${uri}`);
   }
 
   private async executeResourceHandler(

@@ -199,6 +199,7 @@ export class CompletionsManager {
   /**
    * Filter items by value match and format as completion result.
    * Searches case-insensitively across all searchable fields.
+   * Caches lowercased values to avoid repeated toLowerCase() calls.
    */
   private filterAndFormat<T>(
     items: T[],
@@ -207,43 +208,69 @@ export class CompletionsManager {
   ): CompletionResult {
     const lowerValue = value.toLowerCase();
 
+    // Cache lowercased values to avoid repeated toLowerCase() calls during filtering and sorting
+    const itemCache = new Map<T, { values: string[]; lowerValues: string[] }>();
+    const getCachedValues = (item: T) => {
+      let cached = itemCache.get(item);
+      if (!cached) {
+        const values = getSearchableValues(item);
+        cached = { values, lowerValues: values.map((v) => v.toLowerCase()) };
+        itemCache.set(item, cached);
+      }
+      return cached;
+    };
+
     // Filter items that match the search value
-    const matches = items.filter((item) =>
-      getSearchableValues(item).some((v) => v.toLowerCase().includes(lowerValue)),
-    );
+    const matches = items.filter((item) => {
+      const { lowerValues } = getCachedValues(item);
+      return lowerValues.some((v) => v.includes(lowerValue));
+    });
 
     // Sort by relevance (exact prefix matches first, then contains)
     matches.sort((a, b) => {
-      const aValues = getSearchableValues(a);
-      const bValues = getSearchableValues(b);
+      const aCache = getCachedValues(a);
+      const bCache = getCachedValues(b);
 
-      const aStartsWith = aValues.some((v) => v.toLowerCase().startsWith(lowerValue));
-      const bStartsWith = bValues.some((v) => v.toLowerCase().startsWith(lowerValue));
+      const aStartsWith = aCache.lowerValues.some((v) => v.startsWith(lowerValue));
+      const bStartsWith = bCache.lowerValues.some((v) => v.startsWith(lowerValue));
 
       if (aStartsWith && !bStartsWith) return -1;
       if (!aStartsWith && bStartsWith) return 1;
 
       // Secondary sort by first value (name)
-      return (aValues[0] ?? '').localeCompare(bValues[0] ?? '');
+      return (aCache.values[0] ?? '').localeCompare(bCache.values[0] ?? '');
     });
 
-    // Get unique display values (prefer names over IDs)
+    // Get unique display values, prioritizing names over IDs
+    // The first value in the array should be the human-readable name
     const uniqueValues = new Set<string>();
     for (const item of matches) {
-      const values = getSearchableValues(item);
-      // Add the first matching value (usually the name)
-      const matchingValue = values.find((v) => v.toLowerCase().includes(lowerValue));
-      if (matchingValue) {
-        uniqueValues.add(matchingValue);
+      const { values, lowerValues } = getCachedValues(item);
+      // Find the first (name) value if it matches, otherwise find any matching value
+      // This ensures we prefer "Groceries" over the UUID when both match
+      let selectedValue: string | undefined;
+      for (let i = 0; i < values.length; i++) {
+        if (lowerValues[i]?.includes(lowerValue)) {
+          // Prefer the first matching value (typically the name), not the ID
+          // Only select this value if we haven't found a better one yet
+          if (selectedValue === undefined || i < values.indexOf(selectedValue)) {
+            selectedValue = values[i];
+          }
+          // Stop at first match - prioritizes name over ID since name comes first
+          break;
+        }
+      }
+      if (selectedValue) {
+        uniqueValues.add(selectedValue);
       }
       if (uniqueValues.size >= MAX_COMPLETIONS) break;
     }
 
-    const values = Array.from(uniqueValues).slice(0, MAX_COMPLETIONS);
+    const resultValues = Array.from(uniqueValues).slice(0, MAX_COMPLETIONS);
 
     return {
       completion: {
-        values,
+        values: resultValues,
         total: matches.length,
         hasMore: matches.length > MAX_COMPLETIONS,
       },

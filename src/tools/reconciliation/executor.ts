@@ -228,9 +228,15 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
   };
 
   // Progress tracking for MCP notifications
+  // Pre-filter matches to only count those that will actually be updated
+  // This ensures accurate progress percentages (skipped matches don't inflate total)
+  const matchesNeedingUpdate = analysis.auto_matches.filter((match) => {
+    const flags = computeUpdateFlags(match, params);
+    return flags.needsClearedUpdate || flags.needsDateUpdate;
+  });
   const totalOperations =
     (params.auto_create_transactions ? analysis.unmatched_bank.length : 0) +
-    analysis.auto_matches.length +
+    matchesNeedingUpdate.length +
     (params.auto_unclear_missing ? analysis.unmatched_ynab.length : 0);
   let completedOperations = 0;
 
@@ -368,6 +374,9 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
           recordCreateAction(recordArgs);
           accountSnapshotDirty = true;
           applyClearedDelta(entry.amountMilli);
+          // Report progress for sequential/fallback operations
+          completedOperations += 1;
+          await reportProgress(`Created ${completedOperations} of ${totalOperations} transactions`);
           const trigger = options.chunkIndex
             ? `creating ${entry.bankTransaction.payee ?? 'missing transaction'} (chunk ${options.chunkIndex})`
             : `creating ${entry.bankTransaction.payee ?? 'missing transaction'}`;

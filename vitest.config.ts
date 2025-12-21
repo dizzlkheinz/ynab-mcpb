@@ -18,9 +18,10 @@ export default defineConfig({
           exclude: [
             'src/**/*.integration.test.ts',
             'src/**/*.e2e.test.ts',
+            // YNABMCPServer.test.ts requires real YNAB API token and makes API calls,
+            // so it runs as part of integration tests, not unit tests
             'src/server/__tests__/YNABMCPServer.test.ts',
           ],
-          setupFiles: ['src/__tests__/setup.ts'],
         },
       },
       {
@@ -32,7 +33,6 @@ export default defineConfig({
           },
           testTimeout: 30000,
           hookTimeout: 10000,
-          setupFiles: ['src/__tests__/setup.ts'],
         },
       },
       {
@@ -44,7 +44,6 @@ export default defineConfig({
           },
           testTimeout: 60000,
           hookTimeout: 15000,
-          setupFiles: ['src/__tests__/setup.ts'],
         },
       },
       {
@@ -58,14 +57,12 @@ export default defineConfig({
           hookTimeout: 30000,
           fileParallelism: false,
           maxWorkers: 1,
-          setupFiles: ['src/__tests__/setup.ts'],
         },
       },
       {
         test: {
           name: 'e2e',
           include: ['src/**/*.e2e.test.ts'],
-          setupFiles: ['src/__tests__/setup.ts'],
         },
       },
     ],
