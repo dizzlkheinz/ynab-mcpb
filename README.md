@@ -103,8 +103,6 @@ For any MCP-compatible client, configure the server with:
 
 - `YNAB_ACCESS_TOKEN`: Your YNAB Personal Access Token
 
-See the [full list of MCP clients](https://modelcontextprotocol.io/docs/clients/) for more options.
-
 </details>
 
 ### Step 3: Start Using It
