@@ -484,9 +484,10 @@ describe('executeReconciliation - bulk create mode', () => {
         account_id: txn.account_id,
         amount: txn.amount,
         date: txn.date,
+        payee_name: txn.payee_name,
+        memo: txn.memo,
         cleared: 'cleared',
         approved: true,
-        import_id: txn.import_id, // Include import_id for correlation
       }));
       return { data: { transactions, duplicate_import_ids: [] } };
     });
@@ -638,11 +639,12 @@ describe('executeReconciliation - bulk create mode', () => {
         account_id: txn.account_id,
         amount: txn.amount,
         date: txn.date,
+        payee_name: txn.payee_name,
+        memo: txn.memo,
         cleared: 'cleared',
         approved: true,
-        import_id: txn.import_id, // Include import_id for correlation
       }));
-      return { data: { transactions } };
+      return { data: { transactions, duplicate_import_ids: [] } };
     });
 
     const result = await executeReconciliation({
@@ -690,33 +692,35 @@ describe('executeReconciliation - bulk create mode', () => {
     ).rejects.toMatchObject({ status: 404 });
   });
 
-  it('flags duplicate transactions returned by YNAB API', async () => {
-    const analysis = buildBulkAnalysis(3, 7);
+  it('creates all transactions without import_id (no YNAB-side duplicate detection)', async () => {
+    // Note: import_id is intentionally omitted from reconciliation-created transactions
+    // so they can match with bank-imported transactions. This means YNAB won't detect
+    // duplicates via import_id - the reconciliation matcher is responsible for that.
+    // Use amount of 100 to avoid early balance halting (tolerance is 10 milliunits)
+    const analysis = buildBulkAnalysis(3, 100);
     const params = buildBulkParams(analysis.summary.target_statement_balance);
     const initialAccount = { ...defaultAccountSnapshot };
     const { api, mocks } = createMockYnabAPI(initialAccount);
 
     mocks.createTransactions.mockImplementation(async (_budgetId, body: any) => {
-      const transactions = (body.transactions ?? []).map((txn: any, index: number) => {
-        if (index === 1) {
-          return undefined;
-        }
-        return {
-          id: `created-${index}`,
-          account_id: txn.account_id,
-          amount: txn.amount,
-          date: txn.date,
-          cleared: 'cleared',
-          approved: true,
-          import_id: txn.import_id, // Include import_id for correlation
-        };
-      });
-      const filtered = transactions.filter(Boolean);
-      const duplicateImportId = body.transactions?.[1]?.import_id;
+      const transactions = (body.transactions ?? []).map((txn: any, index: number) => ({
+        id: `created-${index}`,
+        account_id: txn.account_id,
+        amount: txn.amount,
+        date: txn.date,
+        payee_name: txn.payee_name,
+        memo: txn.memo,
+        cleared: 'cleared',
+        approved: true,
+      }));
+      // Verify no import_id is being sent
+      for (const txn of body.transactions ?? []) {
+        expect(txn.import_id).toBeUndefined();
+      }
       return {
         data: {
-          transactions: filtered,
-          duplicate_import_ids: duplicateImportId ? [duplicateImportId] : [],
+          transactions,
+          duplicate_import_ids: [],
         },
       };
     });
@@ -731,10 +735,9 @@ describe('executeReconciliation - bulk create mode', () => {
       currencyCode: 'USD',
     });
 
-    const duplicateActions = result.actions_taken.filter((action) => action.duplicate === true);
-    expect(duplicateActions).toHaveLength(1);
-    expect(result.bulk_operation_details?.duplicates_detected).toBe(1);
-    expect(result.summary.transactions_created).toBe(2);
+    // Without import_id, YNAB creates all transactions (no duplicate detection)
+    expect(result.bulk_operation_details?.duplicates_detected).toBe(0);
+    expect(result.summary.transactions_created).toBe(3);
   });
 
   it('honors halting logic when balance aligns mid-batch', async () => {
@@ -749,11 +752,12 @@ describe('executeReconciliation - bulk create mode', () => {
         account_id: txn.account_id,
         amount: txn.amount,
         date: txn.date,
+        payee_name: txn.payee_name,
+        memo: txn.memo,
         cleared: 'cleared',
         approved: true,
-        import_id: txn.import_id, // Include import_id for correlation
       }));
-      return { data: { transactions } };
+      return { data: { transactions, duplicate_import_ids: [] } };
     });
 
     const result = await executeReconciliation({
@@ -794,11 +798,12 @@ describe('executeReconciliation - bulk create mode', () => {
         account_id: txn.account_id,
         amount: txn.amount,
         date: txn.date,
+        payee_name: txn.payee_name,
+        memo: txn.memo,
         cleared: 'cleared',
         approved: true,
-        import_id: txn.import_id,
       }));
-      return { data: { transactions } };
+      return { data: { transactions, duplicate_import_ids: [] } };
     });
 
     const result = await executeReconciliation({

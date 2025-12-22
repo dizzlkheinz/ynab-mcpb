@@ -78,9 +78,12 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
   );
 
   it(
-    'reports duplicates when import IDs already exist',
+    'creates transactions without import_id to allow bank matching',
     { meta: { tier: 'domain', domain: 'reconciliation' } },
     async function () {
+      // Note: import_id is intentionally omitted from reconciliation-created transactions
+      // so they can match with bank-imported transactions. YNAB-side duplicate detection
+      // is no longer used; the reconciliation matcher handles duplicate prevention.
       const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 9);
       const params = buildIntegrationParams(
         accountId,
@@ -88,7 +91,7 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
         analysis.summary.target_statement_balance,
       );
 
-      const firstRun = await skipOnRateLimit(
+      const result = await skipOnRateLimit(
         () =>
           executeReconciliation({
             ynabAPI,
@@ -101,31 +104,14 @@ describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
           }),
         this,
       );
-      if (!firstRun) return;
-      trackCreatedTransactions(firstRun);
+      if (!result) return;
+      trackCreatedTransactions(result);
+      if (containsRateLimitFailure(result)) return;
 
-      const duplicateAttempt = await skipOnRateLimit(
-        () =>
-          executeReconciliation({
-            ynabAPI,
-            analysis,
-            params,
-            budgetId,
-            accountId,
-            initialAccount: accountSnapshot,
-            currencyCode: 'USD',
-          }),
-        this,
-      );
-      if (!duplicateAttempt) return;
-      if (containsRateLimitFailure(duplicateAttempt)) return;
-
-      const duplicateActions = duplicateAttempt.actions_taken.filter(
-        (action) => action.duplicate === true,
-      );
-      expect(duplicateActions.length).toBeGreaterThan(0);
-      expect(duplicateAttempt.bulk_operation_details?.duplicates_detected).toBeGreaterThan(0);
-      expect(duplicateAttempt.summary.transactions_created).toBe(0);
+      // Verify transactions were created successfully
+      expect(result.summary.transactions_created).toBe(2);
+      // Verify no YNAB-side duplicate detection occurred (because no import_id)
+      expect(result.bulk_operation_details?.duplicates_detected).toBe(0);
     },
     60000,
   );

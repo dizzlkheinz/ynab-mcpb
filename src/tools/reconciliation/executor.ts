@@ -1,4 +1,3 @@
-import { createHash } from 'crypto';
 import type * as ynab from 'ynab';
 import type { SaveTransaction } from 'ynab/dist/models/SaveTransaction.js';
 import { YNABAPIError, YNABErrorCode } from '../../server/errorHandler.js';
@@ -129,30 +128,6 @@ interface PreparedBulkCreateEntry {
   saveTransaction: SaveTransaction;
   amountMilli: number;
   correlationKey: string;
-}
-
-/**
- * Generates a deterministic import_id for reconciliation-created transactions.
- *
- * Uses a dedicated `YNAB:bulk:` prefix to distinguish reconciliation-created transactions
- * from manual bulk creates. This namespace separation is intentional:
- * - Reconciliation operations are automated and system-generated
- * - Manual bulk creates via create_transactions tool can use custom import_id formats
- * - Both interact with YNAB's global duplicate detection via the same import_id mechanism
- *
- * The hash-based correlation in transactionTools.ts uses `hash:` prefix for correlation
- * (when no import_id provided), which is separate from this import_id generation.
- */
-function generateBulkImportId(
-  accountId: string,
-  date: string,
-  amountMilli: number,
-  payee?: string | null,
-): string {
-  const normalizedPayee = (payee ?? '').trim().toLowerCase();
-  const raw = `${accountId}|${date}|${amountMilli}|${normalizedPayee}`;
-  const digest = createHash('sha256').update(raw).digest('hex').slice(0, 24);
-  return `YNAB:bulk:${digest}`;
 }
 
 function parseISODate(dateStr: string | undefined): Date | undefined {
@@ -313,7 +288,7 @@ export async function executeReconciliation(options: ExecutionOptions): Promise<
         memo: truncateMemo(bankTxn.memo),
         cleared: 'cleared',
         approved: true,
-        import_id: generateBulkImportId(accountId, bankTxn.date, amountMilli, bankTxn.payee),
+        // Note: import_id intentionally omitted so transactions can match with bank imports
       };
       const correlationKey = generateCorrelationKey(toCorrelationPayload(saveTransaction));
       return {
