@@ -1,33 +1,18 @@
 # YNAB MCP Server
 
-[![Download latest MCPB](https://img.shields.io/badge/Download-latest%20MCPB-blue?logo=github)](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
-[![npm version](https://img.shields.io/npm/v/@dizzlkheinz/ynab-mcpb.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcpb)
-[![npm downloads](https://img.shields.io/npm/dm/@dizzlkheinz/ynab-mcpb.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcpb)
-
-[![Release](https://img.shields.io/github/v/release/dizzlkheinz/ynab-mcpb?sort=semver)](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
-[![Release MCPB](https://github.com/dizzlkheinz/ynab-mcpb/actions/workflows/release.yml/badge.svg)](https://github.com/dizzlkheinz/ynab-mcpb/actions/workflows/release.yml)
-[![Downloads](https://img.shields.io/github/downloads/dizzlkheinz/ynab-mcpb/total.svg)](https://github.com/dizzlkheinz/ynab-mcpb/releases)
+[![Download MCPB](https://img.shields.io/badge/Download-MCPB-blue?logo=github)](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
+[![npm](https://img.shields.io/npm/v/@dizzlkheinz/ynab-mcpb.svg)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcpb)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io)
-[![lint: eslint](https://img.shields.io/badge/lint-eslint-green.svg)](https://eslint.org)
-[![Node](https://img.shields.io/badge/node-%E2%89%A518-brightgreen.svg)](#)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6.svg)](https://www.typescriptlang.org)
-[![SemVer](https://img.shields.io/badge/SemVer-0.y.z-yellow.svg)](https://semver.org/)
-[![Issues](https://img.shields.io/github/issues/dizzlkheinz/ynab-mcpb)](https://github.com/dizzlkheinz/ynab-mcpb/issues)
-[![PRs](https://img.shields.io/github/issues-pr/dizzlkheinz/ynab-mcpb)](https://github.com/dizzlkheinz/ynab-mcpb/pulls)
 
-Connect your YNAB budget to Claude Desktop and other AI assistants using the Model Context Protocol (MCP). Ask questions about your spending, create transactions, reconcile accounts, and manage your budget using natural language.
+Connect your YNAB budget to Claude Desktop (or any MCP client) and manage your finances with natural language.
 
-## What Can You Do?
+### Highlights
 
-- **Ask Questions**: "How much did I spend on groceries last month?" or "What's my credit card balance?"
-- **Manage Transactions**: Create, update, or delete transactions without opening YNAB
-- **Split Receipts**: Create itemized transactions from receipts with automatic tax allocation across items
-- **Reconcile Accounts**: Import and compare bank statements to find missing transactions
-- **Analyze Spending**: Get insights into spending patterns and budget performance
-- **Set Budgets**: Adjust category budgets and move money between categories
+**Receipt Itemization** — Paste a receipt, get split transactions with tax allocated across items. No more manual entry for Costco runs.
 
-All monetary amounts are automatically converted to dollars (YNAB stores them in milliunits internally), so everything is human-readable.
+**Bank Reconciliation** _(beta)_ — Import a CSV from your bank, fuzzy-match against YNAB, find discrepancies. Presets for TD, RBC, Scotiabank, Wealthsimple, Tangerine. _This is the most ambitious feature—it works well but has rough edges. [Bug reports welcome!](https://github.com/dizzlkheinz/ynab-mcpb/issues)_
+
+**Everything Else** — Check balances, create transactions, analyze spending, adjust budgets. Just ask.
 
 ## Quick Start
 
@@ -118,7 +103,7 @@ For any MCP-compatible client, configure the server with:
 
 - `YNAB_ACCESS_TOKEN`: Your YNAB Personal Access Token
 
-Refer to your MCP client's documentation for specific configuration steps.
+See the [full list of MCP clients](https://modelcontextprotocol.io/docs/clients/) for more options.
 
 </details>
 
@@ -133,134 +118,45 @@ Ask your AI assistant questions like:
 
 That's it! You're ready to manage your budget with AI.
 
-## Optional Configuration
+<details>
+<summary><b>Optional Configuration</b></summary>
 
-Most users won't need to change these settings, but they're available if you need them:
+- `YNAB_EXPORT_PATH` — Directory for exported files (default: Downloads)
 
-**Export Location:**
+See `.env.example` for caching and output options.
 
-- `YNAB_EXPORT_PATH` — Where to save exported transaction files (defaults to Downloads folder)
+</details>
 
-Example:
+## Available Tools
 
-```json
-{
-  "mcpServers": {
-    "ynab": {
-      "command": "npx",
-      "args": ["-y", "@dizzlkheinz/ynab-mcpb@latest"],
-      "env": {
-        "YNAB_ACCESS_TOKEN": "your-token-here",
-        "YNAB_EXPORT_PATH": "C:\\Users\\YourName\\Documents"
-      }
-    }
-  }
-}
-```
+29 tools for budgets, accounts, transactions, categories, payees, and analysis. Just ask in natural language.
 
-For advanced configuration options (caching, output formatting), see the `.env.example` file in the repository.
-
-## What's Available
-
-The server gives Claude access to 29 tools organized by function. You don't need to know the tool names - just ask Claude in natural language and it will use the right tools.
-
-**Budget & Account Info**
-
-- View budgets, accounts, categories, payees
-- Check balances and category budgets
-- See monthly spending summaries
-
-**Transactions**
-
-- List, create, update, or delete transactions
-- Import and reconcile bank statements
-- Export transactions to files
-- Create split transactions from receipts
-
-**Analysis**
-
-- Compare spending across time periods
-- Find missing transactions
-- Track budget performance
-
-## MCP Resources
-
-- Access budget and account data via URI patterns (e.g., `ynab://budgets/{id}`)
-- Static resources: `ynab://budgets`, `ynab://user`
-
-For the complete list with technical details, see the [API Reference](docs/reference/API.md).
-
-## MCP Client Features
-
-- **Autocomplete (Completions)**: Clients that support MCP completions can suggest budgets, accounts, categories, and payees while filling tool arguments.
-- **Progress Notifications**: Long-running operations (notably reconciliation) emit progress updates when the client provides a progress token.
+For the complete list, see the [API Reference](docs/reference/API.md).
 
 ## Need Help?
 
-- **[API Reference](docs/reference/API.md)** - Complete tool documentation
-- **[GitHub Issues](https://github.com/dizzlkheinz/ynab-mcpb/issues)** - Report bugs or request features
+[API Reference](docs/reference/API.md) · [Issues](https://github.com/dizzlkheinz/ynab-mcpb/issues)
 
-## For Developers
+<details>
+<summary><b>For Developers</b></summary>
 
-Want to contribute or build from source?
+```bash
+git clone https://github.com/dizzlkheinz/ynab-mcpb.git && cd ynab-mcpb
+npm install
+cp .env.example .env  # add your YNAB_ACCESS_TOKEN
+npm run build && npm test
+```
 
-### Development Setup
+See `CLAUDE.md` for architecture details.
 
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/dizzlkheinz/ynab-mcpb.git
-   cd ynab-mcpb
-   ```
-
-2. **Install dependencies:**
-
-   ```bash
-   npm install
-   ```
-
-3. **Create your environment file:**
-   Copy the example environment file to a new `.env` file:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Open the `.env` file and add your YNAB Personal Access Token:
-
-   ```
-   YNAB_ACCESS_TOKEN="your-token-here"
-   ```
-
-4. **Build and test the project:**
-   ```bash
-   npm run build
-   npm test
-   ```
-
-## Security & Privacy
-
-Your YNAB access token is stored securely and never logged. All communication with YNAB's API uses HTTPS, and the server validates all inputs to prevent errors and security issues.
+</details>
 
 ## Contributing
 
-Contributions welcome! Please:
+**Bug reports are especially valuable** — particularly for the reconciliation tool. If your bank's CSV doesn't parse right or matching behaves unexpectedly, [open an issue](https://github.com/dizzlkheinz/ynab-mcpb/issues) with sample data (anonymized) and I'll fix it.
 
-1. [Open an issue](https://github.com/dizzlkheinz/ynab-mcpb/issues) to discuss your idea
-2. Fork the repository and make your changes
-3. Add tests for new features
-4. Submit a pull request
-
-See `CLAUDE.md` for development details and architecture overview.
+PRs welcome too. See `CLAUDE.md` for architecture.
 
 ## License
 
-Licensed under [AGPL-3.0](LICENSE). Free to use and modify, but derivative works must also be open source.
-
----
-
-Built with:
-
-- [YNAB API](https://api.youneedabudget.com/) - Official YNAB REST API
-- [Model Context Protocol](https://modelcontextprotocol.io/) - AI integration standard
-- [Claude Desktop](https://claude.ai/download) - AI assistant with MCP support
+[AGPL-3.0](LICENSE) — Free to use; derivative works must be open source.
