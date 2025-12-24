@@ -1112,21 +1112,6 @@ interface SubtransactionInput {
   memo?: string;
 }
 
-function buildItemMemo(item: {
-  name: string;
-  quantity: number | undefined;
-  memo: string | undefined;
-}): string | undefined {
-  const quantitySuffix = item.quantity ? ` (x${item.quantity})` : '';
-  if (item.memo && item.memo.trim().length > 0) {
-    return `${item.name}${quantitySuffix} - ${item.memo}`;
-  }
-  if (quantitySuffix) {
-    return `${item.name}${quantitySuffix}`;
-  }
-  return item.name;
-}
-
 /**
  * Constants for smart collapse logic
  */
@@ -1134,6 +1119,35 @@ const BIG_TICKET_THRESHOLD_MILLIUNITS = 50000; // $50.00
 const COLLAPSE_THRESHOLD = 5; // Collapse if 5 or more remaining items
 const MAX_ITEMS_PER_MEMO = 5;
 const MAX_MEMO_LENGTH = 150;
+
+/**
+ * Truncates a string to fit within maxLength, adding ellipsis if truncated
+ */
+function truncateToLength(str: string, maxLength: number): string {
+  if (str.length <= maxLength) {
+    return str;
+  }
+  const ellipsis = '...';
+  return str.substring(0, maxLength - ellipsis.length) + ellipsis;
+}
+
+function buildItemMemo(item: {
+  name: string;
+  quantity: number | undefined;
+  memo: string | undefined;
+}): string | undefined {
+  const quantitySuffix = item.quantity ? ` (x${item.quantity})` : '';
+  let result: string;
+  if (item.memo && item.memo.trim().length > 0) {
+    result = `${item.name}${quantitySuffix} - ${item.memo}`;
+  } else if (quantitySuffix) {
+    result = `${item.name}${quantitySuffix}`;
+  } else {
+    result = item.name;
+  }
+  // Truncate to MAX_MEMO_LENGTH if needed
+  return truncateToLength(result, MAX_MEMO_LENGTH);
+}
 
 /**
  * Applies smart collapse logic to receipt items according to the specification:
@@ -1328,9 +1342,26 @@ function collapseItemsByCategory(categoryGroup: {
 }
 
 /**
+ * Truncates an item name to fit within available space
+ * Preserves the amount suffix and adds "..." to indicate truncation
+ */
+function truncateItemName(name: string, amountSuffix: string, maxLength: number): string {
+  const ellipsis = '...';
+  // We need: truncatedName + ellipsis + amountSuffix <= maxLength
+  const availableForName = maxLength - ellipsis.length - amountSuffix.length;
+
+  if (availableForName <= 0) {
+    // Edge case: amount suffix alone is too long, just return what we can
+    return amountSuffix.substring(0, maxLength);
+  }
+
+  return name.substring(0, availableForName) + ellipsis + amountSuffix;
+}
+
+/**
  * Builds a collapsed memo from a list of items
  * Format: "Item1 $X.XX, Item2 $Y.YY, Item3 $Z.ZZ"
- * Truncates with "..." if needed
+ * Truncates with "..." if needed (either individual items or the list)
  */
 function buildCollapsedMemo(items: ReceiptCategoryCalculation['items'][0][]): string {
   const parts: string[] = [];
@@ -1340,8 +1371,15 @@ function buildCollapsedMemo(items: ReceiptCategoryCalculation['items'][0][]): st
     const item = items[i];
     if (!item) continue;
     const amount = milliunitsToAmount(item.amount_milliunits);
-    const itemStr = `${item.name} $${amount.toFixed(2)}`;
+    const amountSuffix = ` $${amount.toFixed(2)}`;
+    let itemStr = `${item.name}${amountSuffix}`;
     const separator = i > 0 ? ', ' : '';
+
+    // For the first item, check if it alone exceeds the limit
+    if (parts.length === 0 && itemStr.length > MAX_MEMO_LENGTH) {
+      itemStr = truncateItemName(item.name, amountSuffix, MAX_MEMO_LENGTH);
+    }
+
     const testLength = currentLength + separator.length + itemStr.length;
 
     // Check if adding this item would exceed limit

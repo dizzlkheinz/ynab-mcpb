@@ -2107,6 +2107,89 @@ describe('transactionTools', () => {
           expect(collapsedSub.memo).toContain('Cheap Item');
           expect(collapsedSub.amount).toBe(25); // dry_run returns dollars
         });
+
+        it('should truncate single very long item name in itemized mode', async () => {
+          // Create a name that's way longer than 150 chars
+          const veryLongName = 'A'.repeat(200);
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 1.0,
+            receipt_total: 11.0,
+            categories: [
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [{ name: veryLongName, amount: 10.0 }],
+              },
+            ],
+            receipt_subtotal: 10.0,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Should have 2 subtransactions: 1 itemized + 1 tax
+          // (only 1 item, so no collapse, but name gets truncated)
+          expect(parsed.subtransactions).toHaveLength(2);
+
+          const itemMemo = parsed.subtransactions[0].memo;
+          // Memo should be truncated to exactly 150 chars
+          expect(itemMemo.length).toBeLessThanOrEqual(150);
+          // Should contain truncation indicator
+          expect(itemMemo).toContain('...');
+          // Should start with part of the original name
+          expect(itemMemo.startsWith('AAA')).toBe(true);
+        });
+
+        it('should truncate very long item name in collapsed mode while preserving amount', async () => {
+          // Create a name that's way longer than 150 chars
+          const veryLongName = 'B'.repeat(200);
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 1.0,
+            receipt_total: 61.0,
+            categories: [
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: veryLongName, amount: 10.0 }, // This one has very long name
+                  { name: 'Item2', amount: 10.0 },
+                  { name: 'Item3', amount: 10.0 },
+                  { name: 'Item4', amount: 10.0 },
+                  { name: 'Item5', amount: 10.0 },
+                  { name: 'Item6', amount: 10.0 },
+                ],
+              },
+            ],
+            receipt_subtotal: 60.0,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // 6 items -> collapse mode, long item first creates its own subtransaction
+          // that gets truncated
+          expect(parsed.subtransactions.length).toBeGreaterThanOrEqual(2);
+
+          // First subtransaction should be the truncated long item
+          const firstMemo = parsed.subtransactions[0].memo;
+          expect(firstMemo.length).toBeLessThanOrEqual(150);
+          // In collapsed mode, should preserve the amount
+          expect(firstMemo).toContain('$10.00');
+          // Should contain truncation indicator
+          expect(firstMemo).toContain('...');
+          // Should start with part of the original name
+          expect(firstMemo.startsWith('BBB')).toBe(true);
+        });
       });
     });
   });
