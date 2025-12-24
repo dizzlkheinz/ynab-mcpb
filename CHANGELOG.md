@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.3] - 2025-12-24
+
+### Fixed
+
+- **Receipt Itemization** - Truncate long item names to 150 characters in memos
+  - Itemized mode: truncates name with "..." suffix
+  - Collapsed mode: truncates name while preserving amount (e.g., "AAA... $10.00")
+
+## [0.18.2] - 2025-12-24
+
+### Added
+
+- **Smart Collapse Logic** - Intelligent receipt itemization based on item count
+  - Items >= 5: collapse into category-grouped subtransactions
+  - Big ticket items (>$50): always shown separately
+  - Returns/discounts: preserved as individual line items
+  - Tax allocation: proportional distribution across positive categories
+
+## [0.18.1] - 2025-12-23
+
+### Fixed
+
+- **Reconciliation** - Remove import_id from reconciliation to enable bank matching
+
 ## [0.18.0] - 2025-12-21
 
 ### Added
