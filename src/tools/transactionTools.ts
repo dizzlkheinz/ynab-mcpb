@@ -1127,7 +1127,6 @@ function buildItemMemo(item: {
   return item.name;
 }
 
-
 /**
  * Constants for smart collapse logic
  */
@@ -1169,7 +1168,9 @@ function applySmartCollapseLogic(
 
     for (const item of category.items) {
       const isNegative = item.amount_milliunits < 0;
-      const unitPrice = item.quantity ? item.amount_milliunits / item.quantity : item.amount_milliunits;
+      const unitPrice = item.quantity
+        ? item.amount_milliunits / item.quantity
+        : item.amount_milliunits;
       const isBigTicket = unitPrice > BIG_TICKET_THRESHOLD_MILLIUNITS;
 
       if (isNegative || isBigTicket) {
@@ -1434,10 +1435,10 @@ function allocateTax(
 
   // Distribute tax using largest remainder method
   let allocatedTax = 0;
-  const taxAllocations: Array<{
+  const taxAllocations: {
     category: ReceiptCategoryCalculation;
     taxAmount: number;
-  }> = [];
+  }[] = [];
 
   for (let i = 0; i < positiveCategorySubtotals.length; i++) {
     const entry = positiveCategorySubtotals[i];

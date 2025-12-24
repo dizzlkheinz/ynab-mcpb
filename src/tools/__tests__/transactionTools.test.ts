@@ -2040,7 +2040,10 @@ describe('transactionTools', () => {
                 category_id: 'category-groceries',
                 category_name: 'Groceries',
                 items: [
-                  { name: 'Very Long Item Name That Will Definitely Cause Truncation', amount: 10.0 },
+                  {
+                    name: 'Very Long Item Name That Will Definitely Cause Truncation',
+                    amount: 10.0,
+                  },
                   { name: 'Another Very Long Item Name To Exceed Character Limit', amount: 10.0 },
                   { name: 'Third Very Long Item Name Here', amount: 10.0 },
                   { name: 'Fourth Very Long Item Name', amount: 10.0 },
