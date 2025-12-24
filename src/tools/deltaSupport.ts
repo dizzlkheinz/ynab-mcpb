@@ -283,6 +283,24 @@ export function resolveDeltaWriteArgs<TParams extends Record<string, unknown>>(
     );
   }
 
+  // Use shared context if available, otherwise create new fallback instances
+  if (sharedDeltaContext) {
+    if (!sharedDeltaContext.knowledgeStore) {
+      sharedDeltaContext.knowledgeStore = new ServerKnowledgeStore();
+    }
+    if (!sharedDeltaContext.deltaCache) {
+      sharedDeltaContext.deltaCache = new DeltaCache(
+        cacheManager,
+        sharedDeltaContext.knowledgeStore,
+      );
+    }
+    return {
+      deltaCache: sharedDeltaContext.deltaCache,
+      knowledgeStore: sharedDeltaContext.knowledgeStore,
+      params: deltaCacheOrParams,
+    };
+  }
+
   const fallbackKnowledgeStore = new ServerKnowledgeStore();
   const fallbackDeltaCache = new DeltaCache(cacheManager, fallbackKnowledgeStore);
   return {

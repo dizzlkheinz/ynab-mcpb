@@ -1462,6 +1462,650 @@ describe('transactionTools', () => {
       expect(homeCategory.tax).toBeCloseTo(3);
       expect(homeCategory.total).toBeCloseTo(33);
     });
+
+    describe('Smart Collapse Logic', () => {
+      describe('Scenario 1: Small Receipt (fewer than 5 items) - No Collapse', () => {
+        it('should itemize each item individually with separate tax per category', async () => {
+          // 3 items < 5, so no collapse
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Grocery Store',
+            date: '2025-10-13',
+            receipt_tax: 1.16,
+            receipt_total: 15.63, // 14.47 + 1.16
+            categories: [
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Milk', amount: 4.99 },
+                  { name: 'Bread', amount: 3.49 },
+                  { name: 'Eggs', amount: 5.99 },
+                ],
+              },
+            ],
+            receipt_subtotal: 14.47, // 4.99 + 3.49 + 5.99
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          expect(parsed.subtransactions).toHaveLength(4);
+          // Each item should be separate (dry_run returns dollars)
+          expect(parsed.subtransactions[0].memo).toBe('Milk');
+          expect(parsed.subtransactions[0].amount).toBe(4.99);
+          expect(parsed.subtransactions[1].memo).toBe('Bread');
+          expect(parsed.subtransactions[1].amount).toBe(3.49);
+          expect(parsed.subtransactions[2].memo).toBe('Eggs');
+          expect(parsed.subtransactions[2].amount).toBe(5.99);
+          // Tax separate
+          expect(parsed.subtransactions[3].memo).toBe('Tax - Groceries');
+          expect(parsed.subtransactions[3].amount).toBe(1.16);
+        });
+      });
+
+      describe('Scenario 2: Large Single-Category Receipt - Collapse Mode', () => {
+        it('should collapse items into batches of max 5', async () => {
+          // 12 items >= 5, so collapse mode
+          // Subtotal: 4.99+3.49+5.99+10.99+2.99+6.47+4.0+2.01+3.0+3.98+5.0+3.02 = 55.93
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Grocery Store',
+            date: '2025-10-13',
+            receipt_tax: 4.15,
+            receipt_total: 60.08, // 55.93 + 4.15
+            categories: [
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Milk', amount: 4.99 },
+                  { name: 'Bread', amount: 3.49 },
+                  { name: 'Eggs', amount: 5.99 },
+                  { name: 'Cheese', amount: 10.99 },
+                  { name: 'Butter', amount: 2.99 },
+                  { name: 'Yogurt', amount: 6.47 },
+                  { name: 'Apples', amount: 4.0 },
+                  { name: 'Bananas', amount: 2.01 },
+                  { name: 'OJ', amount: 3.0 },
+                  { name: 'Cereal', amount: 3.98 },
+                  { name: 'Rice', amount: 5.0 },
+                  { name: 'Pasta', amount: 3.02 },
+                ],
+              },
+            ],
+            receipt_subtotal: 55.93,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Should have 4 subtransactions: 3 collapsed batches + 1 tax
+          expect(parsed.subtransactions).toHaveLength(4);
+
+          // First batch: 5 items (dry_run returns dollars)
+          expect(parsed.subtransactions[0].memo).toContain('Milk');
+          expect(parsed.subtransactions[0].memo).toContain('Bread');
+          expect(parsed.subtransactions[0].memo).toContain('Eggs');
+          expect(parsed.subtransactions[0].memo).toContain('Cheese');
+          expect(parsed.subtransactions[0].memo).toContain('Butter');
+          expect(parsed.subtransactions[0].amount).toBe(28.45); // 4.99 + 3.49 + 5.99 + 10.99 + 2.99
+
+          // Second batch: next 5 items
+          expect(parsed.subtransactions[1].memo).toContain('Yogurt');
+          expect(parsed.subtransactions[1].memo).toContain('Apples');
+          expect(parsed.subtransactions[1].memo).toContain('Bananas');
+          expect(parsed.subtransactions[1].memo).toContain('OJ');
+          expect(parsed.subtransactions[1].memo).toContain('Cereal');
+          expect(parsed.subtransactions[1].amount).toBe(19.46); // 6.47 + 4.00 + 2.01 + 3.00 + 3.98
+
+          // Third batch: remaining 2 items
+          expect(parsed.subtransactions[2].memo).toContain('Rice');
+          expect(parsed.subtransactions[2].memo).toContain('Pasta');
+          expect(parsed.subtransactions[2].amount).toBe(8.02); // 5.00 + 3.02
+
+          // Tax separate
+          expect(parsed.subtransactions[3].memo).toBe('Tax - Groceries');
+          expect(parsed.subtransactions[3].amount).toBe(4.15);
+        });
+      });
+
+      describe('Scenario 3: Mixed Receipt with Big Ticket Item', () => {
+        it('should separate big ticket item, collapse remaining items', async () => {
+          // TV is > $50 so big ticket (own subtransaction)
+          // Remaining: 8 grocery items >= 5, so collapse
+          // Groceries: 4.99+3.49+5.99+10.99+2.99+6.47+4.0+2.01 = 40.93
+          // Subtotal: 500 + 40.93 = 540.93
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Electronics Store',
+            date: '2025-10-13',
+            receipt_tax: 43.19,
+            receipt_total: 584.12, // 540.93 + 43.19
+            categories: [
+              {
+                category_id: 'category-electronics',
+                category_name: 'Electronics',
+                items: [{ name: 'TV', amount: 500.0 }],
+              },
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Milk', amount: 4.99 },
+                  { name: 'Bread', amount: 3.49 },
+                  { name: 'Eggs', amount: 5.99 },
+                  { name: 'Cheese', amount: 10.99 },
+                  { name: 'Butter', amount: 2.99 },
+                  { name: 'Yogurt', amount: 6.47 },
+                  { name: 'Apples', amount: 4.0 },
+                  { name: 'Bananas', amount: 2.01 },
+                ],
+              },
+            ],
+            receipt_subtotal: 540.93,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Should have: 1 big ticket + 2 collapsed grocery batches + 2 tax subtransactions
+          expect(parsed.subtransactions).toHaveLength(5);
+
+          // Big ticket item first (dry_run returns dollars)
+          expect(parsed.subtransactions[0].memo).toBe('TV');
+          expect(parsed.subtransactions[0].amount).toBe(500);
+          expect(parsed.subtransactions[0].category_id).toBe('category-electronics');
+
+          // Collapsed grocery batch 1: 5 items
+          expect(parsed.subtransactions[1].memo).toContain('Milk');
+          expect(parsed.subtransactions[1].memo).toContain('Butter');
+          expect(parsed.subtransactions[1].category_id).toBe('category-groceries');
+          expect(parsed.subtransactions[1].amount).toBe(28.45); // 4.99+3.49+5.99+10.99+2.99
+
+          // Collapsed grocery batch 2: remaining 3 items
+          expect(parsed.subtransactions[2].memo).toContain('Yogurt');
+          expect(parsed.subtransactions[2].memo).toContain('Apples');
+          expect(parsed.subtransactions[2].memo).toContain('Bananas');
+          expect(parsed.subtransactions[2].category_id).toBe('category-groceries');
+          expect(parsed.subtransactions[2].amount).toBe(12.48); // 6.47+4.0+2.01
+
+          // Tax for electronics (proportional)
+          expect(parsed.subtransactions[3].memo).toBe('Tax - Electronics');
+          expect(parsed.subtransactions[3].category_id).toBe('category-electronics');
+
+          // Tax for groceries (proportional)
+          expect(parsed.subtransactions[4].memo).toBe('Tax - Groceries');
+          expect(parsed.subtransactions[4].category_id).toBe('category-groceries');
+        });
+      });
+
+      describe('Scenario 4: Receipt with Return', () => {
+        it('should separate return, collapse positive items, exclude return from tax', async () => {
+          // Return is negative, gets own subtransaction
+          // Groceries: 4.99+3.49+5.99+10.99+2.99+6.47+4.01 = 38.93 (7 items >= 5, collapse)
+          // Subtotal: -29.99 + 38.93 = 8.94
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 2.79,
+            receipt_total: 11.73, // 8.94 + 2.79
+            categories: [
+              {
+                category_id: 'category-electronics',
+                category_name: 'Electronics',
+                items: [{ name: 'RETURN: Broken headphones', amount: -29.99 }],
+              },
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Milk', amount: 4.99 },
+                  { name: 'Bread', amount: 3.49 },
+                  { name: 'Eggs', amount: 5.99 },
+                  { name: 'Cheese', amount: 10.99 },
+                  { name: 'Butter', amount: 2.99 },
+                  { name: 'Yogurt', amount: 6.47 },
+                  { name: 'Apples', amount: 4.01 },
+                ],
+              },
+            ],
+            receipt_subtotal: 8.94, // -29.99 + 38.93
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Should have: 1 return + 2 collapsed grocery batches + 1 tax (groceries only)
+          expect(parsed.subtransactions).toHaveLength(4);
+
+          // Return first (dry_run returns dollars, negative for return)
+          expect(parsed.subtransactions[0].memo).toBe('RETURN: Broken headphones');
+          expect(parsed.subtransactions[0].amount).toBe(-29.99);
+          expect(parsed.subtransactions[0].category_id).toBe('category-electronics');
+
+          // Collapsed grocery batch 1
+          expect(parsed.subtransactions[1].memo).toContain('Milk');
+          expect(parsed.subtransactions[1].category_id).toBe('category-groceries');
+
+          // Collapsed grocery batch 2
+          expect(parsed.subtransactions[2].memo).toContain('Yogurt');
+          expect(parsed.subtransactions[2].category_id).toBe('category-groceries');
+
+          // Tax only on groceries (return receives no tax)
+          expect(parsed.subtransactions[3].memo).toBe('Tax - Groceries');
+          expect(parsed.subtransactions[3].category_id).toBe('category-groceries');
+          expect(parsed.subtransactions[3].amount).toBe(2.79);
+        });
+      });
+
+      describe('Scenario 5: Receipt with Discount', () => {
+        it('should separate discount, collapse positive items, calculate tax on positive only', async () => {
+          // Discount: -5.0 (negative, gets own subtransaction)
+          // Positive: 4.99+3.49+5.99+10.99+2.99+6.47+4.0+2.01+3.0 = 43.93 (9 items >= 5, collapse)
+          // Subtotal: -5.0 + 43.93 = 38.93
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Grocery Store',
+            date: '2025-10-13',
+            receipt_tax: 3.19,
+            receipt_total: 42.12, // 38.93 + 3.19
+            categories: [
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Member discount', amount: -5.0 },
+                  { name: 'Milk', amount: 4.99 },
+                  { name: 'Bread', amount: 3.49 },
+                  { name: 'Eggs', amount: 5.99 },
+                  { name: 'Cheese', amount: 10.99 },
+                  { name: 'Butter', amount: 2.99 },
+                  { name: 'Yogurt', amount: 6.47 },
+                  { name: 'Apples', amount: 4.0 },
+                  { name: 'Bananas', amount: 2.01 },
+                  { name: 'OJ', amount: 3.0 },
+                ],
+              },
+            ],
+            receipt_subtotal: 38.93, // -5.0 + 43.93
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Should have: 1 discount + 2 collapsed batches + 1 tax
+          expect(parsed.subtransactions).toHaveLength(4);
+
+          // Discount first (negative amount, dry_run returns dollars)
+          expect(parsed.subtransactions[0].memo).toBe('Member discount');
+          expect(parsed.subtransactions[0].amount).toBe(-5); // negative
+          expect(parsed.subtransactions[0].category_id).toBe('category-groceries');
+
+          // Collapsed batch 1 (5 items)
+          expect(parsed.subtransactions[1].memo).toContain('Milk');
+          expect(parsed.subtransactions[1].memo).toContain('Butter');
+          expect(parsed.subtransactions[1].amount).toBe(28.45); // 4.99+3.49+5.99+10.99+2.99
+
+          // Collapsed batch 2 (4 items)
+          expect(parsed.subtransactions[2].memo).toContain('Yogurt');
+          expect(parsed.subtransactions[2].memo).toContain('OJ');
+          expect(parsed.subtransactions[2].amount).toBe(15.48); // 6.47+4.0+2.01+3.0
+
+          // Tax only on positive items (not reduced by discount)
+          expect(parsed.subtransactions[3].memo).toBe('Tax - Groceries');
+          expect(parsed.subtransactions[3].amount).toBe(3.19);
+        });
+      });
+
+      describe('Scenario 6: Quantity Items (Not Big Ticket)', () => {
+        it('should treat quantity items by unit price, not line total', async () => {
+          // Widget: amount=90 (line total), quantity=3, so unit price = 90/3 = $30 < $50 (not big ticket)
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 13.5,
+            receipt_total: 148.5, // 135 + 13.5
+            categories: [
+              {
+                category_id: 'category-electronics',
+                category_name: 'Electronics',
+                items: [
+                  { name: 'Widget', amount: 90.0, quantity: 3 }, // line total $90, unit price $30 < $50
+                ],
+              },
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Milk', amount: 10.0 },
+                  { name: 'Bread', amount: 10.0 },
+                  { name: 'Eggs', amount: 10.0 },
+                  { name: 'Cheese', amount: 15.0 },
+                ],
+              },
+            ],
+            receipt_subtotal: 135.0, // 90 + 45
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Total items: 1 widget entry + 4 groceries = 5 items -> collapse mode (>= 5)
+          // Widget has unit price $30 < $50, so NOT big ticket
+          // Should have: 1 collapsed electronics + 1 collapsed groceries + 2 tax
+          expect(parsed.subtransactions).toHaveLength(4);
+
+          // Widgets collapsed (single entry with quantity shown)
+          expect(parsed.subtransactions[0].memo).toContain('Widget');
+          expect(parsed.subtransactions[0].amount).toBe(90); // dry_run returns dollars
+          expect(parsed.subtransactions[0].category_id).toBe('category-electronics');
+
+          // Groceries collapsed
+          expect(parsed.subtransactions[1].memo).toContain('Milk');
+          expect(parsed.subtransactions[1].memo).toContain('Cheese');
+          expect(parsed.subtransactions[1].amount).toBe(45); // dry_run returns dollars
+          expect(parsed.subtransactions[1].category_id).toBe('category-groceries');
+
+          // Tax for electronics
+          expect(parsed.subtransactions[2].memo).toBe('Tax - Electronics');
+          expect(parsed.subtransactions[2].category_id).toBe('category-electronics');
+
+          // Tax for groceries
+          expect(parsed.subtransactions[3].memo).toBe('Tax - Groceries');
+          expect(parsed.subtransactions[3].category_id).toBe('category-groceries');
+        });
+      });
+
+      describe('Scenario 7: Tax Refund Scenario', () => {
+        it('should create a single tax refund subtransaction for negative tax', async () => {
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: -8.0,
+            receipt_total: -108.0,
+            categories: [
+              {
+                category_id: 'category-electronics',
+                category_name: 'Electronics',
+                items: [{ name: 'RETURN: Defective laptop', amount: -100.0 }],
+              },
+            ],
+            receipt_subtotal: -100.0,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Should have: 1 return + 1 tax refund
+          expect(parsed.subtransactions).toHaveLength(2);
+
+          // Return (negative amount, dry_run returns dollars)
+          expect(parsed.subtransactions[0].memo).toBe('RETURN: Defective laptop');
+          expect(parsed.subtransactions[0].amount).toBe(-100); // negative, in dollars
+          expect(parsed.subtransactions[0].category_id).toBe('category-electronics');
+
+          // Tax refund (negative amount, dry_run returns dollars)
+          expect(parsed.subtransactions[1].memo).toBe('Tax refund');
+          expect(parsed.subtransactions[1].amount).toBe(-8); // negative, in dollars
+          expect(parsed.subtransactions[1].category_id).toBe('category-electronics');
+        });
+      });
+
+      describe('Edge Cases', () => {
+        it('should handle zero tax (no tax subtransactions)', async () => {
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 0,
+            receipt_total: 30.0,
+            categories: [
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Item1', amount: 10.0 },
+                  { name: 'Item2', amount: 10.0 },
+                  { name: 'Item3', amount: 10.0 },
+                ],
+              },
+            ],
+            receipt_subtotal: 30.0,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Should have 3 itemized items, no tax
+          expect(parsed.subtransactions).toHaveLength(3);
+          expect(parsed.subtransactions.every((s: any) => !s.memo.includes('Tax'))).toBe(true);
+        });
+
+        it('should handle single category with exactly 5 items (should collapse)', async () => {
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 4.0,
+            receipt_total: 54.0,
+            categories: [
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Item1', amount: 10.0 },
+                  { name: 'Item2', amount: 10.0 },
+                  { name: 'Item3', amount: 10.0 },
+                  { name: 'Item4', amount: 10.0 },
+                  { name: 'Item5', amount: 10.0 },
+                ],
+              },
+            ],
+            receipt_subtotal: 50.0,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Should have 2 subtransactions: 1 collapsed batch + 1 tax
+          expect(parsed.subtransactions).toHaveLength(2);
+          expect(parsed.subtransactions[0].memo).toContain('Item1');
+          expect(parsed.subtransactions[0].memo).toContain('Item5');
+          expect(parsed.subtransactions[1].memo).toBe('Tax - Groceries');
+        });
+
+        it('should handle single category with exactly 4 items (should NOT collapse)', async () => {
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 4.0,
+            receipt_total: 44.0,
+            categories: [
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Item1', amount: 10.0 },
+                  { name: 'Item2', amount: 10.0 },
+                  { name: 'Item3', amount: 10.0 },
+                  { name: 'Item4', amount: 10.0 },
+                ],
+              },
+            ],
+            receipt_subtotal: 40.0,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Should have 5 subtransactions: 4 itemized + 1 tax
+          expect(parsed.subtransactions).toHaveLength(5);
+          expect(parsed.subtransactions[0].memo).toBe('Item1');
+          expect(parsed.subtransactions[1].memo).toBe('Item2');
+          expect(parsed.subtransactions[2].memo).toBe('Item3');
+          expect(parsed.subtransactions[3].memo).toBe('Item4');
+          expect(parsed.subtransactions[4].memo).toBe('Tax - Groceries');
+        });
+
+        it('should handle mixed categories with consistency rule (all collapse)', async () => {
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 10.0,
+            receipt_total: 100.0, // 90 subtotal + 10 tax
+            categories: [
+              {
+                category_id: 'category-electronics',
+                category_name: 'Electronics',
+                items: [
+                  { name: 'Item1', amount: 20.0 },
+                  { name: 'Item2', amount: 20.0 },
+                ],
+              },
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Milk', amount: 10.0 },
+                  { name: 'Bread', amount: 10.0 },
+                  { name: 'Eggs', amount: 10.0 },
+                  { name: 'Cheese', amount: 10.0 },
+                  { name: 'Butter', amount: 10.0 },
+                ],
+              },
+            ],
+            receipt_subtotal: 90.0, // 40 + 50
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Total: 7 items -> collapse mode
+          // All categories should collapse (consistency rule)
+          // Should have: 1 collapsed electronics + 1 collapsed groceries + 2 tax
+          expect(parsed.subtransactions).toHaveLength(4);
+
+          // Electronics collapsed even though it only has 2 items
+          expect(parsed.subtransactions[0].memo).toContain('Item1');
+          expect(parsed.subtransactions[0].memo).toContain('Item2');
+          expect(parsed.subtransactions[0].category_id).toBe('category-electronics');
+
+          // Groceries collapsed
+          expect(parsed.subtransactions[1].memo).toContain('Milk');
+          expect(parsed.subtransactions[1].category_id).toBe('category-groceries');
+
+          // Taxes
+          expect(parsed.subtransactions[2].memo).toBe('Tax - Electronics');
+          expect(parsed.subtransactions[3].memo).toBe('Tax - Groceries');
+        });
+
+        it('should truncate long memos at 150 chars with ellipsis', async () => {
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 5.0,
+            receipt_total: 55.0,
+            categories: [
+              {
+                category_id: 'category-groceries',
+                category_name: 'Groceries',
+                items: [
+                  { name: 'Very Long Item Name That Will Definitely Cause Truncation', amount: 10.0 },
+                  { name: 'Another Very Long Item Name To Exceed Character Limit', amount: 10.0 },
+                  { name: 'Third Very Long Item Name Here', amount: 10.0 },
+                  { name: 'Fourth Very Long Item Name', amount: 10.0 },
+                  { name: 'Fifth Very Long Item Name', amount: 10.0 },
+                ],
+              },
+            ],
+            receipt_subtotal: 50.0,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          expect(parsed.subtransactions).toHaveLength(2);
+          const collapsedMemo = parsed.subtransactions[0].memo;
+          expect(collapsedMemo.length).toBeLessThanOrEqual(153); // 150 + "..."
+          if (collapsedMemo.length > 150) {
+            expect(collapsedMemo.endsWith('...')).toBe(true);
+          }
+        });
+
+        it('should detect big ticket by unit price > $50 (not line total)', async () => {
+          const params = {
+            budget_id: 'budget-123',
+            account_id: 'account-456',
+            payee_name: 'Store',
+            date: '2025-10-13',
+            receipt_tax: 10.0,
+            receipt_total: 110.0,
+            categories: [
+              {
+                category_id: 'category-electronics',
+                category_name: 'Electronics',
+                items: [
+                  { name: 'Expensive Gadget', amount: 75.0 }, // Unit price $75 > $50 -> big ticket
+                  { name: 'Cheap Item', amount: 5.0 },
+                  { name: 'Cheap Item2', amount: 5.0 },
+                  { name: 'Cheap Item3', amount: 5.0 },
+                  { name: 'Cheap Item4', amount: 5.0 },
+                  { name: 'Cheap Item5', amount: 5.0 },
+                ],
+              },
+            ],
+            receipt_subtotal: 100.0,
+            dry_run: true,
+          } as const;
+
+          const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, params);
+          const parsed = JSON.parse(result.content[0].text);
+
+          // Big ticket separate + collapsed remaining items + tax
+          expect(parsed.subtransactions.length).toBeGreaterThanOrEqual(3);
+
+          // First should be the big ticket item (not collapsed)
+          expect(parsed.subtransactions[0].memo).toBe('Expensive Gadget');
+          expect(parsed.subtransactions[0].amount).toBe(75); // dry_run returns dollars
+
+          // Remaining 5 items should collapse
+          const collapsedSub = parsed.subtransactions[1];
+          expect(collapsedSub.memo).toContain('Cheap Item');
+          expect(collapsedSub.amount).toBe(25); // dry_run returns dollars
+        });
+      });
+    });
   });
 
   describe('UpdateTransactionSchema', () => {

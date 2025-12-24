@@ -215,6 +215,10 @@ describeIntegration('Transaction Tools Integration', () => {
       const result = await handleCreateTransactions(ynabAPI, params);
       const response = parseToolResult(result);
 
+      if (response.error) {
+        console.error('Bulk Create Failed:', JSON.stringify(response.error, null, 2));
+      }
+
       if (trackCreatedIds && Array.isArray(response.results)) {
         const createdIds = response.results
           .filter(
@@ -281,7 +285,7 @@ describeIntegration('Transaction Tools Integration', () => {
       'should detect duplicates when reusing import IDs',
       { meta: { tier: 'domain', domain: 'transactions' } },
       async () => {
-        const importId = `MCP:DUP:${randomUUID()}`;
+        const importId = `MCP:DUP:${randomUUID().slice(0, 20)}`;
         await executeBulkCreate({
           budget_id: testBudgetId,
           transactions: [
@@ -301,6 +305,10 @@ describeIntegration('Transaction Tools Integration', () => {
             }),
           ],
         });
+
+        if (!response.summary) {
+          console.error('Duplicate test response:', JSON.stringify(response, null, 2));
+        }
 
         expect(response.summary.duplicates).toBe(1);
         expect(response.results[0].status).toBe('duplicate');
@@ -797,6 +805,8 @@ describeIntegration('Transaction Tools Integration', () => {
             {
               id: 'invalid-transaction-id-12345',
               memo: 'This should fail',
+              original_account_id: testAccountId,
+              original_date: new Date().toISOString().slice(0, 10),
             },
           ],
         });

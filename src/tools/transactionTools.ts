@@ -1540,6 +1540,27 @@ export async function handleCreateReceiptSplitTransaction(
   // Apply smart collapse logic
   const subtransactions = applySmartCollapseLogic(categoryCalculations, taxMilliunits);
 
+  // Distribute tax proportionally for receipt_summary (only for positive categories)
+  if (taxMilliunits > 0) {
+    const positiveSubtotal = categoryCalculations.reduce(
+      (sum, cat) => sum + Math.max(0, cat.subtotal_milliunits),
+      0,
+    );
+    if (positiveSubtotal > 0) {
+      let remainingTax = taxMilliunits;
+      const positiveCats = categoryCalculations.filter((cat) => cat.subtotal_milliunits > 0);
+      positiveCats.forEach((cat, index) => {
+        if (index === positiveCats.length - 1) {
+          cat.tax_milliunits = remainingTax;
+        } else {
+          const share = Math.round((cat.subtotal_milliunits / positiveSubtotal) * taxMilliunits);
+          cat.tax_milliunits = share;
+          remainingTax -= share;
+        }
+      });
+    }
+  }
+
   const receiptSummary = {
     subtotal: milliunitsToAmount(subtotalMilliunits),
     tax: milliunitsToAmount(taxMilliunits),
