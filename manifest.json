@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "ynab-mcp-server",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "Model Context Protocol server for YNAB (You Need A Budget) integration. Provides 29 tools for comprehensive budget management, including delta-optimized data fetching, bulk transaction operations, advanced reconciliation with recommendations, split transaction support, and diagnostic utilities.",
   "author": {
     "name": "kdizzl"
