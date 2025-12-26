@@ -66,13 +66,28 @@ function filterByDateRange(
   const inRange: YNABTransaction[] = [];
   const outsideRange: YNABTransaction[] = [];
 
+  // Parse date parts and use Date.UTC to avoid timezone issues
+  // This prevents 'off-by-one-day' errors from timezone conversions
+  const [minYear, minMonth, minDay] = dateRange.minDate.split('-').map(Number) as [
+    number,
+    number,
+    number,
+  ];
+  const [maxYear, maxMonth, maxDay] = dateRange.maxDate.split('-').map(Number) as [
+    number,
+    number,
+    number,
+  ];
+
   // Add buffer to date range to account for bank posting delays
-  const minDateWithBuffer = new Date(dateRange.minDate);
-  minDateWithBuffer.setDate(minDateWithBuffer.getDate() - dateToleranceDays);
+  const minDateWithBuffer = new Date(
+    Date.UTC(minYear, minMonth - 1, minDay - dateToleranceDays),
+  );
   const minDateStr = minDateWithBuffer.toISOString().split('T')[0]!;
 
-  const maxDateWithBuffer = new Date(dateRange.maxDate);
-  maxDateWithBuffer.setDate(maxDateWithBuffer.getDate() + dateToleranceDays);
+  const maxDateWithBuffer = new Date(
+    Date.UTC(maxYear, maxMonth - 1, maxDay + dateToleranceDays),
+  );
   const maxDateStr = maxDateWithBuffer.toISOString().split('T')[0]!;
 
   for (const txn of ynabTransactions) {
