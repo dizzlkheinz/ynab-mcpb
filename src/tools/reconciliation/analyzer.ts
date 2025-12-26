@@ -25,6 +25,68 @@ import { generateRecommendations } from './recommendationEngine.js';
 
 // --- Helper Functions ---
 
+/**
+ * Calculate the date range from bank transactions
+ * Returns { minDate, maxDate } as ISO date strings (YYYY-MM-DD)
+ */
+function calculateDateRange(bankTransactions: BankTransaction[]): {
+  minDate: string;
+  maxDate: string;
+} | null {
+  if (bankTransactions.length === 0) {
+    return null;
+  }
+
+  const dates = bankTransactions
+    .map((t) => t.date)
+    .filter((d) => d && /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .sort();
+
+  if (dates.length === 0) {
+    return null;
+  }
+
+  return {
+    minDate: dates[0]!,
+    maxDate: dates[dates.length - 1]!,
+  };
+}
+
+/**
+ * Filter YNAB transactions to only those within the given date range
+ * Returns { inRange, outsideRange } arrays
+ *
+ * @param dateToleranceDays - Buffer to add to the date range to account for bank posting delays
+ */
+function filterByDateRange(
+  ynabTransactions: YNABTransaction[],
+  dateRange: { minDate: string; maxDate: string },
+  dateToleranceDays: number = 7,
+): { inRange: YNABTransaction[]; outsideRange: YNABTransaction[] } {
+  const inRange: YNABTransaction[] = [];
+  const outsideRange: YNABTransaction[] = [];
+
+  // Add buffer to date range to account for bank posting delays
+  const minDateWithBuffer = new Date(dateRange.minDate);
+  minDateWithBuffer.setDate(minDateWithBuffer.getDate() - dateToleranceDays);
+  const minDateStr = minDateWithBuffer.toISOString().split('T')[0]!;
+
+  const maxDateWithBuffer = new Date(dateRange.maxDate);
+  maxDateWithBuffer.setDate(maxDateWithBuffer.getDate() + dateToleranceDays);
+  const maxDateStr = maxDateWithBuffer.toISOString().split('T')[0]!;
+
+  for (const txn of ynabTransactions) {
+    // Compare dates as strings (YYYY-MM-DD format sorts correctly)
+    if (txn.date >= minDateStr && txn.date <= maxDateStr) {
+      inRange.push(txn);
+    } else {
+      outsideRange.push(txn);
+    }
+  }
+
+  return { inRange, outsideRange };
+}
+
 function mapToTransactionMatch(result: MatchResult): TransactionMatch {
   const candidates = result.candidates.map((c) => ({
     ynab_transaction: c.ynabTransaction,
@@ -97,7 +159,8 @@ function calculateBalances(
 
 function generateSummary(
   bankTransactions: BankTransaction[],
-  ynabTransactions: YNABTransaction[],
+  ynabTransactionsInRange: YNABTransaction[],
+  ynabTransactionsOutsideRange: YNABTransaction[],
   autoMatches: TransactionMatch[],
   suggestedMatches: TransactionMatch[],
   unmatchedBank: BankTransaction[],
@@ -107,6 +170,9 @@ function generateSummary(
   // Determine date range from bank transactions
   const dates = bankTransactions.map((t) => t.date).sort();
   const dateRange = dates.length > 0 ? `${dates[0]} to ${dates[dates.length - 1]}` : 'Unknown';
+
+  // Total YNAB transactions = in range + outside range
+  const totalYnabCount = ynabTransactionsInRange.length + ynabTransactionsOutsideRange.length;
 
   // Build discrepancy explanation
   let discrepancyExplanation = '';
@@ -131,7 +197,9 @@ function generateSummary(
   return {
     statement_date_range: dateRange,
     bank_transactions_count: bankTransactions.length,
-    ynab_transactions_count: ynabTransactions.length,
+    ynab_transactions_count: totalYnabCount,
+    ynab_in_range_count: ynabTransactionsInRange.length,
+    ynab_outside_range_count: ynabTransactionsOutsideRange.length,
     auto_matched: autoMatches.length,
     suggested_matches: suggestedMatches.length,
     unmatched_bank: unmatchedBank.length,
@@ -367,13 +435,30 @@ export function analyzeReconciliation(
   const csvParseWarnings = parseResult.warnings;
 
   // Step 2: Normalize YNAB transactions
-  const newYNABTransactions = normalizeYNABTransactions(ynabTransactions);
+  const allYNABTransactions = normalizeYNABTransactions(ynabTransactions);
 
-  // Step 3: Run new matching algorithm
+  // Step 2.5: Filter YNAB transactions by CSV date range
+  // Only compare transactions within the statement period (with tolerance buffer)
+  const csvDateRange = calculateDateRange(newBankTransactions);
+  let ynabInRange: YNABTransaction[];
+  let ynabOutsideRange: YNABTransaction[];
+
+  if (csvDateRange) {
+    const dateToleranceDays = config.dateToleranceDays ?? 7;
+    const filtered = filterByDateRange(allYNABTransactions, csvDateRange, dateToleranceDays);
+    ynabInRange = filtered.inRange;
+    ynabOutsideRange = filtered.outsideRange;
+  } else {
+    // No valid date range from CSV, use all transactions
+    ynabInRange = allYNABTransactions;
+    ynabOutsideRange = [];
+  }
+
+  // Step 3: Run matching algorithm ONLY on YNAB transactions within date range
   // Use normalizeConfig to convert legacy config to V2 format with defaults
   const normalizedConfig = normalizeConfig(config);
 
-  const newMatches = findMatches(newBankTransactions, newYNABTransactions, normalizedConfig);
+  const newMatches = findMatches(newBankTransactions, ynabInRange, normalizedConfig);
   const matches: TransactionMatch[] = newMatches.map(mapToTransactionMatch);
 
   // Categorize
@@ -397,25 +482,26 @@ export function analyzeReconciliation(
   );
   const unmatchedBank = unmatchedBankMatches.map((m) => m.bankTransaction);
 
-  // Find unmatched YNAB
+  // Find unmatched YNAB (only from in-range transactions)
   const matchedYnabIds = new Set<string>();
   matches.forEach((m) => {
     if (m.ynabTransaction) matchedYnabIds.add(m.ynabTransaction.id);
   });
-  const unmatchedYNAB = newYNABTransactions.filter((t) => !matchedYnabIds.has(t.id));
+  const unmatchedYNAB = ynabInRange.filter((t) => !matchedYnabIds.has(t.id));
 
-  // Step 6: Calculate balances
+  // Step 6: Calculate balances (use ALL YNAB transactions for balance calculation)
   const balances = calculateBalances(
-    newYNABTransactions,
+    allYNABTransactions,
     statementBalance,
     currency,
     accountSnapshot,
   );
 
-  // Step 7: Generate summary
+  // Step 7: Generate summary (with date range info)
   const summary = generateSummary(
     matches.map((m) => m.bankTransaction),
-    newYNABTransactions,
+    ynabInRange,
+    ynabOutsideRange,
     autoMatches,
     suggestedMatches,
     unmatchedBank,
@@ -445,6 +531,7 @@ export function analyzeReconciliation(
     suggested_matches: suggestedMatches,
     unmatched_bank: unmatchedBank,
     unmatched_ynab: unmatchedYNAB,
+    ynab_outside_date_range: ynabOutsideRange,
     balance_info: balances,
     next_steps: nextSteps,
     insights,

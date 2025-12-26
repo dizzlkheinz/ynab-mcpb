@@ -137,6 +137,20 @@ function formatTransactionAnalysisSection(
   lines.push(SECTION_DIVIDER);
 
   const summary = analysis.summary;
+
+  // Show date range context if transactions were filtered
+  const outsideRangeCount = summary.ynab_outside_range_count ?? 0;
+  if (outsideRangeCount > 0) {
+    const inRangeCount = summary.ynab_in_range_count ?? summary.ynab_transactions_count;
+    lines.push(
+      `Comparing ${summary.bank_transactions_count} bank transactions with ${inRangeCount} YNAB transactions within statement period.`,
+    );
+    lines.push(
+      `(${outsideRangeCount} YNAB transactions outside statement period - not compared)`,
+    );
+    lines.push('');
+  }
+
   lines.push(
     `- Automatically matched:  ${summary.auto_matched} of ${summary.bank_transactions_count} transactions`,
   );
@@ -147,7 +161,7 @@ function formatTransactionAnalysisSection(
   // Show unmatched bank transactions (if any)
   if (analysis.unmatched_bank.length > 0) {
     lines.push('');
-    lines.push('Unmatched bank transactions:');
+    lines.push('Missing from YNAB (bank transactions without matches):');
     const maxToShow = options.maxUnmatchedToShow ?? 5;
     const toShow = analysis.unmatched_bank.slice(0, maxToShow);
 
@@ -160,10 +174,26 @@ function formatTransactionAnalysisSection(
     }
   }
 
+  // Show unmatched YNAB transactions within date range (if any)
+  if (analysis.unmatched_ynab.length > 0) {
+    lines.push('');
+    lines.push('Missing from bank statement (YNAB transactions without matches):');
+    const maxToShow = options.maxUnmatchedToShow ?? 5;
+    const toShow = analysis.unmatched_ynab.slice(0, maxToShow);
+
+    for (const txn of toShow) {
+      lines.push(formatYnabTransactionLine(txn));
+    }
+
+    if (analysis.unmatched_ynab.length > maxToShow) {
+      lines.push(`   ... and ${analysis.unmatched_ynab.length - maxToShow} more`);
+    }
+  }
+
   // Show suggested matches (if any)
   if (analysis.suggested_matches.length > 0) {
     lines.push('');
-    lines.push('Suggested matches:');
+    lines.push('Suggested matches (review manually):');
     const maxToShow = options.maxUnmatchedToShow ?? 3;
     const toShow = analysis.suggested_matches.slice(0, maxToShow);
 
@@ -177,6 +207,15 @@ function formatTransactionAnalysisSection(
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Format a YNAB transaction line
+ */
+function formatYnabTransactionLine(txn: YNABTransaction): string {
+  const amountStr = formatAmount(txn.amount);
+  const payee = txn.payee ?? 'Unknown';
+  return `   ${txn.date} - ${payee.substring(0, 40).padEnd(40)} ${amountStr}`;
 }
 
 /**
