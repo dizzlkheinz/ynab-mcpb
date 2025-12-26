@@ -145,9 +145,7 @@ function formatTransactionAnalysisSection(
     lines.push(
       `Comparing ${summary.bank_transactions_count} bank transactions with ${inRangeCount} YNAB transactions within statement period.`,
     );
-    lines.push(
-      `(${outsideRangeCount} YNAB transactions outside statement period - not compared)`,
-    );
+    lines.push(`(${outsideRangeCount} YNAB transactions outside statement period - not compared)`);
     lines.push('');
   }
 

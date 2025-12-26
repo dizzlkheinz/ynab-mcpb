@@ -115,7 +115,8 @@ const convertSummary = (analysis: ReconciliationAnalysis) => ({
   statement_date_range: analysis.summary.statement_date_range,
   bank_transactions_count: analysis.summary.bank_transactions_count,
   ynab_transactions_count: analysis.summary.ynab_transactions_count,
-  ynab_in_range_count: analysis.summary.ynab_in_range_count ?? analysis.summary.ynab_transactions_count,
+  ynab_in_range_count:
+    analysis.summary.ynab_in_range_count ?? analysis.summary.ynab_transactions_count,
   ynab_outside_range_count: analysis.summary.ynab_outside_range_count ?? 0,
   auto_matched: analysis.summary.auto_matched,
   suggested_matches: analysis.summary.suggested_matches,
