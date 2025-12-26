@@ -2,9 +2,7 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
 import { SaveTransaction } from 'ynab/dist/models/SaveTransaction.js';
 import { SaveSubTransaction } from 'ynab/dist/models/SaveSubTransaction.js';
-import type { SaveTransactionsResponseData } from 'ynab/dist/models/SaveTransactionsResponseData.js';
 import { z } from 'zod/v4';
-import { createHash } from 'crypto';
 import { ValidationError, withToolErrorHandling } from '../types/index.js';
 import type { ToolFactory } from '../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from './adapters.js';
@@ -19,707 +17,53 @@ import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
 import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from './deltaSupport.js';
 import { handleExportTransactions, ExportTransactionsSchema } from './exportTransactions.js';
 
-/**
- * Utility function to ensure transaction is not null/undefined
- */
-function ensureTransaction<T>(transaction: T | undefined, errorMessage: string): T {
-  if (!transaction) {
-    throw new Error(errorMessage);
-  }
-  return transaction;
-}
-
-const toMonthKey = (date: string): string => `${date.slice(0, 7)}-01`;
-
-interface CategorySource {
-  category_id?: string | null;
-  subtransactions?: { category_id?: string | null }[] | null | undefined;
-}
-
-function appendCategoryIds(source: CategorySource | undefined, target: Set<string>): void {
-  if (!source) {
-    return;
-  }
-  if (source.category_id) {
-    target.add(source.category_id);
-  }
-  if (Array.isArray(source.subtransactions)) {
-    for (const sub of source.subtransactions) {
-      if (sub?.category_id) {
-        target.add(sub.category_id);
-      }
-    }
-  }
-}
-
-function collectCategoryIdsFromSources(...sources: (CategorySource | undefined)[]): Set<string> {
-  const result = new Set<string>();
-  for (const source of sources) {
-    appendCategoryIds(source, result);
-  }
-  return result;
-}
-
-function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
-  if (a.size !== b.size) {
-    return false;
-  }
-  for (const value of a) {
-    if (!b.has(value)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-interface TransactionCacheInvalidationOptions {
-  affectedCategoryIds?: Set<string>;
-  invalidateAllCategories?: boolean;
-  accountTotalsChanged?: boolean;
-  invalidateMonths?: boolean;
-}
-
-function invalidateTransactionCaches(
-  deltaCache: DeltaCache,
-  knowledgeStore: ServerKnowledgeStore,
-  budgetId: string,
-  serverKnowledge: number | undefined,
-  affectedAccountIds: Set<string>,
-  affectedMonths: Set<string>,
-  options: TransactionCacheInvalidationOptions = {},
-): void {
-  deltaCache.invalidate(budgetId, 'transactions');
-  cacheManager.delete(CacheManager.generateKey('transactions', 'list', budgetId));
-
-  for (const accountId of affectedAccountIds) {
-    const accountPrefix = CacheManager.generateKey('transactions', 'account', budgetId, accountId);
-    cacheManager.deleteByPrefix(accountPrefix);
-  }
-
-  const invalidateAccountsList = options.accountTotalsChanged ?? true;
-  if (invalidateAccountsList) {
-    cacheManager.delete(CacheManager.generateKey('accounts', 'list', budgetId));
-  }
-  for (const accountId of affectedAccountIds) {
-    cacheManager.delete(CacheManager.generateKey('account', 'get', budgetId, accountId));
-  }
-
-  const affectedCategoryIds = options.affectedCategoryIds ?? new Set<string>();
-  const shouldInvalidateCategories =
-    options.invalidateAllCategories || affectedCategoryIds.size > 0;
-  if (shouldInvalidateCategories) {
-    cacheManager.delete(CacheManager.generateKey('categories', 'list', budgetId));
-    for (const categoryId of affectedCategoryIds) {
-      cacheManager.delete(CacheManager.generateKey('category', 'get', budgetId, categoryId));
-    }
-  }
-
-  const shouldInvalidateMonths = options.invalidateMonths ?? affectedMonths.size > 0;
-  if (shouldInvalidateMonths) {
-    cacheManager.delete(CacheManager.generateKey('months', 'list', budgetId));
-    deltaCache.invalidate(budgetId, 'months');
-    for (const month of affectedMonths) {
-      cacheManager.delete(CacheManager.generateKey('month', 'get', budgetId, month));
-    }
-  }
-
-  if (serverKnowledge !== undefined) {
-    const transactionCacheKey = CacheManager.generateKey('transactions', 'list', budgetId);
-    knowledgeStore.update(transactionCacheKey, serverKnowledge);
-    if (invalidateAccountsList) {
-      const accountsCacheKey = CacheManager.generateKey('accounts', 'list', budgetId);
-      knowledgeStore.update(accountsCacheKey, serverKnowledge);
-    }
-    if (shouldInvalidateMonths && affectedMonths.size > 0) {
-      const monthsCacheKey = CacheManager.generateKey('months', 'list', budgetId);
-      knowledgeStore.update(monthsCacheKey, serverKnowledge);
-    }
-  }
-}
-
-/**
- * Schema for ynab:list_transactions tool parameters
- */
-export const ListTransactionsSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    account_id: z.string().optional(),
-    category_id: z.string().optional(),
-    since_date: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
-      .optional(),
-    type: z.enum(['uncategorized', 'unapproved']).optional(),
-  })
-  .strict();
-
-export type ListTransactionsParams = z.infer<typeof ListTransactionsSchema>;
-
-/**
- * Schema for ynab:get_transaction tool parameters
- */
-export const GetTransactionSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    transaction_id: z.string().min(1, 'Transaction ID is required'),
-  })
-  .strict();
-
-export type GetTransactionParams = z.infer<typeof GetTransactionSchema>;
-
-/**
- * Schema for ynab:create_transaction tool parameters
- */
-export const CreateTransactionSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    account_id: z.string().min(1, 'Account ID is required'),
-    amount: z.number().int('Amount must be an integer in milliunits'),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)'),
-    payee_name: z.string().optional(),
-    payee_id: z.string().optional(),
-    category_id: z.string().optional(),
-    memo: z.string().optional(),
-    cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
-    approved: z.boolean().optional(),
-    flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional(),
-    import_id: z.string().min(1, 'Import ID cannot be empty').optional(),
-    dry_run: z.boolean().optional(),
-    subtransactions: z
-      .array(
-        z
-          .object({
-            amount: z.number().int('Subtransaction amount must be an integer in milliunits'),
-            payee_name: z.string().optional(),
-            payee_id: z.string().optional(),
-            category_id: z.string().optional(),
-            memo: z.string().optional(),
-          })
-          .strict(),
-      )
-      .min(1, 'At least one subtransaction is required when provided')
-      .optional(),
-  })
-  .strict()
-  .superRefine((data, ctx) => {
-    if (data.subtransactions && data.subtransactions.length > 0) {
-      const total = data.subtransactions.reduce((sum, sub) => sum + sub.amount, 0);
-      if (total !== data.amount) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Amount must equal the sum of subtransaction amounts',
-          path: ['amount'],
-        });
-      }
-    }
-  });
-
-export type CreateTransactionParams = z.infer<typeof CreateTransactionSchema>;
-
-const BulkTransactionInputSchemaBase = CreateTransactionSchema.pick({
-  account_id: true,
-  amount: true,
-  date: true,
-  payee_name: true,
-  payee_id: true,
-  category_id: true,
-  memo: true,
-  cleared: true,
-  approved: true,
-  flag_color: true,
-  import_id: true,
-});
-
-type BulkTransactionInput = Omit<
+// Import schemas and types from transactionSchemas.ts
+import {
+  ListTransactionsSchema,
+  ListTransactionsParams,
+  GetTransactionSchema,
+  GetTransactionParams,
+  CreateTransactionSchema,
   CreateTransactionParams,
-  'budget_id' | 'dry_run' | 'subtransactions'
->;
+  CreateTransactionsSchema,
+  CreateTransactionsParams,
+  CreateReceiptSplitTransactionSchema,
+  CreateReceiptSplitTransactionParams,
+  UpdateTransactionSchema,
+  UpdateTransactionParams,
+  UpdateTransactionsSchema,
+  UpdateTransactionsParams,
+  BulkUpdateTransactionInput,
+  DeleteTransactionSchema,
+  DeleteTransactionParams,
+  BulkCreateResponse,
+  BulkUpdateResult,
+  BulkUpdateResponse,
+  ReceiptCategoryCalculation,
+  SubtransactionInput,
+} from './transactionSchemas.js';
 
-// Schema for bulk transaction creation - subtransactions are not supported
-// The .strict() modifier automatically rejects any fields not in the schema
-const BulkTransactionInputSchema = BulkTransactionInputSchemaBase.strict();
-
-export const CreateTransactionsSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    transactions: z
-      .array(BulkTransactionInputSchema)
-      .min(1, 'At least one transaction is required')
-      .max(100, 'A maximum of 100 transactions may be created at once'),
-    dry_run: z.boolean().optional(),
-  })
-  .strict();
-
-export type CreateTransactionsParams = z.infer<typeof CreateTransactionsSchema>;
-
-export interface BulkTransactionResult {
-  request_index: number;
-  status: 'created' | 'duplicate' | 'failed';
-  transaction_id?: string | undefined;
-  correlation_key: string;
-  error_code?: string | undefined;
-  error?: string | undefined;
-}
-
-export interface BulkCreateResponse {
-  success: boolean;
-  server_knowledge?: number;
-  summary: {
-    total_requested: number;
-    created: number;
-    duplicates: number;
-    failed: number;
-  };
-  results: BulkTransactionResult[];
-  transactions?: ynab.TransactionDetail[];
-  duplicate_import_ids?: string[];
-  message?: string;
-  mode?: 'full' | 'summary' | 'ids_only';
-}
-
-const FULL_RESPONSE_THRESHOLD = 64 * 1024;
-const SUMMARY_RESPONSE_THRESHOLD = 96 * 1024;
-const MAX_RESPONSE_BYTES = 100 * 1024;
-
-export function generateCorrelationKey(transaction: {
-  account_id?: string;
-  date?: string;
-  amount?: number;
-  payee_id?: string | null;
-  payee_name?: string | null;
-  category_id?: string | null;
-  memo?: string | null;
-  cleared?: ynab.TransactionClearedStatus;
-  approved?: boolean;
-  flag_color?: ynab.TransactionFlagColor | null;
-  import_id?: string | null;
-}): string {
-  if (transaction.import_id) {
-    return transaction.import_id;
-  }
-
-  const segments = [
-    `account:${transaction.account_id ?? ''}`,
-    `date:${transaction.date ?? ''}`,
-    `amount:${transaction.amount ?? 0}`,
-    `payee:${transaction.payee_id ?? transaction.payee_name ?? ''}`,
-    `category:${transaction.category_id ?? ''}`,
-    `memo:${transaction.memo ?? ''}`,
-    `cleared:${transaction.cleared ?? ''}`,
-    `approved:${transaction.approved ?? false}`,
-    `flag:${transaction.flag_color ?? ''}`,
-  ];
-
-  const normalized = segments.join('|');
-  const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
-  return `hash:${hash}`;
-}
-
-type CorrelationPayload = Parameters<typeof generateCorrelationKey>[0];
-
-interface CorrelationPayloadInput {
-  account_id?: string | undefined;
-  date?: string | undefined;
-  amount?: number | undefined;
-  payee_id?: string | null | undefined;
-  payee_name?: string | null | undefined;
-  category_id?: string | null | undefined;
-  memo?: string | null | undefined;
-  cleared?: ynab.TransactionClearedStatus | undefined;
-  approved?: boolean | undefined;
-  flag_color?: ynab.TransactionFlagColor | null | undefined;
-  import_id?: string | null | undefined;
-}
-
-export function toCorrelationPayload(transaction: CorrelationPayloadInput): CorrelationPayload {
-  const payload: CorrelationPayload = {};
-  if (transaction.account_id !== undefined) {
-    payload.account_id = transaction.account_id;
-  }
-  if (transaction.date !== undefined) {
-    payload.date = transaction.date;
-  }
-  if (transaction.amount !== undefined) {
-    payload.amount = transaction.amount;
-  }
-  if (transaction.cleared !== undefined) {
-    payload.cleared = transaction.cleared;
-  }
-  if (transaction.approved !== undefined) {
-    payload.approved = transaction.approved;
-  }
-  if (transaction.flag_color !== undefined) {
-    payload.flag_color = transaction.flag_color;
-  }
-  payload.payee_id = transaction.payee_id ?? null;
-  payload.payee_name = transaction.payee_name ?? null;
-  payload.category_id = transaction.category_id ?? null;
-  payload.memo = transaction.memo ?? null;
-  payload.import_id = transaction.import_id ?? null;
-  return payload;
-}
-
-export function correlateResults(
-  requests: BulkTransactionInput[],
-  responseData: SaveTransactionsResponseData,
-  duplicateImportIds: Set<string>,
-): BulkTransactionResult[] {
-  const createdByImportId = new Map<string, string[]>();
-  const createdByHash = new Map<string, string[]>();
-  const responseTransactions = responseData.transactions ?? [];
-
-  const register = (map: Map<string, string[]>, key: string, transactionId: string): void => {
-    const existing = map.get(key);
-    if (existing) {
-      existing.push(transactionId);
-      return;
-    }
-    map.set(key, [transactionId]);
-  };
-
-  for (const transaction of responseTransactions) {
-    if (!transaction.id) {
-      continue;
-    }
-    const key = generateCorrelationKey(transaction);
-    if (key.startsWith('hash:')) {
-      register(createdByHash, key, transaction.id);
-    } else {
-      register(createdByImportId, key, transaction.id);
-    }
-  }
-
-  const popId = (map: Map<string, string[]>, key: string): string | undefined => {
-    const bucket = map.get(key);
-    if (!bucket || bucket.length === 0) {
-      return undefined;
-    }
-    const [transactionId] = bucket.splice(0, 1);
-    if (bucket.length === 0) {
-      map.delete(key);
-    }
-    return transactionId;
-  };
-
-  const correlatedResults: BulkTransactionResult[] = [];
-
-  for (const [index, transaction] of requests.entries()) {
-    const normalizedRequest = toCorrelationPayload(transaction);
-    const correlationKey = generateCorrelationKey(normalizedRequest);
-
-    if (transaction.import_id && duplicateImportIds.has(transaction.import_id)) {
-      correlatedResults.push({
-        request_index: index,
-        status: 'duplicate',
-        correlation_key: correlationKey,
-      });
-      continue;
-    }
-
-    let transactionId: string | undefined;
-    if (correlationKey.startsWith('hash:')) {
-      transactionId = popId(createdByHash, correlationKey);
-    } else {
-      transactionId = popId(createdByImportId, correlationKey);
-    }
-
-    if (!transactionId && !correlationKey.startsWith('hash:')) {
-      // Attempt hash-based fallback if import_id was not matched.
-      const hashKey = generateCorrelationKey(
-        toCorrelationPayload({ ...transaction, import_id: undefined }),
-      );
-      transactionId = popId(createdByHash, hashKey);
-    }
-
-    if (transactionId) {
-      const successResult: BulkTransactionResult = {
-        request_index: index,
-        status: 'created',
-        correlation_key: correlationKey,
-      };
-      successResult.transaction_id = transactionId;
-      correlatedResults.push(successResult);
-      continue;
-    }
-
-    globalRequestLogger.logError(
-      'ynab:create_transactions',
-      'correlate_results',
-      {
-        request_index: index,
-        correlation_key: correlationKey,
-        request: {
-          account_id: transaction.account_id,
-          date: transaction.date,
-          amount: transaction.amount,
-          import_id: transaction.import_id,
-        },
-      },
-      'correlation_failed',
-    );
-
-    correlatedResults.push({
-      request_index: index,
-      status: 'failed',
-      correlation_key: correlationKey,
-      error_code: 'correlation_failed',
-      error: 'Unable to correlate request transaction with YNAB response',
-    });
-  }
-
-  return correlatedResults;
-}
-
-function estimatePayloadSize(payload: BulkCreateResponse | BulkUpdateResponse): number {
-  return Buffer.byteLength(JSON.stringify(payload), 'utf8');
-}
-
-function finalizeResponse(response: BulkCreateResponse): BulkCreateResponse {
-  const appendMessage = (message: string | undefined, addition: string): string => {
-    if (!message) {
-      return addition;
-    }
-    if (message.includes(addition)) {
-      return message;
-    }
-    return `${message} ${addition}`;
-  };
-
-  const fullSize = estimatePayloadSize({ ...response, mode: 'full' });
-  if (fullSize <= FULL_RESPONSE_THRESHOLD) {
-    return { ...response, mode: 'full' };
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { transactions, ...summaryResponse } = response;
-  const summaryPayload: BulkCreateResponse = {
-    ...summaryResponse,
-    message: appendMessage(
-      response.message,
-      'Response downgraded to summary to stay under size limits.',
-    ),
-    mode: 'summary',
-  };
-
-  if (estimatePayloadSize(summaryPayload) <= SUMMARY_RESPONSE_THRESHOLD) {
-    return summaryPayload;
-  }
-
-  const idsOnlyPayload: BulkCreateResponse = {
-    ...summaryPayload,
-    results: summaryResponse.results.map((result) => ({
-      request_index: result.request_index,
-      status: result.status,
-      transaction_id: result.transaction_id,
-      correlation_key: result.correlation_key,
-      error: result.error,
-    })),
-    message: appendMessage(
-      summaryResponse.message,
-      'Response downgraded to ids_only to meet 100KB limit.',
-    ),
-    mode: 'ids_only',
-  };
-
-  if (estimatePayloadSize(idsOnlyPayload) <= MAX_RESPONSE_BYTES) {
-    return idsOnlyPayload;
-  }
-
-  throw new ValidationError(
-    'RESPONSE_TOO_LARGE: Unable to format bulk create response within 100KB limit',
-    `Batch size: ${response.summary.total_requested} transactions`,
-    ['Reduce the batch size and retry', 'Consider splitting into multiple smaller batches'],
-  );
-}
-
-const ReceiptSplitItemSchema = z
-  .object({
-    name: z.string().min(1, 'Item name is required'),
-    amount: z.number().finite('Item amount must be a finite number'),
-    quantity: z
-      .number()
-      .finite('Quantity must be a finite number')
-      .positive('Quantity must be greater than zero')
-      .optional(),
-    memo: z.string().optional(),
-  })
-  .strict();
-
-const ReceiptSplitCategorySchema = z
-  .object({
-    category_id: z.string().min(1, 'Category ID is required'),
-    category_name: z.string().optional(),
-    items: z.array(ReceiptSplitItemSchema).min(1, 'Each category must include at least one item'),
-  })
-  .strict();
-
-export const CreateReceiptSplitTransactionSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    account_id: z.string().min(1, 'Account ID is required'),
-    payee_name: z.string().min(1, 'Payee name is required'),
-    date: z
-      .string()
-      .regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
-      .optional(),
-    memo: z.string().optional(),
-    receipt_subtotal: z
-      .number()
-      .finite('Receipt subtotal must be a finite number')
-      .refine((value) => value >= 0, 'Receipt subtotal must be zero or greater')
-      .optional(),
-    receipt_tax: z.number().finite('Receipt tax must be a finite number'),
-    receipt_total: z
-      .number()
-      .finite('Receipt total must be a finite number')
-      .refine((value) => value > 0, 'Receipt total must be greater than zero'),
-    categories: z
-      .array(ReceiptSplitCategorySchema)
-      .min(1, 'At least one categorized group is required to create a split transaction'),
-    cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
-    approved: z.boolean().optional(),
-    flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional(),
-    dry_run: z.boolean().optional(),
-  })
-  .strict()
-  .superRefine((data, ctx) => {
-    const itemsSubtotal = data.categories
-      .flatMap((category) => category.items)
-      .reduce((sum, item) => sum + item.amount, 0);
-
-    if (data.receipt_subtotal !== undefined) {
-      const delta = Math.abs(data.receipt_subtotal - itemsSubtotal);
-      if (delta > 0.01) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Receipt subtotal (${data.receipt_subtotal.toFixed(2)}) does not match categorized items total (${itemsSubtotal.toFixed(2)})`,
-          path: ['receipt_subtotal'],
-        });
-      }
-    }
-
-    const expectedTotal = itemsSubtotal + data.receipt_tax;
-    const deltaTotal = Math.abs(expectedTotal - data.receipt_total);
-    if (deltaTotal > 0.01) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Receipt total (${data.receipt_total.toFixed(2)}) does not match subtotal plus tax (${expectedTotal.toFixed(2)})`,
-        path: ['receipt_total'],
-      });
-    }
-  });
-
-export type CreateReceiptSplitTransactionParams = z.infer<
-  typeof CreateReceiptSplitTransactionSchema
->;
+// Import utility functions from transactionUtils.ts
+import {
+  ensureTransaction,
+  appendCategoryIds,
+  collectCategoryIdsFromSources,
+  setsEqual,
+  invalidateTransactionCaches,
+  correlateResults,
+  finalizeResponse,
+  finalizeBulkUpdateResponse,
+  handleTransactionError,
+  toMonthKey,
+} from './transactionUtils.js';
 
 /**
- * Schema for ynab:update_transaction tool parameters
+ * Transaction Tool Handlers
+ * 
+ * All schemas, types, and utility functions have been extracted to:
+ * - transactionSchemas.ts - Zod schemas and TypeScript types
+ * - transactionUtils.ts - Utility functions and helpers
  */
-export const UpdateTransactionSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    transaction_id: z.string().min(1, 'Transaction ID is required'),
-    account_id: z.string().optional(),
-    amount: z.number().int('Amount must be an integer in milliunits').optional(),
-    date: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
-      .optional(),
-    payee_name: z.string().optional(),
-    payee_id: z.string().optional(),
-    category_id: z.string().optional(),
-    memo: z.string().optional(),
-    cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
-    approved: z.boolean().optional(),
-    flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional(),
-    dry_run: z.boolean().optional(),
-  })
-  .strict();
-
-export type UpdateTransactionParams = z.infer<typeof UpdateTransactionSchema>;
-
-/**
- * Schema for bulk transaction updates - each item in the array
- * Note: account_id is intentionally excluded as account moves are not supported in bulk updates
- */
-const BulkUpdateTransactionInputSchema = z
-  .object({
-    id: z.string().min(1, 'Transaction ID is required'),
-    amount: z.number().int('Amount must be an integer in milliunits').optional(),
-    date: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
-      .optional(),
-    payee_name: z.string().optional(),
-    payee_id: z.string().optional(),
-    category_id: z.string().optional(),
-    memo: z.string().optional(),
-    cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
-    approved: z.boolean().optional(),
-    flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional(),
-    // Metadata fields for cache invalidation
-    original_account_id: z.string().optional(),
-    original_date: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)')
-      .optional(),
-  })
-  .strict();
-
-export type BulkUpdateTransactionInput = z.infer<typeof BulkUpdateTransactionInputSchema>;
-
-/**
- * Schema for ynab:update_transactions tool parameters
- */
-export const UpdateTransactionsSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    transactions: z
-      .array(BulkUpdateTransactionInputSchema)
-      .min(1, 'At least one transaction is required')
-      .max(100, 'A maximum of 100 transactions may be updated at once'),
-    dry_run: z.boolean().optional(),
-  })
-  .strict();
-
-export type UpdateTransactionsParams = z.infer<typeof UpdateTransactionsSchema>;
-
-export interface BulkUpdateResult {
-  request_index: number;
-  status: 'updated' | 'failed';
-  transaction_id: string;
-  correlation_key: string;
-  error_code?: string;
-  error?: string;
-}
-
-export interface BulkUpdateResponse {
-  success: boolean;
-  server_knowledge?: number;
-  summary: {
-    total_requested: number;
-    updated: number;
-    failed: number;
-  };
-  results: BulkUpdateResult[];
-  transactions?: ynab.TransactionDetail[];
-  message?: string;
-  mode?: 'full' | 'summary' | 'ids_only';
-}
-
-/**
- * Schema for ynab:delete_transaction tool parameters
- */
-export const DeleteTransactionSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    transaction_id: z.string().min(1, 'Transaction ID is required'),
-    dry_run: z.boolean().optional(),
-  })
-  .strict();
-
-export type DeleteTransactionParams = z.infer<typeof DeleteTransactionSchema>;
 
 /**
  * Handles the ynab:list_transactions tool call
@@ -1089,27 +433,6 @@ export async function handleCreateTransaction(
   } catch (error) {
     return handleTransactionError(error, 'Failed to create transaction');
   }
-}
-
-interface ReceiptCategoryCalculation {
-  category_id: string;
-  category_name: string | undefined;
-  subtotal_milliunits: number;
-  tax_milliunits: number;
-  items: {
-    name: string;
-    amount_milliunits: number;
-    quantity: number | undefined;
-    memo: string | undefined;
-  }[];
-}
-
-interface SubtransactionInput {
-  amount: number;
-  payee_name?: string;
-  payee_id?: string;
-  category_id?: string;
-  memo?: string;
 }
 
 /**
@@ -2332,75 +1655,6 @@ async function resolveMetadata(
 }
 
 /**
- * Finalizes bulk update response based on size constraints
- */
-function finalizeBulkUpdateResponse(response: BulkUpdateResponse): BulkUpdateResponse {
-  const appendMessage = (message: string | undefined, addition: string): string => {
-    if (!message) {
-      return addition;
-    }
-    if (message.includes(addition)) {
-      return message;
-    }
-    return `${message} ${addition}`;
-  };
-
-  const fullSize = estimatePayloadSize(response);
-  if (fullSize <= FULL_RESPONSE_THRESHOLD) {
-    return { ...response, mode: 'full' };
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { transactions, ...summaryResponse } = response;
-  const summaryPayload: BulkUpdateResponse = {
-    ...summaryResponse,
-    message: appendMessage(
-      response.message,
-      'Response downgraded to summary to stay under size limits.',
-    ),
-    mode: 'summary',
-  };
-
-  if (estimatePayloadSize(summaryPayload) <= SUMMARY_RESPONSE_THRESHOLD) {
-    return summaryPayload;
-  }
-
-  const idsOnlyPayload: BulkUpdateResponse = {
-    ...summaryPayload,
-    results: summaryResponse.results.map((result) => {
-      const simplified: BulkUpdateResult = {
-        request_index: result.request_index,
-        status: result.status,
-        transaction_id: result.transaction_id,
-        correlation_key: result.correlation_key,
-      };
-      if (result.error) {
-        simplified.error = result.error;
-      }
-      if (result.error_code) {
-        simplified.error_code = result.error_code;
-      }
-      return simplified;
-    }),
-    message: appendMessage(
-      summaryResponse.message,
-      'Response downgraded to ids_only to meet 100KB limit.',
-    ),
-    mode: 'ids_only',
-  };
-
-  if (estimatePayloadSize(idsOnlyPayload) <= MAX_RESPONSE_BYTES) {
-    return idsOnlyPayload;
-  }
-
-  throw new ValidationError(
-    'RESPONSE_TOO_LARGE: Unable to format bulk update response within 100KB limit',
-    `Batch size: ${response.summary.total_requested} transactions`,
-    ['Reduce the batch size and retry', 'Consider splitting into multiple smaller batches'],
-  );
-}
-
-/**
  * Handles the ynab:update_transactions tool call
  * Updates multiple transactions in a single batch operation
  */
@@ -2825,40 +2079,6 @@ export async function handleUpdateTransactions(
 }
 
 /**
- * Handles errors from transaction-related API calls
- */
-function handleTransactionError(error: unknown, defaultMessage: string): CallToolResult {
-  let errorMessage = defaultMessage;
-
-  if (error instanceof Error) {
-    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-      errorMessage = 'Invalid or expired YNAB access token';
-    } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
-      errorMessage = 'Insufficient permissions to access YNAB data';
-    } else if (error.message.includes('404') || error.message.includes('Not Found')) {
-      errorMessage = 'Budget, account, category, or transaction not found';
-    } else if (error.message.includes('429') || error.message.includes('Too Many Requests')) {
-      errorMessage = 'Rate limit exceeded. Please try again later';
-    } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
-      errorMessage = 'YNAB service is currently unavailable';
-    }
-  }
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: responseFormatter.format({
-          error: {
-            message: errorMessage,
-          },
-        }),
-      },
-    ],
-  };
-}
-
-/**
  * Registers transaction-domain tools with the provided registry.
  */
 export const registerTransactionTools: ToolFactory = (registry, context) => {
@@ -2993,3 +2213,62 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
     },
   });
 };
+
+// ============================================================================
+// Re-exports for backward compatibility
+// ============================================================================
+
+/**
+ * Re-export schemas and types from transactionSchemas.ts
+ * These exports maintain backward compatibility for code that imports directly from transactionTools.ts
+ */
+export {
+  ListTransactionsSchema,
+  type ListTransactionsParams,
+  GetTransactionSchema,
+  type GetTransactionParams,
+  CreateTransactionSchema,
+  type CreateTransactionParams,
+  CreateTransactionsSchema,
+  type CreateTransactionsParams,
+  CreateReceiptSplitTransactionSchema,
+  type CreateReceiptSplitTransactionParams,
+  UpdateTransactionSchema,
+  type UpdateTransactionParams,
+  UpdateTransactionsSchema,
+  type UpdateTransactionsParams,
+  type BulkUpdateTransactionInput,
+  DeleteTransactionSchema,
+  type DeleteTransactionParams,
+  type BulkTransactionResult,
+  type BulkCreateResponse,
+  type BulkUpdateResult,
+  type BulkUpdateResponse,
+  type CorrelationPayload,
+  type CorrelationPayloadInput,
+  type CategorySource,
+  type TransactionCacheInvalidationOptions,
+  type ReceiptCategoryCalculation,
+  type SubtransactionInput,
+  type BulkTransactionInput,
+} from './transactionSchemas.js';
+
+/**
+ * Re-export utility functions from transactionUtils.ts
+ * These exports maintain backward compatibility for code that imports directly from transactionTools.ts
+ */
+export {
+  generateCorrelationKey,
+  toCorrelationPayload,
+  correlateResults,
+  estimatePayloadSize,
+  finalizeResponse,
+  finalizeBulkUpdateResponse,
+  handleTransactionError,
+  toMonthKey,
+  ensureTransaction,
+  appendCategoryIds,
+  collectCategoryIdsFromSources,
+  setsEqual,
+  invalidateTransactionCaches,
+} from './transactionUtils.js';
