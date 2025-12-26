@@ -96,6 +96,8 @@ function filterByDateRange(
   const [maxYear, maxMonth, maxDay] = maxParts as [number, number, number];
 
   // Add buffer to date range to account for bank posting delays
+  // Note: Date.UTC automatically handles month rollover if day goes negative
+  // (e.g., day 3 - 7 days = -4 correctly rolls back to previous month)
   const minDateWithBuffer = new Date(Date.UTC(minYear, minMonth - 1, minDay - dateToleranceDays));
   const minDateStr = minDateWithBuffer.toISOString().split('T')[0]!;
 

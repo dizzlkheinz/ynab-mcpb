@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.4] - 2025-12-26
+
+### Fixed
+
+- **Reconciliation Date Range Filtering** - Fix bug where transactions outside the bank statement period were incorrectly flagged as "missing from bank"
+  - Now filters YNAB transactions to statement period ± 7 days tolerance before matching
+  - New summary fields: `ynab_in_range_count`, `ynab_outside_range_count`
+  - Transactions outside the date range are reported separately in `ynab_outside_date_range`
+  - Uses `Date.UTC()` for timezone-safe date calculations (prevents off-by-one-day errors)
+
+### Changed
+
+- **Code Organization** - Refactored `transactionTools.ts` for better maintainability
+  - Extracted Zod schemas to `transactionSchemas.ts` (453 lines)
+  - Extracted utility functions to `transactionUtils.ts` (536 lines)
+  - Main file reduced from 2,995 to 2,274 lines (24% reduction)
+
 ## [0.18.3] - 2025-12-24
 
 ### Fixed
