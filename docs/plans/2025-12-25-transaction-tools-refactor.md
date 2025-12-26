@@ -4,7 +4,15 @@
 
 **Goal:** Split the 2,995-line `transactionTools.ts` into 3 focused files for better maintainability.
 
+**Status:** ✅ Completed (2025-12-25)
+
 **Architecture:** Extract Zod schemas/types to `transactionSchemas.ts`, cache/correlation utilities to `transactionUtils.ts`, keep all handlers in `transactionTools.ts`. No circular dependencies since handlers stay together.
+
+**Outcome:**
+- transactionTools.ts: 2,274 lines (24% reduction from original 2,995 lines)
+- transactionSchemas.ts: 453 lines
+- transactionUtils.ts: 536 lines
+- Total: 3,263 lines (9% overhead from imports/exports)
 
 **Tech Stack:** TypeScript, Zod v4, YNAB API types, Vitest
 
@@ -340,12 +348,16 @@ export interface SubtransactionInput {
 Run: `npm run type-check`
 Expected: No errors related to transactionSchemas.ts
 
+✅ **Completed**
+
 **Step 3: Commit**
 
 ```bash
 git add src/tools/transactionSchemas.ts
 git commit -m "refactor: extract transaction schemas to dedicated file"
 ```
+
+✅ **Completed** (Commit: f24e28c)
 
 ---
 
@@ -672,12 +684,16 @@ export function handleTransactionError(error: unknown, defaultMessage: string): 
 Run: `npm run type-check`
 Expected: No errors
 
+✅ **Completed**
+
 **Step 3: Commit**
 
 ```bash
 git add src/tools/transactionUtils.ts
 git commit -m "refactor: extract transaction utilities to dedicated file"
 ```
+
+✅ **Completed** (Commit: bbc0d76)
 
 ---
 
@@ -801,6 +817,8 @@ git add src/tools/transactionTools.ts
 git commit -m "refactor: update transactionTools to use extracted modules"
 ```
 
+✅ **Completed** (Commit: 6788c84)
+
 ---
 
 ## Task 4: Run full test suite
@@ -877,11 +895,11 @@ Split 2,995-line transactionTools.ts into 3 focused files:
 
 ## Success Criteria
 
-- [ ] `transactionTools.ts` reduced from 2,995 to ~2,000 lines
-- [ ] `transactionSchemas.ts` contains all schemas (~600 lines)
-- [ ] `transactionUtils.ts` contains utilities (~200 lines)
-- [ ] All unit tests pass
-- [ ] All integration tests pass
-- [ ] `npm run build` succeeds
-- [ ] `npm run lint` passes
-- [ ] No circular dependency warnings
+- [x] `transactionTools.ts` reduced from 2,995 to ~2,000 lines - **Actual: 2,274 lines (24% reduction)**
+- [x] `transactionSchemas.ts` contains all schemas (~600 lines) - **Actual: 453 lines**
+- [x] `transactionUtils.ts` contains utilities (~200 lines) - **Actual: 536 lines**
+- [x] All unit tests pass
+- [x] All integration tests pass
+- [x] `npm run build` succeeds
+- [x] `npm run lint` passes
+- [x] No circular dependency warnings

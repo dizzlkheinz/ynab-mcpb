@@ -68,16 +68,24 @@ function filterByDateRange(
 
   // Parse date parts and use Date.UTC to avoid timezone issues
   // This prevents 'off-by-one-day' errors from timezone conversions
-  const [minYear, minMonth, minDay] = dateRange.minDate.split('-').map(Number) as [
-    number,
-    number,
-    number,
-  ];
-  const [maxYear, maxMonth, maxDay] = dateRange.maxDate.split('-').map(Number) as [
-    number,
-    number,
-    number,
-  ];
+  const minParts = dateRange.minDate.split('-').map(Number);
+  const maxParts = dateRange.maxDate.split('-').map(Number);
+
+  // Validate date parts are valid numbers
+  if (
+    minParts.length !== 3 ||
+    maxParts.length !== 3 ||
+    minParts.some((n) => !Number.isFinite(n)) ||
+    maxParts.some((n) => !Number.isFinite(n))
+  ) {
+    console.warn(
+      `[filterByDateRange] Invalid date format in range: ${dateRange.minDate} to ${dateRange.maxDate} - returning all transactions`,
+    );
+    return { inRange: ynabTransactions, outsideRange: [] };
+  }
+
+  const [minYear, minMonth, minDay] = minParts as [number, number, number];
+  const [maxYear, maxMonth, maxDay] = maxParts as [number, number, number];
 
   // Add buffer to date range to account for bank posting delays
   const minDateWithBuffer = new Date(
