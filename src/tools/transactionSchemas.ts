@@ -403,7 +403,7 @@ export type DeleteTransactionParams = z.infer<typeof DeleteTransactionSchema>;
 /**
  * Type for correlation payload used in bulk operations
  */
-export type CorrelationPayload = {
+export interface CorrelationPayload {
   account_id?: string;
   date?: string;
   amount?: number;
@@ -415,7 +415,7 @@ export type CorrelationPayload = {
   approved?: boolean;
   flag_color?: ynab.TransactionFlagColor | null;
   import_id?: string | null;
-};
+}
 
 /**
  * Interface for correlation payload input (with optional fields)
