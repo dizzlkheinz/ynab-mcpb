@@ -521,6 +521,7 @@ export function handleTransactionError(error: unknown, defaultMessage: string): 
   }
 
   return {
+    isError: true,
     content: [
       {
         type: 'text',
