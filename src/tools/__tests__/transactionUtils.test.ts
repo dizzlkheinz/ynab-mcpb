@@ -926,7 +926,7 @@ describe('transactionUtils', () => {
 
     it('should handle 401 Unauthorized error', () => {
       const error = new Error('401 Unauthorized: Invalid token');
-      const result = handleTransactionError(error, 'Default message');
+      handleTransactionError(error, 'Default message');
       expect(responseFormatter.format).toHaveBeenCalledWith({
         error: { message: 'Invalid or expired YNAB access token' },
       });
@@ -934,7 +934,7 @@ describe('transactionUtils', () => {
 
     it('should handle 403 Forbidden error', () => {
       const error = new Error('403 Forbidden');
-      const result = handleTransactionError(error, 'Default message');
+      handleTransactionError(error, 'Default message');
       expect(responseFormatter.format).toHaveBeenCalledWith({
         error: { message: 'Insufficient permissions to access YNAB data' },
       });
@@ -942,7 +942,7 @@ describe('transactionUtils', () => {
 
     it('should handle 404 Not Found error', () => {
       const error = new Error('404 Not Found');
-      const result = handleTransactionError(error, 'Default message');
+      handleTransactionError(error, 'Default message');
       expect(responseFormatter.format).toHaveBeenCalledWith({
         error: { message: 'Budget, account, category, or transaction not found' },
       });
@@ -950,7 +950,7 @@ describe('transactionUtils', () => {
 
     it('should handle 429 Rate Limit error', () => {
       const error = new Error('429 Too Many Requests');
-      const result = handleTransactionError(error, 'Default message');
+      handleTransactionError(error, 'Default message');
       expect(responseFormatter.format).toHaveBeenCalledWith({
         error: { message: 'Rate limit exceeded. Please try again later' },
       });
@@ -958,7 +958,7 @@ describe('transactionUtils', () => {
 
     it('should handle 500 Internal Server Error', () => {
       const error = new Error('500 Internal Server Error');
-      const result = handleTransactionError(error, 'Default message');
+      handleTransactionError(error, 'Default message');
       expect(responseFormatter.format).toHaveBeenCalledWith({
         error: { message: 'YNAB service is currently unavailable' },
       });
@@ -966,21 +966,21 @@ describe('transactionUtils', () => {
 
     it('should handle error with "Unauthorized" keyword', () => {
       const error = new Error('Request failed: Unauthorized access');
-      const result = handleTransactionError(error, 'Default message');
+      handleTransactionError(error, 'Default message');
       expect(responseFormatter.format).toHaveBeenCalledWith({
         error: { message: 'Invalid or expired YNAB access token' },
       });
     });
 
     it('should handle non-Error objects', () => {
-      const result = handleTransactionError('string error', 'Default message');
+      handleTransactionError('string error', 'Default message');
       expect(responseFormatter.format).toHaveBeenCalledWith({
         error: { message: 'Default message' },
       });
     });
 
     it('should handle null error', () => {
-      const result = handleTransactionError(null, 'Default message');
+      handleTransactionError(null, 'Default message');
       expect(responseFormatter.format).toHaveBeenCalledWith({
         error: { message: 'Default message' },
       });

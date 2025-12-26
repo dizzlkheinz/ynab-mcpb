@@ -88,14 +88,10 @@ function filterByDateRange(
   const [maxYear, maxMonth, maxDay] = maxParts as [number, number, number];
 
   // Add buffer to date range to account for bank posting delays
-  const minDateWithBuffer = new Date(
-    Date.UTC(minYear, minMonth - 1, minDay - dateToleranceDays),
-  );
+  const minDateWithBuffer = new Date(Date.UTC(minYear, minMonth - 1, minDay - dateToleranceDays));
   const minDateStr = minDateWithBuffer.toISOString().split('T')[0]!;
 
-  const maxDateWithBuffer = new Date(
-    Date.UTC(maxYear, maxMonth - 1, maxDay + dateToleranceDays),
-  );
+  const maxDateWithBuffer = new Date(Date.UTC(maxYear, maxMonth - 1, maxDay + dateToleranceDays));
   const maxDateStr = maxDateWithBuffer.toISOString().split('T')[0]!;
 
   for (const txn of ynabTransactions) {
