@@ -63,6 +63,14 @@ function filterByDateRange(
   dateRange: { minDate: string; maxDate: string },
   dateToleranceDays: number = 7,
 ): { inRange: YNABTransaction[]; outsideRange: YNABTransaction[] } {
+  // Validate dateToleranceDays is non-negative
+  if (dateToleranceDays < 0) {
+    console.warn(
+      `[filterByDateRange] dateToleranceDays must be non-negative, got ${dateToleranceDays}. Using 0.`,
+    );
+    dateToleranceDays = 0;
+  }
+
   const inRange: YNABTransaction[] = [];
   const outsideRange: YNABTransaction[] = [];
 
