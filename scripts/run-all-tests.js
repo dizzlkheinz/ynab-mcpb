@@ -4,8 +4,20 @@
  * Runs unit, integration, e2e, and performance tests with summarized output
  */
 
-// Suppress deprecation warning for shell spawn (safe in this controlled context)
+// Filter out DEP0190 deprecation warning for shell spawn (safe in this controlled context)
+// We use shell:true intentionally for cross-platform npm execution
+// Must remove default listeners first, then add filtered handler
 process.removeAllListeners('warning');
+process.on('warning', (warning) => {
+  // Check both code and message for DEP0190 (shell spawn with args)
+  const isDep0190 =
+    warning.code === 'DEP0190' ||
+    (warning.name === 'DeprecationWarning' && warning.message?.includes('DEP0190'));
+  if (isDep0190) {
+    return; // Suppress only this specific warning
+  }
+  console.warn(warning);
+});
 
 import { spawn } from 'child_process';
 
@@ -82,6 +94,7 @@ async function runSuite(suite) {
         skipped,
         duration,
         success,
+        stdout: success ? '' : stdout,
         stderr: success ? '' : stderr,
       });
 
@@ -143,7 +156,17 @@ async function main() {
     console.log('\x1b[31m━━━ Failures ━━━\x1b[0m\n');
     for (const r of results.filter((r) => !r.success)) {
       console.log(`\x1b[1m${r.name}:\x1b[0m`);
-      console.log(r.stderr);
+      if (r.stdout) {
+        // Show last 3000 chars of stdout to capture test failures without overwhelming output
+        const trimmedStdout = r.stdout.length > 3000 ? '...' + r.stdout.slice(-3000) : r.stdout;
+        console.log('\x1b[2mOutput:\x1b[0m');
+        console.log(trimmedStdout);
+      }
+      if (r.stderr) {
+        console.log('\x1b[2mErrors:\x1b[0m');
+        console.log(r.stderr);
+      }
+      console.log();
     }
     process.exit(1);
   }
