@@ -56,6 +56,22 @@ async function runSuite(suite) {
       stderr += data.toString();
     });
 
+    proc.on('error', (err) => {
+      console.log('\x1b[31m✗\x1b[0m (spawn error)');
+      hasFailure = true;
+      results.push({
+        name: suite.name,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        duration: ((Date.now() - start) / 1000).toFixed(1),
+        success: false,
+        stdout: '',
+        stderr: err.message,
+      });
+      resolve();
+    });
+
     proc.on('close', (code) => {
       const duration = ((Date.now() - start) / 1000).toFixed(1);
 
