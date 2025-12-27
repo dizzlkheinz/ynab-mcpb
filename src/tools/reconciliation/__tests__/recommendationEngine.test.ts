@@ -30,6 +30,7 @@ const createMockContext = (overrides?: Partial<RecommendationContext>): Recommen
     suggested_matches: [],
     unmatched_bank: [],
     unmatched_ynab: [],
+    ynab_outside_date_range: [],
     balance_info: {
       current_cleared: makeMoney(100),
       current_uncleared: makeMoney(0),
@@ -42,6 +43,8 @@ const createMockContext = (overrides?: Partial<RecommendationContext>): Recommen
       statement_date_range: '2024-01-01 to 2024-01-31',
       bank_transactions_count: 0,
       ynab_transactions_count: 0,
+      ynab_in_range_count: 0,
+      ynab_outside_range_count: 0,
       auto_matched: 0,
       suggested_matches: 0,
       unmatched_bank: 0,

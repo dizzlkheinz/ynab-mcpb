@@ -23,6 +23,8 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
     statement_date_range: '2025-10-01 to 2025-10-31',
     bank_transactions_count: 3,
     ynab_transactions_count: 4,
+    ynab_in_range_count: 4,
+    ynab_outside_range_count: 0,
     auto_matched: 2,
     suggested_matches: 1,
     unmatched_bank: 1,
@@ -115,6 +117,7 @@ const buildAnalysis = (): ReconciliationAnalysis => ({
       memo: null,
     },
   ],
+  ynab_outside_date_range: [],
   balance_info: {
     current_cleared: makeMoney(-899.02),
     current_uncleared: makeMoney(-45.23),

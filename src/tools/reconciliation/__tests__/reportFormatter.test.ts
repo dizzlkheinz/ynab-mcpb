@@ -39,6 +39,8 @@ const createTestAnalysis = (
     statement_date_range: '2025-10-01 to 2025-10-31',
     bank_transactions_count: 10,
     ynab_transactions_count: 12,
+    ynab_in_range_count: 12,
+    ynab_outside_range_count: 0,
     auto_matched: 8,
     suggested_matches: 1,
     unmatched_bank: 1,
@@ -52,6 +54,7 @@ const createTestAnalysis = (
   suggested_matches: [],
   unmatched_bank: [],
   unmatched_ynab: [],
+  ynab_outside_date_range: [],
   balance_info: {
     current_cleared: makeMoney(-899.02),
     current_uncleared: makeMoney(-50.0),
@@ -255,7 +258,7 @@ describe('reportFormatter', () => {
 
       const report = formatHumanReadableReport(analysis);
 
-      expect(report).toContain('Unmatched bank transactions:');
+      expect(report).toContain('Missing from YNAB (bank transactions without matches):');
       expect(report).toContain('2025-10-25');
       expect(report).toContain('EvoCarShare');
       expect(report).toContain('-$22.22');

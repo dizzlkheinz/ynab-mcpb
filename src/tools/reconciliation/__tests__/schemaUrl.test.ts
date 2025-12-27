@@ -2,6 +2,17 @@ import { describe, it, expect } from 'vitest';
 import type { ReconciliationAnalysis } from '../types.js';
 import { buildReconciliationPayload } from '../../reconcileAdapter.js';
 
+const makeMoney = (value: number, currency = 'USD') => ({
+  value_milliunits: Math.round(value * 1000),
+  value,
+  value_display: value < 0 ? `-$${Math.abs(value).toFixed(2)}` : `$${value.toFixed(2)}`,
+  currency,
+  direction: (value === 0 ? 'balanced' : value > 0 ? 'credit' : 'debit') as
+    | 'balanced'
+    | 'credit'
+    | 'debit',
+});
+
 const minimalAnalysis: ReconciliationAnalysis = {
   success: true,
   phase: 'analysis',
@@ -9,25 +20,28 @@ const minimalAnalysis: ReconciliationAnalysis = {
     statement_date_range: '2025-10-01 to 2025-10-31',
     bank_transactions_count: 0,
     ynab_transactions_count: 0,
+    ynab_in_range_count: 0,
+    ynab_outside_range_count: 0,
     auto_matched: 0,
     suggested_matches: 0,
     unmatched_bank: 0,
     unmatched_ynab: 0,
-    current_cleared_balance: 0,
-    target_statement_balance: 0,
-    discrepancy: 0,
+    current_cleared_balance: makeMoney(0),
+    target_statement_balance: makeMoney(0),
+    discrepancy: makeMoney(0),
     discrepancy_explanation: 'Balanced',
   },
   auto_matches: [],
   suggested_matches: [],
   unmatched_bank: [],
   unmatched_ynab: [],
+  ynab_outside_date_range: [],
   balance_info: {
-    current_cleared: 0,
-    current_uncleared: 0,
-    current_total: 0,
-    target_statement: 0,
-    discrepancy: 0,
+    current_cleared: makeMoney(0),
+    current_uncleared: makeMoney(0),
+    current_total: makeMoney(0),
+    target_statement: makeMoney(0),
+    discrepancy: makeMoney(0),
     on_track: true,
   },
   next_steps: [],

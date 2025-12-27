@@ -115,6 +115,9 @@ const convertSummary = (analysis: ReconciliationAnalysis) => ({
   statement_date_range: analysis.summary.statement_date_range,
   bank_transactions_count: analysis.summary.bank_transactions_count,
   ynab_transactions_count: analysis.summary.ynab_transactions_count,
+  ynab_in_range_count:
+    analysis.summary.ynab_in_range_count ?? analysis.summary.ynab_transactions_count,
+  ynab_outside_range_count: analysis.summary.ynab_outside_range_count ?? 0,
   auto_matched: analysis.summary.auto_matched,
   suggested_matches: analysis.summary.suggested_matches,
   unmatched_bank: analysis.summary.unmatched_bank,
@@ -292,6 +295,9 @@ export const buildReconciliationPayload = (
     unmatched: {
       bank: analysis.unmatched_bank.map((txn) => toBankTransactionView(txn, currency)),
       ynab: analysis.unmatched_ynab.map((txn) => toYNABTransactionView(txn, currency)),
+      ynab_outside_date_range: (analysis.ynab_outside_date_range ?? []).map((txn) =>
+        toYNABTransactionView(txn, currency),
+      ),
     },
   };
 

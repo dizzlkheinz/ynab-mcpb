@@ -336,5 +336,70 @@ describe('analyzer', () => {
       expect(result.summary.statement_date_range).toContain('2025-10-15');
       expect(result.summary.statement_date_range).toContain('2025-10-20');
     });
+
+    it('should not flag transactions outside statement period as missing from bank', () => {
+      // Regression test for date range filtering bug
+      // Previously, ALL YNAB transactions were compared against bank CSV,
+      // causing transactions outside the statement period to be incorrectly
+      // flagged as "missing from bank"
+      vi.mocked(csvParser.parseCSV).mockReturnValue({
+        transactions: [
+          {
+            id: 'b1',
+            date: '2025-01-15',
+            amount: -50000,
+            payee: 'Grocery Store',
+            memo: '',
+            sourceRow: 1,
+            raw: {} as any,
+          },
+        ],
+        meta: {
+          detectedDelimiter: ',',
+          detectedColumns: [],
+          totalRows: 1,
+          validRows: 1,
+          skippedRows: 0,
+        },
+        errors: [],
+        warnings: [],
+      });
+
+      const ynabTxns: YNABAPITransaction[] = [
+        // Transaction OUTSIDE statement period (December, before January statement)
+        {
+          id: 'y-outside',
+          date: '2024-12-20',
+          amount: -30000,
+          payee_name: 'Old Transaction',
+          category_name: 'Shopping',
+          cleared: 'cleared' as const,
+          approved: true,
+        } as YNABAPITransaction,
+        // Transaction INSIDE statement period
+        {
+          id: 'y-inside',
+          date: '2025-01-15',
+          amount: -50000,
+          payee_name: 'Grocery Store',
+          category_name: 'Groceries',
+          cleared: 'uncleared' as const,
+          approved: true,
+        } as YNABAPITransaction,
+      ];
+
+      const result = analyzeReconciliation('csv', undefined, ynabTxns, -50.0);
+
+      // The outside-range transaction should be in ynab_outside_date_range, not unmatched_ynab
+      expect(result.ynab_outside_date_range).toHaveLength(1);
+      expect(result.ynab_outside_date_range[0]?.id).toBe('y-outside');
+
+      // The summary should reflect the correct counts
+      expect(result.summary.ynab_in_range_count).toBe(1);
+      expect(result.summary.ynab_outside_range_count).toBe(1);
+
+      // The inside-range transaction should match and not be in unmatched
+      expect(result.unmatched_ynab).toHaveLength(0);
+    });
   });
 });

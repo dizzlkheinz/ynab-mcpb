@@ -60,7 +60,11 @@ describe('scenario: zero, negative, and large statements', () => {
     const result = analyzeReconciliation('csv', undefined, ynabTxns, 0);
 
     expect(result.summary.unmatched_bank).toBeGreaterThan(0);
-    expect(result.summary.unmatched_ynab).toBeGreaterThan(0);
+    // The YNAB transaction from Oct 31 is within the 7-day tolerance buffer
+    // of the statement period (Nov 1-2), so it's included for matching.
+    // Since it doesn't match any bank transactions, it goes to unmatched_ynab.
+    expect(result.summary.ynab_in_range_count).toBe(1);
+    expect(result.summary.unmatched_ynab).toBe(1);
     expect(result.balance_info.discrepancy).not.toBeNaN();
   });
 });

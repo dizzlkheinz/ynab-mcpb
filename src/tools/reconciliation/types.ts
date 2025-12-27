@@ -75,6 +75,10 @@ export interface ReconciliationSummary {
   statement_date_range: string;
   bank_transactions_count: number;
   ynab_transactions_count: number;
+  /** YNAB transactions within the statement date range (used for matching) */
+  ynab_in_range_count: number;
+  /** YNAB transactions outside the statement date range (not compared) */
+  ynab_outside_range_count: number;
   auto_matched: number;
   suggested_matches: number;
   unmatched_bank: number;
@@ -118,6 +122,8 @@ export interface ReconciliationAnalysis {
   suggested_matches: TransactionMatch[];
   unmatched_bank: BankTransaction[];
   unmatched_ynab: YNABTransaction[];
+  /** YNAB transactions outside the statement date range (not compared, expected) */
+  ynab_outside_date_range: YNABTransaction[];
   balance_info: BalanceInfo;
   next_steps: string[];
   insights: ReconciliationInsight[];
