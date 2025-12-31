@@ -335,6 +335,7 @@ describeIntegration('Transaction Tools Integration', () => {
         });
 
         let transactions: any[] | undefined;
+        // Use 30s timeout for CI stability - YNAB API can have propagation delays
         await waitFor(
           async () => {
             const afterList = await fetchBudgetTransactions();
@@ -346,8 +347,8 @@ describeIntegration('Transaction Tools Integration', () => {
               (transactions as any[])?.some((transaction) => transaction.memo === memo) ?? false
             );
           },
-          10000,
-          500,
+          30000,
+          1000,
         );
 
         expect(transactions).toBeDefined();
@@ -597,7 +598,7 @@ describeIntegration('Transaction Tools Integration', () => {
         expect(updateResponse.results[1].status).toBe('updated');
         expect(updateResponse.results[1].correlation_key).toBe(transactionIds[1]);
 
-        // Verify changes persisted
+        // Verify changes persisted - use 30s timeout for CI stability
         await waitFor(
           async () => {
             const getResult1 = await handleGetTransaction(ynabAPI, {
@@ -607,8 +608,8 @@ describeIntegration('Transaction Tools Integration', () => {
             const transaction1 = parseToolResult(getResult1).transaction;
             return transaction1.amount === -7.5 && transaction1.memo === 'Updated memo 1';
           },
-          10000,
-          500,
+          30000,
+          1000,
         );
 
         const getResult1 = await handleGetTransaction(ynabAPI, {
@@ -628,8 +629,8 @@ describeIntegration('Transaction Tools Integration', () => {
             const transaction2 = parseToolResult(getResult2).transaction;
             return transaction2.memo === 'Updated memo 2' && transaction2.cleared === 'cleared';
           },
-          10000,
-          500,
+          30000,
+          1000,
         );
 
         const getResult2 = await handleGetTransaction(ynabAPI, {
@@ -682,7 +683,7 @@ describeIntegration('Transaction Tools Integration', () => {
         expect(updateResponse.success).toBe(true);
         expect(updateResponse.summary.updated).toBe(1);
 
-        // Verify change
+        // Verify change - use 30s timeout for CI stability
         await waitFor(
           async () => {
             const getResult = await handleGetTransaction(ynabAPI, {
@@ -692,8 +693,8 @@ describeIntegration('Transaction Tools Integration', () => {
             const transaction = parseToolResult(getResult).transaction;
             return transaction.memo === 'Updated without metadata';
           },
-          10000,
-          500,
+          30000,
+          1000,
         );
 
         const getResult = await handleGetTransaction(ynabAPI, {
@@ -773,7 +774,7 @@ describeIntegration('Transaction Tools Integration', () => {
     );
 
     it(
-      'should handle partial failures gracefully',
+      'should reject entire batch when any transaction ID is invalid',
       { meta: { tier: 'domain', domain: 'transactions' } },
       async () => {
         // Create one valid transaction
@@ -795,6 +796,7 @@ describeIntegration('Transaction Tools Integration', () => {
         createdTransactionIds.push(validTransactionId);
 
         // Try to update with one valid and one invalid ID
+        // YNAB API rejects the entire batch if any transaction ID is invalid
         const updateResult = await handleUpdateTransactions(ynabAPI, {
           budget_id: testBudgetId,
           transactions: [
@@ -813,18 +815,14 @@ describeIntegration('Transaction Tools Integration', () => {
 
         const updateResponse = parseToolResult(updateResult);
 
-        if (updateResponse.error) {
-          throw new Error(
-            `Tool execution failed unexpectedly: ${JSON.stringify(updateResponse.error)}`,
-          );
-        }
-
-        expect(updateResponse.summary.total_requested).toBe(2);
-        expect(updateResponse.summary.updated).toBe(1);
-        expect(updateResponse.summary.failed).toBeGreaterThan(0);
+        // YNAB API does NOT support partial failures - it rejects the entire batch
+        // when any transaction ID is invalid (returns 400 error)
+        expect(updateResponse.error).toBeDefined();
+        expect(updateResponse.error.code).toBe(400);
+        expect(updateResponse.error.details).toContain('transaction does not exist');
 
         console.warn(
-          `✅ Partial failure handled: ${updateResponse.summary.updated} updated, ${updateResponse.summary.failed} failed`,
+          `✅ Batch correctly rejected due to invalid transaction ID: ${updateResponse.error.message}`,
         );
       },
     );
