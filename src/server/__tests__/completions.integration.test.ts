@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createTestServer, getTestConfig } from '../../__tests__/testUtils.js';
 import type { YNABMCPServer } from '../YNABMCPServer.js';
-import { getTestConfig, createTestServer } from '../../__tests__/testUtils.js';
 
 /**
  * Integration tests for CompletionsManager

@@ -2,7 +2,7 @@
  * Unit tests for RequestLogger class
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RequestLogger } from '../requestLogger.js';
 
 describe('RequestLogger', () => {

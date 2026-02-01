@@ -106,7 +106,7 @@ export class RequestLogger {
   /**
    * Get recent log entries
    */
-  getRecentLogs(count: number = 50): LogEntry[] {
+  getRecentLogs(count = 50): LogEntry[] {
     return this.logs.slice(-count);
   }
 

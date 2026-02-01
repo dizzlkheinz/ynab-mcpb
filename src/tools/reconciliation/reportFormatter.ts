@@ -3,16 +3,16 @@
  * Implements Phase 3 of dual-channel output improvements
  */
 
-import type {
-  ReconciliationAnalysis,
-  TransactionMatch,
-  BankTransaction,
-  YNABTransaction,
-  ReconciliationInsight,
-  BalanceInfo,
-} from './types.js';
-import type { LegacyReconciliationResult } from './executor.js';
 import type { MoneyValue } from '../../utils/money.js';
+import type { LegacyReconciliationResult } from './executor.js';
+import type {
+  BalanceInfo,
+  BankTransaction,
+  ReconciliationAnalysis,
+  ReconciliationInsight,
+  TransactionMatch,
+  YNABTransaction,
+} from './types.js';
 
 const SECTION_DIVIDER = '-'.repeat(60);
 
@@ -247,7 +247,7 @@ function formatAmount(amountMilli: number): string {
 /**
  * Format the insights section
  */
-function formatInsightsSection(insights: ReconciliationInsight[], maxToShow: number = 3): string {
+function formatInsightsSection(insights: ReconciliationInsight[], maxToShow = 3): string {
   const lines: string[] = [];
   lines.push('Key Insights');
   lines.push(SECTION_DIVIDER);
@@ -396,7 +396,7 @@ type FormattableYnabTransaction = YNABTransaction & { payee_name?: string | null
 
 export function formatTransactionList(
   transactions: BankTransaction[] | YNABTransaction[],
-  maxItems: number = 10,
+  maxItems = 10,
 ): string {
   const lines: string[] = [];
   const toShow = transactions.slice(0, maxItems);

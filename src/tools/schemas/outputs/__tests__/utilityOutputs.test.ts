@@ -6,13 +6,13 @@
  * - DiagnosticInfoOutputSchema with null cases
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  SetOutputFormatOutputSchema,
-  DiagnosticInfoOutputSchema,
-  EnvironmentInfoSchema,
   CacheInfoSchema,
   DeltaInfoSchema,
+  DiagnosticInfoOutputSchema,
+  EnvironmentInfoSchema,
+  SetOutputFormatOutputSchema,
 } from '../utilityOutputs.js';
 
 describe('SetOutputFormatOutputSchema', () => {

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as ynab from 'ynab';
-import { handleExportTransactions, ExportTransactionsSchema } from '../exportTransactions.js';
 import { writeFileSync } from 'fs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as ynab from 'ynab';
+import { ExportTransactionsSchema, handleExportTransactions } from '../exportTransactions.js';
 
 // Mock filesystem functions
 vi.mock('fs', () => ({

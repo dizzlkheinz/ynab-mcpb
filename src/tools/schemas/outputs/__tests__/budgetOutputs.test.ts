@@ -6,8 +6,8 @@
  * - BudgetSummarySchema
  */
 
-import { describe, it, expect } from 'vitest';
-import { ListBudgetsOutputSchema, BudgetSummarySchema } from '../budgetOutputs.js';
+import { describe, expect, it } from 'vitest';
+import { BudgetSummarySchema, ListBudgetsOutputSchema } from '../budgetOutputs.js';
 
 describe('BudgetSummarySchema', () => {
   it('should validate complete budget with all fields', () => {

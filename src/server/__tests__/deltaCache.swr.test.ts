@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DeltaCache, type DeltaCacheEntry, type Logger } from '../deltaCache.js';
 import type { CacheManager } from '../cacheManager.js';
+import { DeltaCache, type DeltaCacheEntry, type Logger } from '../deltaCache.js';
 import type { ServerKnowledgeStore } from '../serverKnowledgeStore.js';
 
 interface TestEntity {

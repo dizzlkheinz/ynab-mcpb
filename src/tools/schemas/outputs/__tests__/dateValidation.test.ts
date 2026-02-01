@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  ISODateStringSchema,
   BankTransactionComparisonSchema,
   DateRangeSchema,
+  ISODateStringSchema,
 } from '../comparisonOutputs.js';
 
 describe('Date Validation in comparisonOutputs', () => {

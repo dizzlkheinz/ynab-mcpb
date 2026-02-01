@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as ynab from 'ynab';
-import { handleListCategories, handleGetCategory, handleUpdateCategory } from '../categoryTools.js';
+import { handleGetCategory, handleListCategories, handleUpdateCategory } from '../categoryTools.js';
 
 /**
  * Integration tests for category tools using real YNAB API

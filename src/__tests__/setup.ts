@@ -4,7 +4,7 @@
 
 // Load environment variables from .env for integration tests
 import 'dotenv/config';
-import { beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest';
 import { cacheManager } from '../server/cacheManager.js';
 
 // Skip E2E tests by default unless explicitly enabled

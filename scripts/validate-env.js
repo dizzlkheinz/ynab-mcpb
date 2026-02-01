@@ -5,9 +5,9 @@
  * Validates required environment variables for YNAB MCP Server
  */
 
-import { config } from 'dotenv';
-import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { config } from 'dotenv';
 
 // Load environment variables from .env file
 config();

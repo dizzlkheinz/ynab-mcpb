@@ -2,12 +2,12 @@
  * Security middleware that combines rate limiting, request logging, and input validation
  */
 
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod/v4';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { fromZodError } from 'zod-validation-error';
-import { globalRateLimiter, RateLimitError } from './rateLimiter.js';
-import { globalRequestLogger } from './requestLogger.js';
+import { z } from 'zod/v4';
 import { ErrorHandler } from './errorHandler.js';
+import { RateLimitError, globalRateLimiter } from './rateLimiter.js';
+import { globalRequestLogger } from './requestLogger.js';
 import { responseFormatter } from './responseFormatter.js';
 
 /**

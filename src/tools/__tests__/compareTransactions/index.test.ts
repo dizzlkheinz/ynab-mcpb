@@ -1,9 +1,9 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import * as ynab from 'ynab';
 import {
-  handleCompareTransactions,
-  CompareTransactionsSchema,
   CompareTransactionsParams,
+  CompareTransactionsSchema,
+  handleCompareTransactions,
 } from '../../compareTransactions/index.js';
 
 // Create hoisted mock functions

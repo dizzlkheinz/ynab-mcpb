@@ -1,13 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  formatYNABMonth,
   formatISODate,
+  formatYNABMonth,
   getCurrentMonth,
-  getToday,
   getHistoricalMonths,
-  subtractMonths,
+  getToday,
   isValidISODate,
   isValidYNABMonth,
+  subtractMonths,
   yearMonthToYNABMonth,
 } from '../dateUtils.js';
 

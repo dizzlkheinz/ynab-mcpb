@@ -4,7 +4,7 @@
  * Tests prompt management functionality.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { PromptManager } from '../prompts.js';
 
 describe('prompts module', () => {

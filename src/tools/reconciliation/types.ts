@@ -8,11 +8,11 @@
  * All internal calculations use milliunits to avoid floating-point errors.
  */
 
-import type { MoneyValue } from '../../utils/money.js';
 import type {
   BankTransaction as CanonicalBankTransaction,
   NormalizedYNABTransaction as CanonicalYNABTransaction,
 } from '../../types/reconciliation.js';
+import type { MoneyValue } from '../../utils/money.js';
 
 // Re-export canonical types as the standard types
 export type BankTransaction = CanonicalBankTransaction;

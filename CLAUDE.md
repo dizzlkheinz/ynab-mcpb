@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integration, enabling AI assistants to interact with YNAB budgets, accounts, transactions, and categories. The codebase uses TypeScript with a modular, service-oriented architecture.
 
-**Current Version:** 0.18.1
+**Current Version:** 0.18.4
 
 ## Essential Commands
 
@@ -48,9 +48,9 @@ npm run test:all                   # Run all tests (unit, integration, e2e, perf
 ### Code Quality
 
 ```bash
-npm run lint               # Run ESLint on TypeScript files
-npm run lint:fix           # Auto-fix ESLint issues
-npm run format             # Format code with Prettier
+npm run lint               # Run Biome linting
+npm run lint:fix           # Auto-fix Biome lint/format issues
+npm run format             # Format code with Biome
 npm run format:check       # Check formatting without modifying files
 ```
 
@@ -72,7 +72,8 @@ The architecture is modular and service-oriented:
 ### Core Server Components (`src/server/`)
 
 - **YNABMCPServer.ts** - Main orchestration server, coordinates all services
-- **toolRegistry.ts** - Centralized tool metadata, validation, and execution
+- **toolRegistry.ts** - Centralized tool metadata, validation, execution, and progress notification support
+- **completions.ts** - MCP completions manager for autocomplete suggestions (budget_id, account_id, category, payee)
 - **cacheManager.ts** - Enhanced caching with LRU eviction, observability, and stale-while-revalidate
 - **deltaCache.ts** - Delta request management with server knowledge tracking and merge operations
 - **deltaCache.merge.ts** - Entity merging functions for delta responses (transactions, categories, accounts)
@@ -103,7 +104,9 @@ Tools are organized by domain with some using modular sub-directories:
 
 - **budgetTools.ts** - Budget listing and retrieval
 - **accountTools.ts** - Account management
-- **transactionTools.ts** - Transaction CRUD operations
+- **transactionTools.ts** - Transaction CRUD operations (v0.18.4: refactored into 3 files)
+- **transactionSchemas.ts** - Transaction Zod schemas (extracted v0.18.4, 453 lines)
+- **transactionUtils.ts** - Transaction utilities and helpers (extracted v0.18.4, 536 lines)
 - **categoryTools.ts** - Category management
 - **payeeTools.ts** - Payee listing and retrieval
 - **monthTools.ts** - Monthly budget data
@@ -135,12 +138,18 @@ Tools are organized by domain with some using modular sub-directories:
 ### Type Definitions (`src/types/`)
 
 - **index.ts** - Shared types, error classes, server configuration
+- **toolRegistration.ts** - ToolContext, handler signatures (Handler, DeltaHandler, WriteHandler, NoInputHandler)
+- **toolAnnotations.ts** - MCP annotation types and interfaces
+- **reconciliation.ts** - Reconciliation-specific type definitions
 
 ### Utilities (`src/utils/`)
 
 - **money.ts** - Amount conversion (dollars ↔ milliunits)
 - **dateUtils.ts** - Date formatting and validation
 - **amountUtils.ts** - Amount validation and utilities
+- **baseError.ts** - Base error class for custom errors
+- **errors.ts** - Custom error classes and error handling utilities
+- **validationError.ts** - Validation-specific error handling
 
 ## Key Architecture Patterns
 
@@ -253,6 +262,61 @@ Resource templates allow AI assistants to discover and access YNAB data using UR
 - `ynab://budgets/{budget_id}/accounts/{account_id}` - Get detailed account information
 
 Resources support full caching with configurable TTLs and return structured data that AI assistants can use for analysis and recommendations.
+
+## MCP Completions
+
+The server provides autocomplete suggestions via MCP completions API to help AI assistants discover available values for tool arguments:
+
+### Supported Completions
+
+- **budget_id** - Lists all available budget IDs with names
+- **account_id** - Lists account IDs for a specific budget (context-aware)
+- **category** - Lists category names for a specific budget (context-aware)
+- **payee** - Lists payee names for a specific budget (context-aware)
+
+### Implementation
+
+- **CompletionsManager** class in `src/server/completions.ts`
+- Maximum 100 completions per request
+- Context-aware: uses `budget_id` from prior arguments when available
+- Full caching support with standard TTLs
+- Returns structured completion items with labels and values
+
+### Usage Example
+
+When an AI assistant requests completions for the `account_id` argument, the server returns a list of accounts for the current budget, allowing the assistant to autocomplete valid account IDs.
+
+## Progress Notifications
+
+Long-running operations can emit MCP progress notifications to provide real-time feedback during execution:
+
+### Implementation
+
+- **ProgressCallback** type defined in `src/server/toolRegistry.ts`
+- Optional callback passed to tool handlers via adapter pattern
+- Usage: `await sendProgress?.({ progress, total, message })`
+- Currently used by: `reconcile_account` tool
+
+### Progress Notification Pattern
+
+```typescript
+// In tool handler
+async function handleLongOperation(
+  input: InputType,
+  sendProgress?: ProgressCallback
+): Promise<ResultType> {
+  // Send progress updates during operation
+  await sendProgress?.({
+    progress: currentStep,
+    total: totalSteps,
+    message: 'Processing transactions...',
+  });
+}
+```
+
+### Tools with Progress Support
+
+- **reconcile_account** - Reports progress during CSV parsing, matching, and bulk operations
 
 ## Tool Annotations
 
@@ -421,8 +485,7 @@ Strict mode enabled with extensive safety checks:
 
 ## Code Style & Linting
 
-- **ESLint**: Enforced on all TypeScript files
-- **Prettier**: Auto-formatting for consistent style
+- **Biome**: Linting + formatting for TypeScript/JavaScript
 - **Import Style**: Use `.js` extensions in imports (ES modules)
 - **Naming**: camelCase for functions/variables, PascalCase for classes/types
 
@@ -470,6 +533,7 @@ The reconciliation tool (`reconcile_account`) is a comprehensive account reconci
 - **Executor** - Handles bulk create/update/unclear operations with comprehensive error handling
 - **Recommendation Engine** - Provides smart reconciliation suggestions
 - **Sign Detector** - Auto-detects debit/credit sign conventions from CSV data
+- **Date Range Filtering** (v0.18.4) - Filters YNAB transactions to statement period to prevent false "missing from bank" matches
 
 ### Configuration
 
@@ -477,6 +541,17 @@ The reconciliation tool (`reconcile_account`) is a comprehensive account reconci
 - Date tolerance: 7 days (accommodates bank posting delays)
 - Scoring weights: amount 50%, payee 35%, date 15%
 - Auto-match threshold: 85%
+
+### Date Range Filtering (v0.18.4)
+
+The reconciliation system now filters YNAB transactions to only those within the statement date range:
+
+- **Purpose**: Prevents false positives for transactions outside the statement period
+- **Implementation**: Uses `Date.UTC()` for timezone-safe date comparison
+- **New Report Fields**:
+  - `ynab_in_range_count` - YNAB transactions within statement period
+  - `ynab_outside_range_count` - YNAB transactions outside statement period
+- **Behavior**: Only transactions within the CSV date range are considered for matching
 
 See `docs/technical/reconciliation-system-architecture.md` for detailed documentation.
 

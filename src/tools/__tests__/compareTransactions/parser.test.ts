@@ -1,13 +1,13 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
-  parseBankCSV,
-  autoDetectCSVFormat,
-  parseDate,
   amountToMilliunits,
-  readCSVFile,
+  autoDetectCSVFormat,
   detectDateFormat,
   extractDateRangeFromCSV,
+  parseBankCSV,
+  parseDate,
+  readCSVFile,
 } from '../../compareTransactions/parser.js';
 import { CSVFormat } from '../../compareTransactions/types.js';
 

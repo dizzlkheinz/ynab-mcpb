@@ -1,17 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { LegacyReconciliationResult } from '../executor.js';
 import {
-  formatHumanReadableReport,
-  formatBalanceInfo,
-  formatTransactionList,
   type ReportFormatterOptions,
+  formatBalanceInfo,
+  formatHumanReadableReport,
+  formatTransactionList,
 } from '../reportFormatter.js';
 import type {
-  ReconciliationAnalysis,
   BankTransaction,
-  YNABTransaction,
+  ReconciliationAnalysis,
   ReconciliationInsight,
+  YNABTransaction,
 } from '../types.js';
-import type { LegacyReconciliationResult } from '../executor.js';
 
 /**
  * Helper to create MoneyValue for tests

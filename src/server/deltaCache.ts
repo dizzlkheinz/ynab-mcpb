@@ -1,6 +1,6 @@
-import { CacheManager } from './cacheManager.js';
+import type { CacheManager } from './cacheManager.js';
 import globalRequestLogger from './requestLogger.js';
-import { ServerKnowledgeStore } from './serverKnowledgeStore.js';
+import type { ServerKnowledgeStore } from './serverKnowledgeStore.js';
 
 export interface Logger {
   info(message: string, meta?: Record<string, unknown>): void;

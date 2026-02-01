@@ -471,7 +471,7 @@ export class CacheManager {
     const value = process.env[key];
     if (!value) return defaultValue;
 
-    const parsed = parseInt(value, 10);
+    const parsed = Number.parseInt(value, 10);
     return isNaN(parsed) ? defaultValue : parsed;
   }
 

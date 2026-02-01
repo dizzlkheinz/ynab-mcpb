@@ -1,4 +1,4 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 /**
  * Response formatter contract for dependency injection in error handling
@@ -11,7 +11,7 @@ interface ErrorResponseFormatter {
  * YNAB API error codes and their corresponding HTTP status codes
  */
 
-export const enum YNABErrorCode {
+export enum YNABErrorCode {
   BAD_REQUEST = 400,
   UNAUTHORIZED = 401,
   FORBIDDEN = 403,
@@ -23,7 +23,7 @@ export const enum YNABErrorCode {
 /**
  * Security-related error codes
  */
-export const enum SecurityErrorCode {
+export enum SecurityErrorCode {
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
@@ -635,7 +635,7 @@ export class ErrorHandler {
     let code: YNABErrorCode | null = null;
 
     if (typeof id === 'string') {
-      const numeric = parseInt(id, 10);
+      const numeric = Number.parseInt(id, 10);
       if (!Number.isNaN(numeric)) {
         code = this.mapHttpStatusToErrorCode(numeric);
       }

@@ -1,4 +1,4 @@
-import * as ynab from 'ynab';
+import type * as ynab from 'ynab';
 import { cacheManager } from '../server/cacheManager.js';
 import { DeltaCache } from '../server/deltaCache.js';
 import { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';

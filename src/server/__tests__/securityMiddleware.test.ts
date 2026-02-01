@@ -2,11 +2,11 @@
  * Unit tests for SecurityMiddleware class
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod/v4';
-import { SecurityMiddleware, SecurityContext, withSecurityWrapper } from '../securityMiddleware.js';
-import { RateLimitError, globalRateLimiter, RateLimiter } from '../rateLimiter.js';
+import { RateLimitError, RateLimiter, globalRateLimiter } from '../rateLimiter.js';
 import { globalRequestLogger } from '../requestLogger.js';
+import { SecurityContext, SecurityMiddleware, withSecurityWrapper } from '../securityMiddleware.js';
 
 describe('SecurityMiddleware', () => {
   const testAccessToken = 'test-access-token-123';

@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import type { ReconciliationAnalysis } from '../types.js';
+import { describe, expect, it } from 'vitest';
 import { buildReconciliationPayload } from '../../reconcileAdapter.js';
 import type { LegacyReconciliationResult } from '../executor.js';
+import type { ReconciliationAnalysis } from '../types.js';
 
 const makeMoney = (value: number, currency = 'USD') => ({
   value_milliunits: Math.round(value * 1000),

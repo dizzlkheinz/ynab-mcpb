@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ynab from 'ynab';
 import type { ProgressCallback } from '../../../server/toolRegistry.js';
-import type { ReconciliationAnalysis, TransactionMatch, BankTransaction } from '../types.js';
+import { type ExecutionOptions, executeReconciliation } from '../executor.js';
 import type { ReconcileAccountRequest } from '../index.js';
-import { executeReconciliation, type ExecutionOptions } from '../executor.js';
+import type { BankTransaction, ReconciliationAnalysis, TransactionMatch } from '../types.js';
 
 /**
  * Unit tests for progress notification functionality in reconciliation executor

@@ -1,16 +1,16 @@
 import { toMoneyValue, toMoneyValueFromDecimal } from '../utils/money.js';
-import type {
-  ReconciliationAnalysis,
-  TransactionMatch,
-  BankTransaction,
-  YNABTransaction,
-  ReconciliationInsight,
-} from './reconciliation/types.js';
-import type { LegacyReconciliationResult, AccountSnapshot } from './reconciliation/executor.js';
+import type { AccountSnapshot, LegacyReconciliationResult } from './reconciliation/executor.js';
 import {
-  formatHumanReadableReport,
   type ReportFormatterOptions,
+  formatHumanReadableReport,
 } from './reconciliation/reportFormatter.js';
+import type {
+  BankTransaction,
+  ReconciliationAnalysis,
+  ReconciliationInsight,
+  TransactionMatch,
+  YNABTransaction,
+} from './reconciliation/types.js';
 
 const OUTPUT_VERSION = '2.0';
 const SCHEMA_URL =

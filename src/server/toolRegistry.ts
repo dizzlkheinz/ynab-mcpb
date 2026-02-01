@@ -1,6 +1,6 @@
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
-import { z, toJSONSchema } from 'zod/v4';
 import { fromZodError } from 'zod-validation-error';
+import { toJSONSchema, z } from 'zod/v4';
 import type { MCPToolAnnotations } from '../types/toolAnnotations.js';
 
 export type SecurityWrapperFactory = <T extends Record<string, unknown>>(

@@ -38,9 +38,9 @@
  */
 
 import { z } from 'zod';
-import { TransactionSchema } from './transactionOutputs.js';
 import { AccountSchema } from './accountOutputs.js';
 import { CategorySchema } from './categoryOutputs.js';
+import { TransactionSchema } from './transactionOutputs.js';
 
 // ============================================================================
 // NESTED SCHEMAS FOR COMPOSITION

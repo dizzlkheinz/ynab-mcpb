@@ -5,15 +5,15 @@
  * Extracted from YNABMCPServer to provide focused, testable resource management.
  */
 
-import type * as ynab from 'ynab';
 import {
-  ResourceTemplate as MCPResourceTemplate,
-  Resource as MCPResource,
-  ResourceContents,
   ErrorCode,
+  type Resource as MCPResource,
+  type ResourceTemplate as MCPResourceTemplate,
   McpError,
+  type ResourceContents,
 } from '@modelcontextprotocol/sdk/types.js';
-import { CacheManager, CACHE_TTLS } from './cacheManager.js';
+import type * as ynab from 'ynab';
+import { CACHE_TTLS, CacheManager } from './cacheManager.js';
 
 /**
  * Custom MCP error code for resource not found.

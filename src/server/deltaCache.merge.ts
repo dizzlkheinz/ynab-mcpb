@@ -1,5 +1,5 @@
+import type * as ynab from 'ynab';
 import type { MergeFn, MergeOptions } from './deltaCache.js';
-import * as ynab from 'ynab';
 
 export function mergeFlatEntities<T extends { id: string; deleted?: boolean }>(
   snapshot: T[],

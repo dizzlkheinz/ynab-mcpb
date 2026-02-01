@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
+  fuzzyMatch,
   normalizePayee,
   normalizedMatch,
-  fuzzyMatch,
-  tokenBasedSimilarity,
-  payeeSimilarity,
   payeeContains,
+  payeeSimilarity,
+  tokenBasedSimilarity,
 } from '../payeeNormalizer.js';
 
 describe('payeeNormalizer', () => {

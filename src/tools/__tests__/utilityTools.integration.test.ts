@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as ynab from 'ynab';
-import { handleGetUser } from '../utilityTools.js';
 import { skipOnRateLimit } from '../../__tests__/testUtils.js';
+import { handleGetUser } from '../utilityTools.js';
 
 /**
  * Utility Tools Integration Tests

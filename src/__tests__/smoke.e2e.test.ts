@@ -13,12 +13,12 @@
  * For full workflow testing, see integration tests in src/tools/__tests__/
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { YNABMCPServer } from '../server/YNABMCPServer.js';
 import {
-  getTestConfig,
   createTestServer,
   executeToolCall,
+  getTestConfig,
   parseToolResult,
   validateOutputSchema,
 } from './testUtils.js';

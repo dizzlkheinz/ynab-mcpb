@@ -6,22 +6,22 @@
  */
 
 import type * as ynab from 'ynab';
-import { parseCSV, type ParseCSVOptions, type CSVParseResult } from './csvParser.js';
-import { findMatches, normalizeConfig, type MatchingConfig, DEFAULT_CONFIG } from './matcher.js';
+import { type CSVParseResult, type ParseCSVOptions, parseCSV } from './csvParser.js';
+import { DEFAULT_CONFIG, type MatchingConfig, findMatches, normalizeConfig } from './matcher.js';
 import { normalizeYNABTransactions } from './ynabAdapter.js';
 
-import type {
-  BankTransaction,
-  YNABTransaction,
-  ReconciliationAnalysis,
-  TransactionMatch,
-  BalanceInfo,
-  ReconciliationSummary,
-  ReconciliationInsight,
-} from './types.js';
-import type { MatchResult } from './matcher.js'; // Import MatchResult
 import { toMoneyValue } from '../../utils/money.js';
+import type { MatchResult } from './matcher.js'; // Import MatchResult
 import { generateRecommendations } from './recommendationEngine.js';
+import type {
+  BalanceInfo,
+  BankTransaction,
+  ReconciliationAnalysis,
+  ReconciliationInsight,
+  ReconciliationSummary,
+  TransactionMatch,
+  YNABTransaction,
+} from './types.js';
 
 // --- Helper Functions ---
 
@@ -61,7 +61,7 @@ function calculateDateRange(bankTransactions: BankTransaction[]): {
 function filterByDateRange(
   ynabTransactions: YNABTransaction[],
   dateRange: { minDate: string; maxDate: string },
-  dateToleranceDays: number = 7,
+  dateToleranceDays = 7,
 ): { inRange: YNABTransaction[]; outsideRange: YNABTransaction[] } {
   // Validate dateToleranceDays is non-negative
   if (dateToleranceDays < 0) {
@@ -268,7 +268,7 @@ function generateNextSteps(summary: ReconciliationSummary): string[] {
   return steps;
 }
 
-function formatCurrency(amountMilli: number, currency: string = 'USD'): string {
+function formatCurrency(amountMilli: number, currency = 'USD'): string {
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency,
@@ -282,7 +282,7 @@ function formatCurrency(amountMilli: number, currency: string = 'USD'): string {
 
 function repeatAmountInsights(
   unmatchedBank: BankTransaction[],
-  currency: string = 'USD',
+  currency = 'USD',
 ): ReconciliationInsight[] {
   const insights: ReconciliationInsight[] = [];
   if (unmatchedBank.length === 0) {
@@ -440,10 +440,10 @@ export function analyzeReconciliation(
   ynabTransactions: ynab.TransactionDetail[],
   statementBalance: number,
   config: MatchingConfig = DEFAULT_CONFIG,
-  currency: string = 'USD',
+  currency = 'USD',
   accountId?: string,
   budgetId?: string,
-  invertBankAmounts: boolean = false,
+  invertBankAmounts = false,
   csvOptions?: ParseCSVOptions,
   accountSnapshot?: { balance?: number; cleared_balance?: number; uncleared_balance?: number },
 ): ReconciliationAnalysis {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as ynab from 'ynab';
 import { handleGetMonth, handleListMonths } from '../monthTools.js';
 

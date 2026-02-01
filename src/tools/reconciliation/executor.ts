@@ -2,14 +2,14 @@ import type * as ynab from 'ynab';
 import type { SaveTransaction } from 'ynab/dist/models/SaveTransaction.js';
 import { YNABAPIError, YNABErrorCode } from '../../server/errorHandler.js';
 import type { ProgressCallback } from '../../server/toolRegistry.js';
-import { toMilli, toMoneyValue, addMilli } from '../../utils/money.js';
-import type { ReconciliationAnalysis, TransactionMatch, BankTransaction } from './types.js';
-import type { ReconcileAccountRequest } from './index.js';
+import { addMilli, toMilli, toMoneyValue } from '../../utils/money.js';
 import {
-  generateCorrelationKey,
   correlateResults,
+  generateCorrelationKey,
   toCorrelationPayload,
 } from '../transactionTools.js';
+import type { ReconcileAccountRequest } from './index.js';
+import type { BankTransaction, ReconciliationAnalysis, TransactionMatch } from './types.js';
 
 export interface AccountSnapshot {
   balance: number; // milliunits

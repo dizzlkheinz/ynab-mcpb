@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as ynab from 'ynab';
-import { DeltaFetcher } from '../deltaFetcher.js';
-import type { DeltaCache } from '../../server/deltaCache.js';
 import { CACHE_TTLS } from '../../server/cacheManager.js';
+import type { DeltaCache } from '../../server/deltaCache.js';
 import {
-  mergeFlatEntities,
   mergeCategories,
-  mergeTransactions,
+  mergeFlatEntities,
   mergeMonths,
+  mergeTransactions,
 } from '../../server/deltaCache.merge.js';
+import { DeltaFetcher } from '../deltaFetcher.js';
 
 const createMockDeltaCache = () => ({ fetchWithDelta: vi.fn() });
 

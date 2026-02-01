@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as ynab from 'ynab';
-import { handleListBudgets, handleGetBudget } from '../budgetTools.js';
 import { skipOnRateLimit } from '../../__tests__/testUtils.js';
+import { handleGetBudget, handleListBudgets } from '../budgetTools.js';
 
 /**
  * Integration tests for budget tools using real YNAB API

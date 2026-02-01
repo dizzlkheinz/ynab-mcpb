@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CompletionsManager } from '../completions.js';
-import type { CacheManager } from '../cacheManager.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ynab from 'ynab';
+import type { CacheManager } from '../cacheManager.js';
+import { CompletionsManager } from '../completions.js';
 
 /**
  * Unit tests for CompletionsManager

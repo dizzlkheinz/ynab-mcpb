@@ -1,9 +1,9 @@
+import { readFileSync } from 'fs';
 import { parse } from 'csv-parse/sync';
 import { parse as parseDateFns } from 'date-fns';
 import { toMilli } from '../../utils/money.js';
 import type { Milli } from '../../utils/money.js';
-import { BankTransaction, CSVFormat } from './types.js';
-import { readFileSync } from 'fs';
+import type { BankTransaction, CSVFormat } from './types.js';
 
 /**
  * Parse date string using date-fns for better reliability
@@ -399,8 +399,8 @@ export function parseBankCSV(
           const creditVal = recordObj[format.credit_column as string] || '';
           // Convert: debits negative, credits positive
           // Check if debit has a value and is non-zero
-          const debitNum = parseFloat(debitVal.replace(/[^\d.-]/g, ''));
-          const creditNum = parseFloat(creditVal.replace(/[^\d.-]/g, ''));
+          const debitNum = Number.parseFloat(debitVal.replace(/[^\d.-]/g, ''));
+          const creditNum = Number.parseFloat(creditVal.replace(/[^\d.-]/g, ''));
           if (!isNaN(debitNum) && debitNum !== 0) {
             rawAmount = `-${debitVal}`;
           } else if (!isNaN(creditNum) && creditNum !== 0) {
@@ -419,11 +419,11 @@ export function parseBankCSV(
         const dateIndex =
           typeof format.date_column === 'number'
             ? format.date_column
-            : parseInt(format.date_column, 10);
+            : Number.parseInt(format.date_column, 10);
         const descIndex =
           typeof format.description_column === 'number'
             ? format.description_column
-            : parseInt(format.description_column, 10);
+            : Number.parseInt(format.description_column, 10);
 
         // Validate indices are valid numbers (fallback to defaults if invalid)
         const safeDateIndex = isNaN(dateIndex) ? 0 : dateIndex;
@@ -435,26 +435,26 @@ export function parseBankCSV(
           const amountIndex =
             typeof format.amount_column === 'number'
               ? format.amount_column
-              : parseInt(format.amount_column, 10);
+              : Number.parseInt(format.amount_column, 10);
           const safeAmountIndex = isNaN(amountIndex) ? 1 : amountIndex;
           rawAmount = recordArray[safeAmountIndex] || '';
         } else if (format.debit_column !== undefined && format.credit_column !== undefined) {
           const debitIndex =
             typeof format.debit_column === 'number'
               ? format.debit_column
-              : parseInt(format.debit_column, 10);
+              : Number.parseInt(format.debit_column, 10);
           const creditIndex =
             typeof format.credit_column === 'number'
               ? format.credit_column
-              : parseInt(format.credit_column, 10);
+              : Number.parseInt(format.credit_column, 10);
 
           const debitVal = recordArray[debitIndex] || '';
           const creditVal = recordArray[creditIndex] || '';
 
           // Convert: debits negative, credits positive
           // Check if debit has a value and is non-zero
-          const debitNum = parseFloat(debitVal.replace(/[^\d.-]/g, ''));
-          const creditNum = parseFloat(creditVal.replace(/[^\d.-]/g, ''));
+          const debitNum = Number.parseFloat(debitVal.replace(/[^\d.-]/g, ''));
+          const creditNum = Number.parseFloat(creditVal.replace(/[^\d.-]/g, ''));
           if (!isNaN(debitNum) && debitNum !== 0) {
             rawAmount = `-${debitVal}`;
           } else if (!isNaN(creditNum) && creditNum !== 0) {

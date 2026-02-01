@@ -2,11 +2,11 @@
  * Integration tests for security measures
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod/v4';
+import { RateLimiter, globalRateLimiter } from '../rateLimiter.js';
+import { RequestLogger, globalRequestLogger } from '../requestLogger.js';
 import { SecurityMiddleware } from '../securityMiddleware.js';
-import { globalRateLimiter, RateLimiter } from '../rateLimiter.js';
-import { globalRequestLogger, RequestLogger } from '../requestLogger.js';
 
 describe('Security Integration', () => {
   const testAccessToken = 'integration-test-token-123';

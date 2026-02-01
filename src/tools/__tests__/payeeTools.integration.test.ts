@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as ynab from 'ynab';
-import { handleListPayees, handleGetPayee } from '../payeeTools.js';
+import { handleGetPayee, handleListPayees } from '../payeeTools.js';
 
 /**
  * Integration tests for payee tools using real YNAB API

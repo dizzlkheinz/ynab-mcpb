@@ -8,12 +8,12 @@
  * - TransactionPreviewSchema
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  ListTransactionsOutputSchema,
   GetTransactionOutputSchema,
-  TransactionSchema,
+  ListTransactionsOutputSchema,
   TransactionPreviewSchema,
+  TransactionSchema,
 } from '../transactionOutputs.js';
 
 describe('TransactionSchema', () => {

@@ -6,17 +6,17 @@
  */
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import * as ynab from 'ynab';
+import type * as ynab from 'ynab';
+import type { CacheManager } from '../server/cacheManager.js';
+import type { DeltaCache } from '../server/deltaCache.js';
+import type { DiagnosticManager } from '../server/diagnostics.js';
+import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
 import type {
-  ToolRegistry,
-  ToolExecutionPayload,
   DefaultArgumentResolver,
+  ToolExecutionPayload,
+  ToolRegistry,
 } from '../server/toolRegistry.js';
 import type { DeltaFetcher } from '../tools/deltaFetcher.js';
-import type { DeltaCache } from '../server/deltaCache.js';
-import type { ServerKnowledgeStore } from '../server/serverKnowledgeStore.js';
-import type { DiagnosticManager } from '../server/diagnostics.js';
-import type { CacheManager } from '../server/cacheManager.js';
 
 /**
  * Context object passed to tool factory functions. Contains the dependencies

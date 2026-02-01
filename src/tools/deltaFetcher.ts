@@ -1,12 +1,12 @@
-import * as ynab from 'ynab';
-import { DeltaCache, type DeltaFetchResult } from '../server/deltaCache.js';
+import type * as ynab from 'ynab';
+import { CACHE_TTLS, CacheManager } from '../server/cacheManager.js';
+import type { DeltaCache, DeltaFetchResult } from '../server/deltaCache.js';
 import {
-  mergeFlatEntities,
   mergeCategories,
-  mergeTransactions,
+  mergeFlatEntities,
   mergeMonths,
+  mergeTransactions,
 } from '../server/deltaCache.merge.js';
-import { CacheManager, CACHE_TTLS } from '../server/cacheManager.js';
 
 export interface DeltaFetchOptions {
   forceFullRefresh?: boolean;

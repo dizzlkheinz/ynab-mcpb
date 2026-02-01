@@ -91,9 +91,9 @@ async function runSuite(suite) {
           const failMatch = line.match(/(\d+)\s+failed/);
           const skipMatch = line.match(/(\d+)\s+skipped/);
 
-          if (passMatch) passed = parseInt(passMatch[1], 10);
-          if (failMatch) failed = parseInt(failMatch[1], 10);
-          if (skipMatch) skipped = parseInt(skipMatch[1], 10);
+          if (passMatch) passed = Number.parseInt(passMatch[1], 10);
+          if (failMatch) failed = Number.parseInt(failMatch[1], 10);
+          if (skipMatch) skipped = Number.parseInt(skipMatch[1], 10);
         }
       }
 
@@ -133,7 +133,9 @@ async function main() {
   const totalPassed = results.reduce((sum, r) => sum + r.passed, 0);
   const totalFailed = results.reduce((sum, r) => sum + r.failed, 0);
   const totalSkipped = results.reduce((sum, r) => sum + r.skipped, 0);
-  const totalDuration = results.reduce((sum, r) => sum + parseFloat(r.duration), 0).toFixed(1);
+  const totalDuration = results
+    .reduce((sum, r) => sum + Number.parseFloat(r.duration), 0)
+    .toFixed(1);
 
   // Table header
   console.log('Suite          Passed   Failed   Skipped   Time');

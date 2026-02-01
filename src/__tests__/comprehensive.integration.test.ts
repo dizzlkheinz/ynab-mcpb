@@ -3,10 +3,10 @@
  * These tests use mocked YNAB API responses to test complete workflows
  */
 
-import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { YNABMCPServer } from '../server/YNABMCPServer.js';
-import { executeToolCall, parseToolResult, validateToolResult, waitFor } from './testUtils.js';
 import { cacheManager } from '../server/cacheManager.js';
+import { executeToolCall, parseToolResult, validateToolResult, waitFor } from './testUtils.js';
 
 // Mock the YNAB SDK
 vi.mock('ynab', () => {

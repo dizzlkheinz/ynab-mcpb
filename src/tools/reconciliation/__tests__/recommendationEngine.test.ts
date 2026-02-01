@@ -1,19 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { toMoneyValueFromDecimal } from '../../../utils/money.js';
 import { generateRecommendations } from '../recommendationEngine.js';
 import type {
+  BankTransaction,
+  CreateTransactionRecommendation,
+  ManualReviewRecommendation,
+  MoneyValue,
   RecommendationContext,
   ReconciliationAnalysis,
-  BankTransaction,
-  YNABTransaction,
-  MoneyValue,
   ReconciliationInsight,
-  CreateTransactionRecommendation,
-  UpdateClearedRecommendation,
   ReviewDuplicateRecommendation,
-  ManualReviewRecommendation,
   TransactionMatch,
+  UpdateClearedRecommendation,
+  YNABTransaction,
 } from '../types.js';
-import { toMoneyValueFromDecimal } from '../../../utils/money.js';
 
 // Helper to create MoneyValue objects
 const makeMoney = (value: number, currency = 'USD'): MoneyValue => {

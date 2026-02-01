@@ -27,9 +27,7 @@
     "entry_point": "dist/bundle/index.cjs",
     "mcp_config": {
       "command": "node",
-      "args": [
-        "${__dirname}/dist/bundle/index.cjs"
-      ],
+      "args": ["${__dirname}/dist/bundle/index.cjs"],
       "env": {
         "YNAB_ACCESS_TOKEN": "${user_config.YNAB_ACCESS_TOKEN}",
         "YNAB_EXPORT_PATH": "${user_config.YNAB_EXPORT_PATH}"

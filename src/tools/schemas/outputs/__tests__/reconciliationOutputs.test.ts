@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  ExecutionActionRecordSchema,
   CreatedTransactionSchema,
+  DuplicateDetectionPayloadSchema,
+  ExecutionActionRecordSchema,
   TransactionCreationPayloadSchema,
   TransactionUpdatePayloadSchema,
-  DuplicateDetectionPayloadSchema,
 } from '../reconciliationOutputs.js';
 
 describe('reconciliationOutputs', () => {

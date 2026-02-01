@@ -2,10 +2,10 @@
  * Test utilities for comprehensive testing suite
  */
 
-import { expect } from 'vitest';
-import type { YNABMCPServer } from '../server/YNABMCPServer.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { expect } from 'vitest';
 import { z } from 'zod';
+import type { YNABMCPServer } from '../server/YNABMCPServer.js';
 
 /**
  * Test environment configuration

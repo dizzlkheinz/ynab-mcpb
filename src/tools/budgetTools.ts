@@ -1,14 +1,14 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import * as ynab from 'ynab';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type * as ynab from 'ynab';
 import { z } from 'zod/v4';
-import { withToolErrorHandling } from '../types/index.js';
 import { responseFormatter } from '../server/responseFormatter.js';
-import type { DeltaFetcher } from './deltaFetcher.js';
-import { resolveDeltaFetcherArgs } from './deltaSupport.js';
+import { withToolErrorHandling } from '../types/index.js';
 import type { ToolFactory } from '../types/toolRegistration.js';
 import { createAdapters } from './adapters.js';
-import { ToolAnnotationPresets } from './toolCategories.js';
+import type { DeltaFetcher } from './deltaFetcher.js';
+import { resolveDeltaFetcherArgs } from './deltaSupport.js';
 import { emptyObjectSchema } from './schemas/common.js';
+import { ToolAnnotationPresets } from './toolCategories.js';
 
 /**
  * Schema for ynab:get_budget tool parameters

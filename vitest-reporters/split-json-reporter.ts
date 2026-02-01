@@ -1,6 +1,6 @@
-import type { Reporter, File, Vitest } from 'vitest';
-import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { mkdir, writeFile } from 'fs/promises';
+import type { File, Reporter, Vitest } from 'vitest';
 
 /**
  * Custom Vitest reporter that splits test results into multiple JSON files

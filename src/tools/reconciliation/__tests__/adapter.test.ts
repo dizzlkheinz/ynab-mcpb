@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  buildReconciliationPayload,
   type LegacyReconciliationResult,
+  buildReconciliationPayload,
 } from '../../reconcileAdapter.js';
 import type { ReconciliationAnalysis } from '../types.js';
 

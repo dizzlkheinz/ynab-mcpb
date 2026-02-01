@@ -1,10 +1,10 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import * as ynab from 'ynab';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type * as ynab from 'ynab';
 import { z } from 'zod/v4';
 import { withToolErrorHandling } from '../../types/index.js';
-import { parseBankCSV, readCSVFile, autoDetectCSVFormat } from './parser.js';
-import { findMatches } from './matcher.js';
 import { buildComparisonResult } from './formatter.js';
+import { findMatches } from './matcher.js';
+import { autoDetectCSVFormat, parseBankCSV, readCSVFile } from './parser.js';
 import type { YNABTransaction } from './types.js';
 
 // Re-export core types for consumers

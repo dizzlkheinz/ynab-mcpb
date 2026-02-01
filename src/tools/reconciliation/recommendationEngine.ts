@@ -1,17 +1,17 @@
 import { randomUUID } from 'crypto';
+import { fromMilli, toMoneyValue, toMoneyValueFromDecimal } from '../../utils/money.js';
 import type {
   ActionableRecommendation,
+  BankTransaction,
   CreateTransactionRecommendation,
-  UpdateClearedRecommendation,
-  ReviewDuplicateRecommendation,
   ManualReviewRecommendation,
   RecommendationContext,
   ReconciliationInsight,
+  ReviewDuplicateRecommendation,
   TransactionMatch,
-  BankTransaction,
+  UpdateClearedRecommendation,
   YNABTransaction,
 } from './types.js';
-import { toMoneyValue, toMoneyValueFromDecimal, fromMilli } from '../../utils/money.js';
 
 const RECOMMENDATION_VERSION = '1.0';
 

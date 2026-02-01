@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as ynab from 'ynab';
 import {
-  handleListAccounts,
-  handleGetAccount,
-  handleCreateAccount,
-  ListAccountsSchema,
-  GetAccountSchema,
   CreateAccountSchema,
+  GetAccountSchema,
+  ListAccountsSchema,
+  handleCreateAccount,
+  handleGetAccount,
+  handleListAccounts,
 } from '../accountTools.js';
 import { createDeltaFetcherMock, createRejectingDeltaFetcherMock } from './deltaTestUtils.js';
 

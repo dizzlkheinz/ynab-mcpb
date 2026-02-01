@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as ynab from 'ynab';
 import {
-  handleListPayees,
-  handleGetPayee,
-  ListPayeesSchema,
   GetPayeeSchema,
+  ListPayeesSchema,
+  handleGetPayee,
+  handleListPayees,
 } from '../payeeTools.js';
 import { createDeltaFetcherMock, createRejectingDeltaFetcherMock } from './deltaTestUtils.js';
 

@@ -2,8 +2,8 @@
  * Unit tests for RateLimiter class
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { RateLimiter, RateLimitError } from '../rateLimiter.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { RateLimitError, RateLimiter } from '../rateLimiter.js';
 
 describe('RateLimiter', () => {
   let rateLimiter: RateLimiter;

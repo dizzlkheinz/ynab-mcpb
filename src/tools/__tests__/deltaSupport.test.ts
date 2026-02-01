@@ -1,13 +1,13 @@
 /**
  * Unit tests for deltaSupport.ts - argument resolution with runtime validation
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import * as ynab from 'ynab';
-import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from '../deltaSupport.js';
-import { DeltaFetcher } from '../deltaFetcher.js';
+import { cacheManager } from '../../server/cacheManager.js';
 import { DeltaCache } from '../../server/deltaCache.js';
 import { ServerKnowledgeStore } from '../../server/serverKnowledgeStore.js';
-import { cacheManager } from '../../server/cacheManager.js';
+import { DeltaFetcher } from '../deltaFetcher.js';
+import { resolveDeltaFetcherArgs, resolveDeltaWriteArgs } from '../deltaSupport.js';
 
 describe('deltaSupport runtime validation', () => {
   let ynabAPI: ynab.API;

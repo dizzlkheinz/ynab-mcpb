@@ -1,5 +1,5 @@
+import type * as ynab from 'ynab';
 import { z } from 'zod/v4';
-import * as ynab from 'ynab';
 
 /**
  * Transaction Schemas and Types

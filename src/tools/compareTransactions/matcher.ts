@@ -1,4 +1,4 @@
-import { BankTransaction, YNABTransaction, TransactionMatch } from './types.js';
+import type { BankTransaction, TransactionMatch, YNABTransaction } from './types.js';
 
 /**
  * Calculate match score between bank and YNAB transactions
@@ -80,7 +80,7 @@ export function matchDuplicateAmounts(
   _amount: number,
   amountTolerance: number,
   dateTolerance: number,
-  enableChronologyBonus: boolean = false,
+  enableChronologyBonus = false,
 ): TransactionMatch[] {
   // Sort both arrays by date for sequential matching
   const sortedBank = [...bankTxns].sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -144,7 +144,7 @@ export function findMatches(
   ynabTransactions: YNABTransaction[],
   amountTolerance: number,
   dateTolerance: number,
-  enableChronologyBonus: boolean = false,
+  enableChronologyBonus = false,
 ): {
   matches: TransactionMatch[];
   unmatched_bank: BankTransaction[];

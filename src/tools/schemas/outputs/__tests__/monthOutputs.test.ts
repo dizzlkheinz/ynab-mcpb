@@ -9,13 +9,13 @@
  * - MonthCategorySchema
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   GetMonthOutputSchema,
   ListMonthsOutputSchema,
+  MonthCategorySchema,
   MonthDetailSchema,
   MonthSummarySchema,
-  MonthCategorySchema,
 } from '../monthOutputs.js';
 
 describe('MonthCategorySchema', () => {

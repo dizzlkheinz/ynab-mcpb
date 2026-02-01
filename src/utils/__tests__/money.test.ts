@@ -1,17 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type * as ynab from 'ynab';
 import {
-  toMilli,
-  fromMilli,
-  assertMilli,
   addMilli,
+  assertMilli,
+  formatMoney,
+  fromMilli,
+  getCurrencyCode,
+  getDecimalDigits,
   inWindow,
   moneyDirection,
-  formatMoney,
+  toMilli,
   toMoneyValue,
   toMoneyValueFromDecimal,
-  getDecimalDigits,
-  getCurrencyCode,
 } from '../money.js';
 
 describe('money utilities', () => {

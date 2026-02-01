@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as ynab from 'ynab';
-import { handleListAccounts, handleGetAccount } from '../accountTools.js';
+import { handleGetAccount, handleListAccounts } from '../accountTools.js';
 
 const isSkip = ['true', '1', 'yes', 'y', 'on'].includes(
   (process.env['SKIP_E2E_TESTS'] || '').toLowerCase().trim(),

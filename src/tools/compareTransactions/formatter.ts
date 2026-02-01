@@ -1,7 +1,7 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import * as ynab from 'ynab';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type * as ynab from 'ynab';
 import { responseFormatter } from '../../server/responseFormatter.js';
-import { BankTransaction, YNABTransaction, TransactionMatch } from './types.js';
+import type { BankTransaction, TransactionMatch, YNABTransaction } from './types.js';
 
 /**
  * Find suggested payee for unmatched bank transaction

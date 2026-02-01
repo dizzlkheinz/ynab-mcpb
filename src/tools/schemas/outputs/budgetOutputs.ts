@@ -41,7 +41,7 @@
 
 import { z } from 'zod/v4';
 import { CacheMetadataSchema } from '../shared/commonOutputs.js';
-import { DateFormatSchema, CurrencyFormatSchema } from './utilityOutputs.js';
+import { CurrencyFormatSchema, DateFormatSchema } from './utilityOutputs.js';
 
 /**
  * Schema for a budget summary object.

@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as ynab from 'ynab';
 import {
-  handleGetMonth,
-  handleListMonths,
   GetMonthSchema,
   ListMonthsSchema,
+  handleGetMonth,
+  handleListMonths,
 } from '../monthTools.js';
 import { createDeltaFetcherMock, createRejectingDeltaFetcherMock } from './deltaTestUtils.js';
 

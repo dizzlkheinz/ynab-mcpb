@@ -8,7 +8,7 @@
  * YNAB-specific business logic.
  */
 
-import { format, subMonths, isValid, parse } from 'date-fns';
+import { format, isValid, parse, subMonths } from 'date-fns';
 
 /**
  * Formats a date as YYYY-MM-01 (YNAB month format)

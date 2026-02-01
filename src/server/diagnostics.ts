@@ -6,8 +6,8 @@
  */
 
 import type { CacheManager } from './cacheManager.js';
-import type { ServerKnowledgeStore } from './serverKnowledgeStore.js';
 import type { DeltaCache } from './deltaCache.js';
+import type { ServerKnowledgeStore } from './serverKnowledgeStore.js';
 
 /**
  * Security stats provider interface

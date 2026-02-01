@@ -7,11 +7,11 @@
  * - AccountSchema
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  ListAccountsOutputSchema,
-  GetAccountOutputSchema,
   AccountSchema,
+  GetAccountOutputSchema,
+  ListAccountsOutputSchema,
 } from '../accountOutputs.js';
 
 describe('AccountSchema', () => {

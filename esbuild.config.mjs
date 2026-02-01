@@ -1,6 +1,6 @@
-import * as esbuild from 'esbuild';
 import { createRequire } from 'module';
 import path from 'path';
+import * as esbuild from 'esbuild';
 
 const require = createRequire(import.meta.url);
 

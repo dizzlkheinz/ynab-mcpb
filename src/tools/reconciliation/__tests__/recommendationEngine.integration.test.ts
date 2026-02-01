@@ -3,9 +3,9 @@
  * Tests the full flow from analysis → recommendations with realistic data
  */
 
-import { describe, it, expect } from 'vitest';
-import { analyzeReconciliation } from '../analyzer.js';
+import { describe, expect, it } from 'vitest';
 import type * as ynab from 'ynab';
+import { analyzeReconciliation } from '../analyzer.js';
 import type { ActionableRecommendation } from '../types.js';
 
 /**

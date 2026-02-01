@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { analyzeReconciliation } from '../analyzer.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Transaction as YNABAPITransaction } from 'ynab';
+import { analyzeReconciliation } from '../analyzer.js';
 import * as csvParser from '../csvParser.js';
 
 // Mock the parser module

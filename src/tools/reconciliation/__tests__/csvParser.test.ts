@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseCSV, ParseCSVOptions } from '../csvParser.js';
+import { describe, expect, it } from 'vitest';
+import { ParseCSVOptions, parseCSV } from '../csvParser.js';
 
 describe('csvParser', () => {
   describe('Security and Limits', () => {

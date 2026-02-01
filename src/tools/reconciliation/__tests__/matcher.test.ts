@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { findBestMatch, findMatches } from '../matcher.js';
-import type { BankTransaction, YNABTransaction, MatchingConfig } from '../types.js';
+import type { BankTransaction, MatchingConfig, YNABTransaction } from '../types.js';
 
 describe('matcher', () => {
   let config: MatchingConfig;

@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as ynab from 'ynab';
+import { CacheKeys } from '../../server/cacheKeys.js';
 import {
-  handleListCategories,
-  handleGetCategory,
-  handleUpdateCategory,
-  ListCategoriesSchema,
   GetCategorySchema,
+  ListCategoriesSchema,
   UpdateCategorySchema,
+  handleGetCategory,
+  handleListCategories,
+  handleUpdateCategory,
 } from '../categoryTools.js';
 import { createDeltaFetcherMock, createRejectingDeltaFetcherMock } from './deltaTestUtils.js';
-import { CacheKeys } from '../../server/cacheKeys.js';
 
 // Mock the cache manager
 vi.mock('../../server/cacheManager.js', () => ({

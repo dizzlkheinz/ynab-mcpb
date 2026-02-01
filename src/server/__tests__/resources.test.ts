@@ -4,10 +4,10 @@
  * Tests resource management functionality.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ResourceManager, type ResourceDependencies } from '../resources.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ynab from 'ynab';
 import type { CacheManager } from '../cacheManager.js';
+import { type ResourceDependencies, ResourceManager } from '../resources.js';
 
 // Mock YNAB API
 const mockYnabAPI = {

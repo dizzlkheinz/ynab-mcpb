@@ -1,53 +1,53 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import fs from 'fs';
 import path from 'path';
-import { z } from 'zod';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ListPromptsRequestSchema,
-  ReadResourceRequestSchema,
-  GetPromptRequestSchema,
   CompleteRequestSchema,
   ErrorCode,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
   McpError,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import * as ynab from 'ynab';
+import { z } from 'zod';
+import { registerAccountTools } from '../tools/accountTools.js';
+import { registerBudgetTools } from '../tools/budgetTools.js';
+import { registerCategoryTools } from '../tools/categoryTools.js';
+import { DeltaFetcher } from '../tools/deltaFetcher.js';
+import { registerMonthTools } from '../tools/monthTools.js';
+import { registerPayeeTools } from '../tools/payeeTools.js';
+import { registerReconciliationTools } from '../tools/reconciliation/index.js';
+import { emptyObjectSchema } from '../tools/schemas/common.js';
+import { ToolAnnotationPresets } from '../tools/toolCategories.js';
+import { registerTransactionTools } from '../tools/transactionTools.js';
+import { registerUtilityTools } from '../tools/utilityTools.js';
+import { ValidationError, YNABErrorCode } from '../types/index.js';
+import type { ToolContext } from '../types/toolRegistration.js';
 import {
   AuthenticationError,
-  ConfigurationError,
   ValidationError as ConfigValidationError,
+  ConfigurationError,
 } from '../utils/errors.js';
-import { YNABErrorCode, ValidationError } from '../types/index.js';
-import type { ToolContext } from '../types/toolRegistration.js';
-import { loadConfig, type AppConfig } from './config.js';
-import { createErrorHandler, ErrorHandler } from './errorHandler.js';
 import { BudgetResolver } from './budgetResolver.js';
-import { SecurityMiddleware, withSecurityWrapper } from './securityMiddleware.js';
-import { registerBudgetTools } from '../tools/budgetTools.js';
-import { registerAccountTools } from '../tools/accountTools.js';
-import { registerTransactionTools } from '../tools/transactionTools.js';
-import { registerReconciliationTools } from '../tools/reconciliation/index.js';
-import { registerCategoryTools } from '../tools/categoryTools.js';
-import { registerPayeeTools } from '../tools/payeeTools.js';
-import { registerMonthTools } from '../tools/monthTools.js';
-import { registerUtilityTools } from '../tools/utilityTools.js';
-import { emptyObjectSchema } from '../tools/schemas/common.js';
-import { cacheManager, CacheManager } from './cacheManager.js';
-import { responseFormatter } from './responseFormatter.js';
-import { ToolRegistry, type ToolDefinition, type ProgressCallback } from './toolRegistry.js';
-import { ResourceManager } from './resources.js';
-import { PromptManager } from './prompts.js';
-import { DiagnosticManager } from './diagnostics.js';
-import { ServerKnowledgeStore } from './serverKnowledgeStore.js';
-import { DeltaCache } from './deltaCache.js';
-import { DeltaFetcher } from '../tools/deltaFetcher.js';
-import { ToolAnnotationPresets } from '../tools/toolCategories.js';
+import { CacheManager, cacheManager } from './cacheManager.js';
 import { CompletionsManager } from './completions.js';
+import { type AppConfig, loadConfig } from './config.js';
+import { DeltaCache } from './deltaCache.js';
+import { DiagnosticManager } from './diagnostics.js';
+import { ErrorHandler, createErrorHandler } from './errorHandler.js';
+import { PromptManager } from './prompts.js';
+import { ResourceManager } from './resources.js';
+import { responseFormatter } from './responseFormatter.js';
+import { SecurityMiddleware, withSecurityWrapper } from './securityMiddleware.js';
+import { ServerKnowledgeStore } from './serverKnowledgeStore.js';
+import { type ProgressCallback, type ToolDefinition, ToolRegistry } from './toolRegistry.js';
 
 /**
  * YNAB MCP Server class that provides integration with You Need A Budget API
@@ -69,7 +69,7 @@ export class YNABMCPServer {
   private errorHandler: ErrorHandler;
   private completionsManager: CompletionsManager;
 
-  constructor(exitOnError: boolean = true) {
+  constructor(exitOnError = true) {
     this.exitOnError = exitOnError;
     this.configInstance = loadConfig();
     // Config is now imported and validated at startup

@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { YNABMCPServer } from '../YNABMCPServer.js';
-import { AuthenticationError, ValidationError } from '../../types/index.js';
-import { ToolRegistry } from '../toolRegistry.js';
 import { cacheManager } from '../../server/cacheManager.js';
 import { responseFormatter } from '../../server/responseFormatter.js';
-import { createErrorHandler, ErrorHandler } from '../errorHandler.js';
+import { AuthenticationError, ValidationError } from '../../types/index.js';
+import { YNABMCPServer } from '../YNABMCPServer.js';
+import { ErrorHandler, createErrorHandler } from '../errorHandler.js';
+import { ToolRegistry } from '../toolRegistry.js';
 
 function parseCallToolJson<T = Record<string, unknown>>(result: CallToolResult): T {
   const text = result.content?.[0]?.text;

@@ -4,33 +4,33 @@
  */
 
 import { promises as fs } from 'fs';
-import { z } from 'zod/v4';
-import type * as ynab from 'ynab';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type * as ynab from 'ynab';
+import { z } from 'zod/v4';
+import { responseFormatter } from '../../server/responseFormatter.js';
 import type { ProgressCallback } from '../../server/toolRegistry.js';
 import { withToolErrorHandling } from '../../types/index.js';
 import type { ToolFactory } from '../../types/toolRegistration.js';
 import { createAdapters, createBudgetResolver } from '../adapters.js';
-import { ToolAnnotationPresets } from '../toolCategories.js';
 import {
   CompareTransactionsSchema,
   handleCompareTransactions,
 } from '../compareTransactions/index.js';
-import { analyzeReconciliation } from './analyzer.js';
-import type { MatchingConfig } from './matcher.js';
-import { buildReconciliationPayload } from '../reconcileAdapter.js';
-import {
-  executeReconciliation,
-  type AccountSnapshot,
-  type LegacyReconciliationResult,
-} from './executor.js';
-import { responseFormatter } from '../../server/responseFormatter.js';
-import { parseCSV, type ParseCSVOptions, type CSVParseResult } from './csvParser.js';
 import type { DeltaFetcher } from '../deltaFetcher.js';
 import { resolveDeltaFetcherArgs } from '../deltaSupport.js';
+import { buildReconciliationPayload } from '../reconcileAdapter.js';
+import { ToolAnnotationPresets } from '../toolCategories.js';
+import { analyzeReconciliation } from './analyzer.js';
+import { type CSVParseResult, type ParseCSVOptions, parseCSV } from './csvParser.js';
+import {
+  type AccountSnapshot,
+  type LegacyReconciliationResult,
+  executeReconciliation,
+} from './executor.js';
+import type { MatchingConfig } from './matcher.js';
 import { detectSignInversion } from './signDetector.js';
-import { normalizeYNABTransactions } from './ynabAdapter.js';
 import type { BankTransaction } from './types.js';
+import { normalizeYNABTransactions } from './ynabAdapter.js';
 
 // Re-export types for external use
 export type * from './types.js';

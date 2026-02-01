@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type * as ynab from 'ynab';
 import { normalizeYNABTransaction, normalizeYNABTransactions } from '../ynabAdapter.js';
 

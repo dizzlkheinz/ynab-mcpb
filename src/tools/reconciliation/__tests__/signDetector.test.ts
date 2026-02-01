@@ -2,9 +2,9 @@
  * Tests for smart sign detection algorithm
  */
 
-import { describe, it, expect } from 'vitest';
-import { detectSignInversion } from '../signDetector.js';
+import { describe, expect, it } from 'vitest';
 import type { BankTransaction, NormalizedYNABTransaction } from '../../../types/reconciliation.js';
+import { detectSignInversion } from '../signDetector.js';
 
 describe('detectSignInversion', () => {
   it('detects when bank amounts need inversion (opposite signs)', () => {

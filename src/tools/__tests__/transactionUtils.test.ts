@@ -1,32 +1,32 @@
 /**
  * Unit tests for transactionUtils.ts
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as ynab from 'ynab';
-import { ValidationError } from '../../types/index.js';
+import type { SaveTransactionsResponseData } from 'ynab/dist/models/SaveTransactionsResponseData.js';
 import { responseFormatter } from '../../server/responseFormatter.js';
-import {
-  ensureTransaction,
-  appendCategoryIds,
-  collectCategoryIdsFromSources,
-  setsEqual,
-  toMonthKey,
-  generateCorrelationKey,
-  toCorrelationPayload,
-  correlateResults,
-  estimatePayloadSize,
-  finalizeResponse,
-  finalizeBulkUpdateResponse,
-  handleTransactionError,
-} from '../transactionUtils.js';
+import { ValidationError } from '../../types/index.js';
 import type {
-  CategorySource,
-  BulkTransactionInput,
   BulkCreateResponse,
+  BulkTransactionInput,
   BulkUpdateResponse,
+  CategorySource,
   CorrelationPayloadInput,
 } from '../transactionSchemas.js';
-import type { SaveTransactionsResponseData } from 'ynab/dist/models/SaveTransactionsResponseData.js';
+import {
+  appendCategoryIds,
+  collectCategoryIdsFromSources,
+  correlateResults,
+  ensureTransaction,
+  estimatePayloadSize,
+  finalizeBulkUpdateResponse,
+  finalizeResponse,
+  generateCorrelationKey,
+  handleTransactionError,
+  setsEqual,
+  toCorrelationPayload,
+  toMonthKey,
+} from '../transactionUtils.js';
 
 // Mock the responseFormatter module
 vi.mock('../../server/responseFormatter.js', () => ({

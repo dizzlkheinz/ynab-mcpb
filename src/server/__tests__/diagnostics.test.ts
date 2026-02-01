@@ -4,14 +4,14 @@
  * Tests diagnostic data collection functionality.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  DiagnosticManager,
-  formatUptime,
-  formatBytes,
-  maskToken,
   type DiagnosticDependencies,
+  DiagnosticManager,
   type DiagnosticOptions,
+  formatBytes,
+  formatUptime,
+  maskToken,
 } from '../diagnostics.js';
 
 // Mock SecurityMiddleware

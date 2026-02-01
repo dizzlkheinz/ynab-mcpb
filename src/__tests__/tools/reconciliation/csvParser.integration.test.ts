@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { parseCSV } from '../../../tools/reconciliation/csvParser.js';
 import { findMatches } from '../../../tools/reconciliation/matcher.js';
 import { normalizeYNABTransaction } from '../../../tools/reconciliation/ynabAdapter.js';

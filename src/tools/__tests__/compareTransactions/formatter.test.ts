@@ -1,19 +1,19 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import * as ynab from 'ynab';
+import { responseFormatter } from '../../../server/responseFormatter.js';
 import {
   buildComparisonResult,
-  findSuggestedPayee,
   buildSummary,
+  findSuggestedPayee,
   formatMatches,
   formatUnmatchedBank,
   formatUnmatchedYNAB,
 } from '../../compareTransactions/formatter.js';
 import {
   BankTransaction,
-  YNABTransaction,
   TransactionMatch,
+  YNABTransaction,
 } from '../../compareTransactions/types.js';
-import { responseFormatter } from '../../../server/responseFormatter.js';
 
 // Mock responseFormatter
 vi.mock('../../../server/responseFormatter.js', () => ({

@@ -10,7 +10,7 @@ import type {
   BankTransaction as CanonicalBankTransaction,
   NormalizedYNABTransaction,
 } from '../../types/reconciliation.js';
-import { type MatchingConfig } from './types.js';
+import type { MatchingConfig } from './types.js';
 
 export type { MatchingConfig };
 

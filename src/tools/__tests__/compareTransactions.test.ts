@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as ynab from 'ynab';
 import {
-  handleCompareTransactions,
   CompareTransactionsSchema,
+  handleCompareTransactions,
 } from '../compareTransactions/index.js';
-import { readFileSync } from 'fs';
 
 // Mock filesystem
 vi.mock('fs', () => ({

@@ -1,6 +1,6 @@
-import Papa from 'papaparse';
-import * as chrono from 'chrono-node';
 import { randomUUID } from 'crypto';
+import * as chrono from 'chrono-node';
+import Papa from 'papaparse';
 import type { BankTransaction } from '../../types/reconciliation.js';
 
 export interface CSVParseResult {
@@ -381,7 +381,7 @@ export function parseCSV(content: string, options: ParseCSVOptions = {}): CSVPar
     const getValue = (colName: string | null): string => {
       if (!colName) return '';
       if (Array.isArray(row)) {
-        const idx = parseInt(colName, 10);
+        const idx = Number.parseInt(colName, 10);
         return String(row[idx] ?? '');
       }
       return String(row[colName as keyof typeof row] ?? '');
@@ -540,7 +540,9 @@ function parseDate(raw: string, formatHint?: 'YMD' | 'MDY' | 'DMY'): Date | null
   const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     const [, year, month, day] = isoMatch;
-    return new Date(Date.UTC(parseInt(year!), parseInt(month!) - 1, parseInt(day!)));
+    return new Date(
+      Date.UTC(Number.parseInt(year!), Number.parseInt(month!) - 1, Number.parseInt(day!)),
+    );
   }
 
   // 2. Try explicit format hint for ambiguous numeric dates
@@ -552,19 +554,19 @@ function parseDate(raw: string, formatHint?: 'YMD' | 'MDY' | 'DMY'): Date | null
     let year: number, month: number, day: number;
     switch (formatHint) {
       case 'YMD': // YYYY/MM/DD or YY/MM/DD
-        year = parseInt(a!);
-        month = parseInt(b!);
-        day = parseInt(c!);
+        year = Number.parseInt(a!);
+        month = Number.parseInt(b!);
+        day = Number.parseInt(c!);
         break;
       case 'MDY': // US format: MM/DD/YYYY or MM/DD/YY
-        month = parseInt(a!);
-        day = parseInt(b!);
-        year = parseInt(c!);
+        month = Number.parseInt(a!);
+        day = Number.parseInt(b!);
+        year = Number.parseInt(c!);
         break;
       case 'DMY': // European/UK format: DD/MM/YYYY or DD/MM/YY
-        day = parseInt(a!);
-        month = parseInt(b!);
-        year = parseInt(c!);
+        day = Number.parseInt(a!);
+        month = Number.parseInt(b!);
+        year = Number.parseInt(c!);
         break;
     }
 
@@ -598,7 +600,7 @@ function formatLocalDate(date: Date): string {
 function findColumn(
   available: string[],
   candidates: string | string[],
-  exactIndex: boolean = false,
+  exactIndex = false,
 ): string | null {
   const candidateList = Array.isArray(candidates) ? candidates : [candidates];
 
@@ -673,7 +675,7 @@ function parseAmount(str: string): {
     cleaned = cleaned.replace(/,/g, '');
   }
 
-  const dollars = parseFloat(cleaned);
+  const dollars = Number.parseFloat(cleaned);
   if (!Number.isFinite(dollars)) {
     return { valid: false, valueMilliunits: 0, reason: `Invalid amount: "${str}"` };
   }
