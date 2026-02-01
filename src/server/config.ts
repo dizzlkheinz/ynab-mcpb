@@ -3,11 +3,23 @@ import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { ValidationError } from "../utils/errors.js";
 
+const normalizeEnvValue = (value: unknown) => {
+	if (typeof value !== "string") {
+		return value;
+	}
+	const trimmed = value.trim();
+	const lowered = trimmed.toLowerCase();
+	if (lowered === "undefined" || lowered === "null") {
+		return undefined;
+	}
+	return trimmed;
+};
+
 const envSchema = z.object({
-	YNAB_ACCESS_TOKEN: z
-		.string()
-		.trim()
-		.min(1, "YNAB_ACCESS_TOKEN must be a non-empty string"),
+	YNAB_ACCESS_TOKEN: z.preprocess(
+		normalizeEnvValue,
+		z.string().min(1, "YNAB_ACCESS_TOKEN must be a non-empty string"),
+	),
 	YNAB_DEFAULT_BUDGET_ID: z
 		.string()
 		.uuid("YNAB_DEFAULT_BUDGET_ID must be a valid UUID")

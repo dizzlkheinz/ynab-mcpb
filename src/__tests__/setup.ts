@@ -7,12 +7,38 @@ import "dotenv/config";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { cacheManager } from "../server/cacheManager.js";
 
+const normalizeAccessToken = (
+	token: string | undefined,
+): string | undefined => {
+	if (typeof token !== "string") {
+		return undefined;
+	}
+	const trimmed = token.trim();
+	if (!trimmed) {
+		return undefined;
+	}
+
+	const lowered = trimmed.toLowerCase();
+	if (lowered === "undefined" || lowered === "null") {
+		return undefined;
+	}
+
+	if (lowered === "your_ynab_personal_access_token_here") {
+		return undefined;
+	}
+
+	return trimmed;
+};
+
 // Skip E2E tests by default unless explicitly enabled
-const hasAccessToken = !!process.env.YNAB_ACCESS_TOKEN;
+const normalizedToken = normalizeAccessToken(process.env.YNAB_ACCESS_TOKEN);
+const hasAccessToken = !!normalizedToken;
 if (!process.env.SKIP_E2E_TESTS) {
 	process.env.SKIP_E2E_TESTS = hasAccessToken ? "false" : "true";
 }
-if (!process.env.YNAB_ACCESS_TOKEN) {
+if (normalizedToken) {
+	process.env.YNAB_ACCESS_TOKEN = normalizedToken;
+} else {
 	process.env.YNAB_ACCESS_TOKEN = "test-token-for-mocked-tests";
 }
 

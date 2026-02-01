@@ -17,11 +17,41 @@ export interface TestConfig {
 	skipE2ETests: boolean;
 }
 
+const normalizeAccessToken = (
+	token: string | undefined,
+): string | undefined => {
+	if (typeof token !== "string") {
+		return undefined;
+	}
+	const trimmed = token.trim();
+	if (!trimmed) {
+		return undefined;
+	}
+
+	const lowered = trimmed.toLowerCase();
+	if (lowered === "undefined" || lowered === "null") {
+		return undefined;
+	}
+
+	if (lowered === "your_ynab_personal_access_token_here") {
+		return undefined;
+	}
+
+	if (trimmed === "test-token-for-mocked-tests") {
+		return undefined;
+	}
+
+	return trimmed;
+};
+
+export const hasRealAccessToken = (token?: string): boolean =>
+	!!normalizeAccessToken(token);
+
 /**
  * Get test configuration from environment
  */
 export function getTestConfig(): TestConfig {
-	const hasRealApiKey = !!process.env.YNAB_ACCESS_TOKEN;
+	const hasRealApiKey = hasRealAccessToken(process.env.YNAB_ACCESS_TOKEN);
 	const skipE2ETests = process.env.SKIP_E2E_TESTS === "true" || !hasRealApiKey;
 
 	return {
@@ -36,7 +66,7 @@ export function getTestConfig(): TestConfig {
  * Create a test server instance
  */
 export async function createTestServer(): Promise<YNABMCPServer> {
-	if (!process.env.YNAB_ACCESS_TOKEN) {
+	if (!hasRealAccessToken(process.env.YNAB_ACCESS_TOKEN)) {
 		throw new Error("YNAB_ACCESS_TOKEN is required for testing");
 	}
 
@@ -57,7 +87,7 @@ export async function executeToolCall(
 	toolName: string,
 	args: Record<string, any> = {},
 ): Promise<CallToolResult> {
-	const accessToken = process.env.YNAB_ACCESS_TOKEN;
+	const accessToken = normalizeAccessToken(process.env.YNAB_ACCESS_TOKEN);
 	if (!accessToken) {
 		throw new Error("YNAB_ACCESS_TOKEN is required for tool execution");
 	}
@@ -441,6 +471,46 @@ export function isRateLimitError(error: any): boolean {
 }
 
 /**
+ * Determine whether a value represents an authentication/authorization error.
+ */
+export function isAuthError(error: any): boolean {
+	if (!error) return false;
+
+	const errorString = error.toString
+		? error.toString().toLowerCase()
+		: String(error).toLowerCase();
+	const hasAuthMessage =
+		errorString.includes("unauthorized") ||
+		errorString.includes("invalid or expired") ||
+		errorString.includes("authenticationerror") ||
+		errorString.includes("forbidden") ||
+		errorString.includes("401") ||
+		errorString.includes("403");
+
+	if (error && typeof error === "object") {
+		const statusCode = error.status || error.statusCode || error.error?.id;
+		if (
+			statusCode === 401 ||
+			statusCode === "401" ||
+			statusCode === 403 ||
+			statusCode === "403"
+		) {
+			return true;
+		}
+
+		const errorName = error.name || error.error?.name || "";
+		if (
+			errorName.toLowerCase().includes("unauthorized") ||
+			errorName.toLowerCase().includes("authentication")
+		) {
+			return true;
+		}
+	}
+
+	return hasAuthMessage;
+}
+
+/**
  * Detects rate limit responses that are embedded in a CallToolResult (text JSON with an error object).
  * Returns true and optionally skips the current test when a rate limit is found.
  */
@@ -509,9 +579,12 @@ export async function skipOnRateLimit<T>(
 	try {
 		return await testFn();
 	} catch (error) {
-		if (isRateLimitError(error)) {
+		if (isRateLimitError(error) || isAuthError(error)) {
 			// Log the skip reason
-			console.warn("⏭️  Skipping test due to YNAB API rate limit");
+			const reason = isAuthError(error)
+				? "authentication failure"
+				: "YNAB API rate limit";
+			console.warn(`⏭️  Skipping test due to ${reason}`);
 
 			// Skip the test if context is provided
 			if (context?.skip) {
