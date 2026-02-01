@@ -23,8 +23,6 @@ export const CompareTransactionsSchema = z
 		account_id: z.string().min(1, "Account ID is required"),
 		csv_file_path: z.string().optional(),
 		csv_data: z.string().optional(),
-		/** @deprecated Currently unused. Originally intended to limit the date range when CSV dates span a very long period. */
-		date_range_days: z.number().min(1).max(365).optional().default(30),
 		amount_tolerance: z.number().min(0).max(1).optional().default(0.01),
 		date_tolerance_days: z.number().min(0).max(7).optional().default(5),
 		enable_chronology_bonus: z.boolean().optional().default(false),

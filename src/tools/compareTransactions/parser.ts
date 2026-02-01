@@ -392,12 +392,9 @@ export function parseBankCSV(
 		columns: format.has_header,
 		skip_empty_lines: true,
 		trim: true,
-		// Enhanced CSV parsing options for robust handling
-		quote: '"', // Handle quoted fields (for dates with commas)
-		escape: '"', // Handle escaped quotes within fields
-		relax_column_count: true, // Handle varying column counts
-		// Removed deprecated auto_parse and auto_parse_date options
-		// Removed relax_quotes as it may not be supported in current csv-parse version
+		quote: '"',
+		escape: '"',
+		relax_column_count: true,
 	});
 
 	const transactions: BankTransaction[] = [];
