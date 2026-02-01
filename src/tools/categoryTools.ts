@@ -8,6 +8,7 @@ import {
 	cacheManager,
 } from "../server/cacheManager.js";
 import type { DeltaCache } from "../server/deltaCache.js";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
@@ -102,6 +103,7 @@ export async function handleListCategories(
 	ynabAPI: ynab.API,
 	deltaFetcherOrParams: DeltaFetcher | ListCategoriesParams,
 	maybeParams?: ListCategoriesParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
 		ynabAPI,
@@ -158,6 +160,7 @@ export async function handleListCategories(
 		},
 		"ynab:list_categories",
 		"listing categories",
+		errorHandler,
 	);
 }
 
@@ -168,6 +171,7 @@ export async function handleListCategories(
 export async function handleGetCategory(
 	ynabAPI: ynab.API,
 	params: GetCategoryParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
@@ -222,6 +226,7 @@ export async function handleGetCategory(
 		},
 		"ynab:get_category",
 		"getting category",
+		errorHandler,
 	);
 }
 
@@ -244,6 +249,7 @@ export async function handleUpdateCategory(
 	deltaCacheOrParams: DeltaCache | UpdateCategoryParams,
 	knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateCategoryParams,
 	maybeParams?: UpdateCategoryParams,
+	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,

@@ -3,11 +3,9 @@ import type * as ynab from "ynab";
 import type { SaveSubTransaction } from "ynab/dist/models/SaveSubTransaction.js";
 import type { SaveTransaction } from "ynab/dist/models/SaveTransaction.js";
 import type { z } from "zod/v4";
-import {
-	CacheManager,
-	cacheManager,
-} from "../server/cacheManager.js";
+import { CacheManager, cacheManager } from "../server/cacheManager.js";
 import type { DeltaCache } from "../server/deltaCache.js";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import { globalRequestLogger } from "../server/requestLogger.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
@@ -19,9 +17,7 @@ import {
 	milliunitsToAmount,
 } from "../utils/amountUtils.js";
 import { createAdapters, createBudgetResolver } from "./adapters.js";
-import {
-	resolveDeltaWriteArgs,
-} from "./deltaSupport.js";
+import { resolveDeltaWriteArgs } from "./deltaSupport.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
 
 import {
@@ -77,6 +73,7 @@ export async function handleCreateTransaction(
 	deltaCacheOrParams: DeltaCache | CreateTransactionParams,
 	knowledgeStoreOrParams?: ServerKnowledgeStore | CreateTransactionParams,
 	maybeParams?: CreateTransactionParams,
+	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,
@@ -652,6 +649,7 @@ export async function handleCreateReceiptSplitTransaction(
 		| ServerKnowledgeStore
 		| CreateReceiptSplitTransactionParams,
 	maybeParams?: CreateReceiptSplitTransactionParams,
+	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,
@@ -845,6 +843,7 @@ export async function handleUpdateTransaction(
 	deltaCacheOrParams: DeltaCache | UpdateTransactionParams,
 	knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateTransactionParams,
 	maybeParams?: UpdateTransactionParams,
+	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,
@@ -1049,6 +1048,7 @@ export async function handleDeleteTransaction(
 	deltaCacheOrParams: DeltaCache | DeleteTransactionParams,
 	knowledgeStoreOrParams?: ServerKnowledgeStore | DeleteTransactionParams,
 	maybeParams?: DeleteTransactionParams,
+	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,
@@ -1152,6 +1152,7 @@ export async function handleCreateTransactions(
 	deltaCacheOrParams: DeltaCache | CreateTransactionsParams,
 	knowledgeStoreOrParams?: ServerKnowledgeStore | CreateTransactionsParams,
 	maybeParams?: CreateTransactionsParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,
@@ -1392,6 +1393,7 @@ export async function handleCreateTransactions(
 		},
 		"ynab:create_transactions",
 		"bulk transaction creation",
+		errorHandler,
 	)) as CallToolResult;
 }
 
@@ -1556,6 +1558,7 @@ export async function handleUpdateTransactions(
 	deltaCacheOrParams: DeltaCache | UpdateTransactionsParams,
 	knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateTransactionsParams,
 	maybeParams?: UpdateTransactionsParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,
@@ -1998,6 +2001,7 @@ export async function handleUpdateTransactions(
 		},
 		"ynab:update_transactions",
 		"bulk transaction update",
+		errorHandler,
 	)) as CallToolResult;
 }
 

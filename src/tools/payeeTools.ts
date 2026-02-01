@@ -7,6 +7,7 @@ import {
 	CacheManager,
 	cacheManager,
 } from "../server/cacheManager.js";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
@@ -56,6 +57,7 @@ export async function handleListPayees(
 	ynabAPI: ynab.API,
 	deltaFetcherOrParams: DeltaFetcher | ListPayeesParams,
 	maybeParams?: ListPayeesParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
 		ynabAPI,
@@ -98,6 +100,7 @@ export async function handleListPayees(
 		},
 		"ynab:list_payees",
 		"listing payees",
+		errorHandler,
 	);
 }
 
@@ -108,6 +111,7 @@ export async function handleListPayees(
 export async function handleGetPayee(
 	ynabAPI: ynab.API,
 	params: GetPayeeParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
@@ -152,6 +156,7 @@ export async function handleGetPayee(
 		},
 		"ynab:get_payee",
 		"getting payee details",
+		errorHandler,
 	);
 }
 

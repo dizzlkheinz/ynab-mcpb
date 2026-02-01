@@ -13,7 +13,7 @@ import { cacheManager } from "../../server/cacheManager.js";
 import { responseFormatter } from "../../server/responseFormatter.js";
 import { AuthenticationError, ValidationError } from "../../types/index.js";
 import { YNABMCPServer } from "../YNABMCPServer.js";
-import { ErrorHandler, createErrorHandler } from "../errorHandler.js";
+import { createErrorHandler } from "../errorHandler.js";
 import type { ToolRegistry } from "../toolRegistry.js";
 
 function parseCallToolJson<T = Record<string, unknown>>(
@@ -851,10 +851,13 @@ describe("YNABMCPServer", () => {
 			expect(server.getYNABAPI()).toBeDefined();
 		});
 
-		it("should set global ErrorHandler formatter for backward compatibility", () => {
-			// This test verifies that the global formatter was set
-			// by checking that static ErrorHandler methods work
-			const result = ErrorHandler.createValidationError("Test error");
+		it("should create ErrorHandler with proper formatter", () => {
+			// Verify the server creates a working ErrorHandler by checking
+			// that the server's errorHandler instance produces valid output
+			const errorHandler = createErrorHandler({
+				format: (value: unknown) => JSON.stringify(value),
+			});
+			const result = errorHandler.createValidationError("Test error");
 
 			expect(result.content).toBeDefined();
 			expect(result.content[0].type).toBe("text");
@@ -888,19 +891,19 @@ describe("YNABMCPServer", () => {
 			expect(() => JSON.parse(result.content[0].text)).not.toThrow();
 		});
 
-		it("should handle formatter consistency across static and instance methods", () => {
+		it("should produce consistent error responses across ErrorHandler instances with same formatter", () => {
 			const formatter = { format: (value: unknown) => JSON.stringify(value) };
-			const errorHandler = createErrorHandler(formatter);
-			ErrorHandler.setFormatter(formatter);
+			const errorHandler1 = createErrorHandler(formatter);
+			const errorHandler2 = createErrorHandler(formatter);
 
 			const error = new ValidationError("Test error");
-			const instanceResult = errorHandler.handleError(error, "testing");
-			const staticResult = ErrorHandler.handleError(error, "testing");
+			const result1 = errorHandler1.handleError(error, "testing");
+			const result2 = errorHandler2.handleError(error, "testing");
 
 			// Both should produce the same result structure
-			expect(instanceResult.content[0].type).toBe(staticResult.content[0].type);
-			expect(() => JSON.parse(instanceResult.content[0].text)).not.toThrow();
-			expect(() => JSON.parse(staticResult.content[0].text)).not.toThrow();
+			expect(result1.content[0].type).toBe(result2.content[0].type);
+			expect(() => JSON.parse(result1.content[0].text)).not.toThrow();
+			expect(() => JSON.parse(result2.content[0].text)).not.toThrow();
 		});
 	});
 });

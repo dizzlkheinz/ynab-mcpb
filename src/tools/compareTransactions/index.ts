@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import type { ErrorHandler } from "../../server/errorHandler.js";
 import { withToolErrorHandling } from "../../types/index.js";
 import { buildComparisonResult } from "./formatter.js";
 import { findMatches } from "./matcher.js";
@@ -73,6 +74,7 @@ export type CompareTransactionsParams = z.infer<
 export async function handleCompareTransactions(
 	ynabAPI: ynab.API,
 	params: CompareTransactionsParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
@@ -256,5 +258,6 @@ export async function handleCompareTransactions(
 		},
 		"ynab:compare_transactions",
 		"comparing bank and YNAB transactions",
+		errorHandler,
 	);
 }

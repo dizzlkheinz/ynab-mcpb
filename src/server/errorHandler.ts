@@ -83,26 +83,9 @@ export class ValidationError extends Error {
  */
 export class ErrorHandler {
 	private formatter: ErrorResponseFormatter;
-	private static defaultInstance: ErrorHandler;
 
 	constructor(formatter: ErrorResponseFormatter) {
 		this.formatter = formatter;
-	}
-
-	/**
-	 * Creates a fallback formatter for when no formatter is injected
-	 */
-	private static createFallbackFormatter(): ErrorResponseFormatter {
-		return {
-			format: (value: unknown) => JSON.stringify(value, null, 2),
-		};
-	}
-
-	/**
-	 * Sets the formatter for the default instance (backward compatibility)
-	 */
-	static setFormatter(formatter: ErrorResponseFormatter): void {
-		ErrorHandler.defaultInstance = new ErrorHandler(formatter);
 	}
 
 	/**
@@ -133,18 +116,6 @@ export class ErrorHandler {
 				},
 			],
 		};
-	}
-
-	/**
-	 * Static method for backward compatibility
-	 */
-	static handleError(error: unknown, context: string): CallToolResult {
-		if (!ErrorHandler.defaultInstance) {
-			ErrorHandler.defaultInstance = new ErrorHandler(
-				ErrorHandler.createFallbackFormatter(),
-			);
-		}
-		return ErrorHandler.defaultInstance.handleError(error, context);
 	}
 
 	/**
@@ -760,21 +731,6 @@ export class ErrorHandler {
 	}
 
 	/**
-	 * Static method for backward compatibility
-	 */
-	static async withErrorHandling<T>(
-		operation: () => Promise<T>,
-		context: string,
-	): Promise<T | CallToolResult> {
-		if (!ErrorHandler.defaultInstance) {
-			ErrorHandler.defaultInstance = new ErrorHandler(
-				ErrorHandler.createFallbackFormatter(),
-			);
-		}
-		return ErrorHandler.defaultInstance.withErrorHandling(operation, context);
-	}
-
-	/**
 	 * Creates a validation error for invalid parameters
 	 */
 	createValidationError(
@@ -789,26 +745,6 @@ export class ErrorHandler {
 	}
 
 	/**
-	 * Static method for backward compatibility
-	 */
-	static createValidationError(
-		message: string,
-		details?: string,
-		suggestions?: string[],
-	): CallToolResult {
-		if (!ErrorHandler.defaultInstance) {
-			ErrorHandler.defaultInstance = new ErrorHandler(
-				ErrorHandler.createFallbackFormatter(),
-			);
-		}
-		return ErrorHandler.defaultInstance.createValidationError(
-			message,
-			details,
-			suggestions,
-		);
-	}
-
-	/**
 	 * Creates a YNAB API error with specific error code
 	 */
 	createYNABError(
@@ -818,26 +754,6 @@ export class ErrorHandler {
 	): YNABAPIError {
 		const message = this.getErrorMessage(code, context);
 		return new YNABAPIError(code, message, originalError);
-	}
-
-	/**
-	 * Static method for backward compatibility
-	 */
-	static createYNABError(
-		code: YNABErrorCode,
-		context: string,
-		originalError?: unknown,
-	): YNABAPIError {
-		if (!ErrorHandler.defaultInstance) {
-			ErrorHandler.defaultInstance = new ErrorHandler(
-				ErrorHandler.createFallbackFormatter(),
-			);
-		}
-		return ErrorHandler.defaultInstance.createYNABError(
-			code,
-			context,
-			originalError,
-		);
 	}
 }
 
@@ -854,17 +770,24 @@ export function createErrorHandler(
 }
 
 /**
+ * Module-level fallback ErrorHandler for standalone functions when no instance
+ * is provided. Uses a simple JSON formatter.
+ */
+const fallbackErrorHandler = new ErrorHandler({
+	format: (value: unknown) => JSON.stringify(value, null, 2),
+});
+
+/**
  * Utility function for handling errors in tool handlers
  */
 export function handleToolError(
 	error: unknown,
 	toolName: string,
 	operation: string,
+	errorHandler?: ErrorHandler,
 ): CallToolResult {
-	return ErrorHandler.handleError(
-		error,
-		`executing ${toolName} - ${operation}`,
-	);
+	const eh = errorHandler ?? fallbackErrorHandler;
+	return eh.handleError(error, `executing ${toolName} - ${operation}`);
 }
 
 /**
@@ -874,8 +797,10 @@ export async function withToolErrorHandling<T>(
 	operation: () => Promise<T>,
 	toolName: string,
 	operationName: string,
+	errorHandler?: ErrorHandler,
 ): Promise<T | CallToolResult> {
-	return ErrorHandler.withErrorHandling(
+	const eh = errorHandler ?? fallbackErrorHandler;
+	return eh.withErrorHandling(
 		operation,
 		`executing ${toolName} - ${operationName}`,
 	);

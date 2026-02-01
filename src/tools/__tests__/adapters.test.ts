@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import { createErrorHandler } from "../../server/errorHandler.js";
 import { DefaultArgumentResolutionError } from "../../server/toolRegistry.js";
 import type { ToolContext } from "../../types/toolRegistration.js";
 import { createAdapters, createBudgetResolver } from "../adapters.js";
+
+const createMockErrorHandler = () =>
+	createErrorHandler({
+		format: (value: unknown) => JSON.stringify(value, null, 2),
+	});
 
 const createMockContext = (
 	overrides: Partial<ToolContext> = {},
@@ -17,6 +23,7 @@ const createMockContext = (
 			vi.fn(() => "123e4567-e89b-12d3-a456-426614174000"),
 		setDefaultBudget: overrides.setDefaultBudget ?? vi.fn(),
 		cacheManager: overrides.cacheManager ?? ({} as any),
+		errorHandler: overrides.errorHandler ?? createMockErrorHandler(),
 		diagnosticManager: overrides.diagnosticManager,
 	} satisfies ToolContext;
 };
@@ -30,7 +37,11 @@ describe("createAdapters", () => {
 		const adapted = adapt(handler);
 		await adapted({ input: { foo: "bar" }, context: {} as any });
 
-		expect(handler).toHaveBeenCalledWith(context.ynabAPI, { foo: "bar" });
+		expect(handler).toHaveBeenCalledWith(
+			context.ynabAPI,
+			{ foo: "bar" },
+			context.errorHandler,
+		);
 	});
 
 	it("adaptNoInput passes api without params", async () => {
@@ -41,7 +52,7 @@ describe("createAdapters", () => {
 		const adapted = adaptNoInput(handler);
 		await adapted({ input: {}, context: {} as any });
 
-		expect(handler).toHaveBeenCalledWith(context.ynabAPI);
+		expect(handler).toHaveBeenCalledWith(context.ynabAPI, context.errorHandler);
 	});
 
 	it("adaptWithDelta passes deltaFetcher to handler", async () => {
@@ -53,9 +64,14 @@ describe("createAdapters", () => {
 		const adapted = adaptWithDelta(handler);
 		await adapted({ input: { a: 1 }, context: {} as any });
 
-		expect(handler).toHaveBeenCalledWith(context.ynabAPI, deltaFetcher, {
-			a: 1,
-		});
+		expect(handler).toHaveBeenCalledWith(
+			context.ynabAPI,
+			deltaFetcher,
+			{
+				a: 1,
+			},
+			context.errorHandler,
+		);
 	});
 
 	it("adaptWrite passes cache and knowledge store to handler", async () => {
@@ -75,6 +91,7 @@ describe("createAdapters", () => {
 			{
 				a: 2,
 			},
+			context.errorHandler,
 		);
 	});
 });

@@ -51,13 +51,14 @@ export const hasRealAccessToken = (token?: string): boolean =>
  * Get test configuration from environment
  */
 export function getTestConfig(): TestConfig {
-	const hasRealApiKey = hasRealAccessToken(process.env.YNAB_ACCESS_TOKEN);
-	const skipE2ETests = process.env.SKIP_E2E_TESTS === "true" || !hasRealApiKey;
+	const hasRealApiKey = hasRealAccessToken(process.env["YNAB_ACCESS_TOKEN"]);
+	const skipE2ETests =
+		process.env["SKIP_E2E_TESTS"] === "true" || !hasRealApiKey;
 
 	return {
 		hasRealApiKey,
-		testBudgetId: process.env.TEST_BUDGET_ID,
-		testAccountId: process.env.TEST_ACCOUNT_ID,
+		testBudgetId: process.env["TEST_BUDGET_ID"],
+		testAccountId: process.env["TEST_ACCOUNT_ID"],
 		skipE2ETests,
 	};
 }
@@ -66,7 +67,7 @@ export function getTestConfig(): TestConfig {
  * Create a test server instance
  */
 export async function createTestServer(): Promise<YNABMCPServer> {
-	if (!hasRealAccessToken(process.env.YNAB_ACCESS_TOKEN)) {
+	if (!hasRealAccessToken(process.env["YNAB_ACCESS_TOKEN"])) {
 		throw new Error("YNAB_ACCESS_TOKEN is required for testing");
 	}
 
@@ -87,7 +88,7 @@ export async function executeToolCall(
 	toolName: string,
 	args: Record<string, any> = {},
 ): Promise<CallToolResult> {
-	const accessToken = normalizeAccessToken(process.env.YNAB_ACCESS_TOKEN);
+	const accessToken = normalizeAccessToken(process.env["YNAB_ACCESS_TOKEN"]);
 	if (!accessToken) {
 		throw new Error("YNAB_ACCESS_TOKEN is required for tool execution");
 	}
@@ -537,7 +538,7 @@ export function skipIfRateLimitedResult(
 
 		if (parsed && typeof parsed === "object") {
 			const parsedObj = parsed as Record<string, unknown>;
-			if ("error" in parsedObj) candidates.push(parsedObj.error);
+			if ("error" in parsedObj) candidates.push(parsedObj["error"]);
 			if ("data" in parsedObj) {
 				const data = (parsedObj as any).data;
 				candidates.push(data?.error ?? data);

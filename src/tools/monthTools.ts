@@ -7,6 +7,7 @@ import {
 	CacheManager,
 	cacheManager,
 } from "../server/cacheManager.js";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
@@ -48,6 +49,7 @@ export type ListMonthsParams = z.infer<typeof ListMonthsSchema>;
 export async function handleGetMonth(
 	ynabAPI: ynab.API,
 	params: GetMonthParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
@@ -119,6 +121,7 @@ export async function handleGetMonth(
 		},
 		"ynab:get_month",
 		"getting month data",
+		errorHandler,
 	);
 }
 
@@ -139,6 +142,7 @@ export async function handleListMonths(
 	ynabAPI: ynab.API,
 	deltaFetcherOrParams: DeltaFetcher | ListMonthsParams,
 	maybeParams?: ListMonthsParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
 		ynabAPI,
@@ -179,6 +183,7 @@ export async function handleListMonths(
 		},
 		"ynab:list_months",
 		"listing months",
+		errorHandler,
 	);
 }
 

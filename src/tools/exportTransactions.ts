@@ -5,6 +5,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { format } from "date-fns";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 
@@ -155,6 +156,7 @@ function getExportPath(): string {
 export async function handleExportTransactions(
 	ynabAPI: ynab.API,
 	params: ExportTransactionsParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
@@ -278,5 +280,6 @@ export async function handleExportTransactions(
 		},
 		"ynab:export_transactions",
 		"exporting transactions",
+		errorHandler,
 	);
 }

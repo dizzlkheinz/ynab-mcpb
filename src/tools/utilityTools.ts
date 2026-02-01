@@ -1,5 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
@@ -13,6 +14,7 @@ import { ToolAnnotationPresets } from "./toolCategories.js";
  */
 export async function handleGetUser(
 	ynabAPI: ynab.API,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
@@ -34,6 +36,7 @@ export async function handleGetUser(
 		},
 		"ynab:get_user",
 		"getting user information",
+		errorHandler,
 	);
 }
 

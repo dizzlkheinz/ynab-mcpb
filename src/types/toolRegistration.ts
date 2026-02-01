@@ -10,6 +10,7 @@ import type * as ynab from "ynab";
 import type { CacheManager } from "../server/cacheManager.js";
 import type { DeltaCache } from "../server/deltaCache.js";
 import type { DiagnosticManager } from "../server/diagnostics.js";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import type {
 	DefaultArgumentResolver,
@@ -33,6 +34,7 @@ export interface ToolContext {
 	getDefaultBudgetId: () => string | undefined;
 	setDefaultBudget: (budgetId: string) => void;
 	cacheManager: CacheManager;
+	errorHandler: ErrorHandler;
 	diagnosticManager?: DiagnosticManager;
 }
 
@@ -57,6 +59,7 @@ export type Adapter<TInput extends Record<string, unknown>> = (
 export type Handler<TInput extends Record<string, unknown>> = (
 	api: ynab.API,
 	params: TInput,
+	errorHandler?: ErrorHandler,
 ) => Promise<CallToolResult>;
 
 /**
@@ -66,6 +69,7 @@ export type DeltaHandler<TInput extends Record<string, unknown>> = (
 	api: ynab.API,
 	deltaFetcher: DeltaFetcher,
 	params: TInput,
+	errorHandler?: ErrorHandler,
 ) => Promise<CallToolResult>;
 
 /**
@@ -76,12 +80,16 @@ export type WriteHandler<TInput extends Record<string, unknown>> = (
 	deltaCache: DeltaCache,
 	serverKnowledgeStore: ServerKnowledgeStore,
 	params: TInput,
+	errorHandler?: ErrorHandler,
 ) => Promise<CallToolResult>;
 
 /**
  * Handler signature for tools that do not accept input parameters.
  */
-export type NoInputHandler = (api: ynab.API) => Promise<CallToolResult>;
+export type NoInputHandler = (
+	api: ynab.API,
+	errorHandler?: ErrorHandler,
+) => Promise<CallToolResult>;
 
 /**
  * Helper type for default argument resolver factories.

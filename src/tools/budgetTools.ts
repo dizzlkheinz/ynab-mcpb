@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
@@ -29,6 +30,7 @@ export async function handleListBudgets(
 	ynabAPI: ynab.API,
 	deltaFetcherOrParams?: DeltaFetcher | Record<string, unknown>,
 	maybeParams?: Record<string, unknown>,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaFetcher } = resolveDeltaFetcherArgs(
 		ynabAPI,
@@ -67,6 +69,7 @@ export async function handleListBudgets(
 		},
 		"ynab:list_budgets",
 		"listing budgets",
+		errorHandler,
 	);
 }
 
@@ -77,6 +80,7 @@ export async function handleListBudgets(
 export async function handleGetBudget(
 	ynabAPI: ynab.API,
 	params: GetBudgetParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
@@ -112,6 +116,7 @@ export async function handleGetBudget(
 		},
 		"ynab:get_budget",
 		"getting budget details",
+		errorHandler,
 	);
 }
 

@@ -1,5 +1,14 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { ErrorHandler } from "./errorHandler.js";
+import { type ErrorHandler, createErrorHandler } from "./errorHandler.js";
+
+/**
+ * Module-level fallback ErrorHandler for convenience functions and backward compatibility.
+ * Uses a simple JSON formatter; callers that have access to the injected formatter
+ * should pass their own ErrorHandler instance via the optional parameter.
+ */
+const fallbackErrorHandler = createErrorHandler({
+	format: (value: unknown) => JSON.stringify(value, null, 2),
+});
 
 /**
  * Centralized budget resolution helper that standardizes budget ID validation
@@ -35,6 +44,7 @@ export class BudgetResolver {
 	static resolveBudgetId(
 		providedId?: string,
 		defaultId?: string,
+		errorHandler?: ErrorHandler,
 	): string | CallToolResult {
 		// If a budget ID is provided (including empty strings), handle keywords first
 		if (providedId !== undefined && providedId !== null) {
@@ -45,15 +55,16 @@ export class BudgetResolver {
 				// For "default" keyword, we use the MCP server's stored default budget ID
 				// rather than passing "default" to YNAB API (see function JSDoc for rationale)
 				if (defaultId) {
-					return BudgetResolver.validateBudgetId(defaultId);
+					return BudgetResolver.validateBudgetId(defaultId, errorHandler);
 				}
 				// No default budget set in MCP server, return error
-				return BudgetResolver.createMissingBudgetError();
+				return BudgetResolver.createMissingBudgetError(errorHandler);
 			}
 
 			if (trimmed === "last-used") {
 				// "last-used" keyword is not currently supported
-				return ErrorHandler.createValidationError(
+				const eh = errorHandler ?? fallbackErrorHandler;
+				return eh.createValidationError(
 					"Unsupported keyword",
 					'The "last-used" keyword is not supported yet. Please use a specific budget ID or set a default budget.',
 					[
@@ -66,16 +77,16 @@ export class BudgetResolver {
 			}
 
 			// For non-keyword IDs, validate normally (including empty strings)
-			return BudgetResolver.validateBudgetId(providedId);
+			return BudgetResolver.validateBudgetId(providedId, errorHandler);
 		}
 
 		// If no budget ID provided, try to use the default
 		if (defaultId) {
-			return BudgetResolver.validateBudgetId(defaultId);
+			return BudgetResolver.validateBudgetId(defaultId, errorHandler);
 		}
 
 		// No budget ID provided and no default set
-		return BudgetResolver.createMissingBudgetError();
+		return BudgetResolver.createMissingBudgetError(errorHandler);
 	}
 
 	/**
@@ -84,10 +95,14 @@ export class BudgetResolver {
 	 * @param budgetId - The budget ID to validate
 	 * @returns The validated budget ID or CallToolResult with error
 	 */
-	static validateBudgetId(budgetId: string): string | CallToolResult {
+	static validateBudgetId(
+		budgetId: string,
+		errorHandler?: ErrorHandler,
+	): string | CallToolResult {
 		if (!budgetId || typeof budgetId !== "string") {
 			return BudgetResolver.createInvalidBudgetError(
 				"Budget ID must be provided as a non-empty string",
+				errorHandler,
 			);
 		}
 
@@ -95,6 +110,7 @@ export class BudgetResolver {
 		if (!trimmed) {
 			return BudgetResolver.createInvalidBudgetError(
 				"Budget ID cannot be empty or whitespace only",
+				errorHandler,
 			);
 		}
 
@@ -111,6 +127,7 @@ export class BudgetResolver {
 		if (!BudgetResolver.UUID_REGEX.test(trimmed)) {
 			return BudgetResolver.createInvalidBudgetError(
 				`Invalid budget ID format: '${trimmed}'. Must be a valid UUID format (versions 1-5)`,
+				errorHandler,
 			);
 		}
 
@@ -122,12 +139,13 @@ export class BudgetResolver {
 	 *
 	 * @returns CallToolResult with standardized error response
 	 */
-	static createMissingBudgetError(): CallToolResult {
+	static createMissingBudgetError(errorHandler?: ErrorHandler): CallToolResult {
 		const detailMessage = `A budget ID is required for this operation. You can either:
 1. Provide a specific budget_id parameter
 2. Set a default budget using the set_default_budget tool first`;
 
-		return ErrorHandler.createValidationError(
+		const eh = errorHandler ?? fallbackErrorHandler;
+		return eh.createValidationError(
 			"No budget ID provided and no default budget set",
 			detailMessage,
 			[
@@ -143,7 +161,10 @@ export class BudgetResolver {
 	 * @param details - Specific details about the validation failure
 	 * @returns CallToolResult with standardized error response
 	 */
-	static createInvalidBudgetError(details: string): CallToolResult {
+	static createInvalidBudgetError(
+		details: string,
+		errorHandler?: ErrorHandler,
+	): CallToolResult {
 		const detailMessage = `${details}
 
 Valid formats:
@@ -152,15 +173,12 @@ Valid formats:
 
 You can use the list_budgets tool to see available budget IDs.`;
 
-		return ErrorHandler.createValidationError(
-			"Invalid budget ID format",
-			detailMessage,
-			[
-				"Use a valid UUID format (UUID v1-v5, e.g., 123e4567-e89b-12d3-a456-426614174000; standard UUID v4 format works as well)",
-				"Run the list_budgets tool to view available budget IDs",
-				'Use the special keyword "default" for convenience',
-			],
-		);
+		const eh = errorHandler ?? fallbackErrorHandler;
+		return eh.createValidationError("Invalid budget ID format", detailMessage, [
+			"Use a valid UUID format (UUID v1-v5, e.g., 123e4567-e89b-12d3-a456-426614174000; standard UUID v4 format works as well)",
+			"Run the list_budgets tool to view available budget IDs",
+			'Use the special keyword "default" for convenience',
+		]);
 	}
 
 	/**

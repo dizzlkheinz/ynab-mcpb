@@ -7,6 +7,7 @@ import { promises as fs } from "node:fs";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import type { ErrorHandler } from "../../server/errorHandler.js";
 import { responseFormatter } from "../../server/responseFormatter.js";
 import type { ProgressCallback } from "../../server/toolRegistry.js";
 import { withToolErrorHandling } from "../../types/index.js";
@@ -178,6 +179,7 @@ export async function handleReconcileAccount(
 	deltaFetcherOrParams: DeltaFetcher | ReconcileAccountRequest,
 	maybeParams?: ReconcileAccountRequest,
 	sendProgress?: ProgressCallback,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
 		ynabAPI,
@@ -503,6 +505,7 @@ export async function handleReconcileAccount(
 		},
 		"ynab:reconcile_account",
 		"analyzing account reconciliation",
+		errorHandler,
 	);
 }
 

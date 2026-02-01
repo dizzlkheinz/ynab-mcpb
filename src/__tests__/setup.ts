@@ -31,25 +31,25 @@ const normalizeAccessToken = (
 };
 
 // Skip E2E tests by default unless explicitly enabled
-const normalizedToken = normalizeAccessToken(process.env.YNAB_ACCESS_TOKEN);
+const normalizedToken = normalizeAccessToken(process.env["YNAB_ACCESS_TOKEN"]);
 const hasAccessToken = !!normalizedToken;
-if (!process.env.SKIP_E2E_TESTS) {
-	process.env.SKIP_E2E_TESTS = hasAccessToken ? "false" : "true";
+if (!process.env["SKIP_E2E_TESTS"]) {
+	process.env["SKIP_E2E_TESTS"] = hasAccessToken ? "false" : "true";
 }
 if (normalizedToken) {
-	process.env.YNAB_ACCESS_TOKEN = normalizedToken;
+	process.env["YNAB_ACCESS_TOKEN"] = normalizedToken;
 } else {
-	process.env.YNAB_ACCESS_TOKEN = "test-token-for-mocked-tests";
+	process.env["YNAB_ACCESS_TOKEN"] = "test-token-for-mocked-tests";
 }
 
 // Set test environment variables immediately
-process.env.NODE_ENV = "test";
-if (!process.env.LOG_LEVEL) {
-	process.env.LOG_LEVEL = "error";
+process.env["NODE_ENV"] = "test";
+if (!process.env["LOG_LEVEL"]) {
+	process.env["LOG_LEVEL"] = "error";
 }
 
 // Disable console output for cleaner test output unless VERBOSE_TESTS is set
-if (!process.env.VERBOSE_TESTS) {
+if (!process.env["VERBOSE_TESTS"]) {
 	const originalConsoleError = console.error;
 
 	console.error = (...args: any[]) => {
@@ -97,9 +97,9 @@ const parseFilterList = (value: string | undefined) =>
 		.filter(Boolean) ?? [];
 
 const tierFilters = parseFilterList(
-	process.env.INTEGRATION_TEST_TIER ?? "full",
+	process.env["INTEGRATION_TEST_TIER"] ?? "full",
 ) as TierFilter[];
-const domainFilters = parseFilterList(process.env.INTEGRATION_TEST_DOMAINS);
+const domainFilters = parseFilterList(process.env["INTEGRATION_TEST_DOMAINS"]);
 
 const shouldRunTier = (tier?: string): boolean => {
 	if (!tier) return true;
@@ -121,11 +121,11 @@ const shouldRunDomain = (domain?: string): boolean => {
  */
 beforeAll(async () => {
 	// Set default test token if not provided
-	if (!process.env.YNAB_ACCESS_TOKEN) {
-		process.env.YNAB_ACCESS_TOKEN = "test-token-for-mocked-tests";
+	if (!process.env["YNAB_ACCESS_TOKEN"]) {
+		process.env["YNAB_ACCESS_TOKEN"] = "test-token-for-mocked-tests";
 	}
 
-	if (process.env.VERBOSE_TESTS) {
+	if (process.env["VERBOSE_TESTS"]) {
 		console.warn("🧪 Test environment initialized");
 	}
 });
@@ -143,7 +143,7 @@ afterAll(async () => {
  */
 beforeEach(async () => {
 	// Reset environment for each test
-	process.env.NODE_ENV = "test";
+	process.env["NODE_ENV"] = "test";
 
 	// Clear cache state between tests to prevent interference
 	cacheManager.clear();
@@ -212,7 +212,7 @@ export class TestEnvironment {
 
 		// Restore original NODE_ENV if it was modified by cache methods
 		if (this.originalNodeEnv !== undefined) {
-			process.env.NODE_ENV = this.originalNodeEnv;
+			process.env["NODE_ENV"] = this.originalNodeEnv;
 			this.originalNodeEnv = undefined;
 		}
 	}
@@ -222,9 +222,9 @@ export class TestEnvironment {
 	 */
 	isCI(): boolean {
 		return !!(
-			process.env.CI ||
-			process.env.GITHUB_ACTIONS ||
-			process.env.TRAVIS
+			process.env["CI"] ||
+			process.env["GITHUB_ACTIONS"] ||
+			process.env["TRAVIS"]
 		);
 	}
 
@@ -233,8 +233,8 @@ export class TestEnvironment {
 	 */
 	shouldSkipE2E(): boolean {
 		return (
-			process.env.SKIP_E2E_TESTS === "true" ||
-			!process.env.YNAB_ACCESS_TOKEN ||
+			process.env["SKIP_E2E_TESTS"] === "true" ||
+			!process.env["YNAB_ACCESS_TOKEN"] ||
 			this.isCI()
 		);
 	}
@@ -255,11 +255,11 @@ export class TestEnvironment {
 	disableCache(): void {
 		// Store original NODE_ENV value if not already stored
 		if (this.originalNodeEnv === undefined) {
-			this.originalNodeEnv = process.env.NODE_ENV;
+			this.originalNodeEnv = process.env["NODE_ENV"];
 		}
 		// This would require access to CacheManager internals
 		// For now, we rely on NODE_ENV=test to disable caching
-		process.env.NODE_ENV = "test";
+		process.env["NODE_ENV"] = "test";
 	}
 
 	/**
@@ -268,10 +268,10 @@ export class TestEnvironment {
 	enableCache(): void {
 		// Store original NODE_ENV value if not already stored
 		if (this.originalNodeEnv === undefined) {
-			this.originalNodeEnv = process.env.NODE_ENV;
+			this.originalNodeEnv = process.env["NODE_ENV"];
 		}
 		// Temporarily enable cache for specific tests
-		process.env.NODE_ENV = "development";
+		process.env["NODE_ENV"] = "development";
 	}
 }
 

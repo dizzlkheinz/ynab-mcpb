@@ -5,7 +5,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { fromZodError } from "zod-validation-error";
 import { z } from "zod/v4";
-import { ErrorHandler } from "./errorHandler.js";
+import { createErrorHandler } from "./errorHandler.js";
 import { RateLimitError, globalRateLimiter } from "./rateLimiter.js";
 import { globalRequestLogger } from "./requestLogger.js";
 import { responseFormatter } from "./responseFormatter.js";
@@ -105,7 +105,8 @@ export class SecurityMiddleware {
 				error instanceof Error &&
 				error.message.includes("Validation failed")
 			) {
-				return ErrorHandler.createValidationError(
+				const errorHandler = createErrorHandler(responseFormatter);
+				return errorHandler.createValidationError(
 					`Invalid parameters for ${context.toolName}`,
 					error.message,
 				);

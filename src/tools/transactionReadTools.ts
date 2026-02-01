@@ -1,11 +1,14 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
+import type { z } from "zod/v4";
 import {
 	CACHE_TTLS,
 	CacheManager,
 	cacheManager,
 } from "../server/cacheManager.js";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
+import type { ToolRegistry } from "../server/toolRegistry.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolContext } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/amountUtils.js";
@@ -17,8 +20,6 @@ import {
 	handleExportTransactions,
 } from "./exportTransactions.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
-import type { ToolRegistry } from "../server/toolRegistry.js";
-import type { z } from "zod/v4";
 
 import type {
 	GetTransactionParams,
@@ -52,6 +53,7 @@ export async function handleListTransactions(
 	ynabAPI: ynab.API,
 	deltaFetcherOrParams: DeltaFetcher | ListTransactionsParams,
 	maybeParams?: ListTransactionsParams,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
 		ynabAPI,
@@ -176,6 +178,7 @@ export async function handleListTransactions(
 		},
 		"ynab:list_transactions",
 		"listing transactions",
+		errorHandler,
 	);
 }
 
@@ -186,6 +189,7 @@ export async function handleListTransactions(
 export async function handleGetTransaction(
 	ynabAPI: ynab.API,
 	params: GetTransactionParams,
+	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
 		const useCache = process.env["NODE_ENV"] !== "test";

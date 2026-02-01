@@ -40,7 +40,7 @@ import { CompletionsManager } from "./completions.js";
 import { type AppConfig, loadConfig } from "./config.js";
 import { DeltaCache } from "./deltaCache.js";
 import { DiagnosticManager } from "./diagnostics.js";
-import { ErrorHandler, createErrorHandler } from "./errorHandler.js";
+import { type ErrorHandler, createErrorHandler } from "./errorHandler.js";
 import { PromptManager } from "./prompts.js";
 import { ResourceManager } from "./resources.js";
 import { responseFormatter } from "./responseFormatter.js";
@@ -108,9 +108,6 @@ export class YNABMCPServer {
 
 		// Create ErrorHandler instance with formatter injection
 		this.errorHandler = createErrorHandler(responseFormatter);
-
-		// Set the global default for backward compatibility with static usage
-		ErrorHandler.setFormatter(responseFormatter);
 
 		this.toolRegistry = new ToolRegistry({
 			withSecurityWrapper,
@@ -417,6 +414,7 @@ export class YNABMCPServer {
 			getDefaultBudgetId: () => this.defaultBudgetId,
 			setDefaultBudget: (budgetId: string) => this.setDefaultBudget(budgetId),
 			cacheManager,
+			errorHandler: this.errorHandler,
 			diagnosticManager: this.diagnosticManager,
 		};
 
