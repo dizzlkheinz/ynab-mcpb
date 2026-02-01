@@ -836,53 +836,6 @@ describe("YNABMCPServer", () => {
 		});
 	});
 
-	describe("Deprecated Methods", () => {
-		let server: YNABMCPServer;
-
-		beforeEach(() => {
-			// Create server with valid token for testing deprecated method
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			if (!originalToken) {
-				throw new Error(
-					"YNAB_ACCESS_TOKEN must be defined for getBudgetId tests",
-				);
-			}
-			server = new YNABMCPServer(false);
-		});
-
-		describe("getBudgetId", () => {
-			it("should throw ValidationError when no budget ID provided and no default set", () => {
-				// Ensure no default budget is set
-				expect(server.getDefaultBudget()).toBeUndefined();
-
-				// Should throw ValidationError (not YNABAPIError)
-				expect(() => {
-					server.getBudgetId();
-				}).toThrow(ValidationError);
-
-				expect(() => {
-					server.getBudgetId();
-				}).toThrow("No budget ID provided and no default budget set");
-			});
-
-			it("should throw ValidationError for invalid budget ID format", () => {
-				expect(() => {
-					server.getBudgetId("invalid-id");
-				}).toThrow(ValidationError);
-
-				expect(() => {
-					server.getBudgetId("invalid-id");
-				}).toThrow(/Invalid budget ID format/);
-			});
-
-			it("should return valid budget ID when provided with valid UUID", () => {
-				const validUuid = "123e4567-e89b-12d3-a456-426614174000";
-				const result = server.getBudgetId(validUuid);
-				expect(result).toBe(validUuid);
-			});
-		});
-	});
-
 	describe("ErrorHandler Integration", () => {
 		let server: YNABMCPServer;
 

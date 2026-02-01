@@ -35,7 +35,6 @@ import {
 	ValidationError as ConfigValidationError,
 	ConfigurationError,
 } from "../utils/errors.js";
-import { BudgetResolver } from "./budgetResolver.js";
 import { CacheManager, cacheManager } from "./cacheManager.js";
 import { CompletionsManager } from "./completions.js";
 import { type AppConfig, loadConfig } from "./config.js";
@@ -705,41 +704,6 @@ export class YNABMCPServer {
 	 */
 	getToolRegistry(): ToolRegistry {
 		return this.toolRegistry;
-	}
-
-	/**
-	 * Gets the budget ID to use - either provided or default
-	 *
-	 * @deprecated This method is deprecated and should not be used.
-	 * Use BudgetResolver.resolveBudgetId() directly instead, which returns
-	 * a CallToolResult for errors rather than throwing exceptions.
-	 *
-	 * @returns The resolved budget ID string or throws ValidationError
-	 */
-	getBudgetId(providedBudgetId?: string): string {
-		const result = BudgetResolver.resolveBudgetId(
-			providedBudgetId,
-			this.defaultBudgetId,
-		);
-		if (typeof result === "string") {
-			return result;
-		}
-
-		// Convert CallToolResult to ValidationError for consistency with ErrorHandler
-		const errorText =
-			result.content?.[0]?.type === "text"
-				? result.content[0].text
-				: "Budget resolution failed";
-		const parsedError = (() => {
-			try {
-				return JSON.parse(errorText);
-			} catch {
-				return { error: { message: errorText } };
-			}
-		})();
-
-		const message = parsedError.error?.message || "Budget resolution failed";
-		throw new ValidationError(message);
 	}
 
 	/**
