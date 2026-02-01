@@ -8,7 +8,7 @@
  * @returns Amount in dollars as a number with 2 decimal places
  */
 export function milliunitsToAmount(milliunits: number): number {
-  return Math.round(milliunits) / 1000;
+	return Math.round(milliunits) / 1000;
 }
 
 /**
@@ -17,7 +17,7 @@ export function milliunitsToAmount(milliunits: number): number {
  * @returns Amount in milliunits
  */
 export function amountToMilliunits(amount: number): number {
-  return Math.round(amount * 1000);
+	return Math.round(amount * 1000);
 }
 
 /**
@@ -26,7 +26,7 @@ export function amountToMilliunits(amount: number): number {
  * @param currencySymbol - Currency symbol (default: '$')
  * @returns Formatted currency string
  */
-export function formatAmount(milliunits: number, currencySymbol = '$'): string {
-  const amount = milliunitsToAmount(milliunits);
-  return `${currencySymbol}${amount.toFixed(2)}`;
+export function formatAmount(milliunits: number, currencySymbol = "$"): string {
+	const amount = milliunitsToAmount(milliunits);
+	return `${currencySymbol}${amount.toFixed(2)}`;
 }

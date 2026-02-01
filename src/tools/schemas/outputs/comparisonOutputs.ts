@@ -44,7 +44,7 @@
  * }
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 // ============================================================================
 // DATE VALIDATION HELPERS
@@ -71,26 +71,26 @@ import { z } from 'zod';
  * isValidISODate("2024-02-31") // false (February doesn't have 31 days)
  */
 function isValidISODate(dateStr: string): boolean {
-  // First check format
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return false;
-  }
+	// First check format
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+		return false;
+	}
 
-  // Parse and validate
-  const parsed = Date.parse(dateStr);
-  if (isNaN(parsed)) {
-    return false;
-  }
+	// Parse and validate
+	const parsed = Date.parse(dateStr);
+	if (Number.isNaN(parsed)) {
+		return false;
+	}
 
-  // Verify that the parsed date components match the original string
-  // This catches cases like "2024-02-31" which Date.parse might coerce to "2024-03-03"
-  const date = new Date(parsed);
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  const reconstructed = `${year}-${month}-${day}`;
+	// Verify that the parsed date components match the original string
+	// This catches cases like "2024-02-31" which Date.parse might coerce to "2024-03-03"
+	const date = new Date(parsed);
+	const year = date.getUTCFullYear();
+	const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+	const day = String(date.getUTCDate()).padStart(2, "0");
+	const reconstructed = `${year}-${month}-${day}`;
 
-  return reconstructed === dateStr;
+	return reconstructed === dateStr;
 }
 /**
  * Reusable Zod schema for validating ISO date strings (YYYY-MM-DD).
@@ -102,11 +102,12 @@ function isValidISODate(dateStr: string): boolean {
  * schema.parse({ date: "2024-02-31" }); // Error: Invalid calendar date
  */
 export const ISODateStringSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-  .refine(isValidISODate, {
-    message: 'Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)',
-  });
+	.string()
+	.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format")
+	.refine(isValidISODate, {
+		message:
+			"Invalid calendar date (e.g., month must be 01-12, day must be valid for the month)",
+	});
 
 // ============================================================================
 // NESTED SCHEMAS FOR COMPOSITION
@@ -123,15 +124,18 @@ export const ISODateStringSchema = z
  * @see src/tools/compareTransactions/formatter.ts:92-102 - formatUnmatchedBank function
  */
 export const MissingInYNABItemSchema = z.object({
-  date: ISODateStringSchema,
-  amount: z
-    .string()
-    .regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
-  description: z.string(),
-  row_number: z.number(),
-  suggested_payee_id: z.string().optional(),
-  suggested_payee_name: z.string().optional(),
-  suggestion_reason: z.string().optional(),
+	date: ISODateStringSchema,
+	amount: z
+		.string()
+		.regex(
+			/^-?\d+\.\d{2}$/,
+			"Amount must be a decimal string with exactly 2 decimal places",
+		),
+	description: z.string(),
+	row_number: z.number(),
+	suggested_payee_id: z.string().optional(),
+	suggested_payee_name: z.string().optional(),
+	suggestion_reason: z.string().optional(),
 });
 
 export type MissingInYNABItem = z.infer<typeof MissingInYNABItemSchema>;
@@ -147,14 +151,17 @@ export type MissingInYNABItem = z.infer<typeof MissingInYNABItemSchema>;
  * @see src/tools/compareTransactions/formatter.ts:108-116 - formatUnmatchedYNAB function
  */
 export const MissingInBankItemSchema = z.object({
-  id: z.string(),
-  date: ISODateStringSchema,
-  amount: z
-    .string()
-    .regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
-  payee_name: z.string().nullable(),
-  memo: z.string().nullable(),
-  cleared: z.string(),
+	id: z.string(),
+	date: ISODateStringSchema,
+	amount: z
+		.string()
+		.regex(
+			/^-?\d+\.\d{2}$/,
+			"Amount must be a decimal string with exactly 2 decimal places",
+		),
+	payee_name: z.string().nullable(),
+	memo: z.string().nullable(),
+	cleared: z.string(),
 });
 
 export type MissingInBankItem = z.infer<typeof MissingInBankItemSchema>;
@@ -170,22 +177,28 @@ export type MissingInBankItem = z.infer<typeof MissingInBankItemSchema>;
  * @see src/tools/compareTransactions/formatter.ts:72-86 - formatMatches function
  */
 export const MatchItemSchema = z.object({
-  bank_date: ISODateStringSchema,
-  bank_amount: z
-    .string()
-    .regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
-  bank_description: z.string(),
-  ynab_date: ISODateStringSchema,
-  ynab_amount: z
-    .string()
-    .regex(/^-?\d+\.\d{2}$/, 'Amount must be a decimal string with exactly 2 decimal places'),
-  ynab_payee: z.string().nullable(),
-  ynab_transaction: z.object({
-    id: z.string(),
-    cleared: z.string(),
-  }),
-  match_score: z.number(),
-  match_reasons: z.array(z.string()),
+	bank_date: ISODateStringSchema,
+	bank_amount: z
+		.string()
+		.regex(
+			/^-?\d+\.\d{2}$/,
+			"Amount must be a decimal string with exactly 2 decimal places",
+		),
+	bank_description: z.string(),
+	ynab_date: ISODateStringSchema,
+	ynab_amount: z
+		.string()
+		.regex(
+			/^-?\d+\.\d{2}$/,
+			"Amount must be a decimal string with exactly 2 decimal places",
+		),
+	ynab_payee: z.string().nullable(),
+	ynab_transaction: z.object({
+		id: z.string(),
+		cleared: z.string(),
+	}),
+	match_score: z.number(),
+	match_reasons: z.array(z.string()),
 });
 
 export type MatchItem = z.infer<typeof MatchItemSchema>;
@@ -208,15 +221,17 @@ export type MatchItem = z.infer<typeof MatchItemSchema>;
  * @internal
  */
 export const BankTransactionComparisonSchema = z.object({
-  date: ISODateStringSchema,
-  amount: z.number(),
-  description: z.string(),
-  raw_amount: z.string(),
-  raw_date: z.string(),
-  row_number: z.number(),
+	date: ISODateStringSchema,
+	amount: z.number(),
+	description: z.string(),
+	raw_amount: z.string(),
+	raw_date: z.string(),
+	row_number: z.number(),
 });
 
-export type BankTransactionComparison = z.infer<typeof BankTransactionComparisonSchema>;
+export type BankTransactionComparison = z.infer<
+	typeof BankTransactionComparisonSchema
+>;
 
 /**
  * YNAB transaction (internal type, used during matching).
@@ -232,17 +247,19 @@ export type BankTransactionComparison = z.infer<typeof BankTransactionComparison
  * @internal
  */
 export const YNABTransactionComparisonSchema = z.object({
-  id: z.string(),
-  date: ISODateStringSchema,
-  amount: z.number(),
-  payee_name: z.string().nullable(),
-  memo: z.string().nullable(),
-  cleared: z.string(),
-  account_name: z.string().optional(),
-  category_name: z.string().optional(),
+	id: z.string(),
+	date: ISODateStringSchema,
+	amount: z.number(),
+	payee_name: z.string().nullable(),
+	memo: z.string().nullable(),
+	cleared: z.string(),
+	account_name: z.string().optional(),
+	category_name: z.string().optional(),
 });
 
-export type YNABTransactionComparison = z.infer<typeof YNABTransactionComparisonSchema>;
+export type YNABTransactionComparison = z.infer<
+	typeof YNABTransactionComparisonSchema
+>;
 
 /**
  * Matched transaction pair (internal type, used during matching).
@@ -258,21 +275,23 @@ export type YNABTransactionComparison = z.infer<typeof YNABTransactionComparison
  * @internal
  */
 export const TransactionMatchComparisonSchema = z.object({
-  bank_transaction: BankTransactionComparisonSchema,
-  ynab_transaction: YNABTransactionComparisonSchema,
-  match_score: z.number().min(0).max(100),
-  match_reasons: z.array(z.string()),
+	bank_transaction: BankTransactionComparisonSchema,
+	ynab_transaction: YNABTransactionComparisonSchema,
+	match_score: z.number().min(0).max(100),
+	match_reasons: z.array(z.string()),
 });
 
-export type TransactionMatchComparison = z.infer<typeof TransactionMatchComparisonSchema>;
+export type TransactionMatchComparison = z.infer<
+	typeof TransactionMatchComparisonSchema
+>;
 
 /**
  * Comparison configuration parameters.
  * Documents tolerance settings used for matching.
  */
 export const ComparisonParametersSchema = z.object({
-  amount_tolerance: z.number().optional(),
-  date_tolerance_days: z.number().optional(),
+	amount_tolerance: z.number().optional(),
+	date_tolerance_days: z.number().optional(),
 });
 
 export type ComparisonParameters = z.infer<typeof ComparisonParametersSchema>;
@@ -291,23 +310,23 @@ export type ComparisonParameters = z.infer<typeof ComparisonParametersSchema>;
  * DateRangeSchema.parse({ start: "2024-12-31", end: "2024-01-01" }) // Error: start date must be before or equal to end date
  */
 export const DateRangeSchema = z
-  .object({
-    start: ISODateStringSchema,
-    end: ISODateStringSchema,
-  })
-  .refine(
-    (data) => {
-      // Parse both dates - we know they're valid ISO dates due to ISODateStringSchema
-      const startDate = Date.parse(data.start);
-      const endDate = Date.parse(data.end);
+	.object({
+		start: ISODateStringSchema,
+		end: ISODateStringSchema,
+	})
+	.refine(
+		(data) => {
+			// Parse both dates - we know they're valid ISO dates due to ISODateStringSchema
+			const startDate = Date.parse(data.start);
+			const endDate = Date.parse(data.end);
 
-      // Validate logical ordering: start must be <= end
-      return startDate <= endDate;
-    },
-    {
-      message: 'Start date must be before or equal to end date',
-    },
-  );
+			// Validate logical ordering: start must be <= end
+			return startDate <= endDate;
+		},
+		{
+			message: "Start date must be before or equal to end date",
+		},
+	);
 
 export type DateRange = z.infer<typeof DateRangeSchema>;
 
@@ -322,16 +341,16 @@ export type DateRange = z.infer<typeof DateRangeSchema>;
  * @see src/tools/exportTransactions.ts:184-197 - Export info construction
  */
 export const ExportInfoSchema = z.object({
-  exported_at: z.string(),
-  total_transactions: z.number(),
-  minimal: z.boolean(),
-  filters: z.object({
-    budget_id: z.string().optional(),
-    account_id: z.string().nullable(),
-    category_id: z.string().nullable(),
-    since_date: z.string().nullable(),
-    type: z.string().nullable(),
-  }),
+	exported_at: z.string(),
+	total_transactions: z.number(),
+	minimal: z.boolean(),
+	filters: z.object({
+		budget_id: z.string().optional(),
+		account_id: z.string().nullable(),
+		category_id: z.string().nullable(),
+		since_date: z.string().nullable(),
+		type: z.string().nullable(),
+	}),
 });
 
 export type ExportInfo = z.infer<typeof ExportInfoSchema>;
@@ -352,37 +371,37 @@ export type ExportInfo = z.infer<typeof ExportInfoSchema>;
  * @see src/tools/exportTransactions.ts:204 - Amount field directly from transaction.amount (milliunits)
  */
 export const ExportedTransactionMinimalSchema = z.object({
-  id: z.string(),
-  date: z.string(),
-  amount: z.number(), // Raw YNAB milliunits
-  payee_name: z.string().nullable(),
-  cleared: z.string(),
+	id: z.string(),
+	date: z.string(),
+	amount: z.number(), // Raw YNAB milliunits
+	payee_name: z.string().nullable(),
+	cleared: z.string(),
 });
 
 export const ExportedTransactionFullSchema = z.object({
-  id: z.string(),
-  date: z.string(),
-  amount: z.number(), // Raw YNAB milliunits
-  memo: z.string().nullable(),
-  cleared: z.string(),
-  approved: z.boolean(),
-  flag_color: z.string().nullable(),
-  account_id: z.string(),
-  payee_id: z.string().nullable(),
-  category_id: z.string().nullable(),
-  transfer_account_id: z.string().nullable(),
-  transfer_transaction_id: z.string().nullable(),
-  matched_transaction_id: z.string().nullable(),
-  import_id: z.string().nullable(),
-  deleted: z.boolean(),
-  account_name: z.string().optional(),
-  payee_name: z.string().nullable(),
-  category_name: z.string().nullable(),
+	id: z.string(),
+	date: z.string(),
+	amount: z.number(), // Raw YNAB milliunits
+	memo: z.string().nullable(),
+	cleared: z.string(),
+	approved: z.boolean(),
+	flag_color: z.string().nullable(),
+	account_id: z.string(),
+	payee_id: z.string().nullable(),
+	category_id: z.string().nullable(),
+	transfer_account_id: z.string().nullable(),
+	transfer_transaction_id: z.string().nullable(),
+	matched_transaction_id: z.string().nullable(),
+	import_id: z.string().nullable(),
+	deleted: z.boolean(),
+	account_name: z.string().optional(),
+	payee_name: z.string().nullable(),
+	category_name: z.string().nullable(),
 });
 
 export const ExportedTransactionSchema = z.union([
-  ExportedTransactionMinimalSchema,
-  ExportedTransactionFullSchema,
+	ExportedTransactionMinimalSchema,
+	ExportedTransactionFullSchema,
 ]);
 
 export type ExportedTransaction = z.infer<typeof ExportedTransactionSchema>;
@@ -449,8 +468,8 @@ export type ExportedTransaction = z.infer<typeof ExportedTransactionSchema>;
  * }
  */
 export const ExportFileSchema = z.object({
-  export_info: ExportInfoSchema,
-  transactions: z.array(ExportedTransactionSchema),
+	export_info: ExportInfoSchema,
+	transactions: z.array(ExportedTransactionSchema),
 });
 
 export type ExportFile = z.infer<typeof ExportFileSchema>;
@@ -513,21 +532,23 @@ export type ExportFile = z.infer<typeof ExportFileSchema>;
  * }
  */
 export const CompareTransactionsOutputSchema = z.object({
-  summary: z.object({
-    bank_transactions_count: z.number(),
-    ynab_transactions_count: z.number(),
-    matches_found: z.number(),
-    missing_in_ynab: z.number(),
-    missing_in_bank: z.number(),
-    date_range: DateRangeSchema,
-    parameters: ComparisonParametersSchema,
-  }),
-  matches: z.array(MatchItemSchema),
-  missing_in_ynab: z.array(MissingInYNABItemSchema),
-  missing_in_bank: z.array(MissingInBankItemSchema),
+	summary: z.object({
+		bank_transactions_count: z.number(),
+		ynab_transactions_count: z.number(),
+		matches_found: z.number(),
+		missing_in_ynab: z.number(),
+		missing_in_bank: z.number(),
+		date_range: DateRangeSchema,
+		parameters: ComparisonParametersSchema,
+	}),
+	matches: z.array(MatchItemSchema),
+	missing_in_ynab: z.array(MissingInYNABItemSchema),
+	missing_in_bank: z.array(MissingInBankItemSchema),
 });
 
-export type CompareTransactionsOutput = z.infer<typeof CompareTransactionsOutputSchema>;
+export type CompareTransactionsOutput = z.infer<
+	typeof CompareTransactionsOutputSchema
+>;
 
 /**
  * Transaction export tool response (MCP tool result).
@@ -576,25 +597,27 @@ export type CompareTransactionsOutput = z.infer<typeof CompareTransactionsOutput
  * }
  */
 export const ExportTransactionsOutputSchema = z.object({
-  message: z.string(),
-  filename: z.string(),
-  full_path: z.string(),
-  export_directory: z.string(),
-  export_mode: z.enum(['minimal', 'full']),
-  minimal_fields: z.string().nullable(),
-  filename_explanation: z.string(),
-  preview_count: z.number(),
-  total_count: z.number(),
-  preview_transactions: z.array(
-    z.object({
-      id: z.string(),
-      date: z.string(),
-      amount: z.number(), // Raw YNAB milliunits
-      memo: z.string().nullable().optional(),
-      payee_name: z.string().nullable().optional(),
-      category_name: z.string().nullable().optional(),
-    }),
-  ),
+	message: z.string(),
+	filename: z.string(),
+	full_path: z.string(),
+	export_directory: z.string(),
+	export_mode: z.enum(["minimal", "full"]),
+	minimal_fields: z.string().nullable(),
+	filename_explanation: z.string(),
+	preview_count: z.number(),
+	total_count: z.number(),
+	preview_transactions: z.array(
+		z.object({
+			id: z.string(),
+			date: z.string(),
+			amount: z.number(), // Raw YNAB milliunits
+			memo: z.string().nullable().optional(),
+			payee_name: z.string().nullable().optional(),
+			category_name: z.string().nullable().optional(),
+		}),
+	),
 });
 
-export type ExportTransactionsOutput = z.infer<typeof ExportTransactionsOutputSchema>;
+export type ExportTransactionsOutput = z.infer<
+	typeof ExportTransactionsOutputSchema
+>;

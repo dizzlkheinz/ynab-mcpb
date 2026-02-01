@@ -51,8 +51,8 @@
  * ```
  */
 
-import { z } from 'zod/v4';
-import { CacheMetadataSchema } from '../shared/commonOutputs.js';
+import { z } from "zod/v4";
+import { CacheMetadataSchema } from "../shared/commonOutputs.js";
 
 /**
  * Schema for a payee object.
@@ -60,17 +60,17 @@ import { CacheMetadataSchema } from '../shared/commonOutputs.js';
  * Represents payee data including transfer account linkage.
  */
 export const PayeeSchema = z.object({
-  /** Unique identifier for the payee */
-  id: z.string().describe('Payee ID'),
+	/** Unique identifier for the payee */
+	id: z.string().describe("Payee ID"),
 
-  /** Human-readable payee name */
-  name: z.string().describe('Payee name'),
+	/** Human-readable payee name */
+	name: z.string().describe("Payee name"),
 
-  /** Transfer account ID if this payee represents a transfer (optional) */
-  transfer_account_id: z.string().optional().describe('Transfer account ID'),
+	/** Transfer account ID if this payee represents a transfer (optional) */
+	transfer_account_id: z.string().optional().describe("Transfer account ID"),
 
-  /** Whether payee is deleted */
-  deleted: z.boolean().describe('Deleted flag'),
+	/** Whether payee is deleted */
+	deleted: z.boolean().describe("Deleted flag"),
 });
 
 /**
@@ -79,14 +79,14 @@ export const PayeeSchema = z.object({
  * Returns all payees for a budget with pagination and cache metadata.
  */
 export const ListPayeesOutputSchema = CacheMetadataSchema.extend({
-  /** Array of payee objects */
-  payees: z.array(PayeeSchema).describe('List of payees'),
+	/** Array of payee objects */
+	payees: z.array(PayeeSchema).describe("List of payees"),
 
-  /** Total number of payees in budget */
-  total_count: z.number().int().describe('Total payee count'),
+	/** Total number of payees in budget */
+	total_count: z.number().int().describe("Total payee count"),
 
-  /** Number of payees returned in this response */
-  returned_count: z.number().int().describe('Returned payee count'),
+	/** Number of payees returned in this response */
+	returned_count: z.number().int().describe("Returned payee count"),
 });
 
 /**
@@ -95,8 +95,8 @@ export const ListPayeesOutputSchema = CacheMetadataSchema.extend({
  * Returns a single payee by ID with cache metadata.
  */
 export const GetPayeeOutputSchema = CacheMetadataSchema.extend({
-  /** Single payee object */
-  payee: PayeeSchema.describe('Payee details'),
+	/** Single payee object */
+	payee: PayeeSchema.describe("Payee details"),
 });
 
 // Export inferred TypeScript types

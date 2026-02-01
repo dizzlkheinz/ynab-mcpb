@@ -1,38 +1,38 @@
 {
-  "manifest_version": "0.3",
-  "name": "ynab-mcp-server",
-  "version": "0.18.4",
-  "description": "Model Context Protocol server for YNAB (You Need A Budget) integration. Provides 29 tools for comprehensive budget management, including delta-optimized data fetching, bulk transaction operations, advanced reconciliation with recommendations, split transaction support, and diagnostic utilities.",
-  "author": {
-    "name": "kdizzl"
-  },
-  "user_config": {
-    "YNAB_ACCESS_TOKEN": {
-      "type": "string",
-      "title": "YNAB Personal Access Token",
-      "description": "Your YNAB Personal Access Token. Generate one at: https://app.youneedabudget.com/settings/developer",
-      "required": true,
-      "sensitive": true
-    },
-    "YNAB_EXPORT_PATH": {
-      "type": "string",
-      "title": "Export Directory Path",
-      "description": "Directory where exported transaction files will be saved. Leave empty for platform default: Windows/Mac use Downloads, Linux/Unix use Documents. Examples: ~/Desktop, C:\\Users\\YourName\\Documents, /home/user/exports",
-      "required": false,
-      "default": ""
-    }
-  },
-  "server": {
-    "type": "node",
-    "entry_point": "dist/bundle/index.cjs",
-    "mcp_config": {
-      "command": "node",
-      "args": ["${__dirname}/dist/bundle/index.cjs"],
-      "env": {
-        "YNAB_ACCESS_TOKEN": "${user_config.YNAB_ACCESS_TOKEN}",
-        "YNAB_EXPORT_PATH": "${user_config.YNAB_EXPORT_PATH}"
-      }
-    }
-  },
-  "license": "AGPL-3.0"
+	"manifest_version": "0.3",
+	"name": "ynab-mcp-server",
+	"version": "0.18.4",
+	"description": "Model Context Protocol server for YNAB (You Need A Budget) integration. Provides 29 tools for comprehensive budget management, including delta-optimized data fetching, bulk transaction operations, advanced reconciliation with recommendations, split transaction support, and diagnostic utilities.",
+	"author": {
+		"name": "kdizzl"
+	},
+	"user_config": {
+		"YNAB_ACCESS_TOKEN": {
+			"type": "string",
+			"title": "YNAB Personal Access Token",
+			"description": "Your YNAB Personal Access Token. Generate one at: https://app.youneedabudget.com/settings/developer",
+			"required": true,
+			"sensitive": true
+		},
+		"YNAB_EXPORT_PATH": {
+			"type": "string",
+			"title": "Export Directory Path",
+			"description": "Directory where exported transaction files will be saved. Leave empty for platform default: Windows/Mac use Downloads, Linux/Unix use Documents. Examples: ~/Desktop, C:\\Users\\YourName\\Documents, /home/user/exports",
+			"required": false,
+			"default": ""
+		}
+	},
+	"server": {
+		"type": "node",
+		"entry_point": "dist/bundle/index.cjs",
+		"mcp_config": {
+			"command": "node",
+			"args": ["${__dirname}/dist/bundle/index.cjs"],
+			"env": {
+				"YNAB_ACCESS_TOKEN": "${user_config.YNAB_ACCESS_TOKEN}",
+				"YNAB_EXPORT_PATH": "${user_config.YNAB_EXPORT_PATH}"
+			}
+		}
+	},
+	"license": "AGPL-3.0"
 }

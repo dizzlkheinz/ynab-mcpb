@@ -1,90 +1,90 @@
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import * as ynab from 'ynab';
-import { skipOnRateLimit } from '../../__tests__/testUtils.js';
-import { CacheManager } from '../../server/cacheManager.js';
-import { DeltaCache } from '../../server/deltaCache.js';
-import { ServerKnowledgeStore } from '../../server/serverKnowledgeStore.js';
-import { handleListBudgets } from '../budgetTools.js';
-import { DeltaFetcher } from '../deltaFetcher.js';
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import * as ynab from "ynab";
+import { skipOnRateLimit } from "../../__tests__/testUtils.js";
+import { CacheManager } from "../../server/cacheManager.js";
+import { DeltaCache } from "../../server/deltaCache.js";
+import { ServerKnowledgeStore } from "../../server/serverKnowledgeStore.js";
+import { handleListBudgets } from "../budgetTools.js";
+import { DeltaFetcher } from "../deltaFetcher.js";
 
-const shouldSkip = ['true', '1', 'yes', 'y', 'on'].includes(
-  (process.env['SKIP_E2E_TESTS'] || '').toLowerCase().trim(),
+const shouldSkip = ["true", "1", "yes", "y", "on"].includes(
+	(process.env.SKIP_E2E_TESTS || "").toLowerCase().trim(),
 );
-const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
 const skipTests = shouldSkip || !hasToken;
 const describeIntegration = skipTests ? describe.skip : describe;
 
-describeIntegration('Delta-backed budget tool handler', () => {
-  let ynabAPI: ynab.API;
-  let deltaFetcher: DeltaFetcher;
-  let previousNodeEnv: string | undefined;
+describeIntegration("Delta-backed budget tool handler", () => {
+	let ynabAPI: ynab.API;
+	let deltaFetcher: DeltaFetcher;
+	let previousNodeEnv: string | undefined;
 
-  beforeAll(async () => {
-    const accessToken = process.env['YNAB_ACCESS_TOKEN']!;
-    ynabAPI = new ynab.API(accessToken);
-  });
+	beforeAll(async () => {
+		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+		ynabAPI = new ynab.API(accessToken);
+	});
 
-  beforeEach(() => {
-    previousNodeEnv = process.env['NODE_ENV'];
-    process.env['NODE_ENV'] = 'integration';
-    const cacheManager = new CacheManager();
-    const knowledgeStore = new ServerKnowledgeStore();
-    const deltaCache = new DeltaCache(cacheManager, knowledgeStore);
-    deltaFetcher = new DeltaFetcher(ynabAPI, deltaCache);
-    process.env['YNAB_MCP_ENABLE_DELTA'] = 'true';
-  });
+	beforeEach(() => {
+		previousNodeEnv = process.env.NODE_ENV;
+		process.env.NODE_ENV = "integration";
+		const cacheManager = new CacheManager();
+		const knowledgeStore = new ServerKnowledgeStore();
+		const deltaCache = new DeltaCache(cacheManager, knowledgeStore);
+		deltaFetcher = new DeltaFetcher(ynabAPI, deltaCache);
+		process.env.YNAB_MCP_ENABLE_DELTA = "true";
+	});
 
-  afterEach(() => {
-    delete process.env['YNAB_MCP_ENABLE_DELTA'];
-    if (previousNodeEnv === undefined) {
-      delete process.env['NODE_ENV'];
-    } else {
-      process.env['NODE_ENV'] = previousNodeEnv;
-    }
-    previousNodeEnv = undefined;
-  });
+	afterEach(() => {
+		process.env.YNAB_MCP_ENABLE_DELTA = undefined;
+		if (previousNodeEnv === undefined) {
+			process.env.NODE_ENV = undefined;
+		} else {
+			process.env.NODE_ENV = previousNodeEnv;
+		}
+		previousNodeEnv = undefined;
+	});
 
-  const parseResponse = (result: CallToolResult) => {
-    const content = result.content?.[0];
-    if (!content || content.type !== 'text') {
-      throw new Error('Unexpected tool response format');
-    }
-    return JSON.parse(content.text);
-  };
-  const expectCacheHit = (payload: { cached: boolean; cache_info: string }) => {
-    expect(payload.cached).toBe(true);
-    expect(payload.cache_info).toMatch(/cache/i);
-  };
+	const parseResponse = (result: CallToolResult) => {
+		const content = result.content?.[0];
+		if (!content || content.type !== "text") {
+			throw new Error("Unexpected tool response format");
+		}
+		return JSON.parse(content.text);
+	};
+	const expectCacheHit = (payload: { cached: boolean; cache_info: string }) => {
+		expect(payload.cached).toBe(true);
+		expect(payload.cache_info).toMatch(/cache/i);
+	};
 
-  it(
-    'serves cached budget summaries on the second invocation',
-    { meta: { tier: 'domain', domain: 'delta' } },
-    async (ctx) => {
-      await skipOnRateLimit(async () => {
-        const firstCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
-        const firstPayload = parseResponse(firstCall);
+	it(
+		"serves cached budget summaries on the second invocation",
+		{ meta: { tier: "domain", domain: "delta" } },
+		async (ctx) => {
+			await skipOnRateLimit(async () => {
+				const firstCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
+				const firstPayload = parseResponse(firstCall);
 
-        // If response contains an error, throw it so skipOnRateLimit can catch it
-        if (firstPayload.error) {
-          throw new Error(JSON.stringify(firstPayload.error));
-        }
+				// If response contains an error, throw it so skipOnRateLimit can catch it
+				if (firstPayload.error) {
+					throw new Error(JSON.stringify(firstPayload.error));
+				}
 
-        expect(firstPayload.cached).toBe(false);
+				expect(firstPayload.cached).toBe(false);
 
-        const secondCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
-        const secondPayload = parseResponse(secondCall);
+				const secondCall = await handleListBudgets(ynabAPI, deltaFetcher, {});
+				const secondPayload = parseResponse(secondCall);
 
-        // If response contains an error, throw it so skipOnRateLimit can catch it
-        if (secondPayload.error) {
-          throw new Error(JSON.stringify(secondPayload.error));
-        }
+				// If response contains an error, throw it so skipOnRateLimit can catch it
+				if (secondPayload.error) {
+					throw new Error(JSON.stringify(secondPayload.error));
+				}
 
-        expectCacheHit(secondPayload);
+				expectCacheHit(secondPayload);
 
-        // Verify cached response contains the same budget data as initial fetch
-        expect(secondPayload.budgets).toEqual(firstPayload.budgets);
-      }, ctx);
-    },
-  );
+				// Verify cached response contains the same budget data as initial fetch
+				expect(secondPayload.budgets).toEqual(firstPayload.budgets);
+			}, ctx);
+		},
+	);
 });

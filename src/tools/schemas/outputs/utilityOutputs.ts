@@ -10,8 +10,8 @@
  * exact response shape details.
  */
 
-import { z } from 'zod/v4';
-import { SuccessResponseSchema } from '../shared/commonOutputs.js';
+import { z } from "zod/v4";
+import { SuccessResponseSchema } from "../shared/commonOutputs.js";
 
 // ============================================================================
 // GET USER OUTPUT
@@ -23,7 +23,7 @@ import { SuccessResponseSchema } from '../shared/commonOutputs.js';
  * Represents the authenticated user's information from YNAB API.
  */
 export const UserSchema = z.object({
-  id: z.string(),
+	id: z.string(),
 });
 
 /**
@@ -41,7 +41,7 @@ export const UserSchema = z.object({
  * ```
  */
 export const GetUserOutputSchema = z.object({
-  user: UserSchema,
+	user: UserSchema,
 });
 
 export type GetUserOutput = z.infer<typeof GetUserOutputSchema>;
@@ -67,12 +67,14 @@ export type GetUserOutput = z.infer<typeof GetUserOutputSchema>;
  * ```
  */
 export const GetDefaultBudgetOutputSchema = z.object({
-  default_budget_id: z.string().nullable(),
-  has_default: z.boolean(),
-  message: z.string(),
+	default_budget_id: z.string().nullable(),
+	has_default: z.boolean(),
+	message: z.string(),
 });
 
-export type GetDefaultBudgetOutput = z.infer<typeof GetDefaultBudgetOutputSchema>;
+export type GetDefaultBudgetOutput = z.infer<
+	typeof GetDefaultBudgetOutputSchema
+>;
 
 // ============================================================================
 // SET DEFAULT BUDGET OUTPUT
@@ -96,11 +98,13 @@ export type GetDefaultBudgetOutput = z.infer<typeof GetDefaultBudgetOutputSchema
  * ```
  */
 export const SetDefaultBudgetOutputSchema = SuccessResponseSchema.extend({
-  default_budget_id: z.string(),
-  cache_warm_started: z.boolean(),
+	default_budget_id: z.string(),
+	cache_warm_started: z.boolean(),
 });
 
-export type SetDefaultBudgetOutput = z.infer<typeof SetDefaultBudgetOutputSchema>;
+export type SetDefaultBudgetOutput = z.infer<
+	typeof SetDefaultBudgetOutputSchema
+>;
 
 // ============================================================================
 // CLEAR CACHE OUTPUT
@@ -120,7 +124,9 @@ export type SetDefaultBudgetOutput = z.infer<typeof SetDefaultBudgetOutputSchema
  * };
  * ```
  */
-export const ClearCacheOutputSchema = SuccessResponseSchema.pick({ success: true });
+export const ClearCacheOutputSchema = SuccessResponseSchema.pick({
+	success: true,
+});
 
 export type ClearCacheOutput = z.infer<typeof ClearCacheOutputSchema>;
 
@@ -145,10 +151,10 @@ export type ClearCacheOutput = z.infer<typeof ClearCacheOutputSchema>;
  * ```
  */
 export const SetOutputFormatOutputSchema = SuccessResponseSchema.extend({
-  options: z.object({
-    defaultMinify: z.boolean().optional(),
-    prettySpaces: z.number().optional(),
-  }),
+	options: z.object({
+		defaultMinify: z.boolean().optional(),
+		prettySpaces: z.number().optional(),
+	}),
 });
 
 export type SetOutputFormatOutput = z.infer<typeof SetOutputFormatOutputSchema>;
@@ -163,15 +169,15 @@ export type SetOutputFormatOutput = z.infer<typeof SetOutputFormatOutputSchema>;
  * Contains runtime information about the MCP server process.
  */
 export const ServerInfoSchema = z.object({
-  name: z.string(),
-  version: z.string(),
-  node_version: z.string(),
-  platform: z.string(),
-  arch: z.string(),
-  pid: z.number(),
-  uptime_ms: z.number(),
-  uptime_readable: z.string(),
-  env: z.record(z.string(), z.unknown()),
+	name: z.string(),
+	version: z.string(),
+	node_version: z.string(),
+	platform: z.string(),
+	arch: z.string(),
+	pid: z.number(),
+	uptime_ms: z.number(),
+	uptime_readable: z.string(),
+	env: z.record(z.string(), z.unknown()),
 });
 
 /**
@@ -180,12 +186,12 @@ export const ServerInfoSchema = z.object({
  * Reports memory consumption of the MCP server process.
  */
 export const MemoryInfoSchema = z.object({
-  rss_mb: z.number(),
-  heap_used_mb: z.number(),
-  heap_total_mb: z.number(),
-  external_mb: z.number(),
-  array_buffers_mb: z.number(),
-  description: z.record(z.string(), z.string()),
+	rss_mb: z.number(),
+	heap_used_mb: z.number(),
+	heap_total_mb: z.number(),
+	external_mb: z.number(),
+	array_buffers_mb: z.number(),
+	description: z.record(z.string(), z.string()),
 });
 
 /**
@@ -194,11 +200,11 @@ export const MemoryInfoSchema = z.object({
  * Shows environment variable configuration status.
  */
 export const EnvironmentInfoSchema = z.object({
-  token_present: z.boolean(),
-  token_length: z.number(),
-  token_preview: z.string().nullable(),
-  ynab_env_keys_present: z.array(z.string()),
-  working_directory: z.string(),
+	token_present: z.boolean(),
+	token_length: z.number(),
+	token_preview: z.string().nullable(),
+	ynab_env_keys_present: z.array(z.string()),
+	working_directory: z.string(),
 });
 
 /**
@@ -207,17 +213,17 @@ export const EnvironmentInfoSchema = z.object({
  * Reports cache status and performance metrics.
  */
 export const CacheInfoSchema = z.object({
-  entries: z.number(),
-  estimated_size_kb: z.number(),
-  keys: z.array(z.string()),
-  // Optional performance metrics
-  hits: z.number().optional(),
-  misses: z.number().optional(),
-  evictions: z.number().optional(),
-  lastCleanup: z.string().nullable().optional(),
-  maxEntries: z.number().optional(),
-  hitRate: z.string().optional(),
-  performance_summary: z.string().optional(),
+	entries: z.number(),
+	estimated_size_kb: z.number(),
+	keys: z.array(z.string()),
+	// Optional performance metrics
+	hits: z.number().optional(),
+	misses: z.number().optional(),
+	evictions: z.number().optional(),
+	lastCleanup: z.string().nullable().optional(),
+	maxEntries: z.number().optional(),
+	hitRate: z.string().optional(),
+	performance_summary: z.string().optional(),
 });
 
 /**
@@ -226,15 +232,15 @@ export const CacheInfoSchema = z.object({
  * Reports status of delta request feature and knowledge base.
  */
 export const DeltaInfoSchema = z.object({
-  enabled: z.boolean(),
-  knowledge_entries: z.number(),
-  knowledge_stats: z.record(z.string(), z.unknown()),
-  feature_flag: z.string(),
-  delta_hits: z.number(),
-  delta_misses: z.number(),
-  delta_hit_rate: z.number(),
-  merge_operations: z.number(),
-  knowledge_gap_events: z.number(),
+	enabled: z.boolean(),
+	knowledge_entries: z.number(),
+	knowledge_stats: z.record(z.string(), z.unknown()),
+	feature_flag: z.string(),
+	delta_hits: z.number(),
+	delta_misses: z.number(),
+	delta_hit_rate: z.number(),
+	merge_operations: z.number(),
+	knowledge_gap_events: z.number(),
 });
 
 /**
@@ -266,12 +272,12 @@ export const DeltaInfoSchema = z.object({
  * ```
  */
 export const DiagnosticInfoOutputSchema = z.object({
-  timestamp: z.string(),
-  server: ServerInfoSchema.optional(),
-  memory: MemoryInfoSchema.optional(),
-  environment: EnvironmentInfoSchema.optional(),
-  cache: CacheInfoSchema.optional(),
-  delta: DeltaInfoSchema.optional(),
+	timestamp: z.string(),
+	server: ServerInfoSchema.optional(),
+	memory: MemoryInfoSchema.optional(),
+	environment: EnvironmentInfoSchema.optional(),
+	cache: CacheInfoSchema.optional(),
+	delta: DeltaInfoSchema.optional(),
 });
 
 export type DiagnosticInfoOutput = z.infer<typeof DiagnosticInfoOutputSchema>;
@@ -286,7 +292,7 @@ export type DiagnosticInfoOutput = z.infer<typeof DiagnosticInfoOutputSchema>;
  * Represents how dates are formatted in the YNAB budget.
  */
 export const DateFormatSchema = z.object({
-  format: z.string(),
+	format: z.string(),
 });
 
 /**
@@ -295,14 +301,14 @@ export const DateFormatSchema = z.object({
  * Represents how currency values are formatted in the YNAB budget.
  */
 export const CurrencyFormatSchema = z.object({
-  iso_code: z.string(),
-  example_format: z.string(),
-  decimal_digits: z.number(),
-  decimal_separator: z.string().optional(),
-  symbol_first: z.boolean().optional(),
-  group_separator: z.string().optional(),
-  currency_symbol: z.string().optional(),
-  display_symbol: z.boolean().optional(),
+	iso_code: z.string(),
+	example_format: z.string(),
+	decimal_digits: z.number(),
+	decimal_separator: z.string().optional(),
+	symbol_first: z.boolean().optional(),
+	group_separator: z.string().optional(),
+	currency_symbol: z.string().optional(),
+	display_symbol: z.boolean().optional(),
 });
 
 /**
@@ -312,18 +318,18 @@ export const CurrencyFormatSchema = z.object({
  * format settings and entity counts.
  */
 export const BudgetDetailSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  last_modified_on: z.string().optional(),
-  first_month: z.string().optional(),
-  last_month: z.string().optional(),
-  date_format: DateFormatSchema.optional(),
-  currency_format: CurrencyFormatSchema.optional(),
-  accounts_count: z.number(),
-  categories_count: z.number(),
-  payees_count: z.number(),
-  months_count: z.number(),
-  message: z.string(),
+	id: z.string(),
+	name: z.string(),
+	last_modified_on: z.string().optional(),
+	first_month: z.string().optional(),
+	last_month: z.string().optional(),
+	date_format: DateFormatSchema.optional(),
+	currency_format: CurrencyFormatSchema.optional(),
+	accounts_count: z.number(),
+	categories_count: z.number(),
+	payees_count: z.number(),
+	months_count: z.number(),
+	message: z.string(),
 });
 
 /**
@@ -364,7 +370,7 @@ export const BudgetDetailSchema = z.object({
  * ```
  */
 export const GetBudgetOutputSchema = z.object({
-  budget: BudgetDetailSchema,
+	budget: BudgetDetailSchema,
 });
 
 export type GetBudgetOutput = z.infer<typeof GetBudgetOutputSchema>;

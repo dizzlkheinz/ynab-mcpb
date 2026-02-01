@@ -3,7 +3,7 @@
  * @module tools/schemas/common
  */
 
-import { z } from 'zod/v4';
+import { z } from "zod/v4";
 
 /**
  * Strict empty object schema used for tools that do not accept input params.

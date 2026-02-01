@@ -1,3 +1,3 @@
-import { BaseError } from './baseError.js';
+import { BaseError } from "./baseError.js";
 
 export class ValidationError extends BaseError {}

@@ -2,13 +2,16 @@
  * Performance and load tests for YNAB MCP Server
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type * as ynab from 'ynab';
-import { SecurityErrorCode } from '../server/errorHandler.js';
-import { type AccountSnapshot, executeReconciliation } from '../tools/reconciliation/executor.js';
-import type { ReconcileAccountRequest } from '../tools/reconciliation/index.js';
-import type { ReconciliationAnalysis } from '../tools/reconciliation/types.js';
-import { executeToolCall, parseToolResult } from './testUtils.js';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as ynab from "ynab";
+import { SecurityErrorCode } from "../server/errorHandler.js";
+import {
+	type AccountSnapshot,
+	executeReconciliation,
+} from "../tools/reconciliation/executor.js";
+import type { ReconcileAccountRequest } from "../tools/reconciliation/index.js";
+import type { ReconciliationAnalysis } from "../tools/reconciliation/types.js";
+import { executeToolCall, parseToolResult } from "./testUtils.js";
 
 /**
  * Helper function to validate tool responses and extract array data
@@ -19,705 +22,754 @@ import { executeToolCall, parseToolResult } from './testUtils.js';
  * @returns The validated array data
  * @throws Error if response contains errors or invalid data
  */
-function validateToolResponse<T>(result: any, fieldSelector: (data: any) => T[] | undefined): T[] {
-  const parsed = parseToolResult(result);
+function validateToolResponse<T>(
+	result: any,
+	fieldSelector: (data: any) => T[] | undefined,
+): T[] {
+	const parsed = parseToolResult(result);
 
-  // Check for errors in the response
-  const hasError = parsed.error || parsed.data?.error;
-  if (hasError) {
-    throw new Error(
-      `Tool returned error: ${JSON.stringify(hasError, null, 2)}
+	// Check for errors in the response
+	const hasError = parsed.error || parsed.data?.error;
+	if (hasError) {
+		throw new Error(
+			`Tool returned error: ${JSON.stringify(hasError, null, 2)}
 Full response: ${JSON.stringify(parsed, null, 2)}`,
-    );
-  }
+		);
+	}
 
-  // Ensure data exists
-  if (!parsed.data) {
-    throw new Error(`Tool returned no data. Full response: ${JSON.stringify(parsed, null, 2)}`);
-  }
+	// Ensure data exists
+	if (!parsed.data) {
+		throw new Error(
+			`Tool returned no data. Full response: ${JSON.stringify(parsed, null, 2)}`,
+		);
+	}
 
-  // Select the specific array field
-  const arrayData = fieldSelector(parsed.data);
+	// Select the specific array field
+	const arrayData = fieldSelector(parsed.data);
 
-  // Validate it's a non-empty array
-  expect(arrayData).toBeDefined();
-  expect(Array.isArray(arrayData)).toBe(true);
-  expect(arrayData!.length).toBeGreaterThan(0);
+	// Validate it's a non-empty array
+	expect(arrayData).toBeDefined();
+	expect(Array.isArray(arrayData)).toBe(true);
+	expect(arrayData?.length).toBeGreaterThan(0);
 
-  return arrayData!;
+	return arrayData!;
 }
 
 // Mock the YNAB SDK for performance tests
-vi.mock('ynab', () => {
-  const mockAPI = {
-    budgets: {
-      getBudgets: vi.fn(),
-      getBudgetById: vi.fn(),
-    },
-    accounts: {
-      getAccounts: vi.fn(),
-      getAccountById: vi.fn(),
-    },
-    transactions: {
-      getTransactions: vi.fn(),
-      getTransactionById: vi.fn(),
-      createTransaction: vi.fn(),
-    },
-    categories: {
-      getCategories: vi.fn(),
-    },
-    user: {
-      getUser: vi.fn(),
-    },
-  };
+vi.mock("ynab", () => {
+	const mockAPI = {
+		budgets: {
+			getBudgets: vi.fn(),
+			getBudgetById: vi.fn(),
+		},
+		accounts: {
+			getAccounts: vi.fn(),
+			getAccountById: vi.fn(),
+		},
+		transactions: {
+			getTransactions: vi.fn(),
+			getTransactionById: vi.fn(),
+			createTransaction: vi.fn(),
+		},
+		categories: {
+			getCategories: vi.fn(),
+		},
+		user: {
+			getUser: vi.fn(),
+		},
+	};
 
-  return {
-    API: vi.fn(() => mockAPI),
-  };
+	return {
+		API: vi.fn(() => mockAPI),
+	};
 });
 
 // NOTE: These performance tests need updated mocking for the reconciliation executor
 // Skipping temporarily - reconciliation functionality is covered by integration tests
-describe.skip('Reconciliation Performance - Bulk vs Sequential', () => {
-  it('processes 20 transactions in bulk mode in under 8 seconds', async () => {
-    const { duration, result } = await measurePerformanceScenario({
-      transactionCount: 20,
-      bulkDelay: 50,
-    });
-    console.log(`Bulk benchmark (20 txns): ${duration}ms`);
-    expect(duration).toBeLessThan(8000);
-    expect(result.summary.transactions_created).toBe(20);
-    expect(result.bulk_operation_details?.bulk_successes).toBe(1);
-  }, 60000);
+describe.skip("Reconciliation Performance - Bulk vs Sequential", () => {
+	it("processes 20 transactions in bulk mode in under 8 seconds", async () => {
+		const { duration, result } = await measurePerformanceScenario({
+			transactionCount: 20,
+			bulkDelay: 50,
+		});
+		console.log(`Bulk benchmark (20 txns): ${duration}ms`);
+		expect(duration).toBeLessThan(8000);
+		expect(result.summary.transactions_created).toBe(20);
+		expect(result.bulk_operation_details?.bulk_successes).toBe(1);
+	}, 60000);
 
-  it('pure sequential mode (single transaction) takes longer than 20 seconds', async () => {
-    // Pure sequential baseline: only 1 transaction per "unmatched_bank" to avoid bulk mode
-    const { duration, result } = await measurePerformanceScenario({
-      transactionCount: 1, // This ensures bulk mode is never entered
-      bulkDelay: 50,
-      sequentialDelay: 1050,
-      multipleRuns: 20, // Run 20 times to simulate 20 sequential transactions
-    });
-    console.log(`Pure sequential baseline (20 txns, 1 at a time): ${duration}ms`);
-    expect(duration).toBeGreaterThan(20000);
-    expect(result.summary.transactions_created).toBe(1);
-    expect(result.bulk_operation_details).toBeUndefined(); // No bulk operations at all
-  }, 90000);
+	it("pure sequential mode (single transaction) takes longer than 20 seconds", async () => {
+		// Pure sequential baseline: only 1 transaction per "unmatched_bank" to avoid bulk mode
+		const { duration, result } = await measurePerformanceScenario({
+			transactionCount: 1, // This ensures bulk mode is never entered
+			bulkDelay: 50,
+			sequentialDelay: 1050,
+			multipleRuns: 20, // Run 20 times to simulate 20 sequential transactions
+		});
+		console.log(
+			`Pure sequential baseline (20 txns, 1 at a time): ${duration}ms`,
+		);
+		expect(duration).toBeGreaterThan(20000);
+		expect(result.summary.transactions_created).toBe(1);
+		expect(result.bulk_operation_details).toBeUndefined(); // No bulk operations at all
+	}, 90000);
 
-  it('sequential fallback takes longer than 20 seconds for 20 transactions', async () => {
-    const { duration, result } = await measurePerformanceScenario({
-      transactionCount: 20,
-      bulkDelay: 50,
-      sequentialDelay: 1050,
-      forceSequential: true,
-    });
-    console.log(`Sequential fallback (20 txns): ${duration}ms`);
-    expect(duration).toBeGreaterThan(20000);
-    expect(result.summary.transactions_created).toBe(20);
-    expect(result.bulk_operation_details?.sequential_fallbacks).toBe(1);
-    expect(result.bulk_operation_details?.bulk_successes).toBe(0);
-  }, 90000);
+	it("sequential fallback takes longer than 20 seconds for 20 transactions", async () => {
+		const { duration, result } = await measurePerformanceScenario({
+			transactionCount: 20,
+			bulkDelay: 50,
+			sequentialDelay: 1050,
+			forceSequential: true,
+		});
+		console.log(`Sequential fallback (20 txns): ${duration}ms`);
+		expect(duration).toBeGreaterThan(20000);
+		expect(result.summary.transactions_created).toBe(20);
+		expect(result.bulk_operation_details?.sequential_fallbacks).toBe(1);
+		expect(result.bulk_operation_details?.bulk_successes).toBe(0);
+	}, 90000);
 
-  it('achieves at least a 3x speedup over pure sequential mode', async () => {
-    const bulkRun = await measurePerformanceScenario({
-      transactionCount: 20,
-      bulkDelay: 50,
-    });
-    // Use pure sequential baseline for canonical comparison
-    const pureSequentialRun = await measurePerformanceScenario({
-      transactionCount: 1,
-      bulkDelay: 50,
-      sequentialDelay: 1050,
-      multipleRuns: 20,
-    });
-    const speedup = pureSequentialRun.duration / bulkRun.duration;
-    console.log(`Bulk vs pure sequential speedup: ${speedup.toFixed(2)}x faster`);
-    expect(speedup).toBeGreaterThanOrEqual(3);
-  }, 120000);
+	it("achieves at least a 3x speedup over pure sequential mode", async () => {
+		const bulkRun = await measurePerformanceScenario({
+			transactionCount: 20,
+			bulkDelay: 50,
+		});
+		// Use pure sequential baseline for canonical comparison
+		const pureSequentialRun = await measurePerformanceScenario({
+			transactionCount: 1,
+			bulkDelay: 50,
+			sequentialDelay: 1050,
+			multipleRuns: 20,
+		});
+		const speedup = pureSequentialRun.duration / bulkRun.duration;
+		console.log(
+			`Bulk vs pure sequential speedup: ${speedup.toFixed(2)}x faster`,
+		);
+		expect(speedup).toBeGreaterThanOrEqual(3);
+	}, 120000);
 
-  it('handles 150-transaction chunking without significant overhead', async () => {
-    const { duration, result } = await measurePerformanceScenario({
-      transactionCount: 150,
-      bulkDelay: 60,
-    });
-    console.log(`Chunking benchmark (150 txns): ${duration}ms`);
-    expect(duration).toBeLessThan(15000);
-    expect(result.summary.transactions_created).toBe(150);
-    expect(result.bulk_operation_details?.chunks_processed).toBeGreaterThanOrEqual(2);
-  }, 60000);
+	it("handles 150-transaction chunking without significant overhead", async () => {
+		const { duration, result } = await measurePerformanceScenario({
+			transactionCount: 150,
+			bulkDelay: 60,
+		});
+		console.log(`Chunking benchmark (150 txns): ${duration}ms`);
+		expect(duration).toBeLessThan(15000);
+		expect(result.summary.transactions_created).toBe(150);
+		expect(
+			result.bulk_operation_details?.chunks_processed,
+		).toBeGreaterThanOrEqual(2);
+	}, 60000);
 
-  it('stays within 10MB of heap growth for 100 bulk transactions', async () => {
-    const before = process.memoryUsage().heapUsed;
-    const { result } = await measurePerformanceScenario({
-      transactionCount: 100,
-      bulkDelay: 30,
-    });
-    const after = process.memoryUsage().heapUsed;
-    const deltaMb = (after - before) / (1024 * 1024);
-    expect(result.summary.transactions_created).toBe(100);
-    expect(deltaMb).toBeLessThan(10);
-  });
+	it("stays within 10MB of heap growth for 100 bulk transactions", async () => {
+		const before = process.memoryUsage().heapUsed;
+		const { result } = await measurePerformanceScenario({
+			transactionCount: 100,
+			bulkDelay: 30,
+		});
+		const after = process.memoryUsage().heapUsed;
+		const deltaMb = (after - before) / (1024 * 1024);
+		expect(result.summary.transactions_created).toBe(100);
+		expect(deltaMb).toBeLessThan(10);
+	});
 });
 
 const performanceInitialAccount: AccountSnapshot = {
-  balance: 0,
-  cleared_balance: 0,
-  uncleared_balance: 0,
+	balance: 0,
+	cleared_balance: 0,
+	uncleared_balance: 0,
 };
 
 function buildPerformanceAnalysis(
-  count: number,
-  amount = 5,
-  statementMultiplier = count,
+	count: number,
+	amount = 5,
+	statementMultiplier = count,
 ): ReconciliationAnalysis {
-  const statementBalance = amount * statementMultiplier;
-  const baseDate = Date.parse('2025-08-01');
+	const statementBalance = amount * statementMultiplier;
+	const baseDate = Date.parse("2025-08-01");
 
-  return {
-    success: true,
-    phase: 'analysis',
-    summary: {
-      statement_date_range: 'Performance suite',
-      bank_transactions_count: count,
-      ynab_transactions_count: 0,
-      auto_matched: 0,
-      suggested_matches: 0,
-      unmatched_bank: count,
-      unmatched_ynab: 0,
-      current_cleared_balance: 0,
-      target_statement_balance: statementBalance,
-      discrepancy: statementBalance,
-      discrepancy_explanation: 'Synthetic performance delta',
-    },
-    auto_matches: [],
-    suggested_matches: [],
-    unmatched_bank: Array.from({ length: count }, (_, index) => {
-      const date = new Date(baseDate + index * 24 * 60 * 60 * 1000);
-      return {
-        id: `perf-bank-${index}`,
-        date: date.toISOString().slice(0, 10),
-        amount,
-        payee: `Performance Payee ${index}`,
-        memo: `Performance memo ${index}`,
-        original_csv_row: index + 1,
-      };
-    }),
-    unmatched_ynab: [],
-    balance_info: {
-      current_cleared: 0,
-      current_uncleared: 0,
-      current_total: 0,
-      target_statement: statementBalance,
-      discrepancy: statementBalance,
-      on_track: false,
-    },
-    next_steps: [],
-    insights: [],
-  };
+	return {
+		success: true,
+		phase: "analysis",
+		summary: {
+			statement_date_range: "Performance suite",
+			bank_transactions_count: count,
+			ynab_transactions_count: 0,
+			auto_matched: 0,
+			suggested_matches: 0,
+			unmatched_bank: count,
+			unmatched_ynab: 0,
+			current_cleared_balance: 0,
+			target_statement_balance: statementBalance,
+			discrepancy: statementBalance,
+			discrepancy_explanation: "Synthetic performance delta",
+		},
+		auto_matches: [],
+		suggested_matches: [],
+		unmatched_bank: Array.from({ length: count }, (_, index) => {
+			const date = new Date(baseDate + index * 24 * 60 * 60 * 1000);
+			return {
+				id: `perf-bank-${index}`,
+				date: date.toISOString().slice(0, 10),
+				amount,
+				payee: `Performance Payee ${index}`,
+				memo: `Performance memo ${index}`,
+				original_csv_row: index + 1,
+			};
+		}),
+		unmatched_ynab: [],
+		balance_info: {
+			current_cleared: 0,
+			current_uncleared: 0,
+			current_total: 0,
+			target_statement: statementBalance,
+			discrepancy: statementBalance,
+			on_track: false,
+		},
+		next_steps: [],
+		insights: [],
+	};
 }
 
 function buildPerformanceParams(
-  statementBalance: number,
-  overrides: Partial<ReconcileAccountRequest> = {},
+	statementBalance: number,
+	overrides: Partial<ReconcileAccountRequest> = {},
 ): ReconcileAccountRequest {
-  return {
-    budget_id: 'budget-performance',
-    account_id: 'account-performance',
-    csv_data: 'Date,Description,Amount',
-    statement_balance: statementBalance,
-    statement_date: '2025-08-31',
-    date_tolerance_days: 1,
-    amount_tolerance_cents: 1,
-    auto_match_threshold: 90,
-    suggestion_threshold: 60,
-    auto_create_transactions: true,
-    auto_update_cleared_status: false,
-    auto_unclear_missing: false,
-    auto_adjust_dates: false,
-    dry_run: false,
-    require_exact_match: true,
-    confidence_threshold: 0.8,
-    max_resolution_attempts: 3,
-    include_structured_data: false,
-    ...overrides,
-  };
+	return {
+		budget_id: "budget-performance",
+		account_id: "account-performance",
+		csv_data: "Date,Description,Amount",
+		statement_balance: statementBalance,
+		statement_date: "2025-08-31",
+		date_tolerance_days: 1,
+		amount_tolerance_cents: 1,
+		auto_match_threshold: 90,
+		suggestion_threshold: 60,
+		auto_create_transactions: true,
+		auto_update_cleared_status: false,
+		auto_unclear_missing: false,
+		auto_adjust_dates: false,
+		dry_run: false,
+		require_exact_match: true,
+		confidence_threshold: 0.8,
+		max_resolution_attempts: 3,
+		include_structured_data: false,
+		...overrides,
+	};
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function createPerformanceApi(options: {
-  bulkDelay?: number;
-  sequentialDelay?: number;
-  failBulk?: boolean;
+	bulkDelay?: number;
+	sequentialDelay?: number;
+	failBulk?: boolean;
 }) {
-  const createTransactions = vi.fn().mockImplementation(async (_budgetId, body: any) => {
-    if (options.failBulk) {
-      throw new Error('bulk failure');
-    }
-    if (options.bulkDelay) {
-      await delay(options.bulkDelay);
-    }
-    const transactions = (body.transactions ?? []).map((txn: any, index: number) => ({
-      id: `bulk-${index}-${Date.now()}`,
-      account_id: txn.account_id,
-      amount: txn.amount,
-      date: txn.date,
-      cleared: 'cleared',
-      approved: true,
-    }));
-    return { data: { transactions } };
-  });
+	const createTransactions = vi
+		.fn()
+		.mockImplementation(async (_budgetId, body: any) => {
+			if (options.failBulk) {
+				throw new Error("bulk failure");
+			}
+			if (options.bulkDelay) {
+				await delay(options.bulkDelay);
+			}
+			const transactions = (body.transactions ?? []).map(
+				(txn: any, index: number) => ({
+					id: `bulk-${index}-${Date.now()}`,
+					account_id: txn.account_id,
+					amount: txn.amount,
+					date: txn.date,
+					cleared: "cleared",
+					approved: true,
+				}),
+			);
+			return { data: { transactions } };
+		});
 
-  const createTransaction = vi.fn().mockImplementation(async (_budgetId, body: any) => {
-    if (options.sequentialDelay) {
-      const asyncWait = Math.min(options.sequentialDelay, 50);
-      await delay(asyncWait);
-      const busyWait = Math.max(options.sequentialDelay - asyncWait, 0);
-      const start = Date.now();
-      while (Date.now() - start < busyWait) {
-        // busy-wait to simulate processing overhead
-      }
-    }
-    return {
-      data: {
-        transaction: {
-          id: `seq-${Date.now()}`,
-          amount: body.transaction?.amount ?? 0,
-          date: body.transaction?.date ?? '2025-09-01',
-          cleared: 'cleared',
-          approved: true,
-        },
-      },
-    };
-  });
+	const createTransaction = vi
+		.fn()
+		.mockImplementation(async (_budgetId, body: any) => {
+			if (options.sequentialDelay) {
+				const asyncWait = Math.min(options.sequentialDelay, 50);
+				await delay(asyncWait);
+				const busyWait = Math.max(options.sequentialDelay - asyncWait, 0);
+				const start = Date.now();
+				while (Date.now() - start < busyWait) {
+					// busy-wait to simulate processing overhead
+				}
+			}
+			return {
+				data: {
+					transaction: {
+						id: `seq-${Date.now()}`,
+						amount: body.transaction?.amount ?? 0,
+						date: body.transaction?.date ?? "2025-09-01",
+						cleared: "cleared",
+						approved: true,
+					},
+				},
+			};
+		});
 
-  const updateTransactions = vi.fn().mockResolvedValue({ data: { transactions: [] } });
-  const getTransactionsByAccount = vi.fn().mockResolvedValue({ data: { transactions: [] } });
-  const getAccountById = vi.fn().mockResolvedValue({
-    data: {
-      account: {
-        id: 'account-performance',
-        balance: performanceInitialAccount.balance,
-        cleared_balance: performanceInitialAccount.cleared_balance,
-        uncleared_balance: performanceInitialAccount.uncleared_balance,
-      },
-    },
-  });
+	const updateTransactions = vi
+		.fn()
+		.mockResolvedValue({ data: { transactions: [] } });
+	const getTransactionsByAccount = vi
+		.fn()
+		.mockResolvedValue({ data: { transactions: [] } });
+	const getAccountById = vi.fn().mockResolvedValue({
+		data: {
+			account: {
+				id: "account-performance",
+				balance: performanceInitialAccount.balance,
+				cleared_balance: performanceInitialAccount.cleared_balance,
+				uncleared_balance: performanceInitialAccount.uncleared_balance,
+			},
+		},
+	});
 
-  const api = {
-    transactions: {
-      createTransactions,
-      createTransaction,
-      updateTransactions,
-      getTransactionsByAccount,
-    },
-    accounts: {
-      getAccountById,
-    },
-  } as unknown as ynab.API;
+	const api = {
+		transactions: {
+			createTransactions,
+			createTransaction,
+			updateTransactions,
+			getTransactionsByAccount,
+		},
+		accounts: {
+			getAccountById,
+		},
+	} as unknown as ynab.API;
 
-  return { api, mocks: { createTransactions, createTransaction } };
+	return { api, mocks: { createTransactions, createTransaction } };
 }
 
 async function measurePerformanceScenario(options: {
-  transactionCount: number;
-  amount?: number;
-  bulkDelay?: number;
-  sequentialDelay?: number;
-  forceSequential?: boolean;
-  multipleRuns?: number;
+	transactionCount: number;
+	amount?: number;
+	bulkDelay?: number;
+	sequentialDelay?: number;
+	forceSequential?: boolean;
+	multipleRuns?: number;
 }): Promise<{
-  duration: number;
-  result: Awaited<ReturnType<typeof executeReconciliation>>;
+	duration: number;
+	result: Awaited<ReturnType<typeof executeReconciliation>>;
 }> {
-  const analysis = buildPerformanceAnalysis(options.transactionCount, options.amount ?? 5);
-  const params = buildPerformanceParams(analysis.summary.target_statement_balance);
-  const { api } = createPerformanceApi({
-    bulkDelay: options.bulkDelay,
-    sequentialDelay: options.sequentialDelay,
-    failBulk: options.forceSequential,
-  });
+	const analysis = buildPerformanceAnalysis(
+		options.transactionCount,
+		options.amount ?? 5,
+	);
+	const params = buildPerformanceParams(
+		analysis.summary.target_statement_balance,
+	);
+	const { api } = createPerformanceApi({
+		bulkDelay: options.bulkDelay,
+		sequentialDelay: options.sequentialDelay,
+		failBulk: options.forceSequential,
+	});
 
-  const start = Date.now();
-  let result: Awaited<ReturnType<typeof executeReconciliation>>;
+	const start = Date.now();
+	let result: Awaited<ReturnType<typeof executeReconciliation>>;
 
-  if (options.multipleRuns) {
-    // Run the scenario multiple times sequentially to measure pure sequential performance
-    for (let i = 0; i < options.multipleRuns; i++) {
-      result = await executeReconciliation({
-        ynabAPI: api,
-        analysis,
-        params,
-        budgetId: params.budget_id,
-        accountId: params.account_id,
-        initialAccount: performanceInitialAccount,
-        currencyCode: 'USD',
-      });
-    }
-  } else {
-    result = await executeReconciliation({
-      ynabAPI: api,
-      analysis,
-      params,
-      budgetId: params.budget_id,
-      accountId: params.account_id,
-      initialAccount: performanceInitialAccount,
-      currencyCode: 'USD',
-    });
-  }
-  const duration = Date.now() - start;
-  return { duration, result: result! };
+	if (options.multipleRuns) {
+		// Run the scenario multiple times sequentially to measure pure sequential performance
+		for (let i = 0; i < options.multipleRuns; i++) {
+			result = await executeReconciliation({
+				ynabAPI: api,
+				analysis,
+				params,
+				budgetId: params.budget_id,
+				accountId: params.account_id,
+				initialAccount: performanceInitialAccount,
+				currencyCode: "USD",
+			});
+		}
+	} else {
+		result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: params.budget_id,
+			accountId: params.account_id,
+			initialAccount: performanceInitialAccount,
+			currencyCode: "USD",
+		});
+	}
+	const duration = Date.now() - start;
+	return { duration, result: result! };
 }
 
-describe('YNAB MCP Server - Performance Tests', () => {
-  let server: InstanceType<typeof import('../server/YNABMCPServer.js').YNABMCPServer>;
-  let mockYnabAPI: any;
+describe("YNAB MCP Server - Performance Tests", () => {
+	let server: InstanceType<
+		typeof import("../server/YNABMCPServer.js").YNABMCPServer
+	>;
+	let mockYnabAPI: any;
 
-  beforeEach(async () => {
-    // Ensure YNAB_ACCESS_TOKEN is set for all tests, even if just a placeholder
-    process.env['YNAB_ACCESS_TOKEN'] = 'test-token-performance';
-    // Clear modules to ensure fresh import of server with new env var
-    vi.resetModules();
-    const { YNABMCPServer } = await import('../server/YNABMCPServer.js');
-    server = new YNABMCPServer();
+	beforeEach(async () => {
+		// Ensure YNAB_ACCESS_TOKEN is set for all tests, even if just a placeholder
+		process.env.YNAB_ACCESS_TOKEN = "test-token-performance";
+		// Clear modules to ensure fresh import of server with new env var
+		vi.resetModules();
+		const { YNABMCPServer } = await import("../server/YNABMCPServer.js");
+		server = new YNABMCPServer();
 
-    // Mock the YNAB API constructor to ensure it receives the correct access token
-    const { API } = await import('ynab');
-    mockYnabAPI = new (API as any)('test-token-performance');
+		// Mock the YNAB API constructor to ensure it receives the correct access token
+		const { API } = await import("ynab");
+		mockYnabAPI = new (API as any)("test-token-performance");
 
-    vi.clearAllMocks();
-    // Clear cache to ensure mocks are called in each test
-    await executeToolCall(server, 'ynab:clear_cache');
-  });
+		vi.clearAllMocks();
+		// Clear cache to ensure mocks are called in each test
+		await executeToolCall(server, "ynab:clear_cache");
+	});
 
-  describe('Response Time Performance', () => {
-    it('should respond to budget listing within acceptable time', async () => {
-      // Mock quick response
-      mockYnabAPI.budgets.getBudgets.mockResolvedValue({
-        data: {
-          budgets: Array.from({ length: 5 }, (_, i) => ({
-            id: `budget-${i}`,
-            name: `Budget ${i}`,
-            last_modified_on: '2024-01-01T00:00:00Z',
-            first_month: '2024-01-01',
-            last_month: '2024-12-01',
-          })),
-        },
-      });
+	describe("Response Time Performance", () => {
+		it("should respond to budget listing within acceptable time", async () => {
+			// Mock quick response
+			mockYnabAPI.budgets.getBudgets.mockResolvedValue({
+				data: {
+					budgets: Array.from({ length: 5 }, (_, i) => ({
+						id: `budget-${i}`,
+						name: `Budget ${i}`,
+						last_modified_on: "2024-01-01T00:00:00Z",
+						first_month: "2024-01-01",
+						last_month: "2024-12-01",
+					})),
+				},
+			});
 
-      const startTime = Date.now();
-      const result = await executeToolCall(server, 'ynab:list_budgets');
-      const endTime = Date.now();
+			const startTime = Date.now();
+			const result = await executeToolCall(server, "ynab:list_budgets");
+			const endTime = Date.now();
 
-      const responseTime = endTime - startTime;
+			const responseTime = endTime - startTime;
 
-      expect(result).toBeDefined();
-      expect(responseTime).toBeLessThan(1000); // Should respond within 1 second
+			expect(result).toBeDefined();
+			expect(responseTime).toBeLessThan(1000); // Should respond within 1 second
 
-      const budgets = parseToolResult(result);
-      expect(budgets.data.budgets).toHaveLength(5);
-    });
+			const budgets = parseToolResult(result);
+			expect(budgets.data.budgets).toHaveLength(5);
+		});
 
-    it('should handle large transaction lists efficiently', async () => {
-      // Use smaller list to avoid size limit and ensure we get 'transactions' not 'preview_transactions'
-      const largeTransactionList = Array.from({ length: 100 }, (_, i) => ({
-        id: `transaction-${i}`,
-        date: '2024-01-01',
-        amount: -1000 * (i + 1),
-        memo: `Transaction ${i}`,
-        cleared: 'cleared' as const,
-        approved: true,
-        account_id: 'account-1',
-        category_id: 'category-1',
-        deleted: false,
-        payee_name: `Payee ${i}`,
-        category_name: `Category ${i}`,
-      }));
+		it("should handle large transaction lists efficiently", async () => {
+			// Use smaller list to avoid size limit and ensure we get 'transactions' not 'preview_transactions'
+			const largeTransactionList = Array.from({ length: 100 }, (_, i) => ({
+				id: `transaction-${i}`,
+				date: "2024-01-01",
+				amount: -1000 * (i + 1),
+				memo: `Transaction ${i}`,
+				cleared: "cleared" as const,
+				approved: true,
+				account_id: "account-1",
+				category_id: "category-1",
+				deleted: false,
+				payee_name: `Payee ${i}`,
+				category_name: `Category ${i}`,
+			}));
 
-      // Mock the method that list_transactions actually uses for budget-wide queries
-      // Use mockImplementation to ensure it works with any arguments (including lastKnowledge)
-      mockYnabAPI.transactions.getTransactions.mockImplementation(async () => ({
-        data: {
-          transactions: largeTransactionList,
-          server_knowledge: 100,
-        },
-      }));
+			// Mock the method that list_transactions actually uses for budget-wide queries
+			// Use mockImplementation to ensure it works with any arguments (including lastKnowledge)
+			mockYnabAPI.transactions.getTransactions.mockImplementation(async () => ({
+				data: {
+					transactions: largeTransactionList,
+					server_knowledge: 100,
+				},
+			}));
 
-      const startTime = Date.now();
-      const result = await executeToolCall(server, 'ynab:list_transactions', {
-        budget_id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID
-      });
-      const endTime = Date.now();
+			const startTime = Date.now();
+			const result = await executeToolCall(server, "ynab:list_transactions", {
+				budget_id: "123e4567-e89b-12d3-a456-426614174000", // Valid UUID
+			});
+			const endTime = Date.now();
 
-      const responseTime = endTime - startTime;
+			const responseTime = endTime - startTime;
 
-      expect(result).toBeDefined();
-      expect(responseTime).toBeLessThan(2000); // Should handle large lists within 2 seconds
+			expect(result).toBeDefined();
+			expect(responseTime).toBeLessThan(2000); // Should handle large lists within 2 seconds
 
-      // Validate response structure
-      validateToolResponse(result, (data) => data.transactions || data.preview_transactions);
-    });
+			// Validate response structure
+			validateToolResponse(
+				result,
+				(data) => data.transactions || data.preview_transactions,
+			);
+		});
 
-    it('should handle concurrent requests efficiently', async () => {
-      // Mock responses for concurrent requests
-      mockYnabAPI.budgets.getBudgets.mockResolvedValue({
-        data: { budgets: [{ id: 'budget-1', name: 'Test Budget' }] },
-      });
+		it("should handle concurrent requests efficiently", async () => {
+			// Mock responses for concurrent requests
+			mockYnabAPI.budgets.getBudgets.mockResolvedValue({
+				data: { budgets: [{ id: "budget-1", name: "Test Budget" }] },
+			});
 
-      mockYnabAPI.accounts.getAccounts.mockResolvedValue({
-        data: {
-          accounts: [{ id: 'account-1', name: 'Test Account', type: 'checking', balance: 0 }],
-        },
-      });
+			mockYnabAPI.accounts.getAccounts.mockResolvedValue({
+				data: {
+					accounts: [
+						{
+							id: "account-1",
+							name: "Test Account",
+							type: "checking",
+							balance: 0,
+						},
+					],
+				},
+			});
 
-      mockYnabAPI.user.getUser.mockResolvedValue({
-        data: { user: { id: 'user-1', email: 'test@example.com' } },
-      });
+			mockYnabAPI.user.getUser.mockResolvedValue({
+				data: { user: { id: "user-1", email: "test@example.com" } },
+			});
 
-      const startTime = Date.now();
+			const startTime = Date.now();
 
-      // Execute multiple concurrent requests
-      const promises = [
-        executeToolCall(server, 'ynab:list_budgets'),
-        executeToolCall(server, 'ynab:list_accounts', { budget_id: 'test-budget' }),
-        executeToolCall(server, 'ynab:get_user'),
-        executeToolCall(server, 'ynab:list_budgets'),
-        executeToolCall(server, 'ynab:list_accounts', { budget_id: 'test-budget' }),
-      ];
+			// Execute multiple concurrent requests
+			const promises = [
+				executeToolCall(server, "ynab:list_budgets"),
+				executeToolCall(server, "ynab:list_accounts", {
+					budget_id: "test-budget",
+				}),
+				executeToolCall(server, "ynab:get_user"),
+				executeToolCall(server, "ynab:list_budgets"),
+				executeToolCall(server, "ynab:list_accounts", {
+					budget_id: "test-budget",
+				}),
+			];
 
-      const results = await Promise.all(promises);
-      const endTime = Date.now();
+			const results = await Promise.all(promises);
+			const endTime = Date.now();
 
-      const totalTime = endTime - startTime;
+			const totalTime = endTime - startTime;
 
-      expect(results).toHaveLength(5);
-      results.forEach((result) => expect(result).toBeDefined());
-      expect(totalTime).toBeLessThan(3000); // All concurrent requests within 3 seconds
-    });
-  });
+			expect(results).toHaveLength(5);
+			results.forEach((result) => expect(result).toBeDefined());
+			expect(totalTime).toBeLessThan(3000); // All concurrent requests within 3 seconds
+		});
+	});
 
-  describe('Memory Usage Performance', () => {
-    it('should handle memory efficiently with large datasets', async () => {
-      // Create a large mock dataset
-      const largeCategoryList = Array.from({ length: 100 }, (_, groupIndex) => ({
-        id: `group-${groupIndex}`,
-        name: `Category Group ${groupIndex}`,
-        hidden: false,
-        deleted: false,
-        categories: Array.from({ length: 20 }, (_, catIndex) => ({
-          id: `category-${groupIndex}-${catIndex}`,
-          category_group_id: `group-${groupIndex}`,
-          name: `Category ${groupIndex}-${catIndex}`,
-          hidden: false,
-          deleted: false,
-          budgeted: 1000 * catIndex,
-          activity: -500 * catIndex,
-          balance: 500 * catIndex,
-        })),
-      }));
+	describe("Memory Usage Performance", () => {
+		it("should handle memory efficiently with large datasets", async () => {
+			// Create a large mock dataset
+			const largeCategoryList = Array.from(
+				{ length: 100 },
+				(_, groupIndex) => ({
+					id: `group-${groupIndex}`,
+					name: `Category Group ${groupIndex}`,
+					hidden: false,
+					deleted: false,
+					categories: Array.from({ length: 20 }, (_, catIndex) => ({
+						id: `category-${groupIndex}-${catIndex}`,
+						category_group_id: `group-${groupIndex}`,
+						name: `Category ${groupIndex}-${catIndex}`,
+						hidden: false,
+						deleted: false,
+						budgeted: 1000 * catIndex,
+						activity: -500 * catIndex,
+						balance: 500 * catIndex,
+					})),
+				}),
+			);
 
-      // Use mockImplementation to ensure it works with any arguments (including lastKnowledge)
-      mockYnabAPI.categories.getCategories.mockImplementation(async () => ({
-        data: {
-          category_groups: largeCategoryList,
-          server_knowledge: 100,
-        },
-      }));
+			// Use mockImplementation to ensure it works with any arguments (including lastKnowledge)
+			mockYnabAPI.categories.getCategories.mockImplementation(async () => ({
+				data: {
+					category_groups: largeCategoryList,
+					server_knowledge: 100,
+				},
+			}));
 
-      const initialMemory = process.memoryUsage();
+			const initialMemory = process.memoryUsage();
 
-      // Process large dataset multiple times
-      for (let i = 0; i < 10; i++) {
-        const result = await executeToolCall(server, 'ynab:list_categories', {
-          budget_id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID
-        });
+			// Process large dataset multiple times
+			for (let i = 0; i < 10; i++) {
+				const result = await executeToolCall(server, "ynab:list_categories", {
+					budget_id: "123e4567-e89b-12d3-a456-426614174000", // Valid UUID
+				});
 
-        // Validate response structure
-        validateToolResponse(result, (data) => data.category_groups);
+				// Validate response structure
+				validateToolResponse(result, (data) => data.category_groups);
 
-        // Force garbage collection if available
-        if (global.gc) {
-          global.gc();
-        }
-      }
+				// Force garbage collection if available
+				if (global.gc) {
+					global.gc();
+				}
+			}
 
-      const finalMemory = process.memoryUsage();
+			const finalMemory = process.memoryUsage();
 
-      // Memory usage shouldn't grow excessively (allow for some variance)
-      const memoryGrowth = finalMemory.heapUsed - initialMemory.heapUsed;
-      // With large datasets (2000 categories × 10 iterations), allow more memory growth
-      // Each category has multiple fields, and we're dealing with substantial JSON parsing
-      expect(memoryGrowth).toBeLessThan(100 * 1024 * 1024); // Less than 100MB growth
-    });
-  });
+			// Memory usage shouldn't grow excessively (allow for some variance)
+			const memoryGrowth = finalMemory.heapUsed - initialMemory.heapUsed;
+			// With large datasets (2000 categories × 10 iterations), allow more memory growth
+			// Each category has multiple fields, and we're dealing with substantial JSON parsing
+			expect(memoryGrowth).toBeLessThan(100 * 1024 * 1024); // Less than 100MB growth
+		});
+	});
 
-  describe('Error Handling Performance', () => {
-    it('should handle errors quickly without blocking', async () => {
-      // Mock API errors
-      const apiError = new Error('API Error');
-      mockYnabAPI.budgets.getBudgets.mockRejectedValue(apiError);
-      mockYnabAPI.accounts.getAccounts.mockRejectedValue(apiError);
+	describe("Error Handling Performance", () => {
+		it("should handle errors quickly without blocking", async () => {
+			// Mock API errors
+			const apiError = new Error("API Error");
+			mockYnabAPI.budgets.getBudgets.mockRejectedValue(apiError);
+			mockYnabAPI.accounts.getAccounts.mockRejectedValue(apiError);
 
-      const startTime = Date.now();
+			const startTime = Date.now();
 
-      // Execute multiple failing requests
-      const promises = [
-        executeToolCall(server, 'ynab:list_budgets'),
-        executeToolCall(server, 'ynab:list_accounts', { budget_id: 'test' }),
-        executeToolCall(server, 'ynab:list_budgets'),
-      ];
+			// Execute multiple failing requests
+			const promises = [
+				executeToolCall(server, "ynab:list_budgets"),
+				executeToolCall(server, "ynab:list_accounts", { budget_id: "test" }),
+				executeToolCall(server, "ynab:list_budgets"),
+			];
 
-      const results = await Promise.all(promises);
-      const endTime = Date.now();
+			const results = await Promise.all(promises);
+			const endTime = Date.now();
 
-      const totalTime = endTime - startTime;
+			const totalTime = endTime - startTime;
 
-      // Check that all results are error responses
-      results.forEach((result) => {
-        const parsed = parseToolResult(result);
-        expect(parsed.error || parsed.data?.error).toBeDefined();
-      });
-      expect(totalTime).toBeLessThan(1000); // Errors should be handled quickly
-    });
+			// Check that all results are error responses
+			results.forEach((result) => {
+				const parsed = parseToolResult(result);
+				expect(parsed.error || parsed.data?.error).toBeDefined();
+			});
+			expect(totalTime).toBeLessThan(1000); // Errors should be handled quickly
+		});
 
-    it('should recover from rate limiting gracefully', async () => {
-      let callCount = 0;
+		it("should recover from rate limiting gracefully", async () => {
+			let callCount = 0;
 
-      // Mock rate limiting on first few calls, then success
-      mockYnabAPI.budgets.getBudgets.mockImplementation(() => {
-        callCount++;
-        if (callCount <= 2) {
-          const rateLimitError = new Error('Rate Limited');
-          (rateLimitError as any).error = { id: '429', name: 'rate_limit' };
-          return Promise.reject(rateLimitError);
-        }
-        return Promise.resolve({
-          data: { budgets: [{ id: 'budget-1', name: 'Test Budget' }] },
-        });
-      });
+			// Mock rate limiting on first few calls, then success
+			mockYnabAPI.budgets.getBudgets.mockImplementation(() => {
+				callCount++;
+				if (callCount <= 2) {
+					const rateLimitError = new Error("Rate Limited");
+					(rateLimitError as any).error = { id: "429", name: "rate_limit" };
+					return Promise.reject(rateLimitError);
+				}
+				return Promise.resolve({
+					data: { budgets: [{ id: "budget-1", name: "Test Budget" }] },
+				});
+			});
 
-      const startTime = Date.now();
+			const startTime = Date.now();
 
-      try {
-        // This should fail due to rate limiting
-        await executeToolCall(server, 'ynab:list_budgets');
-        expect.fail('Should have thrown rate limit error');
-      } catch (error) {
-        expect(error).toBeDefined();
-      }
+			try {
+				// This should fail due to rate limiting
+				await executeToolCall(server, "ynab:list_budgets");
+				expect.fail("Should have thrown rate limit error");
+			} catch (error) {
+				expect(error).toBeDefined();
+			}
 
-      const endTime = Date.now();
-      const errorTime = endTime - startTime;
+			const endTime = Date.now();
+			const errorTime = endTime - startTime;
 
-      expect(errorTime).toBeLessThan(500); // Rate limit errors should be fast
-      expect(callCount).toBe(1);
-    });
-  });
+			expect(errorTime).toBeLessThan(500); // Rate limit errors should be fast
+			expect(callCount).toBe(1);
+		});
+	});
 
-  describe('Validation Performance', () => {
-    it('should validate input parameters quickly', async () => {
-      const startTime = Date.now();
+	describe("Validation Performance", () => {
+		it("should validate input parameters quickly", async () => {
+			const startTime = Date.now();
 
-      // Test multiple validation scenarios
-      const validationTests = [
-        // Invalid parameters (should fail quickly)
-        executeToolCall(server, 'ynab:get_budget', {
-          budget_id: '', // Empty string should fail validation
-        }),
+			// Test multiple validation scenarios
+			const validationTests = [
+				// Invalid parameters (should fail quickly)
+				executeToolCall(server, "ynab:get_budget", {
+					budget_id: "", // Empty string should fail validation
+				}),
 
-        executeToolCall(server, 'ynab:create_transaction', {
-          budget_id: 'test',
-          account_id: 'test',
-          amount: 'not-a-number', // Invalid type
-          date: '2024-01-01',
-        }),
-      ];
+				executeToolCall(server, "ynab:create_transaction", {
+					budget_id: "test",
+					account_id: "test",
+					amount: "not-a-number", // Invalid type
+					date: "2024-01-01",
+				}),
+			];
 
-      const results = await Promise.all(validationTests);
-      const parsed = results.map((result) => parseToolResult(result));
-      const endTime = Date.now();
+			const results = await Promise.all(validationTests);
+			const parsed = results.map((result) => parseToolResult(result));
+			const endTime = Date.now();
 
-      const totalTime = endTime - startTime;
+			const totalTime = endTime - startTime;
 
-      expect(parsed).toHaveLength(2);
-      const firstError = parsed[0].error ?? parsed[0].data?.error;
-      const secondError = parsed[1].error ?? parsed[1].data?.error;
-      expect(firstError?.code).toBe(SecurityErrorCode.VALIDATION_ERROR); // Invalid calls should fail
-      expect(secondError?.code).toBe(SecurityErrorCode.VALIDATION_ERROR);
-      expect(totalTime).toBeLessThan(1000); // Validation should be fast
-    });
-  });
+			expect(parsed).toHaveLength(2);
+			const firstError = parsed[0].error ?? parsed[0].data?.error;
+			const secondError = parsed[1].error ?? parsed[1].data?.error;
+			expect(firstError?.code).toBe(SecurityErrorCode.VALIDATION_ERROR); // Invalid calls should fail
+			expect(secondError?.code).toBe(SecurityErrorCode.VALIDATION_ERROR);
+			expect(totalTime).toBeLessThan(1000); // Validation should be fast
+		});
+	});
 
-  describe('Stress Testing', () => {
-    it('should handle rapid sequential requests', async () => {
-      mockYnabAPI.user.getUser.mockResolvedValue({
-        data: { user: { id: 'user-1', email: 'test@example.com' } },
-      });
+	describe("Stress Testing", () => {
+		it("should handle rapid sequential requests", async () => {
+			mockYnabAPI.user.getUser.mockResolvedValue({
+				data: { user: { id: "user-1", email: "test@example.com" } },
+			});
 
-      const startTime = Date.now();
+			const startTime = Date.now();
 
-      // Execute 50 rapid sequential requests
-      const results = [];
-      for (let i = 0; i < 50; i++) {
-        const result = await executeToolCall(server, 'ynab:get_user');
-        results.push(result);
-      }
+			// Execute 50 rapid sequential requests
+			const results = [];
+			for (let i = 0; i < 50; i++) {
+				const result = await executeToolCall(server, "ynab:get_user");
+				results.push(result);
+			}
 
-      const endTime = Date.now();
-      const totalTime = endTime - startTime;
-      const averageTime = totalTime / 50;
+			const endTime = Date.now();
+			const totalTime = endTime - startTime;
+			const averageTime = totalTime / 50;
 
-      expect(results).toHaveLength(50);
-      results.forEach((result) => expect(result).toBeDefined());
-      expect(averageTime).toBeLessThan(100); // Average less than 100ms per request
-      expect(totalTime).toBeLessThan(5000); // Total less than 5 seconds
-    });
+			expect(results).toHaveLength(50);
+			results.forEach((result) => expect(result).toBeDefined());
+			expect(averageTime).toBeLessThan(100); // Average less than 100ms per request
+			expect(totalTime).toBeLessThan(5000); // Total less than 5 seconds
+		});
 
-    it('should maintain performance under mixed workload', async () => {
-      // Mock various endpoints
-      mockYnabAPI.budgets.getBudgets.mockResolvedValue({
-        data: { budgets: [{ id: 'budget-1', name: 'Test Budget' }] },
-      });
+		it("should maintain performance under mixed workload", async () => {
+			// Mock various endpoints
+			mockYnabAPI.budgets.getBudgets.mockResolvedValue({
+				data: { budgets: [{ id: "budget-1", name: "Test Budget" }] },
+			});
 
-      mockYnabAPI.accounts.getAccounts.mockResolvedValue({
-        data: { accounts: [{ id: 'account-1', name: 'Test Account' }] },
-      });
+			mockYnabAPI.accounts.getAccounts.mockResolvedValue({
+				data: { accounts: [{ id: "account-1", name: "Test Account" }] },
+			});
 
-      mockYnabAPI.transactions.getTransactions.mockImplementation(() =>
-        Promise.resolve({
-          data: { transactions: [] },
-        }),
-      );
+			mockYnabAPI.transactions.getTransactions.mockImplementation(() =>
+				Promise.resolve({
+					data: { transactions: [] },
+				}),
+			);
 
-      mockYnabAPI.categories.getCategories.mockImplementation(() =>
-        Promise.resolve({
-          data: { category_groups: [] },
-        }),
-      );
+			mockYnabAPI.categories.getCategories.mockImplementation(() =>
+				Promise.resolve({
+					data: { category_groups: [] },
+				}),
+			);
 
-      const startTime = Date.now();
+			const startTime = Date.now();
 
-      // Mixed workload: different tools with different complexities
-      const mixedPromises = [];
-      for (let i = 0; i < 20; i++) {
-        mixedPromises.push(
-          executeToolCall(server, 'ynab:list_budgets'),
-          executeToolCall(server, 'ynab:list_accounts', { budget_id: 'test' }),
-          executeToolCall(server, 'ynab:list_transactions', { budget_id: 'test' }),
-          executeToolCall(server, 'ynab:list_categories', { budget_id: 'test' }),
-        );
-      }
+			// Mixed workload: different tools with different complexities
+			const mixedPromises = [];
+			for (let i = 0; i < 20; i++) {
+				mixedPromises.push(
+					executeToolCall(server, "ynab:list_budgets"),
+					executeToolCall(server, "ynab:list_accounts", { budget_id: "test" }),
+					executeToolCall(server, "ynab:list_transactions", {
+						budget_id: "test",
+					}),
+					executeToolCall(server, "ynab:list_categories", {
+						budget_id: "test",
+					}),
+				);
+			}
 
-      const results = await Promise.all(mixedPromises);
-      const endTime = Date.now();
+			const results = await Promise.all(mixedPromises);
+			const endTime = Date.now();
 
-      const totalTime = endTime - startTime;
+			const totalTime = endTime - startTime;
 
-      expect(results).toHaveLength(80); // 20 iterations × 4 tools
-      results.forEach((result) => expect(result).toBeDefined());
-      expect(totalTime).toBeLessThan(10000); // Should complete within 10 seconds
-    });
-  });
+			expect(results).toHaveLength(80); // 20 iterations × 4 tools
+			results.forEach((result) => expect(result).toBeDefined());
+			expect(totalTime).toBeLessThan(10000); // Should complete within 10 seconds
+		});
+	});
 });

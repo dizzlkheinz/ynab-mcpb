@@ -37,10 +37,10 @@
  * }
  */
 
-import { z } from 'zod';
-import { AccountSchema } from './accountOutputs.js';
-import { CategorySchema } from './categoryOutputs.js';
-import { TransactionSchema } from './transactionOutputs.js';
+import { z } from "zod";
+import { AccountSchema } from "./accountOutputs.js";
+import { CategorySchema } from "./categoryOutputs.js";
+import { TransactionSchema } from "./transactionOutputs.js";
 
 // ============================================================================
 // NESTED SCHEMAS FOR COMPOSITION
@@ -54,17 +54,17 @@ import { TransactionSchema } from './transactionOutputs.js';
  * @see src/tools/transactionTools.ts:1160-1335 - create_receipt_split_transaction handler
  */
 export const SubtransactionSchema = z.object({
-  id: z.string(),
-  transaction_id: z.string(),
-  amount: z.number(),
-  memo: z.string().optional(),
-  payee_id: z.string().optional(),
-  payee_name: z.string().optional(),
-  category_id: z.string().optional(),
-  category_name: z.string().optional(),
-  transfer_account_id: z.string().optional(),
-  transfer_transaction_id: z.string().optional(),
-  deleted: z.boolean(),
+	id: z.string(),
+	transaction_id: z.string(),
+	amount: z.number(),
+	memo: z.string().optional(),
+	payee_id: z.string().optional(),
+	payee_name: z.string().optional(),
+	category_id: z.string().optional(),
+	category_name: z.string().optional(),
+	transfer_account_id: z.string().optional(),
+	transfer_transaction_id: z.string().optional(),
+	deleted: z.boolean(),
 });
 
 export type Subtransaction = z.infer<typeof SubtransactionSchema>;
@@ -82,12 +82,14 @@ export type Subtransaction = z.infer<typeof SubtransactionSchema>;
  * @see src/tools/transactionTools.ts:1336-1530 - update_transaction handler
  */
 export const TransactionWithBalanceSchema = TransactionSchema.extend({
-  account_balance: z.number().optional(), // Raw YNAB milliunits
-  account_cleared_balance: z.number().optional(), // Raw YNAB milliunits
-  subtransactions: z.array(SubtransactionSchema).optional(),
+	account_balance: z.number().optional(), // Raw YNAB milliunits
+	account_cleared_balance: z.number().optional(), // Raw YNAB milliunits
+	subtransactions: z.array(SubtransactionSchema).optional(),
 });
 
-export type TransactionWithBalance = z.infer<typeof TransactionWithBalanceSchema>;
+export type TransactionWithBalance = z.infer<
+	typeof TransactionWithBalanceSchema
+>;
 
 /**
  * Individual receipt line item.
@@ -96,10 +98,10 @@ export type TransactionWithBalance = z.infer<typeof TransactionWithBalanceSchema
  * @see src/tools/transactionTools.ts:1160-1335 - create_receipt_split_transaction handler
  */
 export const ReceiptItemSchema = z.object({
-  name: z.string(),
-  quantity: z.number().optional(),
-  amount: z.number(),
-  memo: z.string().optional(),
+	name: z.string(),
+	quantity: z.number().optional(),
+	amount: z.number(),
+	memo: z.string().optional(),
 });
 
 export type ReceiptItem = z.infer<typeof ReceiptItemSchema>;
@@ -111,15 +113,17 @@ export type ReceiptItem = z.infer<typeof ReceiptItemSchema>;
  * @see src/tools/transactionTools.ts:1160-1335 - create_receipt_split_transaction handler
  */
 export const ReceiptCategoryBreakdownSchema = z.object({
-  category_id: z.string(),
-  category_name: z.string().optional(),
-  items: z.array(ReceiptItemSchema),
-  subtotal: z.number(),
-  tax: z.number(),
-  total: z.number(),
+	category_id: z.string(),
+	category_name: z.string().optional(),
+	items: z.array(ReceiptItemSchema),
+	subtotal: z.number(),
+	tax: z.number(),
+	total: z.number(),
 });
 
-export type ReceiptCategoryBreakdown = z.infer<typeof ReceiptCategoryBreakdownSchema>;
+export type ReceiptCategoryBreakdown = z.infer<
+	typeof ReceiptCategoryBreakdownSchema
+>;
 
 /**
  * Complete receipt breakdown summary.
@@ -128,10 +132,10 @@ export type ReceiptCategoryBreakdown = z.infer<typeof ReceiptCategoryBreakdownSc
  * @see src/tools/transactionTools.ts:1160-1335 - create_receipt_split_transaction handler
  */
 export const ReceiptSummarySchema = z.object({
-  subtotal: z.number(),
-  tax: z.number(),
-  total: z.number(),
-  categories: z.array(ReceiptCategoryBreakdownSchema),
+	subtotal: z.number(),
+	tax: z.number(),
+	total: z.number(),
+	categories: z.array(ReceiptCategoryBreakdownSchema),
 });
 
 export type ReceiptSummary = z.infer<typeof ReceiptSummarySchema>;
@@ -144,11 +148,11 @@ export type ReceiptSummary = z.infer<typeof ReceiptSummarySchema>;
  * @see src/tools/transactionTools.ts:2057-2462 - update_transactions handler
  */
 export const BulkOperationSummarySchema = z.object({
-  total_requested: z.number(),
-  created: z.number().optional(),
-  updated: z.number().optional(),
-  duplicates: z.number().optional(),
-  failed: z.number(),
+	total_requested: z.number(),
+	created: z.number().optional(),
+	updated: z.number().optional(),
+	duplicates: z.number().optional(),
+	failed: z.number(),
 });
 
 export type BulkOperationSummary = z.infer<typeof BulkOperationSummarySchema>;
@@ -174,15 +178,15 @@ export type BulkOperationSummary = z.infer<typeof BulkOperationSummarySchema>;
  * @see src/tools/transactionTools.ts:2057-2462 - update_transactions handler
  */
 export const BulkResultSchema = z
-  .object({
-    request_index: z.number(),
-    status: z.enum(['created', 'duplicate', 'updated', 'failed']),
-    transaction_id: z.string().optional(),
-    correlation_key: z.string(),
-    error_code: z.string().optional(),
-    error: z.string().optional(),
-  })
-  .passthrough(); // Allow additional correlation metadata fields
+	.object({
+		request_index: z.number(),
+		status: z.enum(["created", "duplicate", "updated", "failed"]),
+		transaction_id: z.string().optional(),
+		correlation_key: z.string(),
+		error_code: z.string().optional(),
+		error: z.string().optional(),
+	})
+	.passthrough(); // Allow additional correlation metadata fields
 
 export type BulkResult = z.infer<typeof BulkResultSchema>;
 
@@ -193,18 +197,21 @@ export type BulkResult = z.infer<typeof BulkResultSchema>;
  * @see src/tools/transactionTools.ts:2139-2192 - update_transactions dry-run diff building
  */
 export const TransactionDiffFieldsSchema = z.object({
-  amount: z.number().optional(),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  memo: z.string().optional(),
-  payee_id: z.string().nullable().optional(),
-  payee_name: z.string().nullable().optional(),
-  category_id: z.string().nullable().optional(),
-  cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
-  approved: z.boolean().optional(),
-  flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).nullable().optional(),
+	amount: z.number().optional(),
+	date: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/)
+		.optional(),
+	memo: z.string().optional(),
+	payee_id: z.string().nullable().optional(),
+	payee_name: z.string().nullable().optional(),
+	category_id: z.string().nullable().optional(),
+	cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional(),
+	approved: z.boolean().optional(),
+	flag_color: z
+		.enum(["red", "orange", "yellow", "green", "blue", "purple"])
+		.nullable()
+		.optional(),
 });
 
 export type TransactionDiffFields = z.infer<typeof TransactionDiffFieldsSchema>;
@@ -216,9 +223,9 @@ export type TransactionDiffFields = z.infer<typeof TransactionDiffFieldsSchema>;
  * @see src/tools/transactionTools.ts:2057-2462 - update_transactions handler
  */
 export const DryRunPreviewItemSchema = z.object({
-  transaction_id: z.string(),
-  before: z.union([z.literal('unavailable'), TransactionDiffFieldsSchema]),
-  after: TransactionDiffFieldsSchema,
+	transaction_id: z.string(),
+	before: z.union([z.literal("unavailable"), TransactionDiffFieldsSchema]),
+	after: TransactionDiffFieldsSchema,
 });
 
 export type DryRunPreviewItem = z.infer<typeof DryRunPreviewItemSchema>;
@@ -230,10 +237,10 @@ export type DryRunPreviewItem = z.infer<typeof DryRunPreviewItemSchema>;
  * @see src/tools/transactionTools.ts:2057-2462 - update_transactions handler
  */
 export const DryRunWarningSchema = z.object({
-  code: z.string(),
-  count: z.number(),
-  message: z.string(),
-  sample_ids: z.array(z.string()).optional(),
+	code: z.string(),
+	count: z.number(),
+	message: z.string(),
+	sample_ids: z.array(z.string()).optional(),
 });
 
 export type DryRunWarning = z.infer<typeof DryRunWarningSchema>;
@@ -269,17 +276,19 @@ export type DryRunWarning = z.infer<typeof DryRunWarningSchema>;
  * }
  */
 export const CreateTransactionOutputSchema = z.union([
-  z.object({
-    dry_run: z.literal(true),
-    action: z.literal('create_transaction'),
-    request: z.record(z.string(), z.unknown()),
-  }),
-  z.object({
-    transaction: TransactionWithBalanceSchema,
-  }),
+	z.object({
+		dry_run: z.literal(true),
+		action: z.literal("create_transaction"),
+		request: z.record(z.string(), z.unknown()),
+	}),
+	z.object({
+		transaction: TransactionWithBalanceSchema,
+	}),
 ]);
 
-export type CreateTransactionOutput = z.infer<typeof CreateTransactionOutputSchema>;
+export type CreateTransactionOutput = z.infer<
+	typeof CreateTransactionOutputSchema
+>;
 
 /**
  * Transaction preview item for bulk create dry-run.
@@ -288,18 +297,20 @@ export type CreateTransactionOutput = z.infer<typeof CreateTransactionOutputSche
  * @see src/tools/transactionTools.ts:1742-1752 - create_transactions dry-run preview
  */
 export const CreateTransactionPreviewSchema = z.object({
-  request_index: z.number(),
-  account_id: z.string(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  amount: z.number(),
-  memo: z.string().optional(),
-  payee_id: z.string().optional(),
-  payee_name: z.string().optional(),
-  category_id: z.string().optional(),
-  import_id: z.string().optional(),
+	request_index: z.number(),
+	account_id: z.string(),
+	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+	amount: z.number(),
+	memo: z.string().optional(),
+	payee_id: z.string().optional(),
+	payee_name: z.string().optional(),
+	category_id: z.string().optional(),
+	import_id: z.string().optional(),
 });
 
-export type CreateTransactionPreview = z.infer<typeof CreateTransactionPreviewSchema>;
+export type CreateTransactionPreview = z.infer<
+	typeof CreateTransactionPreviewSchema
+>;
 
 /**
  * Bulk transaction creation output.
@@ -340,44 +351,46 @@ export type CreateTransactionPreview = z.infer<typeof CreateTransactionPreviewSc
  * }
  */
 export const CreateTransactionsOutputSchema = z.union([
-  // Dry-run mode: Strict schema for preview validation
-  z
-    .object({
-      dry_run: z.literal(true),
-      action: z.literal('create_transactions'),
-      validation: z.literal('passed'),
-      summary: z.object({
-        total_transactions: z.number(),
-        total_amount: z.number(),
-        accounts_affected: z.array(z.string()),
-        date_range: z
-          .object({
-            earliest: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-            latest: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-          })
-          .optional(),
-        categories_affected: z.array(z.string()),
-      }),
-      transactions_preview: z.array(CreateTransactionPreviewSchema),
-      note: z.string(),
-    })
-    .strict(), // Strict for dry-run to prevent malformed previews
-  // Execution mode: Allow passthrough for correlation metadata extension
-  z
-    .object({
-      success: z.boolean(),
-      server_knowledge: z.number().optional(),
-      summary: BulkOperationSummarySchema,
-      results: z.array(BulkResultSchema),
-      transactions: z.array(TransactionSchema).optional(),
-      duplicate_import_ids: z.array(z.string()).optional(),
-      message: z.string().optional(),
-      mode: z.enum(['full', 'summary', 'ids_only']).optional(),
-    })
-    .passthrough(), // Allow top-level metadata like batch_id, execution_id
+	// Dry-run mode: Strict schema for preview validation
+	z
+		.object({
+			dry_run: z.literal(true),
+			action: z.literal("create_transactions"),
+			validation: z.literal("passed"),
+			summary: z.object({
+				total_transactions: z.number(),
+				total_amount: z.number(),
+				accounts_affected: z.array(z.string()),
+				date_range: z
+					.object({
+						earliest: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+						latest: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+					})
+					.optional(),
+				categories_affected: z.array(z.string()),
+			}),
+			transactions_preview: z.array(CreateTransactionPreviewSchema),
+			note: z.string(),
+		})
+		.strict(), // Strict for dry-run to prevent malformed previews
+	// Execution mode: Allow passthrough for correlation metadata extension
+	z
+		.object({
+			success: z.boolean(),
+			server_knowledge: z.number().optional(),
+			summary: BulkOperationSummarySchema,
+			results: z.array(BulkResultSchema),
+			transactions: z.array(TransactionSchema).optional(),
+			duplicate_import_ids: z.array(z.string()).optional(),
+			message: z.string().optional(),
+			mode: z.enum(["full", "summary", "ids_only"]).optional(),
+		})
+		.passthrough(), // Allow top-level metadata like batch_id, execution_id
 ]);
 
-export type CreateTransactionsOutput = z.infer<typeof CreateTransactionsOutputSchema>;
+export type CreateTransactionsOutput = z.infer<
+	typeof CreateTransactionsOutputSchema
+>;
 
 /**
  * Single transaction update output.
@@ -402,19 +415,21 @@ export type CreateTransactionsOutput = z.infer<typeof CreateTransactionsOutputSc
  * }
  */
 export const UpdateTransactionOutputSchema = z.union([
-  z.object({
-    dry_run: z.literal(true),
-    action: z.literal('update_transaction'),
-    request: z.record(z.string(), z.unknown()),
-  }),
-  z.object({
-    transaction: TransactionWithBalanceSchema,
-    updated_balance: z.number(), // Raw YNAB milliunits
-    updated_cleared_balance: z.number(), // Raw YNAB milliunits
-  }),
+	z.object({
+		dry_run: z.literal(true),
+		action: z.literal("update_transaction"),
+		request: z.record(z.string(), z.unknown()),
+	}),
+	z.object({
+		transaction: TransactionWithBalanceSchema,
+		updated_balance: z.number(), // Raw YNAB milliunits
+		updated_cleared_balance: z.number(), // Raw YNAB milliunits
+	}),
 ]);
 
-export type UpdateTransactionOutput = z.infer<typeof UpdateTransactionOutputSchema>;
+export type UpdateTransactionOutput = z.infer<
+	typeof UpdateTransactionOutputSchema
+>;
 
 /**
  * Bulk transaction update output.
@@ -459,37 +474,39 @@ export type UpdateTransactionOutput = z.infer<typeof UpdateTransactionOutputSche
  * }
  */
 export const UpdateTransactionsOutputSchema = z.union([
-  // Dry-run mode: Strict schema for preview validation
-  z
-    .object({
-      dry_run: z.literal(true),
-      action: z.literal('update_transactions'),
-      validation: z.literal('passed'),
-      summary: z.object({
-        total_transactions: z.number(),
-        accounts_affected: z.number(),
-        fields_to_update: z.array(z.string()),
-      }),
-      transactions_preview: z.array(DryRunPreviewItemSchema),
-      warnings: z.array(DryRunWarningSchema).optional(),
-      note: z.string(),
-    })
-    .strict(), // Strict for dry-run to prevent malformed previews
-  // Execution mode: Allow passthrough for correlation metadata extension
-  z
-    .object({
-      success: z.boolean(),
-      server_knowledge: z.number().optional(),
-      summary: BulkOperationSummarySchema,
-      results: z.array(BulkResultSchema),
-      transactions: z.array(TransactionSchema).optional(),
-      message: z.string().optional(),
-      mode: z.enum(['full', 'summary', 'ids_only']).optional(),
-    })
-    .passthrough(), // Allow top-level metadata like batch_id, execution_id
+	// Dry-run mode: Strict schema for preview validation
+	z
+		.object({
+			dry_run: z.literal(true),
+			action: z.literal("update_transactions"),
+			validation: z.literal("passed"),
+			summary: z.object({
+				total_transactions: z.number(),
+				accounts_affected: z.number(),
+				fields_to_update: z.array(z.string()),
+			}),
+			transactions_preview: z.array(DryRunPreviewItemSchema),
+			warnings: z.array(DryRunWarningSchema).optional(),
+			note: z.string(),
+		})
+		.strict(), // Strict for dry-run to prevent malformed previews
+	// Execution mode: Allow passthrough for correlation metadata extension
+	z
+		.object({
+			success: z.boolean(),
+			server_knowledge: z.number().optional(),
+			summary: BulkOperationSummarySchema,
+			results: z.array(BulkResultSchema),
+			transactions: z.array(TransactionSchema).optional(),
+			message: z.string().optional(),
+			mode: z.enum(["full", "summary", "ids_only"]).optional(),
+		})
+		.passthrough(), // Allow top-level metadata like batch_id, execution_id
 ]);
 
-export type UpdateTransactionsOutput = z.infer<typeof UpdateTransactionsOutputSchema>;
+export type UpdateTransactionsOutput = z.infer<
+	typeof UpdateTransactionsOutputSchema
+>;
 
 /**
  * Transaction deletion output.
@@ -515,23 +532,25 @@ export type UpdateTransactionsOutput = z.infer<typeof UpdateTransactionsOutputSc
  * }
  */
 export const DeleteTransactionOutputSchema = z.union([
-  z.object({
-    dry_run: z.literal(true),
-    action: z.literal('delete_transaction'),
-    request: z.record(z.string(), z.unknown()),
-  }),
-  z.object({
-    message: z.string(),
-    transaction: z.object({
-      id: z.string(),
-      deleted: z.boolean(),
-    }),
-    updated_balance: z.number(), // Raw YNAB milliunits
-    updated_cleared_balance: z.number(), // Raw YNAB milliunits
-  }),
+	z.object({
+		dry_run: z.literal(true),
+		action: z.literal("delete_transaction"),
+		request: z.record(z.string(), z.unknown()),
+	}),
+	z.object({
+		message: z.string(),
+		transaction: z.object({
+			id: z.string(),
+			deleted: z.boolean(),
+		}),
+		updated_balance: z.number(), // Raw YNAB milliunits
+		updated_cleared_balance: z.number(), // Raw YNAB milliunits
+	}),
 ]);
 
-export type DeleteTransactionOutput = z.infer<typeof DeleteTransactionOutputSchema>;
+export type DeleteTransactionOutput = z.infer<
+	typeof DeleteTransactionOutputSchema
+>;
 
 /**
  * Transaction preview schema for dry-run responses.
@@ -549,20 +568,25 @@ export type DeleteTransactionOutput = z.infer<typeof DeleteTransactionOutputSche
  * @see CreateReceiptSplitTransactionOutputSchema - Used in dry-run branch for transaction preview
  */
 export const TransactionDryRunPreviewSchema = z.object({
-  account_id: z.string(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  amount: z.number(),
-  memo: z.string().optional().nullable(),
-  cleared: z.enum(['cleared', 'uncleared', 'reconciled']).optional(),
-  approved: z.boolean().optional(),
-  flag_color: z.enum(['red', 'orange', 'yellow', 'green', 'blue', 'purple']).optional().nullable(),
-  payee_id: z.string().optional().nullable(),
-  payee_name: z.string().optional().nullable(),
-  category_id: z.string().optional().nullable(),
-  import_id: z.string().optional().nullable(),
+	account_id: z.string(),
+	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+	amount: z.number(),
+	memo: z.string().optional().nullable(),
+	cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional(),
+	approved: z.boolean().optional(),
+	flag_color: z
+		.enum(["red", "orange", "yellow", "green", "blue", "purple"])
+		.optional()
+		.nullable(),
+	payee_id: z.string().optional().nullable(),
+	payee_name: z.string().optional().nullable(),
+	category_id: z.string().optional().nullable(),
+	import_id: z.string().optional().nullable(),
 });
 
-export type TransactionDryRunPreview = z.infer<typeof TransactionDryRunPreviewSchema>;
+export type TransactionDryRunPreview = z.infer<
+	typeof TransactionDryRunPreviewSchema
+>;
 
 /**
  * Subtransaction preview schema for dry-run responses.
@@ -577,9 +601,9 @@ export type TransactionDryRunPreview = z.infer<typeof TransactionDryRunPreviewSc
  * @see CreateReceiptSplitTransactionOutputSchema - Used in dry-run branch for subtransactions preview
  */
 export const SubtransactionPreviewSchema = SubtransactionSchema.omit({
-  id: true,
-  transaction_id: true,
-  deleted: true,
+	id: true,
+	transaction_id: true,
+	deleted: true,
 });
 
 export type SubtransactionPreview = z.infer<typeof SubtransactionPreviewSchema>;
@@ -630,21 +654,21 @@ export type SubtransactionPreview = z.infer<typeof SubtransactionPreviewSchema>;
  * }
  */
 export const CreateReceiptSplitTransactionOutputSchema = z.union([
-  z.object({
-    dry_run: z.literal(true),
-    action: z.literal('create_receipt_split_transaction'),
-    transaction_preview: TransactionDryRunPreviewSchema,
-    receipt_summary: ReceiptSummarySchema,
-    subtransactions: z.array(SubtransactionPreviewSchema),
-  }),
-  z.object({
-    transaction: TransactionWithBalanceSchema,
-    receipt_summary: ReceiptSummarySchema,
-  }),
+	z.object({
+		dry_run: z.literal(true),
+		action: z.literal("create_receipt_split_transaction"),
+		transaction_preview: TransactionDryRunPreviewSchema,
+		receipt_summary: ReceiptSummarySchema,
+		subtransactions: z.array(SubtransactionPreviewSchema),
+	}),
+	z.object({
+		transaction: TransactionWithBalanceSchema,
+		receipt_summary: ReceiptSummarySchema,
+	}),
 ]);
 
 export type CreateReceiptSplitTransactionOutput = z.infer<
-  typeof CreateReceiptSplitTransactionOutputSchema
+	typeof CreateReceiptSplitTransactionOutputSchema
 >;
 
 /**
@@ -654,13 +678,15 @@ export type CreateReceiptSplitTransactionOutput = z.infer<
  * @see src/tools/accountTools.ts:218-233 - create_account dry-run response construction
  */
 export const CreateAccountDryRunRequestSchema = z.object({
-  budget_id: z.string(),
-  name: z.string(),
-  type: z.string(),
-  balance: z.number(),
+	budget_id: z.string(),
+	name: z.string(),
+	type: z.string(),
+	balance: z.number(),
 });
 
-export type CreateAccountDryRunRequest = z.infer<typeof CreateAccountDryRunRequestSchema>;
+export type CreateAccountDryRunRequest = z.infer<
+	typeof CreateAccountDryRunRequestSchema
+>;
 
 /**
  * Account creation output.
@@ -689,14 +715,14 @@ export type CreateAccountDryRunRequest = z.infer<typeof CreateAccountDryRunReque
  * }
  */
 export const CreateAccountOutputSchema = z.union([
-  z.object({
-    dry_run: z.literal(true),
-    action: z.literal('create_account'),
-    request: CreateAccountDryRunRequestSchema,
-  }),
-  z.object({
-    account: AccountSchema,
-  }),
+	z.object({
+		dry_run: z.literal(true),
+		action: z.literal("create_account"),
+		request: CreateAccountDryRunRequestSchema,
+	}),
+	z.object({
+		account: AccountSchema,
+	}),
 ]);
 
 export type CreateAccountOutput = z.infer<typeof CreateAccountOutputSchema>;
@@ -708,13 +734,15 @@ export type CreateAccountOutput = z.infer<typeof CreateAccountOutputSchema>;
  * @see src/tools/categoryTools.ts:237-256 - update_category dry-run response construction
  */
 export const UpdateCategoryDryRunRequestSchema = z.object({
-  budget_id: z.string(),
-  category_id: z.string(),
-  budgeted: z.number(),
-  month: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+	budget_id: z.string(),
+	category_id: z.string(),
+	budgeted: z.number(),
+	month: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
-export type UpdateCategoryDryRunRequest = z.infer<typeof UpdateCategoryDryRunRequestSchema>;
+export type UpdateCategoryDryRunRequest = z.infer<
+	typeof UpdateCategoryDryRunRequestSchema
+>;
 
 /**
  * Category budget update output.
@@ -744,15 +772,15 @@ export type UpdateCategoryDryRunRequest = z.infer<typeof UpdateCategoryDryRunReq
  * }
  */
 export const UpdateCategoryOutputSchema = z.union([
-  z.object({
-    dry_run: z.literal(true),
-    action: z.literal('update_category'),
-    request: UpdateCategoryDryRunRequestSchema,
-  }),
-  z.object({
-    category: CategorySchema,
-    updated_month: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  }),
+	z.object({
+		dry_run: z.literal(true),
+		action: z.literal("update_category"),
+		request: UpdateCategoryDryRunRequestSchema,
+	}),
+	z.object({
+		category: CategorySchema,
+		updated_month: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+	}),
 ]);
 
 export type UpdateCategoryOutput = z.infer<typeof UpdateCategoryOutputSchema>;

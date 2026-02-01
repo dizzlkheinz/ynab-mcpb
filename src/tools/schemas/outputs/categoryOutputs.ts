@@ -75,8 +75,8 @@
  * ```
  */
 
-import { z } from 'zod/v4';
-import { CacheMetadataSchema } from '../shared/commonOutputs.js';
+import { z } from "zod/v4";
+import { CacheMetadataSchema } from "../shared/commonOutputs.js";
 
 /**
  * Schema for a category object.
@@ -84,65 +84,83 @@ import { CacheMetadataSchema } from '../shared/commonOutputs.js';
  * Represents category data with budgeted/activity/balance amounts in dollars.
  */
 export const CategorySchema = z.object({
-  /** Unique identifier for the category */
-  id: z.string().describe('Category ID'),
+	/** Unique identifier for the category */
+	id: z.string().describe("Category ID"),
 
-  /** Category group ID this category belongs to */
-  category_group_id: z.string().describe('Category group ID'),
+	/** Category group ID this category belongs to */
+	category_group_id: z.string().describe("Category group ID"),
 
-  /** Category group name (only present in list_categories) */
-  category_group_name: z.string().optional().describe('Category group name'),
+	/** Category group name (only present in list_categories) */
+	category_group_name: z.string().optional().describe("Category group name"),
 
-  /** Human-readable category name */
-  name: z.string().describe('Category name'),
+	/** Human-readable category name */
+	name: z.string().describe("Category name"),
 
-  /** Whether category is hidden */
-  hidden: z.boolean().describe('Hidden flag'),
+	/** Whether category is hidden */
+	hidden: z.boolean().describe("Hidden flag"),
 
-  /** Original category group ID if moved (optional) */
-  original_category_group_id: z.string().optional().describe('Original category group ID'),
+	/** Original category group ID if moved (optional) */
+	original_category_group_id: z
+		.string()
+		.optional()
+		.describe("Original category group ID"),
 
-  /** Optional category note */
-  note: z.string().optional().describe('Category note'),
+	/** Optional category note */
+	note: z.string().optional().describe("Category note"),
 
-  /** Budgeted amount in dollars */
-  budgeted: z.number().describe('Budgeted amount in dollars'),
+	/** Budgeted amount in dollars */
+	budgeted: z.number().describe("Budgeted amount in dollars"),
 
-  /** Activity (spending) in dollars */
-  activity: z.number().describe('Activity in dollars'),
+	/** Activity (spending) in dollars */
+	activity: z.number().describe("Activity in dollars"),
 
-  /** Current balance in dollars */
-  balance: z.number().describe('Balance in dollars'),
+	/** Current balance in dollars */
+	balance: z.number().describe("Balance in dollars"),
 
-  /** Goal type (TB, TBD, MF, NEED, DEBT, optional) */
-  goal_type: z.string().optional().describe('Goal type'),
+	/** Goal type (TB, TBD, MF, NEED, DEBT, optional) */
+	goal_type: z.string().optional().describe("Goal type"),
 
-  /** Goal creation month (YYYY-MM-DD, optional) */
-  goal_creation_month: z.string().optional().describe('Goal creation month'),
+	/** Goal creation month (YYYY-MM-DD, optional) */
+	goal_creation_month: z.string().optional().describe("Goal creation month"),
 
-  /** Goal target amount in dollars (converted from YNAB API milliunits, optional) */
-  goal_target: z.number().optional().describe('Goal target amount in dollars'),
+	/** Goal target amount in dollars (converted from YNAB API milliunits, optional) */
+	goal_target: z.number().optional().describe("Goal target amount in dollars"),
 
-  /** Goal target month (YYYY-MM-DD, optional) */
-  goal_target_month: z.string().optional().describe('Goal target month'),
+	/** Goal target month (YYYY-MM-DD, optional) */
+	goal_target_month: z.string().optional().describe("Goal target month"),
 
-  /** Goal percentage complete (optional) */
-  goal_percentage_complete: z.number().optional().describe('Goal percentage complete'),
+	/** Goal percentage complete (optional) */
+	goal_percentage_complete: z
+		.number()
+		.optional()
+		.describe("Goal percentage complete"),
 
-  /** Number of months to budget for goal (optional) */
-  goal_months_to_budget: z.number().optional().describe('Goal months to budget'),
+	/** Number of months to budget for goal (optional) */
+	goal_months_to_budget: z
+		.number()
+		.optional()
+		.describe("Goal months to budget"),
 
-  /** Amount still needed in current month to stay on track with goal (dollars, optional) */
-  goal_under_funded: z.number().optional().describe('Goal underfunded amount in dollars'),
+	/** Amount still needed in current month to stay on track with goal (dollars, optional) */
+	goal_under_funded: z
+		.number()
+		.optional()
+		.describe("Goal underfunded amount in dollars"),
 
-  /** Total amount funded towards goal across entire goal period since creation (dollars, optional) */
-  goal_overall_funded: z.number().optional().describe('Goal overall funded amount in dollars'),
+	/** Total amount funded towards goal across entire goal period since creation (dollars, optional) */
+	goal_overall_funded: z
+		.number()
+		.optional()
+		.describe("Goal overall funded amount in dollars"),
 
-  /** Amount still needed to complete goal across entire goal period (dollars, optional) */
-  goal_overall_left: z.number().optional().describe('Goal overall left amount in dollars'),
+	/** Amount still needed to complete goal across entire goal period (dollars, optional) */
+	goal_overall_left: z
+		.number()
+		.optional()
+		.describe("Goal overall left amount in dollars"),
 
-  /** Whether category is deleted (optional, may not be present in API responses) */
-  deleted: z.boolean().optional().describe('Deleted flag'),
+	/** Whether category is deleted (optional, may not be present in API responses) */
+	deleted: z.boolean().optional().describe("Deleted flag"),
 });
 
 /**
@@ -151,17 +169,17 @@ export const CategorySchema = z.object({
  * Represents category group metadata.
  */
 export const CategoryGroupSchema = z.object({
-  /** Unique identifier for the category group */
-  id: z.string().describe('Category group ID'),
+	/** Unique identifier for the category group */
+	id: z.string().describe("Category group ID"),
 
-  /** Human-readable category group name */
-  name: z.string().describe('Category group name'),
+	/** Human-readable category group name */
+	name: z.string().describe("Category group name"),
 
-  /** Whether category group is hidden */
-  hidden: z.boolean().describe('Hidden flag'),
+	/** Whether category group is hidden */
+	hidden: z.boolean().describe("Hidden flag"),
 
-  /** Whether category group is deleted */
-  deleted: z.boolean().describe('Deleted flag'),
+	/** Whether category group is deleted */
+	deleted: z.boolean().describe("Deleted flag"),
 });
 
 /**
@@ -170,11 +188,13 @@ export const CategoryGroupSchema = z.object({
  * Returns all categories and category groups for a budget month with cache metadata.
  */
 export const ListCategoriesOutputSchema = CacheMetadataSchema.extend({
-  /** Array of category objects */
-  categories: z.array(CategorySchema).describe('List of categories'),
+	/** Array of category objects */
+	categories: z.array(CategorySchema).describe("List of categories"),
 
-  /** Array of category group objects */
-  category_groups: z.array(CategoryGroupSchema).describe('List of category groups'),
+	/** Array of category group objects */
+	category_groups: z
+		.array(CategoryGroupSchema)
+		.describe("List of category groups"),
 });
 
 /**
@@ -183,8 +203,8 @@ export const ListCategoriesOutputSchema = CacheMetadataSchema.extend({
  * Returns a single category by ID with cache metadata.
  */
 export const GetCategoryOutputSchema = CacheMetadataSchema.extend({
-  /** Single category object */
-  category: CategorySchema.describe('Category details'),
+	/** Single category object */
+	category: CategorySchema.describe("Category details"),
 });
 
 // Export inferred TypeScript types

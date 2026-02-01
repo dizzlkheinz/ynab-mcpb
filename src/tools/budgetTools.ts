@@ -1,23 +1,23 @@
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type * as ynab from 'ynab';
-import { z } from 'zod/v4';
-import { responseFormatter } from '../server/responseFormatter.js';
-import { withToolErrorHandling } from '../types/index.js';
-import type { ToolFactory } from '../types/toolRegistration.js';
-import { createAdapters } from './adapters.js';
-import type { DeltaFetcher } from './deltaFetcher.js';
-import { resolveDeltaFetcherArgs } from './deltaSupport.js';
-import { emptyObjectSchema } from './schemas/common.js';
-import { ToolAnnotationPresets } from './toolCategories.js';
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type * as ynab from "ynab";
+import { z } from "zod/v4";
+import { responseFormatter } from "../server/responseFormatter.js";
+import { withToolErrorHandling } from "../types/index.js";
+import type { ToolFactory } from "../types/toolRegistration.js";
+import { createAdapters } from "./adapters.js";
+import type { DeltaFetcher } from "./deltaFetcher.js";
+import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
+import { emptyObjectSchema } from "./schemas/common.js";
+import { ToolAnnotationPresets } from "./toolCategories.js";
 
 /**
  * Schema for ynab:get_budget tool parameters
  */
 export const GetBudgetSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-  })
-  .strict();
+	.object({
+		budget_id: z.string().min(1, "Budget ID is required"),
+	})
+	.strict();
 
 export type GetBudgetParams = z.infer<typeof GetBudgetSchema>;
 
@@ -26,48 +26,48 @@ export type GetBudgetParams = z.infer<typeof GetBudgetSchema>;
  * Lists all budgets associated with the user's account
  */
 export async function handleListBudgets(
-  ynabAPI: ynab.API,
-  deltaFetcherOrParams?: DeltaFetcher | Record<string, unknown>,
-  maybeParams?: Record<string, unknown>,
+	ynabAPI: ynab.API,
+	deltaFetcherOrParams?: DeltaFetcher | Record<string, unknown>,
+	maybeParams?: Record<string, unknown>,
 ): Promise<CallToolResult> {
-  const { deltaFetcher } = resolveDeltaFetcherArgs(
-    ynabAPI,
-    (deltaFetcherOrParams ?? {}) as DeltaFetcher | Record<string, unknown>,
-    maybeParams,
-  );
-  return await withToolErrorHandling(
-    async () => {
-      // Always use cache unless explicitly disabled
-      const result = await deltaFetcher.fetchBudgets();
-      const budgets = result.data;
-      const wasCached = result.wasCached;
+	const { deltaFetcher } = resolveDeltaFetcherArgs(
+		ynabAPI,
+		(deltaFetcherOrParams ?? {}) as DeltaFetcher | Record<string, unknown>,
+		maybeParams,
+	);
+	return await withToolErrorHandling(
+		async () => {
+			// Always use cache unless explicitly disabled
+			const result = await deltaFetcher.fetchBudgets();
+			const budgets = result.data;
+			const wasCached = result.wasCached;
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: responseFormatter.format({
-              budgets: budgets.map((budget) => ({
-                id: budget.id,
-                name: budget.name,
-                last_modified_on: budget.last_modified_on,
-                first_month: budget.first_month,
-                last_month: budget.last_month,
-                date_format: budget.date_format,
-                currency_format: budget.currency_format,
-              })),
-              cached: wasCached,
-              cache_info: wasCached
-                ? `Data retrieved from cache for improved performance${result.usedDelta ? ' (delta merge applied)' : ''}`
-                : 'Fresh data retrieved from YNAB API',
-            }),
-          },
-        ],
-      };
-    },
-    'ynab:list_budgets',
-    'listing budgets',
-  );
+			return {
+				content: [
+					{
+						type: "text",
+						text: responseFormatter.format({
+							budgets: budgets.map((budget) => ({
+								id: budget.id,
+								name: budget.name,
+								last_modified_on: budget.last_modified_on,
+								first_month: budget.first_month,
+								last_month: budget.last_month,
+								date_format: budget.date_format,
+								currency_format: budget.currency_format,
+							})),
+							cached: wasCached,
+							cache_info: wasCached
+								? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`
+								: "Fresh data retrieved from YNAB API",
+						}),
+					},
+				],
+			};
+		},
+		"ynab:list_budgets",
+		"listing budgets",
+	);
 }
 
 /**
@@ -75,75 +75,75 @@ export async function handleListBudgets(
  * Gets detailed information for a specific budget
  */
 export async function handleGetBudget(
-  ynabAPI: ynab.API,
-  params: GetBudgetParams,
+	ynabAPI: ynab.API,
+	params: GetBudgetParams,
 ): Promise<CallToolResult> {
-  return await withToolErrorHandling(
-    async () => {
-      const response = await ynabAPI.budgets.getBudgetById(params.budget_id);
-      const budget = response.data.budget;
+	return await withToolErrorHandling(
+		async () => {
+			const response = await ynabAPI.budgets.getBudgetById(params.budget_id);
+			const budget = response.data.budget;
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: responseFormatter.format({
-              budget: {
-                id: budget.id,
-                name: budget.name,
-                last_modified_on: budget.last_modified_on,
-                first_month: budget.first_month,
-                last_month: budget.last_month,
-                date_format: budget.date_format,
-                currency_format: budget.currency_format,
-                // Return counts instead of full arrays to avoid massive responses
-                accounts_count: budget.accounts?.length ?? 0,
-                categories_count: budget.categories?.length ?? 0,
-                payees_count: budget.payees?.length ?? 0,
-                months_count: budget.months?.length ?? 0,
-                // Include helpful message
-                message:
-                  'Use list_accounts, list_categories, list_payees, and list_months to get detailed lists',
-              },
-            }),
-          },
-        ],
-      };
-    },
-    'ynab:get_budget',
-    'getting budget details',
-  );
+			return {
+				content: [
+					{
+						type: "text",
+						text: responseFormatter.format({
+							budget: {
+								id: budget.id,
+								name: budget.name,
+								last_modified_on: budget.last_modified_on,
+								first_month: budget.first_month,
+								last_month: budget.last_month,
+								date_format: budget.date_format,
+								currency_format: budget.currency_format,
+								// Return counts instead of full arrays to avoid massive responses
+								accounts_count: budget.accounts?.length ?? 0,
+								categories_count: budget.categories?.length ?? 0,
+								payees_count: budget.payees?.length ?? 0,
+								months_count: budget.months?.length ?? 0,
+								// Include helpful message
+								message:
+									"Use list_accounts, list_categories, list_payees, and list_months to get detailed lists",
+							},
+						}),
+					},
+				],
+			};
+		},
+		"ynab:get_budget",
+		"getting budget details",
+	);
 }
 
 /**
  * Registers all budget-related tools with the provided registry.
  */
 export const registerBudgetTools: ToolFactory = (registry, context) => {
-  const { adapt, adaptWithDelta } = createAdapters(context);
+	const { adapt, adaptWithDelta } = createAdapters(context);
 
-  registry.register({
-    name: 'list_budgets',
-    description: "List all budgets associated with the user's account",
-    inputSchema: emptyObjectSchema,
-    handler: adaptWithDelta(handleListBudgets),
-    metadata: {
-      annotations: {
-        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-        title: 'YNAB: List Budgets',
-      },
-    },
-  });
+	registry.register({
+		name: "list_budgets",
+		description: "List all budgets associated with the user's account",
+		inputSchema: emptyObjectSchema,
+		handler: adaptWithDelta(handleListBudgets),
+		metadata: {
+			annotations: {
+				...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+				title: "YNAB: List Budgets",
+			},
+		},
+	});
 
-  registry.register({
-    name: 'get_budget',
-    description: 'Get detailed information for a specific budget',
-    inputSchema: GetBudgetSchema,
-    handler: adapt(handleGetBudget),
-    metadata: {
-      annotations: {
-        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-        title: 'YNAB: Get Budget Details',
-      },
-    },
-  });
+	registry.register({
+		name: "get_budget",
+		description: "Get detailed information for a specific budget",
+		inputSchema: GetBudgetSchema,
+		handler: adapt(handleGetBudget),
+		metadata: {
+			annotations: {
+				...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+				title: "YNAB: Get Budget Details",
+			},
+		},
+	});
 };

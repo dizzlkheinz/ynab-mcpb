@@ -89,8 +89,8 @@
  * ```
  */
 
-import { z } from 'zod/v4';
-import { CacheMetadataSchema } from '../shared/commonOutputs.js';
+import { z } from "zod/v4";
+import { CacheMetadataSchema } from "../shared/commonOutputs.js";
 
 /**
  * Schema for a complete transaction object.
@@ -98,59 +98,65 @@ import { CacheMetadataSchema } from '../shared/commonOutputs.js';
  * Represents full transaction data with amounts in dollars (converted from YNAB milliunits).
  */
 export const TransactionSchema = z.object({
-  /** Unique identifier for the transaction */
-  id: z.string().describe('Transaction ID'),
+	/** Unique identifier for the transaction */
+	id: z.string().describe("Transaction ID"),
 
-  /** Transaction date (YYYY-MM-DD format) */
-  date: z.string().describe('Transaction date'),
+	/** Transaction date (YYYY-MM-DD format) */
+	date: z.string().describe("Transaction date"),
 
-  /** Transaction amount in dollars (negative for outflows, positive for inflows) */
-  amount: z.number().describe('Transaction amount in dollars'),
+	/** Transaction amount in dollars (negative for outflows, positive for inflows) */
+	amount: z.number().describe("Transaction amount in dollars"),
 
-  /** Optional transaction memo */
-  memo: z.string().optional().describe('Transaction memo'),
+	/** Optional transaction memo */
+	memo: z.string().optional().describe("Transaction memo"),
 
-  /** Cleared status (uncleared, cleared, reconciled) */
-  cleared: z.string().describe('Cleared status'),
+	/** Cleared status (uncleared, cleared, reconciled) */
+	cleared: z.string().describe("Cleared status"),
 
-  /** Whether transaction is approved */
-  approved: z.boolean().describe('Approved flag'),
+	/** Whether transaction is approved */
+	approved: z.boolean().describe("Approved flag"),
 
-  /** Optional flag color */
-  flag_color: z.string().optional().describe('Flag color'),
+	/** Optional flag color */
+	flag_color: z.string().optional().describe("Flag color"),
 
-  /** Account ID for this transaction */
-  account_id: z.string().describe('Account ID'),
+	/** Account ID for this transaction */
+	account_id: z.string().describe("Account ID"),
 
-  /** Optional payee ID */
-  payee_id: z.string().nullish().describe('Payee ID'),
+	/** Optional payee ID */
+	payee_id: z.string().nullish().describe("Payee ID"),
 
-  /** Optional category ID */
-  category_id: z.string().nullish().describe('Category ID'),
+	/** Optional category ID */
+	category_id: z.string().nullish().describe("Category ID"),
 
-  /** Optional transfer account ID (for transfer transactions) */
-  transfer_account_id: z.string().nullish().describe('Transfer account ID'),
+	/** Optional transfer account ID (for transfer transactions) */
+	transfer_account_id: z.string().nullish().describe("Transfer account ID"),
 
-  /** Optional transfer transaction ID (for transfer transactions) */
-  transfer_transaction_id: z.string().nullish().describe('Transfer transaction ID'),
+	/** Optional transfer transaction ID (for transfer transactions) */
+	transfer_transaction_id: z
+		.string()
+		.nullish()
+		.describe("Transfer transaction ID"),
 
-  /** Optional matched transaction ID (for imported transactions) */
-  matched_transaction_id: z.string().nullish().describe('Matched transaction ID'),
+	/** Optional matched transaction ID (for imported transactions) */
+	matched_transaction_id: z
+		.string()
+		.nullish()
+		.describe("Matched transaction ID"),
 
-  /** Optional import ID */
-  import_id: z.string().optional().describe('Import ID'),
+	/** Optional import ID */
+	import_id: z.string().optional().describe("Import ID"),
 
-  /** Whether transaction is deleted */
-  deleted: z.boolean().describe('Deleted flag'),
+	/** Whether transaction is deleted */
+	deleted: z.boolean().describe("Deleted flag"),
 
-  /** Account name (enriched field, optional) */
-  account_name: z.string().optional().describe('Account name'),
+	/** Account name (enriched field, optional) */
+	account_name: z.string().optional().describe("Account name"),
 
-  /** Payee name (enriched field, optional) */
-  payee_name: z.string().optional().describe('Payee name'),
+	/** Payee name (enriched field, optional) */
+	payee_name: z.string().optional().describe("Payee name"),
 
-  /** Category name (enriched field, optional) */
-  category_name: z.string().optional().describe('Category name'),
+	/** Category name (enriched field, optional) */
+	category_name: z.string().optional().describe("Category name"),
 });
 
 /**
@@ -159,23 +165,23 @@ export const TransactionSchema = z.object({
  * Subset of transaction fields shown in preview mode for large result sets.
  */
 export const TransactionPreviewSchema = z.object({
-  /** Unique identifier for the transaction */
-  id: z.string().describe('Transaction ID'),
+	/** Unique identifier for the transaction */
+	id: z.string().describe("Transaction ID"),
 
-  /** Transaction date (YYYY-MM-DD format) */
-  date: z.string().describe('Transaction date'),
+	/** Transaction date (YYYY-MM-DD format) */
+	date: z.string().describe("Transaction date"),
 
-  /** Transaction amount in dollars */
-  amount: z.number().describe('Transaction amount in dollars'),
+	/** Transaction amount in dollars */
+	amount: z.number().describe("Transaction amount in dollars"),
 
-  /** Optional transaction memo */
-  memo: z.string().optional().describe('Transaction memo'),
+	/** Optional transaction memo */
+	memo: z.string().optional().describe("Transaction memo"),
 
-  /** Payee name (enriched field, optional) */
-  payee_name: z.string().optional().describe('Payee name'),
+	/** Payee name (enriched field, optional) */
+	payee_name: z.string().optional().describe("Payee name"),
 
-  /** Category name (enriched field, optional) */
-  category_name: z.string().optional().describe('Category name'),
+	/** Category name (enriched field, optional) */
+	category_name: z.string().optional().describe("Category name"),
 });
 
 /**
@@ -184,11 +190,11 @@ export const TransactionPreviewSchema = z.object({
  * Returns all transactions when count <= 100.
  */
 const ListTransactionsNormalSchema = CacheMetadataSchema.extend({
-  /** Total number of transactions */
-  total_count: z.number().int().describe('Total transaction count'),
+	/** Total number of transactions */
+	total_count: z.number().int().describe("Total transaction count"),
 
-  /** Array of complete transaction objects */
-  transactions: z.array(TransactionSchema).describe('List of transactions'),
+	/** Array of complete transaction objects */
+	transactions: z.array(TransactionSchema).describe("List of transactions"),
 });
 
 /**
@@ -197,23 +203,25 @@ const ListTransactionsNormalSchema = CacheMetadataSchema.extend({
  * Returns a preview when count > 100 to avoid overwhelming responses.
  */
 const ListTransactionsPreviewSchema = z.object({
-  /** Message explaining large result set */
-  message: z.string().describe('Large result set message'),
+	/** Message explaining large result set */
+	message: z.string().describe("Large result set message"),
 
-  /** Suggestion to narrow results */
-  suggestion: z.string().describe('Suggestion to narrow results'),
+	/** Suggestion to narrow results */
+	suggestion: z.string().describe("Suggestion to narrow results"),
 
-  /** Human-readable summary of transactions shown in preview (e.g., "First 50 transactions:") */
-  showing: z.string().describe('Human-readable summary of transactions shown'),
+	/** Human-readable summary of transactions shown in preview (e.g., "First 50 transactions:") */
+	showing: z.string().describe("Human-readable summary of transactions shown"),
 
-  /** Total number of transactions */
-  total_count: z.number().int().describe('Total transaction count'),
+	/** Total number of transactions */
+	total_count: z.number().int().describe("Total transaction count"),
 
-  /** Estimated response size in KB if all transactions returned */
-  estimated_size_kb: z.number().describe('Estimated response size in KB'),
+	/** Estimated response size in KB if all transactions returned */
+	estimated_size_kb: z.number().describe("Estimated response size in KB"),
 
-  /** Array of preview transaction objects */
-  preview_transactions: z.array(TransactionPreviewSchema).describe('Preview transactions'),
+	/** Array of preview transaction objects */
+	preview_transactions: z
+		.array(TransactionPreviewSchema)
+		.describe("Preview transactions"),
 });
 
 /**
@@ -222,8 +230,8 @@ const ListTransactionsPreviewSchema = z.object({
  * Discriminated union supporting both normal and preview response modes.
  */
 export const ListTransactionsOutputSchema = z.union([
-  ListTransactionsNormalSchema,
-  ListTransactionsPreviewSchema,
+	ListTransactionsNormalSchema,
+	ListTransactionsPreviewSchema,
 ]);
 
 /**
@@ -232,12 +240,14 @@ export const ListTransactionsOutputSchema = z.union([
  * Returns a single transaction by ID with cache metadata.
  */
 export const GetTransactionOutputSchema = CacheMetadataSchema.extend({
-  /** Single transaction object */
-  transaction: TransactionSchema.describe('Transaction details'),
+	/** Single transaction object */
+	transaction: TransactionSchema.describe("Transaction details"),
 });
 
 // Export inferred TypeScript types
 export type Transaction = z.infer<typeof TransactionSchema>;
 export type TransactionPreview = z.infer<typeof TransactionPreviewSchema>;
-export type ListTransactionsOutput = z.infer<typeof ListTransactionsOutputSchema>;
+export type ListTransactionsOutput = z.infer<
+	typeof ListTransactionsOutputSchema
+>;
 export type GetTransactionOutput = z.infer<typeof GetTransactionOutputSchema>;

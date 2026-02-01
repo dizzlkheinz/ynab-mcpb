@@ -1,372 +1,397 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as ynab from 'ynab';
-import { getTestConfig, skipOnRateLimit } from '../../../__tests__/testUtils.js';
-import { type AccountSnapshot, executeReconciliation } from '../executor.js';
-import type { ReconcileAccountRequest } from '../index.js';
-import type { ReconciliationAnalysis } from '../types.js';
+import {
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
+import * as ynab from "ynab";
+import {
+	getTestConfig,
+	skipOnRateLimit,
+} from "../../../__tests__/testUtils.js";
+import { type AccountSnapshot, executeReconciliation } from "../executor.js";
+import type { ReconcileAccountRequest } from "../index.js";
+import type { ReconciliationAnalysis } from "../types.js";
 
 /**
  * Reconciliation Executor Integration Tests
  * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
 const config = getTestConfig();
-const hasToken = !!process.env['YNAB_ACCESS_TOKEN'];
+const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
 const shouldSkip = config.skipE2ETests || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
-describeIntegration('Reconciliation Executor - Bulk Create Integration', () => {
-  let ynabAPI: ynab.API;
-  let budgetId: string;
-  let accountId: string;
-  let accountSnapshot: AccountSnapshot;
-  const createdTransactionIds: string[] = [];
+describeIntegration("Reconciliation Executor - Bulk Create Integration", () => {
+	let ynabAPI: ynab.API;
+	let budgetId: string;
+	let accountId: string;
+	let accountSnapshot: AccountSnapshot;
+	const createdTransactionIds: string[] = [];
 
-  beforeAll(async () => {
-    const accessToken = process.env['YNAB_ACCESS_TOKEN']!;
-    ynabAPI = new ynab.API(accessToken);
-    budgetId = config.testBudgetId ?? (await resolveDefaultBudgetId(ynabAPI));
-    accountId = config.testAccountId ?? (await resolveDefaultAccountId(ynabAPI, budgetId));
-  });
+	beforeAll(async () => {
+		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+		ynabAPI = new ynab.API(accessToken);
+		budgetId = config.testBudgetId ?? (await resolveDefaultBudgetId(ynabAPI));
+		accountId =
+			config.testAccountId ??
+			(await resolveDefaultAccountId(ynabAPI, budgetId));
+	});
 
-  beforeEach(async () => {
-    accountSnapshot = await fetchAccountSnapshot(ynabAPI, budgetId, accountId);
-  });
+	beforeEach(async () => {
+		accountSnapshot = await fetchAccountSnapshot(ynabAPI, budgetId, accountId);
+	});
 
-  afterEach(async () => {
-    while (createdTransactionIds.length > 0) {
-      const transactionId = createdTransactionIds.pop();
-      if (!transactionId) continue;
-      await skipOnRateLimit(async () => {
-        await ynabAPI.transactions.deleteTransaction(budgetId, transactionId);
-      });
-    }
-  }, 60000); // 60 second timeout for cleanup of bulk transactions
+	afterEach(async () => {
+		while (createdTransactionIds.length > 0) {
+			const transactionId = createdTransactionIds.pop();
+			if (!transactionId) continue;
+			await skipOnRateLimit(async () => {
+				await ynabAPI.transactions.deleteTransaction(budgetId, transactionId);
+			});
+		}
+	}, 60000); // 60 second timeout for cleanup of bulk transactions
 
-  it(
-    'creates 10 transactions via bulk mode',
-    { meta: { tier: 'domain', domain: 'reconciliation' } },
-    async function () {
-      const analysis = buildIntegrationAnalysis(accountSnapshot, 10, 7);
-      const params = buildIntegrationParams(
-        accountId,
-        budgetId,
-        analysis.summary.target_statement_balance,
-      );
+	it(
+		"creates 10 transactions via bulk mode",
+		{ meta: { tier: "domain", domain: "reconciliation" } },
+		async function () {
+			const analysis = buildIntegrationAnalysis(accountSnapshot, 10, 7);
+			const params = buildIntegrationParams(
+				accountId,
+				budgetId,
+				analysis.summary.target_statement_balance,
+			);
 
-      const result = await skipOnRateLimit(
-        () =>
-          executeReconciliation({
-            ynabAPI,
-            analysis,
-            params,
-            budgetId,
-            accountId,
-            initialAccount: accountSnapshot,
-            currencyCode: 'USD',
-          }),
-        this,
-      );
-      if (!result) return;
-      if (containsRateLimitFailure(result)) return;
+			const result = await skipOnRateLimit(
+				() =>
+					executeReconciliation({
+						ynabAPI,
+						analysis,
+						params,
+						budgetId,
+						accountId,
+						initialAccount: accountSnapshot,
+						currencyCode: "USD",
+					}),
+				this,
+			);
+			if (!result) return;
+			if (containsRateLimitFailure(result)) return;
 
-      trackCreatedTransactions(result);
-      expect(result.summary.transactions_created).toBe(10);
-      expect(result.bulk_operation_details?.bulk_successes).toBeGreaterThanOrEqual(1);
-      expect(result.bulk_operation_details?.chunks_processed).toBe(1);
-    },
-    60000,
-  );
+			trackCreatedTransactions(result);
+			expect(result.summary.transactions_created).toBe(10);
+			expect(
+				result.bulk_operation_details?.bulk_successes,
+			).toBeGreaterThanOrEqual(1);
+			expect(result.bulk_operation_details?.chunks_processed).toBe(1);
+		},
+		60000,
+	);
 
-  it(
-    'creates transactions without import_id to allow bank matching',
-    { meta: { tier: 'domain', domain: 'reconciliation' } },
-    async function () {
-      // Note: import_id is intentionally omitted from reconciliation-created transactions
-      // so they can match with bank-imported transactions. YNAB-side duplicate detection
-      // is no longer used; the reconciliation matcher handles duplicate prevention.
-      const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 9);
-      const params = buildIntegrationParams(
-        accountId,
-        budgetId,
-        analysis.summary.target_statement_balance,
-      );
+	it(
+		"creates transactions without import_id to allow bank matching",
+		{ meta: { tier: "domain", domain: "reconciliation" } },
+		async function () {
+			// Note: import_id is intentionally omitted from reconciliation-created transactions
+			// so they can match with bank-imported transactions. YNAB-side duplicate detection
+			// is no longer used; the reconciliation matcher handles duplicate prevention.
+			const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 9);
+			const params = buildIntegrationParams(
+				accountId,
+				budgetId,
+				analysis.summary.target_statement_balance,
+			);
 
-      const result = await skipOnRateLimit(
-        () =>
-          executeReconciliation({
-            ynabAPI,
-            analysis,
-            params,
-            budgetId,
-            accountId,
-            initialAccount: accountSnapshot,
-            currencyCode: 'USD',
-          }),
-        this,
-      );
-      if (!result) return;
-      trackCreatedTransactions(result);
-      if (containsRateLimitFailure(result)) return;
+			const result = await skipOnRateLimit(
+				() =>
+					executeReconciliation({
+						ynabAPI,
+						analysis,
+						params,
+						budgetId,
+						accountId,
+						initialAccount: accountSnapshot,
+						currencyCode: "USD",
+					}),
+				this,
+			);
+			if (!result) return;
+			trackCreatedTransactions(result);
+			if (containsRateLimitFailure(result)) return;
 
-      // Verify transactions were created successfully
-      expect(result.summary.transactions_created).toBe(2);
-      // Verify no YNAB-side duplicate detection occurred (because no import_id)
-      expect(result.bulk_operation_details?.duplicates_detected).toBe(0);
-    },
-    60000,
-  );
+			// Verify transactions were created successfully
+			expect(result.summary.transactions_created).toBe(2);
+			// Verify no YNAB-side duplicate detection occurred (because no import_id)
+			expect(result.bulk_operation_details?.duplicates_detected).toBe(0);
+		},
+		60000,
+	);
 
-  it(
-    'processes 150 transactions across multiple chunks',
-    { meta: { tier: 'domain', domain: 'reconciliation' } },
-    async function () {
-      const analysis = buildIntegrationAnalysis(accountSnapshot, 150, 3);
-      const params = buildIntegrationParams(
-        accountId,
-        budgetId,
-        analysis.summary.target_statement_balance,
-      );
+	it(
+		"processes 150 transactions across multiple chunks",
+		{ meta: { tier: "domain", domain: "reconciliation" } },
+		async function () {
+			const analysis = buildIntegrationAnalysis(accountSnapshot, 150, 3);
+			const params = buildIntegrationParams(
+				accountId,
+				budgetId,
+				analysis.summary.target_statement_balance,
+			);
 
-      const result = await skipOnRateLimit(
-        () =>
-          executeReconciliation({
-            ynabAPI,
-            analysis,
-            params,
-            budgetId,
-            accountId,
-            initialAccount: accountSnapshot,
-            currencyCode: 'USD',
-          }),
-        this,
-      );
-      if (!result) return;
-      if (containsRateLimitFailure(result)) return;
-      trackCreatedTransactions(result);
+			const result = await skipOnRateLimit(
+				() =>
+					executeReconciliation({
+						ynabAPI,
+						analysis,
+						params,
+						budgetId,
+						accountId,
+						initialAccount: accountSnapshot,
+						currencyCode: "USD",
+					}),
+				this,
+			);
+			if (!result) return;
+			if (containsRateLimitFailure(result)) return;
+			trackCreatedTransactions(result);
 
-      expect(result.summary.transactions_created).toBe(150);
-      expect(result.bulk_operation_details?.chunks_processed).toBeGreaterThanOrEqual(2);
-    },
-    90000,
-  );
+			expect(result.summary.transactions_created).toBe(150);
+			expect(
+				result.bulk_operation_details?.chunks_processed,
+			).toBeGreaterThanOrEqual(2);
+		},
+		90000,
+	);
 
-  it(
-    'processes 20 transactions in under 8 seconds',
-    { meta: { tier: 'domain', domain: 'reconciliation' } },
-    async function () {
-      const analysis = buildIntegrationAnalysis(accountSnapshot, 20, 4);
-      const params = buildIntegrationParams(
-        accountId,
-        budgetId,
-        analysis.summary.target_statement_balance,
-      );
-      const start = Date.now();
+	it(
+		"processes 20 transactions in under 8 seconds",
+		{ meta: { tier: "domain", domain: "reconciliation" } },
+		async function () {
+			const analysis = buildIntegrationAnalysis(accountSnapshot, 20, 4);
+			const params = buildIntegrationParams(
+				accountId,
+				budgetId,
+				analysis.summary.target_statement_balance,
+			);
+			const start = Date.now();
 
-      const result = await skipOnRateLimit(
-        () =>
-          executeReconciliation({
-            ynabAPI,
-            analysis,
-            params,
-            budgetId,
-            accountId,
-            initialAccount: accountSnapshot,
-            currencyCode: 'USD',
-          }),
-        this,
-      );
-      if (!result) return;
-      if (containsRateLimitFailure(result)) return;
-      trackCreatedTransactions(result);
+			const result = await skipOnRateLimit(
+				() =>
+					executeReconciliation({
+						ynabAPI,
+						analysis,
+						params,
+						budgetId,
+						accountId,
+						initialAccount: accountSnapshot,
+						currencyCode: "USD",
+					}),
+				this,
+			);
+			if (!result) return;
+			if (containsRateLimitFailure(result)) return;
+			trackCreatedTransactions(result);
 
-      const duration = Date.now() - start;
-      console.info(`Bulk mode (20 txns): ${duration}ms`);
-      expect(duration).toBeLessThan(8000);
-    },
-    60000,
-  );
+			const duration = Date.now() - start;
+			console.info(`Bulk mode (20 txns): ${duration}ms`);
+			expect(duration).toBeLessThan(8000);
+		},
+		60000,
+	);
 
-  it(
-    'propagates API errors for invalid account IDs',
-    { meta: { tier: 'domain', domain: 'reconciliation' } },
-    async function () {
-      const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 6);
-      const params = buildIntegrationParams(
-        'invalid-account',
-        budgetId,
-        analysis.summary.target_statement_balance,
-      );
+	it(
+		"propagates API errors for invalid account IDs",
+		{ meta: { tier: "domain", domain: "reconciliation" } },
+		async function () {
+			const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 6);
+			const params = buildIntegrationParams(
+				"invalid-account",
+				budgetId,
+				analysis.summary.target_statement_balance,
+			);
 
-      await skipOnRateLimit(async () => {
-        await expect(
-          executeReconciliation({
-            ynabAPI,
-            analysis,
-            params,
-            budgetId,
-            accountId: 'invalid-account',
-            initialAccount: accountSnapshot,
-            currencyCode: 'USD',
-          }),
-        ).rejects.toMatchObject({ status: expect.any(Number) });
-      }, this);
-    },
-    60000,
-  );
+			await skipOnRateLimit(async () => {
+				await expect(
+					executeReconciliation({
+						ynabAPI,
+						analysis,
+						params,
+						budgetId,
+						accountId: "invalid-account",
+						initialAccount: accountSnapshot,
+						currencyCode: "USD",
+					}),
+				).rejects.toMatchObject({ status: expect.any(Number) });
+			}, this);
+		},
+		60000,
+	);
 
-  it(
-    'skips work when a rate limit error is detected',
-    { meta: { tier: 'domain', domain: 'reconciliation' } },
-    async () => {
-      const fakeContext = { skip: vi.fn() };
-      const rateLimitError = Object.assign(new Error('429 Too Many Requests'), { status: 429 });
-      const result = await skipOnRateLimit(async () => {
-        throw rateLimitError;
-      }, fakeContext);
-      expect(result).toBeUndefined();
-      expect(fakeContext.skip).toHaveBeenCalled();
-    },
-  );
+	it(
+		"skips work when a rate limit error is detected",
+		{ meta: { tier: "domain", domain: "reconciliation" } },
+		async () => {
+			const fakeContext = { skip: vi.fn() };
+			const rateLimitError = Object.assign(new Error("429 Too Many Requests"), {
+				status: 429,
+			});
+			const result = await skipOnRateLimit(async () => {
+				throw rateLimitError;
+			}, fakeContext);
+			expect(result).toBeUndefined();
+			expect(fakeContext.skip).toHaveBeenCalled();
+		},
+	);
 
-  function trackCreatedTransactions(
-    result: Awaited<ReturnType<typeof executeReconciliation>>,
-  ): void {
-    for (const action of result.actions_taken) {
-      if (action.type !== 'create_transaction') continue;
-      const transaction = action.transaction as { id?: string } | null;
-      if (transaction?.id) {
-        createdTransactionIds.push(transaction.id);
-      }
-    }
-  }
+	function trackCreatedTransactions(
+		result: Awaited<ReturnType<typeof executeReconciliation>>,
+	): void {
+		for (const action of result.actions_taken) {
+			if (action.type !== "create_transaction") continue;
+			const transaction = action.transaction as { id?: string } | null;
+			if (transaction?.id) {
+				createdTransactionIds.push(transaction.id);
+			}
+		}
+	}
 
-  function containsRateLimitFailure(result: Awaited<ReturnType<typeof executeReconciliation>>) {
-    return result.actions_taken.some((action) => {
-      const reason = typeof action.reason === 'string' ? action.reason.toLowerCase() : '';
-      return (
-        reason.includes('429') ||
-        reason.includes('too many requests') ||
-        reason.includes('rate limit')
-      );
-    });
-  }
+	function containsRateLimitFailure(
+		result: Awaited<ReturnType<typeof executeReconciliation>>,
+	) {
+		return result.actions_taken.some((action) => {
+			const reason =
+				typeof action.reason === "string" ? action.reason.toLowerCase() : "";
+			return (
+				reason.includes("429") ||
+				reason.includes("too many requests") ||
+				reason.includes("rate limit")
+			);
+		});
+	}
 });
 
 async function resolveDefaultBudgetId(api: ynab.API): Promise<string> {
-  const budgets = await api.budgets.getBudgets();
-  const budget = budgets.data.budgets[0];
-  if (!budget) {
-    throw new Error('No budgets available for integration testing');
-  }
-  return budget.id;
+	const budgets = await api.budgets.getBudgets();
+	const budget = budgets.data.budgets[0];
+	if (!budget) {
+		throw new Error("No budgets available for integration testing");
+	}
+	return budget.id;
 }
 
-async function resolveDefaultAccountId(api: ynab.API, budgetId: string): Promise<string> {
-  const accounts = await api.accounts.getAccounts(budgetId);
-  const account = accounts.data.accounts.find((acct) => !acct.closed);
-  if (!account) {
-    throw new Error('No open accounts available for integration testing');
-  }
-  return account.id;
+async function resolveDefaultAccountId(
+	api: ynab.API,
+	budgetId: string,
+): Promise<string> {
+	const accounts = await api.accounts.getAccounts(budgetId);
+	const account = accounts.data.accounts.find((acct) => !acct.closed);
+	if (!account) {
+		throw new Error("No open accounts available for integration testing");
+	}
+	return account.id;
 }
 
 async function fetchAccountSnapshot(
-  api: ynab.API,
-  budgetId: string,
-  accountId: string,
+	api: ynab.API,
+	budgetId: string,
+	accountId: string,
 ): Promise<AccountSnapshot> {
-  const response = await api.accounts.getAccountById(budgetId, accountId);
-  const account = response.data.account;
-  return {
-    balance: account.balance,
-    cleared_balance: account.cleared_balance ?? account.balance,
-    uncleared_balance: account.uncleared_balance ?? 0,
-  };
+	const response = await api.accounts.getAccountById(budgetId, accountId);
+	const account = response.data.account;
+	return {
+		balance: account.balance,
+		cleared_balance: account.cleared_balance ?? account.balance,
+		uncleared_balance: account.uncleared_balance ?? 0,
+	};
 }
 
 function buildIntegrationAnalysis(
-  snapshot: AccountSnapshot,
-  count: number,
-  transactionAmount: number,
+	snapshot: AccountSnapshot,
+	count: number,
+	transactionAmount: number,
 ): ReconciliationAnalysis {
-  const clearedDollars = snapshot.cleared_balance / 1000;
-  const totalDelta = transactionAmount * count;
-  const statementBalance = clearedDollars + totalDelta;
+	const clearedDollars = snapshot.cleared_balance / 1000;
+	const totalDelta = transactionAmount * count;
+	const statementBalance = clearedDollars + totalDelta;
 
-  // Choose a base date safely in the past so YNAB accepts the transactions (no future dates),
-  // and include a nonce in payee names to avoid duplicate collisions across test runs.
-  const dayMs = 24 * 60 * 60 * 1000;
-  const baseDate = Date.now() - (count + 1) * dayMs;
-  const runNonce = Date.now().toString();
+	// Choose a base date safely in the past so YNAB accepts the transactions (no future dates),
+	// and include a nonce in payee names to avoid duplicate collisions across test runs.
+	const dayMs = 24 * 60 * 60 * 1000;
+	const baseDate = Date.now() - (count + 1) * dayMs;
+	const runNonce = Date.now().toString();
 
-  return {
-    success: true,
-    phase: 'analysis',
-    summary: {
-      statement_date_range: 'Integration test',
-      bank_transactions_count: count,
-      ynab_transactions_count: 0,
-      auto_matched: 0,
-      suggested_matches: 0,
-      unmatched_bank: count,
-      unmatched_ynab: 0,
-      current_cleared_balance: clearedDollars,
-      target_statement_balance: statementBalance,
-      discrepancy: totalDelta,
-      discrepancy_explanation: 'Synthetic integration delta',
-    },
-    auto_matches: [],
-    suggested_matches: [],
-    unmatched_bank: Array.from({ length: count }, (_, index) => {
-      const date = new Date(baseDate + index * dayMs);
-      return {
-        id: `integration-bank-${index}-${runNonce}`,
-        date: date.toISOString().slice(0, 10),
-        amount: transactionAmount,
-        payee: `Integration Payee ${index}-${runNonce}`,
-        memo: `Integration memo ${index}`,
-        original_csv_row: index + 1,
-      };
-    }),
-    unmatched_ynab: [],
-    balance_info: {
-      current_cleared: clearedDollars,
-      current_uncleared: snapshot.uncleared_balance / 1000,
-      current_total: snapshot.balance / 1000,
-      target_statement: statementBalance,
-      discrepancy: totalDelta,
-      on_track: false,
-    },
-    next_steps: [],
-    insights: [],
-  };
+	return {
+		success: true,
+		phase: "analysis",
+		summary: {
+			statement_date_range: "Integration test",
+			bank_transactions_count: count,
+			ynab_transactions_count: 0,
+			auto_matched: 0,
+			suggested_matches: 0,
+			unmatched_bank: count,
+			unmatched_ynab: 0,
+			current_cleared_balance: clearedDollars,
+			target_statement_balance: statementBalance,
+			discrepancy: totalDelta,
+			discrepancy_explanation: "Synthetic integration delta",
+		},
+		auto_matches: [],
+		suggested_matches: [],
+		unmatched_bank: Array.from({ length: count }, (_, index) => {
+			const date = new Date(baseDate + index * dayMs);
+			return {
+				id: `integration-bank-${index}-${runNonce}`,
+				date: date.toISOString().slice(0, 10),
+				amount: transactionAmount,
+				payee: `Integration Payee ${index}-${runNonce}`,
+				memo: `Integration memo ${index}`,
+				original_csv_row: index + 1,
+			};
+		}),
+		unmatched_ynab: [],
+		balance_info: {
+			current_cleared: clearedDollars,
+			current_uncleared: snapshot.uncleared_balance / 1000,
+			current_total: snapshot.balance / 1000,
+			target_statement: statementBalance,
+			discrepancy: totalDelta,
+			on_track: false,
+		},
+		next_steps: [],
+		insights: [],
+	};
 }
 
 function buildIntegrationParams(
-  accountId: string,
-  budgetId: string,
-  statementBalance: number,
-  overrides: Partial<ReconcileAccountRequest> = {},
+	accountId: string,
+	budgetId: string,
+	statementBalance: number,
+	overrides: Partial<ReconcileAccountRequest> = {},
 ): ReconcileAccountRequest {
-  return {
-    budget_id: budgetId,
-    account_id: accountId,
-    csv_data: 'Date,Description,Amount',
-    statement_balance: statementBalance,
-    statement_date: new Date().toISOString().slice(0, 10),
-    date_tolerance_days: 1,
-    amount_tolerance_cents: 1,
-    auto_match_threshold: 90,
-    suggestion_threshold: 60,
-    auto_create_transactions: true,
-    auto_update_cleared_status: false,
-    auto_unclear_missing: false,
-    auto_adjust_dates: false,
-    dry_run: false,
-    require_exact_match: true,
-    confidence_threshold: 0.8,
-    max_resolution_attempts: 3,
-    include_structured_data: false,
-    ...overrides,
-  };
+	return {
+		budget_id: budgetId,
+		account_id: accountId,
+		csv_data: "Date,Description,Amount",
+		statement_balance: statementBalance,
+		statement_date: new Date().toISOString().slice(0, 10),
+		date_tolerance_days: 1,
+		amount_tolerance_cents: 1,
+		auto_match_threshold: 90,
+		suggestion_threshold: 60,
+		auto_create_transactions: true,
+		auto_update_cleared_status: false,
+		auto_unclear_missing: false,
+		auto_adjust_dates: false,
+		dry_run: false,
+		require_exact_match: true,
+		confidence_threshold: 0.8,
+		max_resolution_attempts: 3,
+		include_structured_data: false,
+		...overrides,
+	};
 }

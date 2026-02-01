@@ -14,78 +14,78 @@
  * - Memory: O(n) where n = number of cache keys accessed (typically 5-20 per budget)
  */
 export class ServerKnowledgeStore {
-  /** Map of cache key to last known server_knowledge value */
-  private knowledge: Map<string, number> = new Map();
+	/** Map of cache key to last known server_knowledge value */
+	private knowledge: Map<string, number> = new Map();
 
-  /**
-   * Get the last known server_knowledge for a cache key.
-   *
-   * @param cacheKey - The cache key to look up
-   * @returns The last known server_knowledge value, or undefined if never fetched
-   */
-  get(cacheKey: string): number | undefined {
-    return this.knowledge.get(cacheKey);
-  }
+	/**
+	 * Get the last known server_knowledge for a cache key.
+	 *
+	 * @param cacheKey - The cache key to look up
+	 * @returns The last known server_knowledge value, or undefined if never fetched
+	 */
+	get(cacheKey: string): number | undefined {
+		return this.knowledge.get(cacheKey);
+	}
 
-  /**
-   * Update server_knowledge after an API response.
-   *
-   * @param cacheKey - The cache key to update
-   * @param value - The new server_knowledge value (must be non-negative)
-   * @throws Error if value is negative
-   */
-  update(cacheKey: string, value: number): void {
-    if (value < 0) {
-      throw new Error(`server_knowledge must be non-negative, got: ${value}`);
-    }
-    this.knowledge.set(cacheKey, value);
-  }
+	/**
+	 * Update server_knowledge after an API response.
+	 *
+	 * @param cacheKey - The cache key to update
+	 * @param value - The new server_knowledge value (must be non-negative)
+	 * @throws Error if value is negative
+	 */
+	update(cacheKey: string, value: number): void {
+		if (value < 0) {
+			throw new Error(`server_knowledge must be non-negative, got: ${value}`);
+		}
+		this.knowledge.set(cacheKey, value);
+	}
 
-  /**
-   * Reset knowledge for keys matching a pattern, or clear all if pattern is undefined.
-   *
-   * @param keyPattern - Optional pattern to match (uses key.includes(keyPattern))
-   */
-  reset(keyPattern?: string): void {
-    if (keyPattern === undefined || keyPattern === '') {
-      this.knowledge.clear();
-      return;
-    }
+	/**
+	 * Reset knowledge for keys matching a pattern, or clear all if pattern is undefined.
+	 *
+	 * @param keyPattern - Optional pattern to match (uses key.includes(keyPattern))
+	 */
+	reset(keyPattern?: string): void {
+		if (keyPattern === undefined || keyPattern === "") {
+			this.knowledge.clear();
+			return;
+		}
 
-    const keysToDelete: string[] = [];
-    for (const key of this.knowledge.keys()) {
-      if (key.includes(keyPattern)) {
-        keysToDelete.push(key);
-      }
-    }
+		const keysToDelete: string[] = [];
+		for (const key of this.knowledge.keys()) {
+			if (key.includes(keyPattern)) {
+				keysToDelete.push(key);
+			}
+		}
 
-    for (const key of keysToDelete) {
-      this.knowledge.delete(key);
-    }
-  }
-  /**
-   * Convenience helper to reset all knowledge entries for a specific budget.
-   *
-   * @param budgetId - The budget ID to reset knowledge for
-   */
-  resetByBudgetId(budgetId: string): void {
-    this.reset(`:${budgetId}`);
-  }
+		for (const key of keysToDelete) {
+			this.knowledge.delete(key);
+		}
+	}
+	/**
+	 * Convenience helper to reset all knowledge entries for a specific budget.
+	 *
+	 * @param budgetId - The budget ID to reset knowledge for
+	 */
+	resetByBudgetId(budgetId: string): void {
+		this.reset(`:${budgetId}`);
+	}
 
-  /**
-   * Get diagnostic information about tracked cache keys.
-   *
-   * @returns Object containing entry count and all tracked entries
-   */
-  getStats(): { entryCount: number; entries: Record<string, number> } {
-    const entries: Record<string, number> = {};
-    for (const [key, value] of this.knowledge.entries()) {
-      entries[key] = value;
-    }
+	/**
+	 * Get diagnostic information about tracked cache keys.
+	 *
+	 * @returns Object containing entry count and all tracked entries
+	 */
+	getStats(): { entryCount: number; entries: Record<string, number> } {
+		const entries: Record<string, number> = {};
+		for (const [key, value] of this.knowledge.entries()) {
+			entries[key] = value;
+		}
 
-    return {
-      entryCount: this.knowledge.size,
-      entries,
-    };
-  }
+		return {
+			entryCount: this.knowledge.size,
+			entries,
+		};
+	}
 }

@@ -14,9 +14,9 @@
  * normalizePayee("AMZN MKTP CA*123456789") => "amznmktpca123456789"
  */
 export function normalizePayee(payee: string | null | undefined): string {
-  if (!payee) return '';
+	if (!payee) return "";
 
-  return payee.toLowerCase().replace(/[^a-z0-9]/g, ''); // Remove all non-alphanumeric
+	return payee.toLowerCase().replace(/[^a-z0-9]/g, ""); // Remove all non-alphanumeric
 }
 
 /**
@@ -26,15 +26,15 @@ export function normalizePayee(payee: string | null | undefined): string {
  * This catches 80%+ of matches quickly
  */
 export function normalizedMatch(
-  payee1: string | null | undefined,
-  payee2: string | null | undefined,
+	payee1: string | null | undefined,
+	payee2: string | null | undefined,
 ): boolean {
-  const norm1 = normalizePayee(payee1);
-  const norm2 = normalizePayee(payee2);
+	const norm1 = normalizePayee(payee1);
+	const norm2 = normalizePayee(payee2);
 
-  if (!norm1 || !norm2) return false;
+	if (!norm1 || !norm2) return false;
 
-  return norm1 === norm2;
+	return norm1 === norm2;
 }
 
 /**
@@ -42,31 +42,42 @@ export function normalizedMatch(
  * Used for fuzzy matching when normalized comparison fails
  */
 function levenshteinDistance(str1: string, str2: string): number {
-  const len1 = str1.length;
-  const len2 = str2.length;
+	const len1 = str1.length;
+	const len2 = str2.length;
 
-  // Create distance matrix
-  const matrix: number[][] = Array(len1 + 1)
-    .fill(null)
-    .map(() => Array(len2 + 1).fill(0));
+	// Create distance matrix
+	const matrix: number[][] = Array(len1 + 1)
+		.fill(null)
+		.map(() => Array(len2 + 1).fill(0));
 
-  // Initialize first row and column
-  for (let i = 0; i <= len1; i++) matrix[i]![0] = i;
-  for (let j = 0; j <= len2; j++) matrix[0]![j] = j;
+	// Initialize first row and column
+	for (let i = 0; i <= len1; i++) {
+		const row = matrix[i];
+		if (row) row[0] = i;
+	}
+	const firstRow = matrix[0];
+	if (firstRow) {
+		for (let j = 0; j <= len2; j++) {
+			firstRow[j] = j;
+		}
+	}
 
-  // Fill the matrix
-  for (let i = 1; i <= len1; i++) {
-    for (let j = 1; j <= len2; j++) {
-      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      matrix[i]![j] = Math.min(
-        matrix[i - 1]![j]! + 1, // deletion
-        matrix[i]![j - 1]! + 1, // insertion
-        matrix[i - 1]![j - 1]! + cost, // substitution
-      );
-    }
-  }
+	// Fill the matrix
+	for (let i = 1; i <= len1; i++) {
+		for (let j = 1; j <= len2; j++) {
+			const row = matrix[i];
+			const prevRow = matrix[i - 1];
+			if (!row || !prevRow) continue;
+			const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+			row[j] = Math.min(
+				(prevRow[j] ?? 0) + 1, // deletion
+				(row[j - 1] ?? 0) + 1, // insertion
+				(prevRow[j - 1] ?? 0) + cost, // substitution
+			);
+		}
+	}
 
-  return matrix[len1]![len2]!;
+	return matrix[len1]?.[len2] ?? 0;
 }
 
 /**
@@ -76,23 +87,23 @@ function levenshteinDistance(str1: string, str2: string): number {
  * Only used when Tier 1 (normalized matching) fails
  */
 export function fuzzyMatch(
-  payee1: string | null | undefined,
-  payee2: string | null | undefined,
+	payee1: string | null | undefined,
+	payee2: string | null | undefined,
 ): number {
-  const norm1 = normalizePayee(payee1);
-  const norm2 = normalizePayee(payee2);
+	const norm1 = normalizePayee(payee1);
+	const norm2 = normalizePayee(payee2);
 
-  if (!norm1 || !norm2) return 0;
-  if (norm1 === norm2) return 100; // Perfect match
+	if (!norm1 || !norm2) return 0;
+	if (norm1 === norm2) return 100; // Perfect match
 
-  const distance = levenshteinDistance(norm1, norm2);
-  const maxLen = Math.max(norm1.length, norm2.length);
+	const distance = levenshteinDistance(norm1, norm2);
+	const maxLen = Math.max(norm1.length, norm2.length);
 
-  if (maxLen === 0) return 0;
+	if (maxLen === 0) return 0;
 
-  // Convert to similarity percentage
-  const similarity = (1 - distance / maxLen) * 100;
-  return Math.max(0, Math.min(100, similarity));
+	// Convert to similarity percentage
+	const similarity = (1 - distance / maxLen) * 100;
+	return Math.max(0, Math.min(100, similarity));
 }
 
 /**
@@ -103,32 +114,32 @@ export function fuzzyMatch(
  * "amazon prime video" vs "prime amazon" => higher similarity
  */
 export function tokenBasedSimilarity(
-  payee1: string | null | undefined,
-  payee2: string | null | undefined,
+	payee1: string | null | undefined,
+	payee2: string | null | undefined,
 ): number {
-  const norm1 = normalizePayee(payee1);
-  const norm2 = normalizePayee(payee2);
+	const norm1 = normalizePayee(payee1);
+	const norm2 = normalizePayee(payee2);
 
-  if (!norm1 || !norm2) return 0;
+	if (!norm1 || !norm2) return 0;
 
-  // Split into tokens (any sequence of letters or digits)
-  const tokens1 = norm1.match(/[a-z]+|[0-9]+/g) || [];
-  const tokens2 = norm2.match(/[a-z]+|[0-9]+/g) || [];
+	// Split into tokens (any sequence of letters or digits)
+	const tokens1 = norm1.match(/[a-z]+|[0-9]+/g) || [];
+	const tokens2 = norm2.match(/[a-z]+|[0-9]+/g) || [];
 
-  if (tokens1.length === 0 || tokens2.length === 0) return 0;
+	if (tokens1.length === 0 || tokens2.length === 0) return 0;
 
-  // Count matching tokens
-  const set1 = new Set(tokens1);
-  const set2 = new Set(tokens2);
+	// Count matching tokens
+	const set1 = new Set(tokens1);
+	const set2 = new Set(tokens2);
 
-  let matches = 0;
-  for (const token of set1) {
-    if (set2.has(token)) matches++;
-  }
+	let matches = 0;
+	for (const token of set1) {
+		if (set2.has(token)) matches++;
+	}
 
-  // Jaccard similarity
-  const union = new Set([...set1, ...set2]).size;
-  return (matches / union) * 100;
+	// Jaccard similarity
+	const union = new Set([...set1, ...set2]).size;
+	return (matches / union) * 100;
 }
 
 /**
@@ -139,29 +150,32 @@ export function tokenBasedSimilarity(
  * - Token-based match
  */
 export function payeeSimilarity(
-  payee1: string | null | undefined,
-  payee2: string | null | undefined,
+	payee1: string | null | undefined,
+	payee2: string | null | undefined,
 ): number {
-  // Tier 1: Normalized exact match
-  if (normalizedMatch(payee1, payee2)) return 100;
+	// Tier 1: Normalized exact match
+	if (normalizedMatch(payee1, payee2)) return 100;
 
-  // Tier 2: Fuzzy and token-based matching
-  const fuzzyScore = fuzzyMatch(payee1, payee2);
-  const tokenScore = tokenBasedSimilarity(payee1, payee2);
+	// Tier 2: Fuzzy and token-based matching
+	const fuzzyScore = fuzzyMatch(payee1, payee2);
+	const tokenScore = tokenBasedSimilarity(payee1, payee2);
 
-  // Return the best score
-  return Math.max(fuzzyScore, tokenScore);
+	// Return the best score
+	return Math.max(fuzzyScore, tokenScore);
 }
 
 /**
  * Check if payee contains a common substring
  * Useful for matching "AMAZON.COM" to "Amazon Prime"
  */
-export function payeeContains(payee: string | null | undefined, substring: string): boolean {
-  const norm = normalizePayee(payee);
-  const normSub = normalizePayee(substring);
+export function payeeContains(
+	payee: string | null | undefined,
+	substring: string,
+): boolean {
+	const norm = normalizePayee(payee);
+	const normSub = normalizePayee(substring);
 
-  if (!norm || !normSub) return false;
+	if (!norm || !normSub) return false;
 
-  return norm.includes(normSub);
+	return norm.includes(normSub);
 }

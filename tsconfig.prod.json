@@ -1,18 +1,18 @@
 {
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "sourceMap": false,
-    "declarationMap": false,
-    "removeComments": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false
-  },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/*.test.ts",
-    "**/*.spec.ts",
-    "src/__tests__/**/*",
-    "scripts/**/*"
-  ]
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"sourceMap": false,
+		"declarationMap": false,
+		"removeComments": true,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false
+	},
+	"exclude": [
+		"node_modules",
+		"dist",
+		"**/*.test.ts",
+		"**/*.spec.ts",
+		"src/__tests__/**/*",
+		"scripts/**/*"
+	]
 }

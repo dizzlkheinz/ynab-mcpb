@@ -9,137 +9,142 @@
  * Prompt argument definition
  */
 export interface PromptArgument {
-  name: string;
-  description: string;
-  required: boolean;
+	name: string;
+	description: string;
+	required: boolean;
 }
 
 /**
  * Prompt definition structure
  */
 export interface PromptDefinition {
-  name: string;
-  description: string;
-  arguments: PromptArgument[];
+	name: string;
+	description: string;
+	arguments: PromptArgument[];
 }
 
 /**
  * Prompt response structure
  */
 export interface PromptResponse {
-  description: string;
-  messages: {
-    role: 'user' | 'assistant';
-    content: {
-      type: 'text';
-      text: string;
-    };
-  }[];
+	description: string;
+	messages: {
+		role: "user" | "assistant";
+		content: {
+			type: "text";
+			text: string;
+		};
+	}[];
 }
 
 /**
  * Prompt handler function signature
  */
 export type PromptHandler = (
-  name: string,
-  args: Record<string, unknown> | undefined,
+	name: string,
+	args: Record<string, unknown> | undefined,
 ) => Promise<PromptResponse>;
 
 /**
  * Default prompt definitions
  */
 const defaultPromptDefinitions: PromptDefinition[] = [
-  {
-    name: 'create-transaction',
-    description: 'Create a new transaction in YNAB',
-    arguments: [
-      {
-        name: 'budget_name',
-        description: 'Name of the budget (optional, uses first budget if not specified)',
-        required: false,
-      },
-      {
-        name: 'account_name',
-        description: 'Name of the account',
-        required: true,
-      },
-      {
-        name: 'amount',
-        description: 'Transaction amount (negative for expenses, positive for income)',
-        required: true,
-      },
-      {
-        name: 'payee',
-        description: 'Who you paid or received money from',
-        required: true,
-      },
-      {
-        name: 'category',
-        description: 'Budget category (optional)',
-        required: false,
-      },
-      {
-        name: 'memo',
-        description: 'Additional notes (optional)',
-        required: false,
-      },
-    ],
-  },
-  {
-    name: 'budget-summary',
-    description: 'Get a summary of your budget status',
-    arguments: [
-      {
-        name: 'budget_name',
-        description: 'Name of the budget (optional, uses first budget if not specified)',
-        required: false,
-      },
-      {
-        name: 'month',
-        description:
-          'Month to analyze (YYYY-MM format, optional, uses current month if not specified)',
-        required: false,
-      },
-    ],
-  },
-  {
-    name: 'account-balances',
-    description: 'Check balances across all accounts',
-    arguments: [
-      {
-        name: 'budget_name',
-        description: 'Name of the budget (optional, uses first budget if not specified)',
-        required: false,
-      },
-      {
-        name: 'account_type',
-        description: 'Filter by account type (checking, savings, creditCard, etc.)',
-        required: false,
-      },
-    ],
-  },
+	{
+		name: "create-transaction",
+		description: "Create a new transaction in YNAB",
+		arguments: [
+			{
+				name: "budget_name",
+				description:
+					"Name of the budget (optional, uses first budget if not specified)",
+				required: false,
+			},
+			{
+				name: "account_name",
+				description: "Name of the account",
+				required: true,
+			},
+			{
+				name: "amount",
+				description:
+					"Transaction amount (negative for expenses, positive for income)",
+				required: true,
+			},
+			{
+				name: "payee",
+				description: "Who you paid or received money from",
+				required: true,
+			},
+			{
+				name: "category",
+				description: "Budget category (optional)",
+				required: false,
+			},
+			{
+				name: "memo",
+				description: "Additional notes (optional)",
+				required: false,
+			},
+		],
+	},
+	{
+		name: "budget-summary",
+		description: "Get a summary of your budget status",
+		arguments: [
+			{
+				name: "budget_name",
+				description:
+					"Name of the budget (optional, uses first budget if not specified)",
+				required: false,
+			},
+			{
+				name: "month",
+				description:
+					"Month to analyze (YYYY-MM format, optional, uses current month if not specified)",
+				required: false,
+			},
+		],
+	},
+	{
+		name: "account-balances",
+		description: "Check balances across all accounts",
+		arguments: [
+			{
+				name: "budget_name",
+				description:
+					"Name of the budget (optional, uses first budget if not specified)",
+				required: false,
+			},
+			{
+				name: "account_type",
+				description:
+					"Filter by account type (checking, savings, creditCard, etc.)",
+				required: false,
+			},
+		],
+	},
 ];
 
 /**
  * Default prompt handlers
  */
 const defaultPromptHandlers: Record<string, PromptHandler> = {
-  'create-transaction': async (_name, args) => {
-    const budgetName = args?.['budget_name'] || 'first available budget';
-    const accountName = args?.['account_name'] || '[ACCOUNT_NAME]';
-    const amount = args?.['amount'] || '[AMOUNT]';
-    const payee = args?.['payee'] || '[PAYEE]';
-    const category = args?.['category'] || '[CATEGORY]';
-    const memo = args?.['memo'] || '';
+	"create-transaction": async (_name, args) => {
+		const budgetName = args?.["budget_name"] || "first available budget";
+		const accountName = args?.["account_name"] || "[ACCOUNT_NAME]";
+		const amount = args?.["amount"] || "[AMOUNT]";
+		const payee = args?.["payee"] || "[PAYEE]";
+		const category = args?.["category"] || "[CATEGORY]";
+		const memo = args?.["memo"] || "";
 
-    return {
-      description: `Create a transaction for ${payee} in ${accountName}`,
-      messages: [
-        {
-          role: 'user',
-          content: {
-            type: 'text',
-            text: `Please create a transaction with the following details:
+		return {
+			description: `Create a transaction for ${payee} in ${accountName}`,
+			messages: [
+				{
+					role: "user",
+					content: {
+						type: "text",
+						text: `Please create a transaction with the following details:
 - Budget: ${budgetName}
 - Account: ${accountName}
 - Amount: $${amount}
@@ -153,24 +158,24 @@ Use the appropriate YNAB MCP tools to:
 3. If a category is specified, list categories to find the category ID
 4. Create the transaction with the correct amount in milliunits (multiply by 1000)
 5. Confirm the transaction was created successfully`,
-          },
-        },
-      ],
-    };
-  },
+					},
+				},
+			],
+		};
+	},
 
-  'budget-summary': async (_name, args) => {
-    const summaryBudget = args?.['budget_name'] || 'first available budget';
-    const month = args?.['month'] || 'current month';
+	"budget-summary": async (_name, args) => {
+		const summaryBudget = args?.["budget_name"] || "first available budget";
+		const month = args?.["month"] || "current month";
 
-    return {
-      description: `Get budget summary for ${summaryBudget}`,
-      messages: [
-        {
-          role: 'user',
-          content: {
-            type: 'text',
-            text: `Please provide a comprehensive budget summary for ${summaryBudget} (${month}):
+		return {
+			description: `Get budget summary for ${summaryBudget}`,
+			messages: [
+				{
+					role: "user",
+					content: {
+						type: "text",
+						text: `Please provide a comprehensive budget summary for ${summaryBudget} (${month}):
 
 IMPORTANT: In YNAB, understand these key fields:
 - budgeted: Amount assigned to the category this month
@@ -201,24 +206,24 @@ Distinguish between current-month patterns vs historical trends when presenting 
    - Any true overspending where categories went into the red (negative Available balance)
 
 Format the response in a clear, easy-to-read summary.`,
-          },
-        },
-      ],
-    };
-  },
+					},
+				},
+			],
+		};
+	},
 
-  'account-balances': async (_name, args) => {
-    const balanceBudget = args?.['budget_name'] || 'first available budget';
-    const accountType = args?.['account_type'] || 'all accounts';
+	"account-balances": async (_name, args) => {
+		const balanceBudget = args?.["budget_name"] || "first available budget";
+		const accountType = args?.["account_type"] || "all accounts";
 
-    return {
-      description: `Check account balances for ${accountType}`,
-      messages: [
-        {
-          role: 'user',
-          content: {
-            type: 'text',
-            text: `Please show account balances for ${balanceBudget}:
+		return {
+			description: `Check account balances for ${accountType}`,
+			messages: [
+				{
+					role: "user",
+					content: {
+						type: "text",
+						text: `Please show account balances for ${balanceBudget}:
 
 1. List all budgets and select the appropriate one
 2. List accounts for that budget
@@ -231,61 +236,61 @@ Format the response in a clear, easy-to-read summary.`,
    - Net worth summary (assets - liabilities)
 
 Convert milliunits to dollars for easy reading.`,
-          },
-        },
-      ],
-    };
-  },
+					},
+				},
+			],
+		};
+	},
 };
 
 /**
  * PromptManager class that handles prompt registration and request handling
  */
 export class PromptManager {
-  private promptDefinitions: PromptDefinition[];
-  private promptHandlers: Record<string, PromptHandler>;
+	private promptDefinitions: PromptDefinition[];
+	private promptHandlers: Record<string, PromptHandler>;
 
-  constructor() {
-    this.promptDefinitions = [...defaultPromptDefinitions];
-    this.promptHandlers = { ...defaultPromptHandlers };
-  }
+	constructor() {
+		this.promptDefinitions = [...defaultPromptDefinitions];
+		this.promptHandlers = { ...defaultPromptHandlers };
+	}
 
-  /**
-   * Register a new prompt with its handler at runtime
-   */
-  registerPrompt(definition: PromptDefinition, handler: PromptHandler): void {
-    this.promptDefinitions.push(definition);
-    this.promptHandlers[definition.name] = handler;
-  }
+	/**
+	 * Register a new prompt with its handler at runtime
+	 */
+	registerPrompt(definition: PromptDefinition, handler: PromptHandler): void {
+		this.promptDefinitions.push(definition);
+		this.promptHandlers[definition.name] = handler;
+	}
 
-  /**
-   * Returns list of available prompts for MCP prompt listing
-   */
-  listPrompts(): { prompts: PromptDefinition[] } {
-    return {
-      prompts: this.promptDefinitions,
-    };
-  }
+	/**
+	 * Returns list of available prompts for MCP prompt listing
+	 */
+	listPrompts(): { prompts: PromptDefinition[] } {
+		return {
+			prompts: this.promptDefinitions,
+		};
+	}
 
-  /**
-   * Handles prompt get requests
-   */
-  async getPrompt(
-    name: string,
-    args: Record<string, unknown> | undefined,
-  ): Promise<PromptResponse> {
-    const handler = this.promptHandlers[name];
-    if (!handler) {
-      throw new Error(`Unknown prompt: ${name}`);
-    }
+	/**
+	 * Handles prompt get requests
+	 */
+	async getPrompt(
+		name: string,
+		args: Record<string, unknown> | undefined,
+	): Promise<PromptResponse> {
+		const handler = this.promptHandlers[name];
+		if (!handler) {
+			throw new Error(`Unknown prompt: ${name}`);
+		}
 
-    const definition = this.promptDefinitions.find((p) => p.name === name);
-    if (!definition) {
-      throw new Error(`Prompt definition not found: ${name}`);
-    }
+		const definition = this.promptDefinitions.find((p) => p.name === name);
+		if (!definition) {
+			throw new Error(`Prompt definition not found: ${name}`);
+		}
 
-    // Let handlers deal with missing arguments - they provide placeholders when args are missing
+		// Let handlers deal with missing arguments - they provide placeholders when args are missing
 
-    return await handler(name, args);
-  }
+		return await handler(name, args);
+	}
 }

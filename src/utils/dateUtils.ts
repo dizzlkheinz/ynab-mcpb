@@ -8,7 +8,7 @@
  * YNAB-specific business logic.
  */
 
-import { format, isValid, parse, subMonths } from 'date-fns';
+import { format, isValid, parse, subMonths } from "date-fns";
 
 /**
  * Formats a date as YYYY-MM-01 (YNAB month format)
@@ -16,7 +16,7 @@ import { format, isValid, parse, subMonths } from 'date-fns';
  * @returns Formatted date string in YYYY-MM-01 format
  */
 export function formatYNABMonth(date: Date): string {
-  return format(date, "yyyy-MM-'01'");
+	return format(date, "yyyy-MM-'01'");
 }
 
 /**
@@ -25,7 +25,7 @@ export function formatYNABMonth(date: Date): string {
  * @returns Formatted date string in YYYY-MM-DD format
  */
 export function formatISODate(date: Date): string {
-  return format(date, 'yyyy-MM-dd');
+	return format(date, "yyyy-MM-dd");
 }
 
 /**
@@ -33,7 +33,7 @@ export function formatISODate(date: Date): string {
  * @returns Current month formatted as YYYY-MM-01
  */
 export function getCurrentMonth(): string {
-  return formatYNABMonth(new Date());
+	return formatYNABMonth(new Date());
 }
 
 /**
@@ -41,7 +41,7 @@ export function getCurrentMonth(): string {
  * @returns Today's date formatted as YYYY-MM-DD
  */
 export function getToday(): string {
-  return formatISODate(new Date());
+	return formatISODate(new Date());
 }
 
 /**
@@ -50,13 +50,16 @@ export function getToday(): string {
  * @param startDate The starting date (defaults to current date)
  * @returns Array of month strings in YYYY-MM-01 format, ordered newest to oldest
  */
-export function getHistoricalMonths(monthCount: number, startDate?: Date): string[] {
-  const baseDate = startDate || new Date();
+export function getHistoricalMonths(
+	monthCount: number,
+	startDate?: Date,
+): string[] {
+	const baseDate = startDate || new Date();
 
-  return Array.from({ length: monthCount }, (_, i) => {
-    const date = subMonths(baseDate, i);
-    return formatYNABMonth(date);
-  });
+	return Array.from({ length: monthCount }, (_, i) => {
+		const date = subMonths(baseDate, i);
+		return formatYNABMonth(date);
+	});
 }
 
 /**
@@ -66,7 +69,7 @@ export function getHistoricalMonths(monthCount: number, startDate?: Date): strin
  * @returns New date with months subtracted
  */
 export function subtractMonths(date: Date, months: number): Date {
-  return subMonths(date, months);
+	return subMonths(date, months);
 }
 
 /**
@@ -75,11 +78,11 @@ export function subtractMonths(date: Date, months: number): Date {
  * @returns True if valid ISO date format
  */
 export function isValidISODate(dateString: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    return false;
-  }
-  const parsed = parse(dateString, 'yyyy-MM-dd', new Date());
-  return isValid(parsed);
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+		return false;
+	}
+	const parsed = parse(dateString, "yyyy-MM-dd", new Date());
+	return isValid(parsed);
 }
 
 /**
@@ -88,11 +91,11 @@ export function isValidISODate(dateString: string): boolean {
  * @returns True if valid YNAB month format
  */
 export function isValidYNABMonth(monthString: string): boolean {
-  if (!/^\d{4}-\d{2}-01$/.test(monthString)) {
-    return false;
-  }
-  const parsed = parse(monthString, "yyyy-MM-'01'", new Date());
-  return isValid(parsed);
+	if (!/^\d{4}-\d{2}-01$/.test(monthString)) {
+		return false;
+	}
+	const parsed = parse(monthString, "yyyy-MM-'01'", new Date());
+	return isValid(parsed);
 }
 
 /**
@@ -101,8 +104,8 @@ export function isValidYNABMonth(monthString: string): boolean {
  * @returns String in YYYY-MM-01 format
  */
 export function yearMonthToYNABMonth(yearMonth: string): string {
-  if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
-    throw new Error('Invalid year-month format. Expected YYYY-MM');
-  }
-  return `${yearMonth}-01`;
+	if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+		throw new Error("Invalid year-month format. Expected YYYY-MM");
+	}
+	return `${yearMonth}-01`;
 }

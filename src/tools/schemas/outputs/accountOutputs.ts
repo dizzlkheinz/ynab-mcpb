@@ -59,8 +59,8 @@
  * ```
  */
 
-import { z } from 'zod/v4';
-import { CacheMetadataSchema } from '../shared/commonOutputs.js';
+import { z } from "zod/v4";
+import { CacheMetadataSchema } from "../shared/commonOutputs.js";
 
 /**
  * Schema for an account object.
@@ -68,41 +68,47 @@ import { CacheMetadataSchema } from '../shared/commonOutputs.js';
  * Represents account data with balances in dollars (converted from YNAB milliunits).
  */
 export const AccountSchema = z.object({
-  /** Unique identifier for the account */
-  id: z.string().describe('Account ID'),
+	/** Unique identifier for the account */
+	id: z.string().describe("Account ID"),
 
-  /** Human-readable account name */
-  name: z.string().describe('Account name'),
+	/** Human-readable account name */
+	name: z.string().describe("Account name"),
 
-  /** Account type (checking, savings, creditCard, etc.) */
-  type: z.string().describe('Account type'),
+	/** Account type (checking, savings, creditCard, etc.) */
+	type: z.string().describe("Account type"),
 
-  /** Whether account is on-budget or tracking */
-  on_budget: z.boolean().describe('On-budget flag'),
+	/** Whether account is on-budget or tracking */
+	on_budget: z.boolean().describe("On-budget flag"),
 
-  /** Whether account is closed */
-  closed: z.boolean().describe('Closed flag'),
+	/** Whether account is closed */
+	closed: z.boolean().describe("Closed flag"),
 
-  /** Optional account note */
-  note: z.string().optional().describe('Account note'),
+	/** Optional account note */
+	note: z.string().optional().describe("Account note"),
 
-  /** Current account balance in dollars */
-  balance: z.number().describe('Account balance in dollars'),
+	/** Current account balance in dollars */
+	balance: z.number().describe("Account balance in dollars"),
 
-  /** Cleared balance in dollars */
-  cleared_balance: z.number().describe('Cleared balance in dollars'),
+	/** Cleared balance in dollars */
+	cleared_balance: z.number().describe("Cleared balance in dollars"),
 
-  /** Uncleared balance in dollars */
-  uncleared_balance: z.number().describe('Uncleared balance in dollars'),
+	/** Uncleared balance in dollars */
+	uncleared_balance: z.number().describe("Uncleared balance in dollars"),
 
-  /** Payee ID for transfers to this account */
-  transfer_payee_id: z.string().describe('Transfer payee ID'),
+	/** Payee ID for transfers to this account */
+	transfer_payee_id: z.string().describe("Transfer payee ID"),
 
-  /** Whether account is linked for direct import (optional) */
-  direct_import_linked: z.boolean().optional().describe('Direct import linked flag'),
+	/** Whether account is linked for direct import (optional) */
+	direct_import_linked: z
+		.boolean()
+		.optional()
+		.describe("Direct import linked flag"),
 
-  /** Whether direct import is in error state (optional) */
-  direct_import_in_error: z.boolean().optional().describe('Direct import error flag'),
+	/** Whether direct import is in error state (optional) */
+	direct_import_in_error: z
+		.boolean()
+		.optional()
+		.describe("Direct import error flag"),
 });
 
 /**
@@ -111,14 +117,14 @@ export const AccountSchema = z.object({
  * Returns all accounts for a budget with pagination and cache metadata.
  */
 export const ListAccountsOutputSchema = CacheMetadataSchema.extend({
-  /** Array of account objects */
-  accounts: z.array(AccountSchema).describe('List of accounts'),
+	/** Array of account objects */
+	accounts: z.array(AccountSchema).describe("List of accounts"),
 
-  /** Total number of accounts in budget */
-  total_count: z.number().int().describe('Total account count'),
+	/** Total number of accounts in budget */
+	total_count: z.number().int().describe("Total account count"),
 
-  /** Number of accounts returned in this response */
-  returned_count: z.number().int().describe('Returned account count'),
+	/** Number of accounts returned in this response */
+	returned_count: z.number().int().describe("Returned account count"),
 });
 
 /**
@@ -127,8 +133,8 @@ export const ListAccountsOutputSchema = CacheMetadataSchema.extend({
  * Returns a single account by ID with cache metadata.
  */
 export const GetAccountOutputSchema = CacheMetadataSchema.extend({
-  /** Single account object */
-  account: AccountSchema.describe('Account details'),
+	/** Single account object */
+	account: AccountSchema.describe("Account details"),
 });
 
 // Export inferred TypeScript types

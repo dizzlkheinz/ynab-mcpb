@@ -12,7 +12,7 @@
  * - Success response patterns: src/server/YNABMCPServer.ts (lines 456-460)
  */
 
-import { z } from 'zod/v4';
+import { z } from "zod/v4";
 
 /**
  * CacheMetadataSchema
@@ -37,15 +37,20 @@ import { z } from 'zod/v4';
  * ```
  */
 export const CacheMetadataSchema = z.object({
-  cached: z.boolean().optional().describe('Indicates if data was served from cache'),
-  cache_info: z
-    .string()
-    .optional()
-    .describe('Human-readable cache status message (e.g., "Cache hit", "Cache miss")'),
-  usedDelta: z
-    .boolean()
-    .optional()
-    .describe('Indicates if delta merge optimization was applied for budgets'),
+	cached: z
+		.boolean()
+		.optional()
+		.describe("Indicates if data was served from cache"),
+	cache_info: z
+		.string()
+		.optional()
+		.describe(
+			'Human-readable cache status message (e.g., "Cache hit", "Cache miss")',
+		),
+	usedDelta: z
+		.boolean()
+		.optional()
+		.describe("Indicates if delta merge optimization was applied for budgets"),
 });
 
 export type CacheMetadata = z.infer<typeof CacheMetadataSchema>;
@@ -70,8 +75,8 @@ export type CacheMetadata = z.infer<typeof CacheMetadataSchema>;
  * ```
  */
 export const SuccessResponseSchema = z.object({
-  success: z.boolean().describe('Indicates operation success'),
-  message: z.string().describe('Human-readable success message'),
+	success: z.boolean().describe("Indicates operation success"),
+	message: z.string().describe("Human-readable success message"),
 });
 
 export type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
@@ -101,10 +106,10 @@ export type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
  * ```
  */
 export const ConfirmationResponseSchema = SuccessResponseSchema.extend({
-  details: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe('Additional confirmation details as key-value pairs'),
+	details: z
+		.record(z.string(), z.unknown())
+		.optional()
+		.describe("Additional confirmation details as key-value pairs"),
 });
 
 export type ConfirmationResponse = z.infer<typeof ConfirmationResponseSchema>;
@@ -132,9 +137,12 @@ export type ConfirmationResponse = z.infer<typeof ConfirmationResponseSchema>;
  * ```
  */
 export const ErrorDetailsSchema = z.object({
-  error: z.string().describe('Error message'),
-  code: z.string().optional().describe('Error code for categorization'),
-  details: z.string().optional().describe('Additional error context or details'),
+	error: z.string().describe("Error message"),
+	code: z.string().optional().describe("Error code for categorization"),
+	details: z
+		.string()
+		.optional()
+		.describe("Additional error context or details"),
 });
 
 export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;

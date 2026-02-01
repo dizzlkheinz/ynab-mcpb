@@ -1,25 +1,29 @@
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type * as ynab from 'ynab';
-import { z } from 'zod/v4';
-import { CacheKeys } from '../server/cacheKeys.js';
-import { CACHE_TTLS, CacheManager, cacheManager } from '../server/cacheManager.js';
-import { responseFormatter } from '../server/responseFormatter.js';
-import { withToolErrorHandling } from '../types/index.js';
-import type { ToolFactory } from '../types/toolRegistration.js';
-import { createAdapters, createBudgetResolver } from './adapters.js';
-import type { DeltaFetcher } from './deltaFetcher.js';
-import { resolveDeltaFetcherArgs } from './deltaSupport.js';
-import { ToolAnnotationPresets } from './toolCategories.js';
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type * as ynab from "ynab";
+import { z } from "zod/v4";
+import { CacheKeys } from "../server/cacheKeys.js";
+import {
+	CACHE_TTLS,
+	CacheManager,
+	cacheManager,
+} from "../server/cacheManager.js";
+import { responseFormatter } from "../server/responseFormatter.js";
+import { withToolErrorHandling } from "../types/index.js";
+import type { ToolFactory } from "../types/toolRegistration.js";
+import { createAdapters, createBudgetResolver } from "./adapters.js";
+import type { DeltaFetcher } from "./deltaFetcher.js";
+import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
+import { ToolAnnotationPresets } from "./toolCategories.js";
 
 /**
  * Schema for ynab:list_payees tool parameters
  */
 export const ListPayeesSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    limit: z.number().int().positive().optional(),
-  })
-  .strict();
+	.object({
+		budget_id: z.string().min(1, "Budget ID is required"),
+		limit: z.number().int().positive().optional(),
+	})
+	.strict();
 
 export type ListPayeesParams = z.infer<typeof ListPayeesSchema>;
 
@@ -27,11 +31,11 @@ export type ListPayeesParams = z.infer<typeof ListPayeesSchema>;
  * Schema for ynab:get_payee tool parameters
  */
 export const GetPayeeSchema = z
-  .object({
-    budget_id: z.string().min(1, 'Budget ID is required'),
-    payee_id: z.string().min(1, 'Payee ID is required'),
-  })
-  .strict();
+	.object({
+		budget_id: z.string().min(1, "Budget ID is required"),
+		payee_id: z.string().min(1, "Payee ID is required"),
+	})
+	.strict();
 
 export type GetPayeeParams = z.infer<typeof GetPayeeSchema>;
 
@@ -40,61 +44,61 @@ export type GetPayeeParams = z.infer<typeof GetPayeeSchema>;
  * Lists all payees for a specific budget
  */
 export async function handleListPayees(
-  ynabAPI: ynab.API,
-  deltaFetcher: DeltaFetcher,
-  params: ListPayeesParams,
+	ynabAPI: ynab.API,
+	deltaFetcher: DeltaFetcher,
+	params: ListPayeesParams,
 ): Promise<CallToolResult>;
 export async function handleListPayees(
-  ynabAPI: ynab.API,
-  params: ListPayeesParams,
+	ynabAPI: ynab.API,
+	params: ListPayeesParams,
 ): Promise<CallToolResult>;
 export async function handleListPayees(
-  ynabAPI: ynab.API,
-  deltaFetcherOrParams: DeltaFetcher | ListPayeesParams,
-  maybeParams?: ListPayeesParams,
+	ynabAPI: ynab.API,
+	deltaFetcherOrParams: DeltaFetcher | ListPayeesParams,
+	maybeParams?: ListPayeesParams,
 ): Promise<CallToolResult> {
-  const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-    ynabAPI,
-    deltaFetcherOrParams,
-    maybeParams,
-  );
-  return await withToolErrorHandling(
-    async () => {
-      const result = await deltaFetcher.fetchPayees(params.budget_id);
-      let payees = result.data;
-      const wasCached = result.wasCached;
+	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
+		ynabAPI,
+		deltaFetcherOrParams,
+		maybeParams,
+	);
+	return await withToolErrorHandling(
+		async () => {
+			const result = await deltaFetcher.fetchPayees(params.budget_id);
+			let payees = result.data;
+			const wasCached = result.wasCached;
 
-      // Apply limit if specified
-      const totalCount = payees.length;
-      if (params.limit !== undefined) {
-        payees = payees.slice(0, params.limit);
-      }
+			// Apply limit if specified
+			const totalCount = payees.length;
+			if (params.limit !== undefined) {
+				payees = payees.slice(0, params.limit);
+			}
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: responseFormatter.format({
-              payees: payees.map((payee) => ({
-                id: payee.id,
-                name: payee.name,
-                transfer_account_id: payee.transfer_account_id,
-                deleted: payee.deleted,
-              })),
-              total_count: totalCount,
-              returned_count: payees.length,
-              cached: wasCached,
-              cache_info: wasCached
-                ? `Data retrieved from cache for improved performance${result.usedDelta ? ' (delta merge applied)' : ''}`
-                : 'Fresh data retrieved from YNAB API',
-            }),
-          },
-        ],
-      };
-    },
-    'ynab:list_payees',
-    'listing payees',
-  );
+			return {
+				content: [
+					{
+						type: "text",
+						text: responseFormatter.format({
+							payees: payees.map((payee) => ({
+								id: payee.id,
+								name: payee.name,
+								transfer_account_id: payee.transfer_account_id,
+								deleted: payee.deleted,
+							})),
+							total_count: totalCount,
+							returned_count: payees.length,
+							cached: wasCached,
+							cache_info: wasCached
+								? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`
+								: "Fresh data retrieved from YNAB API",
+						}),
+					},
+				],
+			};
+		},
+		"ynab:list_payees",
+		"listing payees",
+	);
 }
 
 /**
@@ -102,84 +106,87 @@ export async function handleListPayees(
  * Gets detailed information for a specific payee
  */
 export async function handleGetPayee(
-  ynabAPI: ynab.API,
-  params: GetPayeeParams,
+	ynabAPI: ynab.API,
+	params: GetPayeeParams,
 ): Promise<CallToolResult> {
-  return await withToolErrorHandling(
-    async () => {
-      // Use enhanced CacheManager wrap method
-      const cacheKey = CacheManager.generateKey(
-        CacheKeys.PAYEES,
-        'get',
-        params.budget_id,
-        params.payee_id,
-      );
-      const wasCached = cacheManager.has(cacheKey);
-      const payee = await cacheManager.wrap<ynab.Payee>(cacheKey, {
-        ttl: CACHE_TTLS.PAYEES,
-        loader: async () => {
-          const response = await ynabAPI.payees.getPayeeById(params.budget_id, params.payee_id);
-          return response.data.payee;
-        },
-      });
+	return await withToolErrorHandling(
+		async () => {
+			// Use enhanced CacheManager wrap method
+			const cacheKey = CacheManager.generateKey(
+				CacheKeys.PAYEES,
+				"get",
+				params.budget_id,
+				params.payee_id,
+			);
+			const wasCached = cacheManager.has(cacheKey);
+			const payee = await cacheManager.wrap<ynab.Payee>(cacheKey, {
+				ttl: CACHE_TTLS.PAYEES,
+				loader: async () => {
+					const response = await ynabAPI.payees.getPayeeById(
+						params.budget_id,
+						params.payee_id,
+					);
+					return response.data.payee;
+				},
+			});
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: responseFormatter.format({
-              payee: {
-                id: payee.id,
-                name: payee.name,
-                transfer_account_id: payee.transfer_account_id,
-                deleted: payee.deleted,
-              },
-              cached: wasCached,
-              cache_info: wasCached
-                ? 'Data retrieved from cache for improved performance'
-                : 'Fresh data retrieved from YNAB API',
-            }),
-          },
-        ],
-      };
-    },
-    'ynab:get_payee',
-    'getting payee details',
-  );
+			return {
+				content: [
+					{
+						type: "text",
+						text: responseFormatter.format({
+							payee: {
+								id: payee.id,
+								name: payee.name,
+								transfer_account_id: payee.transfer_account_id,
+								deleted: payee.deleted,
+							},
+							cached: wasCached,
+							cache_info: wasCached
+								? "Data retrieved from cache for improved performance"
+								: "Fresh data retrieved from YNAB API",
+						}),
+					},
+				],
+			};
+		},
+		"ynab:get_payee",
+		"getting payee details",
+	);
 }
 
 /**
  * Registers all payee-related tools with the registry.
  */
 export const registerPayeeTools: ToolFactory = (registry, context) => {
-  const { adapt, adaptWithDelta } = createAdapters(context);
-  const budgetResolver = createBudgetResolver(context);
+	const { adapt, adaptWithDelta } = createAdapters(context);
+	const budgetResolver = createBudgetResolver(context);
 
-  registry.register({
-    name: 'list_payees',
-    description: 'List all payees for a specific budget',
-    inputSchema: ListPayeesSchema,
-    handler: adaptWithDelta(handleListPayees),
-    defaultArgumentResolver: budgetResolver<z.infer<typeof ListPayeesSchema>>(),
-    metadata: {
-      annotations: {
-        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-        title: 'YNAB: List Payees',
-      },
-    },
-  });
+	registry.register({
+		name: "list_payees",
+		description: "List all payees for a specific budget",
+		inputSchema: ListPayeesSchema,
+		handler: adaptWithDelta(handleListPayees),
+		defaultArgumentResolver: budgetResolver<z.infer<typeof ListPayeesSchema>>(),
+		metadata: {
+			annotations: {
+				...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+				title: "YNAB: List Payees",
+			},
+		},
+	});
 
-  registry.register({
-    name: 'get_payee',
-    description: 'Get detailed information for a specific payee',
-    inputSchema: GetPayeeSchema,
-    handler: adapt(handleGetPayee),
-    defaultArgumentResolver: budgetResolver<z.infer<typeof GetPayeeSchema>>(),
-    metadata: {
-      annotations: {
-        ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
-        title: 'YNAB: Get Payee Details',
-      },
-    },
-  });
+	registry.register({
+		name: "get_payee",
+		description: "Get detailed information for a specific payee",
+		inputSchema: GetPayeeSchema,
+		handler: adapt(handleGetPayee),
+		defaultArgumentResolver: budgetResolver<z.infer<typeof GetPayeeSchema>>(),
+		metadata: {
+			annotations: {
+				...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+				title: "YNAB: Get Payee Details",
+			},
+		},
+	});
 };
