@@ -462,6 +462,10 @@ Optional (Output):
 - `YNAB_MCP_MINIFY_OUTPUT` (default: true) - Minify JSON responses
 - `YNAB_MCP_PRETTY_SPACES` (default: 2) - Spaces for pretty-print when not minified
 
+Optional (Delta):
+
+- `YNAB_MCP_ENABLE_DELTA` (default: `"true"`) - Enable delta request caching (`"true"` or `"false"`)
+
 Optional (Export):
 
 - `YNAB_EXPORT_PATH` - Directory for exported files (default: ~/Downloads or ~/Documents)

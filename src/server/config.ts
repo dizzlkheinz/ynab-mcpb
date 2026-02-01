@@ -24,6 +24,7 @@ const envSchema = z.object({
 		.string()
 		.uuid("YNAB_DEFAULT_BUDGET_ID must be a valid UUID")
 		.optional(),
+	YNAB_MCP_ENABLE_DELTA: z.enum(["true", "false"]).optional(),
 	MCP_PORT: z.coerce.number().int().positive().optional(),
 	LOG_LEVEL: z
 		.enum(["trace", "debug", "info", "warn", "error", "fatal"])
