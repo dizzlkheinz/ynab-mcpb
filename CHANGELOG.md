@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-02-02
+
 ### Changed
 
 - **MCP Tool Schemas** - Restored `outputSchema` registration for all tools with MCP-safe schema normalization

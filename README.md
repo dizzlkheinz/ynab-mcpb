@@ -14,6 +14,8 @@ Connect your YNAB budget to Claude Desktop (or any MCP client) and manage your f
 
 **Everything Else** — Check balances, create transactions, analyze spending, adjust budgets. Just ask.
 
+**MCP Compatibility** — Updated for MCP clients expecting object-root tool schemas and structured output metadata.
+
 ## Quick Start
 
 ### Step 1: Get Your YNAB Access Token
