@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-02-01
+
+### Changed
+
+- **Dependencies** - Updated all dependencies including major version bumps
+  - Biome 1.9 → 2.3 (migrated config, fixed new lint rules)
+  - Vitest 3.2 → 4.0 (fixed mock constructors for Vitest 4 compatibility)
+  - Zod 4.1 → 4.3 (refactored schema to support Zod 4 `.pick()` restrictions)
+  - esbuild 0.25 → 0.27, @types/node 24 → 25
+  - MCP SDK 1.25.1 → 1.25.3, TypeScript 5.9.2 → 5.9.3
+  - dotenv, tsx, @types/papaparse patch updates
+
+### Fixed
+
+- **Security** - Resolved lodash prototype pollution and qs DoS vulnerabilities
+
 ## [0.20.0] - 2026-02-01
 
 ### Fixed
