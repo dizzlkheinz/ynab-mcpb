@@ -25,6 +25,13 @@ import { registerMonthTools } from "../tools/monthTools.js";
 import { registerPayeeTools } from "../tools/payeeTools.js";
 import { registerReconciliationTools } from "../tools/reconciliation/index.js";
 import { emptyObjectSchema } from "../tools/schemas/common.js";
+import {
+	ClearCacheOutputSchema,
+	DiagnosticInfoOutputSchema,
+	GetDefaultBudgetOutputSchema,
+	SetDefaultBudgetOutputSchema,
+	SetOutputFormatOutputSchema,
+} from "../tools/schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "../tools/toolCategories.js";
 import { registerTransactionTools } from "../tools/transactionTools.js";
 import { registerUtilityTools } from "../tools/utilityTools.js";
@@ -452,6 +459,7 @@ export class YNABMCPServer {
 			name: "set_default_budget",
 			description: "Set the default budget for subsequent operations",
 			inputSchema: setDefaultBudgetSchema,
+			outputSchema: SetDefaultBudgetOutputSchema,
 			handler: async ({ input }) => {
 				const { budget_id } = input;
 				await this.ynabAPI.budgets.getBudgetById(budget_id);
@@ -488,6 +496,7 @@ export class YNABMCPServer {
 			name: "get_default_budget",
 			description: "Get the currently set default budget",
 			inputSchema: emptyObjectSchema,
+			outputSchema: GetDefaultBudgetOutputSchema,
 			handler: async () => {
 				try {
 					const defaultBudget = this.getDefaultBudget();
@@ -514,10 +523,10 @@ export class YNABMCPServer {
 			},
 			metadata: {
 				annotations: {
-					// Intentionally categorized as UTILITY_LOCAL (not READ_ONLY_EXTERNAL) because
+					// Intentionally categorized as local read-only (not READ_ONLY_EXTERNAL) because
 					// this tool only reads local server state without making any YNAB API calls.
 					// Compare with set_default_budget which calls ynabAPI.budgets.getBudgetById().
-					...ToolAnnotationPresets.UTILITY_LOCAL,
+					...ToolAnnotationPresets.UTILITY_LOCAL_READ_ONLY,
 					title: "YNAB: Get Default Budget",
 				},
 			},
@@ -528,12 +537,13 @@ export class YNABMCPServer {
 			description:
 				"Get comprehensive diagnostic information about the MCP server",
 			inputSchema: diagnosticInfoSchema,
+			outputSchema: DiagnosticInfoOutputSchema,
 			handler: async ({ input }) => {
 				return this.diagnosticManager.collectDiagnostics(input);
 			},
 			metadata: {
 				annotations: {
-					...ToolAnnotationPresets.UTILITY_LOCAL,
+					...ToolAnnotationPresets.UTILITY_LOCAL_READ_ONLY,
 					title: "YNAB: Diagnostic Information",
 				},
 			},
@@ -543,6 +553,7 @@ export class YNABMCPServer {
 			name: "clear_cache",
 			description: "Clear the in-memory cache (safe, no YNAB data is modified)",
 			inputSchema: emptyObjectSchema,
+			outputSchema: ClearCacheOutputSchema,
 			handler: async () => {
 				cacheManager.clear();
 				return {
@@ -553,7 +564,7 @@ export class YNABMCPServer {
 			},
 			metadata: {
 				annotations: {
-					...ToolAnnotationPresets.UTILITY_LOCAL,
+					...ToolAnnotationPresets.UTILITY_LOCAL_MUTATION,
 					title: "YNAB: Clear Cache",
 				},
 			},
@@ -564,6 +575,7 @@ export class YNABMCPServer {
 			description:
 				"Configure default JSON output formatting (minify or pretty spaces)",
 			inputSchema: setOutputFormatSchema,
+			outputSchema: SetOutputFormatOutputSchema,
 			handler: async ({ input }) => {
 				const options: { defaultMinify?: boolean; prettySpaces?: number } = {};
 				if (typeof input.default_minify === "boolean") {
@@ -605,7 +617,7 @@ export class YNABMCPServer {
 			},
 			metadata: {
 				annotations: {
-					...ToolAnnotationPresets.UTILITY_LOCAL,
+					...ToolAnnotationPresets.UTILITY_LOCAL_MUTATION,
 					title: "YNAB: Set Output Format",
 				},
 			},

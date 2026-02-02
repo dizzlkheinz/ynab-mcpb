@@ -18,6 +18,14 @@ import {
 } from "../utils/amountUtils.js";
 import { createAdapters, createBudgetResolver } from "./adapters.js";
 import { resolveDeltaWriteArgs } from "./deltaSupport.js";
+import {
+	CreateReceiptSplitTransactionOutputSchema,
+	CreateTransactionOutputSchema,
+	CreateTransactionsOutputSchema,
+	DeleteTransactionOutputSchema,
+	UpdateTransactionOutputSchema,
+	UpdateTransactionsOutputSchema,
+} from "./schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
 
 import {
@@ -2018,6 +2026,7 @@ export function registerTransactionWriteTools(
 		name: "create_transaction",
 		description: "Create a new transaction in the specified budget and account",
 		inputSchema: CreateTransactionSchema,
+		outputSchema: CreateTransactionOutputSchema,
 		handler: adaptWrite(handleCreateTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionSchema>>(),
@@ -2034,6 +2043,7 @@ export function registerTransactionWriteTools(
 		description:
 			"Create multiple transactions in a single batch (1-100 items) with duplicate detection, dry-run validation, and automatic response size management with correlation metadata.",
 		inputSchema: CreateTransactionsSchema,
+		outputSchema: CreateTransactionsOutputSchema,
 		handler: adaptWrite(handleCreateTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionsSchema>>(),
@@ -2050,6 +2060,7 @@ export function registerTransactionWriteTools(
 		description:
 			"Create a split transaction from receipt items with proportional tax allocation",
 		inputSchema: CreateReceiptSplitTransactionSchema,
+		outputSchema: CreateReceiptSplitTransactionOutputSchema,
 		handler: adaptWrite(handleCreateReceiptSplitTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
@@ -2065,6 +2076,7 @@ export function registerTransactionWriteTools(
 		name: "update_transaction",
 		description: "Update an existing transaction",
 		inputSchema: UpdateTransactionSchema,
+		outputSchema: UpdateTransactionOutputSchema,
 		handler: adaptWrite(handleUpdateTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionSchema>>(),
@@ -2081,6 +2093,7 @@ export function registerTransactionWriteTools(
 		description:
 			"Update multiple transactions in a single batch (1-100 items) with dry-run validation, automatic cache invalidation, and response size management. Supports optional original_account_id and original_date metadata for efficient cache invalidation.",
 		inputSchema: UpdateTransactionsSchema,
+		outputSchema: UpdateTransactionsOutputSchema,
 		handler: adaptWrite(handleUpdateTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionsSchema>>(),
@@ -2096,6 +2109,7 @@ export function registerTransactionWriteTools(
 		name: "delete_transaction",
 		description: "Delete a transaction from the specified budget",
 		inputSchema: DeleteTransactionSchema,
+		outputSchema: DeleteTransactionOutputSchema,
 		handler: adaptWrite(handleDeleteTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof DeleteTransactionSchema>>(),

@@ -184,18 +184,22 @@ export class ToolRegistry {
 
 	listTools(): Tool[] {
 		return Array.from(this.tools.values()).map((tool) => {
-			const inputSchema =
+			const inputSchema = this.ensureRootObjectJsonSchema(
 				(tool.metadata?.inputJsonSchema as Tool["inputSchema"] | undefined) ??
-				(this.generateJsonSchema(tool.inputSchema) as Tool["inputSchema"]);
+					(this.generateJsonSchema(tool.inputSchema) as Tool["inputSchema"]),
+				"input",
+				tool.name,
+			) as Tool["inputSchema"];
 			const result: Tool = {
 				name: tool.name,
 				description: tool.description,
 				inputSchema,
 			};
 			if (tool.outputSchema) {
-				const outputSchema = this.generateJsonSchema(
-					tool.outputSchema,
+				const outputSchema = this.ensureRootObjectJsonSchema(
+					this.generateJsonSchema(tool.outputSchema, "output"),
 					"output",
+					tool.name,
 				) as Tool["outputSchema"];
 				result.outputSchema = outputSchema;
 			}
@@ -468,6 +472,36 @@ export class ToolRegistry {
 		}
 	}
 
+	private ensureRootObjectJsonSchema(
+		schema: Record<string, unknown>,
+		schemaKind: "input" | "output",
+		toolName: string,
+	): Record<string, unknown> {
+		const candidate = schema;
+		if (candidate["type"] === "object") {
+			return candidate;
+		}
+
+		const hasComposedRoot =
+			Array.isArray(candidate["anyOf"]) ||
+			Array.isArray(candidate["oneOf"]) ||
+			Array.isArray(candidate["allOf"]);
+		if (hasComposedRoot) {
+			return {
+				...candidate,
+				type: "object",
+			};
+		}
+
+		console.warn(
+			`Generated ${schemaKind} schema for tool '${toolName}' is not an object root; using permissive object fallback.`,
+		);
+		return {
+			type: "object",
+			additionalProperties: true,
+		};
+	}
+
 	/**
 	 * Validates handler output against the tool's output schema if present
 	 */
@@ -563,7 +597,24 @@ export class ToolRegistry {
 			);
 		}
 
-		// Validation passed, return original output
-		return output;
+		if (
+			typeof result.data !== "object" ||
+			result.data === null ||
+			Array.isArray(result.data)
+		) {
+			return this.deps.errorHandler.createValidationError(
+				`Output validation failed for ${toolName}`,
+				"Handler output schema must resolve to a JSON object for structuredContent",
+				[
+					"Ensure outputSchema root type is object",
+					"Return a JSON object from the tool handler",
+				],
+			);
+		}
+
+		return {
+			...output,
+			structuredContent: result.data as Record<string, unknown>,
+		};
 	}
 }

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **MCP Tool Schemas** - Restored `outputSchema` registration for all tools with MCP-safe schema normalization
+  - `tools/list` now enforces root object JSON schemas for both input and output definitions
+  - Output-schema-validated object responses now populate `structuredContent` automatically
+  - Added regression coverage for union/composed output schemas to prevent client tool-discovery breakage
+- **Tool Annotations** - Split local utility metadata into explicit read-only vs mutating presets
+  - `diagnostic_info` and `get_default_budget` remain read-only
+  - `clear_cache` and `set_output_format` are now correctly marked as mutating
+
 ## [0.20.1] - 2026-02-01
 
 ### Changed

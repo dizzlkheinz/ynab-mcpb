@@ -542,7 +542,8 @@ describe("ToolRegistry", () => {
 		const tool = registry.listTools().find((item) => item.name === "any_tool");
 		const schema = tool?.inputSchema as Record<string, unknown> | undefined;
 		expect(schema).toBeDefined();
-		expect(typeof schema?.$schema).toBe("string");
+		expect(schema?.type).toBe("object");
+		expect(schema?.additionalProperties).toBe(true);
 	});
 
 	it("supports empty registry listings", () => {
@@ -635,6 +636,47 @@ describe("ToolRegistry", () => {
 			expect(handler).toHaveBeenCalledTimes(1);
 			expect(result.content[0]?.text).toContain("success");
 			expect(result.content[0]?.text).toContain("test-id");
+			expect(result.structuredContent).toEqual({
+				success: true,
+				data: { id: "test-id", value: 42 },
+			});
+		});
+
+		it("normalizes union output schema roots so tools remain listable", () => {
+			const outputSchema = z.union([
+				z.object({
+					success: z.literal(true),
+					transaction_id: z.string(),
+				}),
+				z.object({
+					dry_run: z.literal(true),
+					request: z.record(z.string(), z.unknown()),
+				}),
+			]);
+
+			registry.register({
+				name: "union_output_tool",
+				description: "Union output schema",
+				inputSchema: z.object({ id: z.string() }),
+				outputSchema,
+				handler: vi.fn(async () =>
+					createResult(
+						JSON.stringify({
+							success: true,
+							transaction_id: "txn-1",
+						}),
+					),
+				),
+			});
+
+			const tools = registry.listTools();
+			const tool = tools.find((t) => t.name === "union_output_tool");
+			const schema = tool?.outputSchema as Record<string, unknown> | undefined;
+			expect(schema).toBeDefined();
+			expect(schema?.type).toBe("object");
+			expect(
+				Array.isArray(schema?.anyOf) || Array.isArray(schema?.oneOf),
+			).toBe(true);
 		});
 
 		it("rejects handler output that does not match output schema", async () => {

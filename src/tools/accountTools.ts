@@ -20,6 +20,11 @@ import {
 	resolveDeltaFetcherArgs,
 	resolveDeltaWriteArgs,
 } from "./deltaSupport.js";
+import {
+	CreateAccountOutputSchema,
+	GetAccountOutputSchema,
+	ListAccountsOutputSchema,
+} from "./schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
 
 /**
@@ -321,6 +326,7 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
 		name: "list_accounts",
 		description: "List all accounts for a specific budget",
 		inputSchema: ListAccountsSchema,
+		outputSchema: ListAccountsOutputSchema,
 		handler: adaptWithDelta(handleListAccounts),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof ListAccountsSchema>>(),
@@ -336,6 +342,7 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
 		name: "get_account",
 		description: "Get detailed information for a specific account",
 		inputSchema: GetAccountSchema,
+		outputSchema: GetAccountOutputSchema,
 		handler: adapt(handleGetAccount),
 		defaultArgumentResolver: budgetResolver<z.infer<typeof GetAccountSchema>>(),
 		metadata: {
@@ -350,6 +357,7 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
 		name: "create_account",
 		description: "Create a new account in the specified budget",
 		inputSchema: CreateAccountSchema,
+		outputSchema: CreateAccountOutputSchema,
 		handler: adaptWrite(handleCreateAccount),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateAccountSchema>>(),

@@ -20,6 +20,10 @@ import {
 import type { DeltaFetcher } from "../deltaFetcher.js";
 import { resolveDeltaFetcherArgs } from "../deltaSupport.js";
 import { buildReconciliationPayload } from "../reconcileAdapter.js";
+import {
+	CompareTransactionsOutputSchema,
+	ReconcileAccountOutputSchema,
+} from "../schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "../toolCategories.js";
 import { analyzeReconciliation } from "./analyzer.js";
 import {
@@ -523,6 +527,7 @@ export const registerReconciliationTools: ToolFactory = (registry, context) => {
 		description:
 			"Compare bank transactions from CSV with YNAB transactions to find missing entries",
 		inputSchema: CompareTransactionsSchema,
+		outputSchema: CompareTransactionsOutputSchema,
 		handler: adapt(handleCompareTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CompareTransactionsSchema>>(),
@@ -539,6 +544,7 @@ export const registerReconciliationTools: ToolFactory = (registry, context) => {
 		description:
 			"Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).",
 		inputSchema: ReconcileAccountSchema,
+		outputSchema: ReconcileAccountOutputSchema,
 		handler: adaptWithDeltaAndProgress(handleReconcileAccount),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof ReconcileAccountSchema>>(),

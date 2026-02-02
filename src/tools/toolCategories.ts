@@ -130,6 +130,34 @@ export const ToolAnnotationPresets = {
 	 * - idempotentHint: true - Deterministic operations with same inputs (or safe to repeat)
 	 * - openWorldHint: false - No external API calls, purely local operations
 	 */
+	UTILITY_LOCAL_READ_ONLY: {
+		readOnlyHint: true,
+		destructiveHint: false,
+		idempotentHint: true,
+		openWorldHint: false,
+	},
+
+	/**
+	 * Preset for local utility tools that mutate only local server state.
+	 *
+	 * Use this for local tools that do not call external APIs, but do modify
+	 * server-local state/configuration.
+	 *
+	 * Examples:
+	 * - clear_cache: Clears local in-memory cache entries
+	 * - set_output_format: Updates local response formatting defaults
+	 */
+	UTILITY_LOCAL_MUTATION: {
+		readOnlyHint: false,
+		destructiveHint: false,
+		idempotentHint: true,
+		openWorldHint: false,
+	},
+
+	/**
+	 * Backward-compatible alias for existing call sites.
+	 * Prefer explicit READ_ONLY or MUTATION presets for new tools.
+	 */
 	UTILITY_LOCAL: {
 		readOnlyHint: true,
 		destructiveHint: false,

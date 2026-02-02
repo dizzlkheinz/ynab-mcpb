@@ -19,6 +19,11 @@ import {
 	ExportTransactionsSchema,
 	handleExportTransactions,
 } from "./exportTransactions.js";
+import {
+	ExportTransactionsOutputSchema,
+	GetTransactionOutputSchema,
+	ListTransactionsOutputSchema,
+} from "./schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
 
 import type {
@@ -283,6 +288,7 @@ export function registerTransactionReadTools(
 		name: "list_transactions",
 		description: "List transactions for a budget with optional filtering",
 		inputSchema: ListTransactionsSchema,
+		outputSchema: ListTransactionsOutputSchema,
 		handler: adaptWithDelta(handleListTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof ListTransactionsSchema>>(),
@@ -299,6 +305,7 @@ export function registerTransactionReadTools(
 		description:
 			"Export all transactions to a JSON file with descriptive filename",
 		inputSchema: ExportTransactionsSchema,
+		outputSchema: ExportTransactionsOutputSchema,
 		handler: adapt(handleExportTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof ExportTransactionsSchema>>(),
@@ -314,6 +321,7 @@ export function registerTransactionReadTools(
 		name: "get_transaction",
 		description: "Get detailed information for a specific transaction",
 		inputSchema: GetTransactionSchema,
+		outputSchema: GetTransactionOutputSchema,
 		handler: adapt(handleGetTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof GetTransactionSchema>>(),

@@ -6,6 +6,7 @@ import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
 import { createAdapters } from "./adapters.js";
 import { emptyObjectSchema } from "./schemas/common.js";
+import { GetUserOutputSchema } from "./schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
 
 /**
@@ -53,6 +54,7 @@ export const registerUtilityTools: ToolFactory = (registry, context) => {
 		name: "get_user",
 		description: "Get information about the authenticated user",
 		inputSchema: emptyObjectSchema,
+		outputSchema: GetUserOutputSchema,
 		handler: adaptNoInput(handleGetUser),
 		metadata: {
 			annotations: {

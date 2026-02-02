@@ -20,6 +20,11 @@ import {
 	resolveDeltaFetcherArgs,
 	resolveDeltaWriteArgs,
 } from "./deltaSupport.js";
+import {
+	GetCategoryOutputSchema,
+	ListCategoriesOutputSchema,
+	UpdateCategoryOutputSchema,
+} from "./schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
 
 /**
@@ -371,6 +376,7 @@ export const registerCategoryTools: ToolFactory = (registry, context) => {
 		name: "list_categories",
 		description: "List all categories for a specific budget",
 		inputSchema: ListCategoriesSchema,
+		outputSchema: ListCategoriesOutputSchema,
 		handler: adaptWithDelta(handleListCategories),
 		defaultArgumentResolver: budgetResolver<ListCategoriesParams>(),
 		metadata: {
@@ -385,6 +391,7 @@ export const registerCategoryTools: ToolFactory = (registry, context) => {
 		name: "get_category",
 		description: "Get detailed information for a specific category",
 		inputSchema: GetCategorySchema,
+		outputSchema: GetCategoryOutputSchema,
 		handler: adapt(handleGetCategory),
 		defaultArgumentResolver: budgetResolver<GetCategoryParams>(),
 		metadata: {
@@ -400,6 +407,7 @@ export const registerCategoryTools: ToolFactory = (registry, context) => {
 		description:
 			"Update the budgeted amount for a category in the current month",
 		inputSchema: UpdateCategorySchema,
+		outputSchema: UpdateCategoryOutputSchema,
 		handler: adaptWrite(handleUpdateCategory),
 		defaultArgumentResolver: budgetResolver<UpdateCategoryParams>(),
 		metadata: {
