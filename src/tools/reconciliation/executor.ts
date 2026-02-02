@@ -242,7 +242,6 @@ export async function executeReconciliation(
 	let accountSnapshotDirty = false;
 	const statementTargetMilli = resolveStatementBalanceMilli(
 		analysis.balance_info,
-		params.statement_balance,
 	);
 	let clearedDeltaMilli = addMilli(
 		initialAccount.cleared_balance ?? 0,
@@ -878,7 +877,7 @@ export async function executeReconciliation(
 	}
 
 	// STEP 4: Mark all matched transactions as reconciled when balance aligns
-	if (balanceAligned && !params.dry_run) {
+	if (balanceAligned && !params.dry_run && params.auto_update_cleared_status) {
 		const transactionsToReconcile: ynab.SaveTransactionWithIdOrImportId[] = [];
 
 		for (const match of orderedAutoMatches) {
@@ -966,7 +965,7 @@ export async function executeReconciliation(
 			budgetId,
 			accountId,
 			statementDate: params.statement_date,
-			statementBalance: params.statement_balance,
+			statementBalanceMilli: statementTargetMilli,
 			analysis,
 		});
 	}
@@ -1178,10 +1177,10 @@ async function buildBalanceReconciliation(args: {
 	budgetId: string;
 	accountId: string;
 	statementDate: string;
-	statementBalance: number;
+	statementBalanceMilli: number;
 	analysis: ReconciliationAnalysis;
 }) {
-	const { ynabAPI, budgetId, accountId, statementDate, statementBalance } =
+	const { ynabAPI, budgetId, accountId, statementDate, statementBalanceMilli } =
 		args;
 	const ynabMilli = await clearedBalanceAsOf(
 		ynabAPI,
@@ -1189,7 +1188,7 @@ async function buildBalanceReconciliation(args: {
 		accountId,
 		statementDate,
 	);
-	const bankMilli = toMilli(statementBalance);
+	const bankMilli = statementBalanceMilli;
 	const discrepancy = bankMilli - ynabMilli;
 	const status =
 		discrepancy === 0 ? "PERFECTLY_RECONCILED" : "DISCREPANCY_FOUND";
@@ -1244,7 +1243,9 @@ async function clearedBalanceAsOf(
 	);
 	const asOf = new Date(dateISO);
 	const cleared = response.data.transactions.filter(
-		(txn) => txn.cleared === "cleared" && new Date(txn.date) <= asOf,
+		(txn) =>
+			(txn.cleared === "cleared" || txn.cleared === "reconciled") &&
+			new Date(txn.date) <= asOf,
 	);
 	const sum = cleared.reduce((acc, txn) => addMilli(acc, txn.amount ?? 0), 0);
 	return sum;
@@ -1359,12 +1360,7 @@ export type { ExecutionResult as LegacyReconciliationResult };
 
 function resolveStatementBalanceMilli(
 	balanceInfo: ReconciliationAnalysis["balance_info"],
-	provided?: number,
 ): number {
-	if (typeof provided === "number" && Number.isFinite(provided)) {
-		return toMilli(provided);
-	}
-
 	return (
 		extractMoneyValue(balanceInfo?.target_statement) ??
 		extractMoneyValue(balanceInfo?.current_cleared) ??

@@ -18,9 +18,11 @@ The `src/tools/` directory implements:
 src/tools/
 ├── budgetTools.ts              # Budget listing and retrieval
 ├── accountTools.ts             # Account management (list, get, create)
-├── transactionTools.ts         # Transaction CRUD operations (2,274 lines)
-├── transactionSchemas.ts       # Transaction Zod schemas (453 lines, v0.18.4)
-├── transactionUtils.ts         # Transaction utilities (536 lines, v0.18.4)
+├── transactionTools.ts         # Transaction facade (delegates to read/write modules)
+├── transactionReadTools.ts     # Transaction read handlers (list/get/export)
+├── transactionWriteTools.ts    # Transaction write handlers (create/update/delete)
+├── transactionSchemas.ts       # Transaction Zod schemas (v0.18.4 extraction)
+├── transactionUtils.ts         # Transaction utilities (v0.18.4 extraction)
 ├── categoryTools.ts            # Category management (list, get, update)
 ├── payeeTools.ts               # Payee listing and retrieval
 ├── monthTools.ts               # Monthly budget data (get, list)
@@ -150,7 +152,7 @@ export const BudgetOutputSchema = z.object({
 YNAB uses **milliunits** (1 dollar = 1000 milliunits). Always convert before API calls:
 
 ```typescript
-import { milliunitsToAmount, amountToMilliunits } from '../utils/money.js';
+import { milliunitsToAmount, amountToMilliunits } from '../utils/amountUtils.js';
 
 // User provides dollars, convert to milliunits for API
 const transaction = {
@@ -225,31 +227,38 @@ context.cacheManager.delete(`account:${accountId}`); // Account balance changed
 
 ## Transaction Tools (Special Note)
 
-In v0.18.4, transaction tools were refactored into 3 files for maintainability:
+Transaction tooling is split into focused modules for maintainability:
 
 ### File Breakdown
 
-1. **transactionSchemas.ts** (453 lines)
+1. **transactionSchemas.ts**
    - Zod schemas for all transaction operations
    - Input: `CreateTransactionSchema`, `UpdateTransactionSchema`, etc.
    - Shared types: `TransactionInput`, `BulkTransactionInput`
 
-2. **transactionUtils.ts** (536 lines)
+2. **transactionUtils.ts**
    - Transaction utilities and helpers
    - Receipt itemization logic (smart collapse for 5+ items)
    - Big ticket preservation (items >10% of total)
    - Tax allocation across line items
    - Date validation, amount validation
 
-3. **transactionTools.ts** (2,274 lines)
-   - Tool registration factory (`registerTransactionTools`)
-   - Handler implementations for all transaction operations
-   - Tools: `create_transaction`, `update_transaction`, `delete_transaction`, `create_transactions`, `create_receipt_split_transaction`, `list_transactions`, `get_transaction`, `export_transactions`, `update_transactions`
+3. **transactionReadTools.ts**
+   - Read-only handlers (`list_transactions`, `get_transaction`, `export_transactions`)
+   - Registration factory for read tools
+
+4. **transactionWriteTools.ts**
+   - Mutation handlers (`create_transaction`, `update_transaction`, `delete_transaction`, `create_transactions`, `create_receipt_split_transaction`, `update_transactions`)
+   - Registration factory for write tools
+
+5. **transactionTools.ts**
+   - Facade that calls read/write registration factories
+   - Backward-compatible re-exports
 
 ### Why Refactored
 
-- **Maintainability**: 3,263 lines in one file was unwieldy
-- **Separation of Concerns**: Schemas, utilities, and handlers are distinct responsibilities
+- **Maintainability**: Smaller, focused modules are easier to review and test
+- **Separation of Concerns**: Schemas, utilities, and read/write handlers are distinct responsibilities
 - **Testability**: Easier to unit test schemas and utilities separately
 
 ## Receipt Itemization (v0.18.2+)
@@ -576,8 +585,8 @@ metadata: {
 ### With Utils (`src/utils/`)
 
 - **Money Conversion**: `amountToMilliunits()`, `milliunitsToAmount()`
-- **Date Utilities**: `formatDate()`, `isValidDate()`
-- **Validation**: `validateAmount()`, `validateDate()`
+- **Date Utilities**: `formatISODate()`, `isValidISODate()`
+- **Validation**: `isValidISODate()` plus Zod input schemas
 
 ## Performance Considerations
 

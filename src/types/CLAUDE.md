@@ -38,12 +38,12 @@ export interface ToolContext {
   serverKnowledgeStore: ServerKnowledgeStore;
 
   // Default budget management
-  getDefaultBudgetId: () => string | null;
-  setDefaultBudgetId: (budgetId: string | null) => void;
+  getDefaultBudgetId: () => string | undefined;
+  setDefaultBudget: (budgetId: string) => void;
 
   // Cache and diagnostics
   cacheManager: CacheManager;
-  diagnosticsManager: DiagnosticsManager;
+  diagnosticManager?: DiagnosticManager;
 
   // Error handling
   errorHandler: ErrorHandler;
@@ -60,29 +60,34 @@ Type-safe handler function signatures ensure consistent tool implementations:
 
 ```typescript
 // Standard handler (read-only, with input)
-export type Handler<TInput, TOutput> = (
-  input: TInput,
-  context: ToolContext
-) => Promise<TOutput>;
+export type Handler<TInput extends Record<string, unknown>> = (
+  api: ynab.API,
+  params: TInput,
+  errorHandler?: ErrorHandler
+) => Promise<CallToolResult>;
 
 // Delta-aware handler (supports delta caching)
-export type DeltaHandler<TInput, TOutput> = (
-  input: TInput,
-  context: ToolContext,
-  serverKnowledge?: number
-) => Promise<{ data: TOutput; server_knowledge?: number }>;
+export type DeltaHandler<TInput extends Record<string, unknown>> = (
+  api: ynab.API,
+  deltaFetcher: DeltaFetcher,
+  params: TInput,
+  errorHandler?: ErrorHandler
+) => Promise<CallToolResult>;
 
-// Write handler (supports progress notifications)
-export type WriteHandler<TInput, TOutput> = (
-  input: TInput,
-  context: ToolContext,
-  sendProgress?: ProgressCallback
-) => Promise<TOutput>;
+// Write handler (updates delta cache and server knowledge)
+export type WriteHandler<TInput extends Record<string, unknown>> = (
+  api: ynab.API,
+  deltaCache: DeltaCache,
+  serverKnowledgeStore: ServerKnowledgeStore,
+  params: TInput,
+  errorHandler?: ErrorHandler
+) => Promise<CallToolResult>;
 
 // No-input handler (e.g., list_budgets, get_user)
-export type NoInputHandler<TOutput> = (
-  context: ToolContext
-) => Promise<TOutput>;
+export type NoInputHandler = (
+  api: ynab.API,
+  errorHandler?: ErrorHandler
+) => Promise<CallToolResult>;
 ```
 
 **Why Critical**: Ensures type safety across all tool handlers. TypeScript catches signature mismatches at compile time.
@@ -249,28 +254,30 @@ When adding a new handler pattern:
 
 1. **Define type** in `toolRegistration.ts`:
    ```typescript
-   export type MyNewHandler<TInput, TOutput> = (
-     input: TInput,
-     context: ToolContext,
-     myNewParam: MyType
-   ) => Promise<TOutput>;
+   export type MyNewHandler<TInput extends Record<string, unknown>> = (
+     api: ynab.API,
+     params: TInput,
+     myNewParam: MyType,
+     errorHandler?: ErrorHandler
+   ) => Promise<CallToolResult>;
    ```
 
-2. **Create adapter** in `src/tools/adapters.ts`:
+2. **Create adapter helper** in `src/tools/adapters.ts`:
    ```typescript
-   export function adaptMyNew<TInput, TOutput>(
-     handler: MyNewHandler<TInput, TOutput>,
-     context: ToolContext
-   ): (input: TInput, myNewParam: MyType) => Promise<TOutput> {
-     return async (input, myNewParam) => handler(input, context, myNewParam);
-   }
+   adaptMyNew:
+     <TInput extends Record<string, unknown>>(
+       handler: MyNewHandler<TInput>,
+       myNewParam: MyType
+     ) =>
+     async ({ input }: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
+       handler(ynabAPI, input, myNewParam, errorHandler),
    ```
 
 3. **Use in tool registration**:
    ```typescript
    registry.register({
      name: 'my_tool',
-     handler: adaptMyNew(handleMyTool, context),
+     handler: adaptMyNew(handleMyTool, myNewParam),
    });
    ```
 
@@ -400,11 +407,12 @@ import type { CacheManager } from '../server/cacheManager.js';
 // BAD (missing context)
 async function handleMyTool(input: MyInput): Promise<MyOutput>
 
-// GOOD (matches Handler<TInput, TOutput>)
+// GOOD (matches Handler<TInput>)
 async function handleMyTool(
-  input: MyInput,
-  context: ToolContext
-): Promise<MyOutput>
+  api: ynab.API,
+  params: MyInput,
+  errorHandler?: ErrorHandler
+): Promise<CallToolResult>
 ```
 
 ### 4. Missing Error Context

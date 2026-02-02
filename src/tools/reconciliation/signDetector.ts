@@ -27,15 +27,15 @@ interface SignMatch {
  *
  * @param bankTransactions - Raw bank transactions from CSV
  * @param ynabTransactions - Normalized YNAB transactions
- * @returns true if bank amounts should be inverted, false otherwise
+ * @returns true if bank amounts should be inverted, false if not, null if insufficient evidence
  */
 export function detectSignInversion(
 	bankTransactions: BankTransaction[],
 	ynabTransactions: NormalizedYNABTransaction[],
-): boolean {
+): boolean | null {
 	// Edge cases: empty lists
 	if (bankTransactions.length === 0 || ynabTransactions.length === 0) {
-		return false; // Conservative default: don't invert
+		return null; // Insufficient evidence
 	}
 
 	// Sample up to 20 transactions for performance
@@ -54,7 +54,7 @@ export function detectSignInversion(
 
 	// Need at least 1 match to make a determination
 	if (matches.length === 0) {
-		return false; // Conservative default: don't invert
+		return null; // Insufficient evidence
 	}
 
 	// Count how many matches have opposite signs

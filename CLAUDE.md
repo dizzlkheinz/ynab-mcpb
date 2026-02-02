@@ -104,7 +104,9 @@ Tools are organized by domain with some using modular sub-directories:
 
 - **budgetTools.ts** - Budget listing and retrieval
 - **accountTools.ts** - Account management
-- **transactionTools.ts** - Transaction CRUD operations (v0.18.4: refactored into 3 files)
+- **transactionTools.ts** - Transaction tool facade (registration + compatibility re-exports)
+- **transactionReadTools.ts** - Read-only transaction handlers (list/get/export)
+- **transactionWriteTools.ts** - Write transaction handlers (create/update/delete)
 - **transactionSchemas.ts** - Transaction Zod schemas (extracted v0.18.4, 453 lines)
 - **transactionUtils.ts** - Transaction utilities and helpers (extracted v0.18.4, 536 lines)
 - **categoryTools.ts** - Category management
@@ -407,7 +409,7 @@ YNAB uses **milliunits** internally (1 dollar = 1000 milliunits):
 
 ```typescript
 // Converting amounts
-import { milliunitsToAmount, amountToMilliunits } from './utils/money.js';
+import { milliunitsToAmount, amountToMilliunits } from './utils/amountUtils.js';
 
 const dollars = milliunitsToAmount(25500); // 25.50
 const milliunits = amountToMilliunits(25.5); // 25500

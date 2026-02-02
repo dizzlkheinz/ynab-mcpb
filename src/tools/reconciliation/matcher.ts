@@ -191,21 +191,9 @@ function calculateScores(
 	ynabTxn: NormalizedYNABTransaction,
 	config: MatchingConfig,
 ): MatchCandidate["scores"] {
-	// Amount score - now using INTEGER comparison (milliunits)
+	// Amount score - exact match only (candidates outside tolerance already filtered)
 	const amountDiff = Math.abs(bankTxn.amount - ynabTxn.amount);
-	let amountScore: number;
-
-	if (amountDiff === 0) {
-		// Exact integer match - no floating point issues!
-		amountScore = 100;
-	} else if (amountDiff <= config.amountToleranceMilliunits) {
-		amountScore = 95;
-	} else if (amountDiff <= 1000) {
-		// Within $1
-		amountScore = 80 - (amountDiff / 1000) * 20;
-	} else {
-		amountScore = Math.max(0, 60 - (amountDiff / 1000) * 5);
-	}
+	const amountScore = amountDiff === 0 ? 100 : 95;
 
 	// Date score
 	const bankDate = new Date(bankTxn.date);

@@ -370,15 +370,17 @@ export async function handleReconcileAccount(
 					normalizedYNAB,
 				);
 
-				if (needsInversion !== finalInvertAmounts) {
-					narrativeNotes.push(
-						needsInversion
-							? "Detected bank CSV amounts opposite YNAB; inverting bank amounts for matching."
-							: "Detected bank CSV amounts already align with YNAB; using CSV amounts as-is.",
-					);
-				}
+				if (needsInversion !== null) {
+					if (needsInversion !== finalInvertAmounts) {
+						narrativeNotes.push(
+							needsInversion
+								? "Detected bank CSV amounts opposite YNAB; inverting bank amounts for matching."
+								: "Detected bank CSV amounts already align with YNAB; using CSV amounts as-is.",
+						);
+					}
 
-				finalInvertAmounts = needsInversion;
+					finalInvertAmounts = needsInversion;
+				}
 			}
 
 			const parseResult =

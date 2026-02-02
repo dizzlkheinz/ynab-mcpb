@@ -370,11 +370,19 @@ function formatExecutionSection(execution: LegacyReconciliationResult): string {
 	}
 
 	lines.push("");
+	const totalChanges =
+		summary.transactions_created +
+		summary.transactions_updated +
+		summary.dates_adjusted;
 	if (summary.dry_run) {
 		lines.push("NOTE: Dry run only - no YNAB changes were applied.");
-	} else {
+	} else if (totalChanges > 0) {
 		lines.push(
 			"Changes applied to YNAB. Review structured output for action details.",
+		);
+	} else {
+		lines.push(
+			"No changes were needed. All transactions are already up to date.",
 		);
 	}
 
@@ -394,7 +402,17 @@ function formatRecommendationsSection(
 
 	// If we have execution results, recommendations are already shown
 	if (execution && !execution.summary.dry_run) {
-		lines.push("All recommended actions have been applied.");
+		const totalChanges =
+			execution.summary.transactions_created +
+			execution.summary.transactions_updated +
+			execution.summary.dates_adjusted;
+		if (totalChanges > 0) {
+			lines.push("All recommended actions have been applied.");
+		} else {
+			lines.push(
+				"No actions were needed. Transactions are already reconciled.",
+			);
+		}
 		return lines.join("\n");
 	}
 

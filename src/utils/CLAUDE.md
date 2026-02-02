@@ -7,7 +7,7 @@ This directory contains pure utility functions for common operations like money 
 The `src/utils/` directory provides:
 
 1. **Money Conversion** - Convert between dollars and YNAB milliunits (CRITICAL)
-2. **Date Utilities** - Format, validate, and parse dates
+2. **Date Utilities** - Format and validate ISO dates
 3. **Amount Validation** - Validate monetary amounts
 4. **Error Classes** - Custom error types with context
 5. **Pure Functions** - No side effects, easy to test
@@ -16,9 +16,9 @@ The `src/utils/` directory provides:
 
 | File | Responsibility | Lines | Critical |
 |------|---------------|-------|----------|
-| **money.ts** | Milliunits ↔ dollars conversion (CRITICAL!) | ~100 | CRITICAL |
-| **dateUtils.ts** | Date formatting, validation, parsing | ~150 | HIGH |
-| **amountUtils.ts** | Amount validation and utilities | ~100 | MEDIUM |
+| **amountUtils.ts** | Dollar ↔ milliunit conversion and amount formatting (CRITICAL!) | ~50 | CRITICAL |
+| **money.ts** | Currency-aware money helpers (`toMilli`, `fromMilli`, `formatMoney`) | ~150 | HIGH |
+| **dateUtils.ts** | ISO/YNAB month formatting and validation | ~100 | HIGH |
 | **baseError.ts** | Base error class for custom errors | ~50 | HIGH |
 | **errors.ts** | Custom error classes and utilities | ~200 | HIGH |
 | **validationError.ts** | Validation-specific error handling | ~100 | MEDIUM |
@@ -32,7 +32,7 @@ The `src/utils/` directory provides:
 This is the **most critical** utility in the entire codebase. Getting this wrong means amounts are 1000x off.
 
 ```typescript
-// money.ts
+// amountUtils.ts
 export function amountToMilliunits(dollars: number): number {
   return Math.round(dollars * 1000);
 }
@@ -84,21 +84,14 @@ YNAB requires ISO date format: `YYYY-MM-DD`
 
 ```typescript
 // dateUtils.ts
-export function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0]; // "2025-01-31"
+export function formatISODate(date: Date): string {
+  return format(date, 'yyyy-MM-dd'); // "2025-01-31"
 }
 
-export function isValidDate(dateString: string): boolean {
-  const regex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!regex.test(dateString)) return false;
-
-  const date = new Date(dateString);
-  return !isNaN(date.getTime());
-}
-
-export function parseDate(dateString: string): Date | null {
-  if (!isValidDate(dateString)) return null;
-  return new Date(dateString);
+export function isValidISODate(dateString: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false;
+  const parsed = parse(dateString, 'yyyy-MM-dd', new Date());
+  return isValid(parsed);
 }
 ```
 
@@ -145,14 +138,14 @@ All utility functions are **pure**: same input → same output, no side effects.
 
 ```typescript
 // GOOD: Pure function
-export function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
+export function formatISODate(date: Date): string {
+  return format(date, 'yyyy-MM-dd');
 }
 
 // BAD: Impure function (mutates input)
-export function formatDateImpure(date: Date): string {
+export function formatISODateImpure(date: Date): string {
   date.setHours(0, 0, 0, 0); // Mutation!
-  return date.toISOString().split('T')[0];
+  return format(date, 'yyyy-MM-dd');
 }
 
 // BAD: Impure function (depends on external state)
@@ -237,15 +230,17 @@ When adding date-related utilities:
 
 1. **Use ISO format** - `YYYY-MM-DD`
 2. **Use `Date.UTC()`** for timezone safety
-3. **Validate inputs** - Use `isValidDate()`
+3. **Validate inputs** - Use `isValidISODate()`
 4. **Add tests** - Edge cases, timezone boundaries, leap years
 
 Example:
 
 ```typescript
 export function addDays(dateString: string, days: number): string {
-  const date = parseDate(dateString);
-  if (!date) throw new ValidationError('Invalid date', { dateString });
+  if (!isValidISODate(dateString)) {
+    throw new ValidationError('Invalid date', { dateString });
+  }
+  const date = new Date(`${dateString}T00:00:00Z`);
 
   // Use UTC to avoid timezone issues
   const utcDate = new Date(
@@ -253,7 +248,7 @@ export function addDays(dateString: string, days: number): string {
   );
   utcDate.setUTCDate(utcDate.getUTCDate() + days);
 
-  return formatDate(utcDate);
+  return formatISODate(utcDate);
 }
 ```
 
@@ -323,21 +318,21 @@ describe('milliunitsToAmount', () => {
 ### Date Utility Tests
 
 ```typescript
-describe('formatDate', () => {
+describe('formatISODate', () => {
   it('should format date as ISO string', () => {
     const date = new Date('2025-01-31T12:00:00Z');
-    expect(formatDate(date)).toBe('2025-01-31');
+    expect(formatISODate(date)).toBe('2025-01-31');
   });
 });
 
-describe('isValidDate', () => {
+describe('isValidISODate', () => {
   it('should accept valid ISO dates', () => {
-    expect(isValidDate('2025-01-31')).toBe(true);
+    expect(isValidISODate('2025-01-31')).toBe(true);
   });
 
   it('should reject invalid dates', () => {
-    expect(isValidDate('2025-02-30')).toBe(false); // Feb 30 doesn't exist
-    expect(isValidDate('01/31/2025')).toBe(false); // Wrong format
+    expect(isValidISODate('2025-02-30')).toBe(false); // Feb 30 doesn't exist
+    expect(isValidISODate('01/31/2025')).toBe(false); // Wrong format
   });
 });
 ```
@@ -478,7 +473,7 @@ const time2 = Date.UTC(
 ### With Tools (`src/tools/`)
 
 - **Money Conversion**: All transaction tools use `amountToMilliunits`/`milliunitsToAmount`
-- **Date Formatting**: All date fields use `formatDate`
+- **Date Formatting**: All date fields use `formatISODate`
 - **Validation**: Input validation before API calls
 
 ### With Server (`src/server/`)

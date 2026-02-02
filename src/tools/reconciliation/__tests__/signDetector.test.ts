@@ -183,19 +183,19 @@ describe("detectSignInversion", () => {
 
 		const result = detectSignInversion(bankTransactions, ynabTransactions);
 
-		// Conservative default: don't invert if we can't determine
-		expect(result).toBe(false);
+		// Insufficient evidence: return null when no matches found
+		expect(result).toBeNull();
 	});
 
 	it("handles empty transaction lists", () => {
 		const result1 = detectSignInversion([], []);
-		expect(result1).toBe(false);
+		expect(result1).toBeNull();
 
 		const bankTransactions: BankTransaction[] = [
 			{ id: "1", date: "2025-11-20", amount: 10000, payee: "Store" },
 		];
 		const result2 = detectSignInversion(bankTransactions, []);
-		expect(result2).toBe(false);
+		expect(result2).toBeNull();
 
 		const ynabTransactions: NormalizedYNABTransaction[] = [
 			{
@@ -209,6 +209,6 @@ describe("detectSignInversion", () => {
 			},
 		];
 		const result3 = detectSignInversion([], ynabTransactions);
-		expect(result3).toBe(false);
+		expect(result3).toBeNull();
 	});
 });

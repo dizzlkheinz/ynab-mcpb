@@ -18,17 +18,17 @@ The `src/tools/schemas/` directory provides:
 src/tools/schemas/
 ├── common.ts               # Shared schemas (emptyObject, looseObject)
 └── outputs/                # Output validation schemas
-    ├── budgetOutput.ts     # Budget response schemas
-    ├── accountOutput.ts    # Account response schemas
-    ├── transactionOutput.ts # Transaction response schemas
-    ├── categoryOutput.ts   # Category response schemas
-    ├── payeeOutput.ts      # Payee response schemas
-    ├── monthOutput.ts      # Month response schemas
-    ├── userOutput.ts       # User response schemas
-    ├── reconcileOutput.ts  # Reconciliation response schemas
-    ├── compareOutput.ts    # Comparison response schemas
-    ├── exportOutput.ts     # Export response schemas
-    └── utilityOutput.ts    # Utility response schemas
+    ├── budgetOutputs.ts              # Budget response schemas
+    ├── accountOutputs.ts             # Account response schemas
+    ├── transactionOutputs.ts         # Transaction read response schemas
+    ├── transactionMutationOutputs.ts # Transaction mutation response schemas
+    ├── categoryOutputs.ts            # Category response schemas
+    ├── payeeOutputs.ts               # Payee response schemas
+    ├── monthOutputs.ts               # Month response schemas
+    ├── utilityOutputs.ts             # Utility response schemas
+    ├── reconciliationOutputs.ts      # Reconciliation response schemas
+    ├── comparisonOutputs.ts          # Comparison response schemas
+    └── index.ts                      # Central export surface
 ```
 
 ## Key Files & Responsibilities
@@ -84,15 +84,12 @@ export const emptyObjectSchema = z.object({}).strict();
 
 // Loose object schema (for passthrough scenarios)
 export const looseObjectSchema = z.object({}).passthrough();
-
-// Optional budget_id field (used across many tools)
-export const budgetIdSchema = z.string().optional();
 ```
 
 **Usage**:
 
 ```typescript
-import { emptyObjectSchema, budgetIdSchema } from './schemas/common.js';
+import { emptyObjectSchema } from './schemas/common.js';
 
 // Tool with no input
 const ListBudgetsSchema = emptyObjectSchema;
@@ -100,7 +97,7 @@ const ListBudgetsSchema = emptyObjectSchema;
 // Tool with budget_id
 const GetBudgetSchema = z
   .object({
-    budget_id: budgetIdSchema,
+    budget_id: z.string().optional(),
   })
   .strict();
 ```
@@ -170,13 +167,13 @@ const ReconcileSchema = z
 Output schemas are organized by domain in the `outputs/` directory:
 
 ```typescript
-// outputs/transactionOutput.ts
+// outputs/transactionOutputs.ts
 import { z } from 'zod';
 
-export const TransactionOutputSchema = z.object({
+export const TransactionSchema = z.object({
   id: z.string(),
   date: z.string(),
-  amount: z.number(), // Milliunits!
+  amount: z.number(), // Dollars
   memo: z.string().nullable(),
   cleared: z.enum(['uncleared', 'cleared', 'reconciled']),
   approved: z.boolean(),
@@ -189,7 +186,7 @@ export const TransactionOutputSchema = z.object({
   deleted: z.boolean(),
 });
 
-export type TransactionOutput = z.infer<typeof TransactionOutputSchema>;
+export type Transaction = z.infer<typeof TransactionSchema>;
 ```
 
 **Why Important**: Validates API responses, catches unexpected data structures.
@@ -271,7 +268,7 @@ When adding validation for tool output:
 
 1. **Create schema** in `outputs/`:
    ```typescript
-   // outputs/myOutput.ts
+   // outputs/myOutputs.ts
    import { z } from 'zod';
 
    export const MyOutputSchema = z.object({
@@ -284,7 +281,7 @@ When adding validation for tool output:
 
 2. **Use in handler**:
    ```typescript
-   import { MyOutputSchema, type MyOutput } from './schemas/outputs/myOutput.js';
+   import { MyOutputSchema, type MyOutput } from './schemas/outputs/myOutputs.js';
 
    async function handleMyTool(input: MyInput): Promise<MyOutput> {
      const data = await fetchData();

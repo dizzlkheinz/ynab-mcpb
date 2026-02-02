@@ -711,10 +711,8 @@ function parseAmount(str: string): {
 		cleaned = cleaned.replace(/\./g, "").replace(",", ".");
 	}
 
-	// Handle thousands separator: 1,234.56 → 1234.56
-	if (cleaned.includes(".")) {
-		cleaned = cleaned.replace(/,/g, "");
-	}
+	// Handle thousands separator: 1,234.56 or 1,234 → 1234.56 or 1234
+	cleaned = cleaned.replace(/,(\d{3})/g, "$1");
 
 	const dollars = Number.parseFloat(cleaned);
 	if (!Number.isFinite(dollars)) {

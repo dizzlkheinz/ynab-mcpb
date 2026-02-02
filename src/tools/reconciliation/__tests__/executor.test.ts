@@ -896,7 +896,7 @@ describe("executeReconciliation - bulk create mode", () => {
 	});
 
 	it("simulates bulk preview during dry-run mode", async () => {
-		const analysis = buildBulkAnalysis(5, 9);
+		const analysis = buildBulkAnalysis(5, 100);
 		const params = buildBulkParams(analysis.summary.target_statement_balance, {
 			dry_run: true,
 		});
