@@ -8,9 +8,9 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { BudgetResolver } from "../server/budgetResolver.js";
 import {
-	type ErrorHandler,
 	handleToolError as _handleToolError,
 	withToolErrorHandling as _withToolErrorHandling,
+	type ErrorHandler,
 } from "../server/errorHandler.js";
 import type {
 	DefaultArgumentResolver,

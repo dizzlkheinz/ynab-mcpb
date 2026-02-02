@@ -12,9 +12,9 @@ import {
 import { cacheManager } from "../../server/cacheManager.js";
 import { responseFormatter } from "../../server/responseFormatter.js";
 import { AuthenticationError, ValidationError } from "../../types/index.js";
-import { YNABMCPServer } from "../YNABMCPServer.js";
 import { createErrorHandler } from "../errorHandler.js";
 import type { ToolRegistry } from "../toolRegistry.js";
+import { YNABMCPServer } from "../YNABMCPServer.js";
 
 function parseCallToolJson<T = Record<string, unknown>>(
 	result: CallToolResult,
@@ -242,7 +242,9 @@ describe("YNABMCPServer", () => {
 
 			// All should succeed (YNAB API is generally permissive for user info calls)
 			const results = await Promise.all(promises);
-			results.forEach((result) => expect(result).toBe(true));
+			for (const result of results) {
+				expect(result).toBe(true);
+			}
 		});
 	});
 

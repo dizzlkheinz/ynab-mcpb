@@ -1,8 +1,7 @@
 import { createRequire } from "node:module";
-import path from "node:path";
 import * as esbuild from "esbuild";
 
-const require = createRequire(import.meta.url);
+const _require = createRequire(import.meta.url);
 
 // Plugin to ignore Zod locale imports (except English)
 const ignoreZodLocalesPlugin = {
@@ -50,7 +49,7 @@ const buildOptions = {
 };
 
 try {
-	const result = await esbuild.build(buildOptions);
+	const _result = await esbuild.build(buildOptions);
 
 	// Show bundle size
 	const fs = await import("node:fs");

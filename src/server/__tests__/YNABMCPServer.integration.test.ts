@@ -3,8 +3,8 @@ import { skipOnRateLimit } from "../../__tests__/testUtils.js";
 import { cacheManager } from "../../server/cacheManager.js";
 import { responseFormatter } from "../../server/responseFormatter.js";
 import { ValidationError } from "../../types/index.js";
-import { YNABMCPServer } from "../YNABMCPServer.js";
 import type { ToolRegistry } from "../toolRegistry.js";
+import { YNABMCPServer } from "../YNABMCPServer.js";
 
 /**
  * Real YNAB API tests using token from .env (YNAB_ACCESS_TOKEN)
@@ -228,7 +228,9 @@ describeIntegration("YNABMCPServer", () => {
 
 					// All should succeed (YNAB API is generally permissive for user info calls)
 					const results = await Promise.all(promises);
-					results.forEach((result) => expect(result).toBe(true));
+					for (const result of results) {
+						expect(result).toBe(true);
+					}
 				}, ctx);
 			},
 		);

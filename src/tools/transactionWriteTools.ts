@@ -539,8 +539,7 @@ function allocateTax(
 	// Handle negative tax (refund)
 	if (taxMilliunits < 0) {
 		// Find category with largest return
-		let largestReturnCategory: ReceiptCategoryCalculation | undefined =
-			undefined;
+		let largestReturnCategory: ReceiptCategoryCalculation | undefined;
 		let largestReturnAmount = 0;
 
 		for (const category of categoryCalculations) {

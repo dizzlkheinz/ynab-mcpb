@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-	ErrorHandler,
-	ValidationError,
-	YNABAPIError,
-	YNABErrorCode,
 	createErrorHandler,
 	handleToolError,
+	ValidationError,
 	withToolErrorHandling,
+	YNABAPIError,
+	YNABErrorCode,
 } from "../errorHandler.js";
 
 /**

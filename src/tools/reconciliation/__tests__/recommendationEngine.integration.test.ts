@@ -78,7 +78,7 @@ describe("Recommendation Engine Integration", () => {
 				expect(analysis.recommendations?.length).toBeGreaterThan(0);
 
 				// Verify recommendation details
-				const rec = analysis.recommendations?.[0]!;
+				const rec = analysis.recommendations?.[0];
 				expect(rec.action_type).toBe("create_transaction");
 				expect(rec.priority).toMatch(/^(high|medium|low)$/);
 				expect(rec.account_id).toBe("test-account-id");

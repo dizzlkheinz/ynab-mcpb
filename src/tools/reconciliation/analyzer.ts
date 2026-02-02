@@ -6,21 +6,19 @@
  */
 
 import type * as ynab from "ynab";
+import { toMoneyValue } from "../../utils/money.js";
 import {
 	type CSVParseResult,
 	type ParseCSVOptions,
 	parseCSV,
 } from "./csvParser.js";
+import type { MatchResult } from "./matcher.js"; // Import MatchResult
 import {
 	DEFAULT_CONFIG,
-	type MatchingConfig,
 	findMatches,
+	type MatchingConfig,
 	normalizeConfig,
 } from "./matcher.js";
-import { normalizeYNABTransactions } from "./ynabAdapter.js";
-
-import { toMoneyValue } from "../../utils/money.js";
-import type { MatchResult } from "./matcher.js"; // Import MatchResult
 import { generateRecommendations } from "./recommendationEngine.js";
 import type {
 	BalanceInfo,
@@ -31,6 +29,7 @@ import type {
 	TransactionMatch,
 	YNABTransaction,
 } from "./types.js";
+import { normalizeYNABTransactions } from "./ynabAdapter.js";
 
 // --- Helper Functions ---
 

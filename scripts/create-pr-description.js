@@ -34,7 +34,7 @@ function getDefaultBranch() {
 			.trim()
 			.replace("refs/remotes/origin/", "");
 		return defaultBranch;
-	} catch (err) {
+	} catch (_err) {
 		// Fallback: try common branch names
 		try {
 			execSync("git rev-parse --verify origin/main", {
@@ -76,7 +76,7 @@ try {
 	changelogEntries = latestSection
 		? `## Latest Changes\n\n${latestSection}`
 		: "";
-} catch (err) {
+} catch (_err) {
 	// No changelog
 }
 
@@ -101,7 +101,7 @@ try {
 	if (commits) {
 		commitMessages = `## Commits\n\n${commits}\n\n`;
 	}
-} catch (err) {
+} catch (_err) {
 	console.warn("Could not get git commit info");
 }
 
@@ -115,7 +115,7 @@ try {
 	if (stats) {
 		changeStats = `**Changes**: ${stats}\n\n`;
 	}
-} catch (err) {
+} catch (_err) {
 	console.warn("Could not get change stats");
 }
 
@@ -131,7 +131,7 @@ function getPreviousVersion() {
 		);
 		const previousPkg = JSON.parse(previousPackageJson);
 		return previousPkg.version;
-	} catch (err) {
+	} catch (_err) {
 		// Fallback: try to get the latest git tag
 		try {
 			const latestTag = execSync("git describe --tags --abbrev=0", {

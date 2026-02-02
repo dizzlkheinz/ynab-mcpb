@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import {
 	GetPayeeSchema,
-	ListPayeesSchema,
 	handleGetPayee,
 	handleListPayees,
+	ListPayeesSchema,
 } from "../payeeTools.js";
 import {
 	createDeltaFetcherMock,

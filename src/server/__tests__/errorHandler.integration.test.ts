@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	createErrorHandler,
 	ErrorHandler,
 	ValidationError,
 	YNABAPIError,
 	YNABErrorCode,
-	createErrorHandler,
 } from "../../server/errorHandler";
 import { responseFormatter } from "../../server/responseFormatter";
 import { handleListAccounts } from "../../tools/accountTools";

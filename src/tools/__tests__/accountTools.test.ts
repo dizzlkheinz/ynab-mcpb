@@ -3,10 +3,10 @@ import type * as ynab from "ynab";
 import {
 	CreateAccountSchema,
 	GetAccountSchema,
-	ListAccountsSchema,
 	handleCreateAccount,
 	handleGetAccount,
 	handleListAccounts,
+	ListAccountsSchema,
 } from "../accountTools.js";
 import {
 	createDeltaFetcherMock,

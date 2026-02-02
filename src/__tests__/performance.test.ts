@@ -80,7 +80,10 @@ vi.mock("ynab", () => {
 	};
 
 	return {
-		API: vi.fn(() => mockAPI),
+		// biome-ignore lint: Vitest 4 requires non-arrow function for constructors
+		API: vi.fn(function () {
+			return mockAPI;
+		}),
 	};
 });
 
@@ -538,7 +541,9 @@ describe("YNAB MCP Server - Performance Tests", () => {
 			const totalTime = endTime - startTime;
 
 			expect(results).toHaveLength(5);
-			results.forEach((result) => expect(result).toBeDefined());
+			for (const result of results) {
+				expect(result).toBeDefined();
+			}
 			expect(totalTime).toBeLessThan(3000); // All concurrent requests within 3 seconds
 		});
 	});
@@ -718,7 +723,9 @@ describe("YNAB MCP Server - Performance Tests", () => {
 			const averageTime = totalTime / 50;
 
 			expect(results).toHaveLength(50);
-			results.forEach((result) => expect(result).toBeDefined());
+			for (const result of results) {
+				expect(result).toBeDefined();
+			}
 			expect(averageTime).toBeLessThan(100); // Average less than 100ms per request
 			expect(totalTime).toBeLessThan(5000); // Total less than 5 seconds
 		});
@@ -768,7 +775,9 @@ describe("YNAB MCP Server - Performance Tests", () => {
 			const totalTime = endTime - startTime;
 
 			expect(results).toHaveLength(80); // 20 iterations × 4 tools
-			results.forEach((result) => expect(result).toBeDefined());
+			for (const result of results) {
+				expect(result).toBeDefined();
+			}
 			expect(totalTime).toBeLessThan(10000); // Should complete within 10 seconds
 		});
 	});

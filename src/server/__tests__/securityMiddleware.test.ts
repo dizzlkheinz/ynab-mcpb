@@ -5,9 +5,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod/v4";
 import {
+	globalRateLimiter,
 	RateLimitError,
 	RateLimiter,
-	globalRateLimiter,
 } from "../rateLimiter.js";
 import { globalRequestLogger } from "../requestLogger.js";
 import {

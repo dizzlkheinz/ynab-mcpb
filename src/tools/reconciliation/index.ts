@@ -29,24 +29,24 @@ import {
 } from "./csvParser.js";
 import {
 	type AccountSnapshot,
-	type LegacyReconciliationResult,
 	executeReconciliation,
+	type LegacyReconciliationResult,
 } from "./executor.js";
 import type { MatchingConfig } from "./matcher.js";
 import { detectSignInversion } from "./signDetector.js";
 import type { BankTransaction } from "./types.js";
 import { normalizeYNABTransactions } from "./ynabAdapter.js";
 
-// Re-export types for external use
-export type * from "./types.js";
 export { analyzeReconciliation } from "./analyzer.js";
-export { findMatches, findBestMatch } from "./matcher.js";
+export { findBestMatch, findMatches } from "./matcher.js";
 export {
-	normalizePayee,
-	normalizedMatch,
 	fuzzyMatch,
+	normalizedMatch,
+	normalizePayee,
 	payeeSimilarity,
 } from "./payeeNormalizer.js";
+// Re-export types for external use
+export type * from "./types.js";
 
 /**
  * Helper function to determine audit data source based on fetch result

@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { type ErrorHandler, createErrorHandler } from "./errorHandler.js";
+import { createErrorHandler, type ErrorHandler } from "./errorHandler.js";
 
 /**
  * Module-level fallback ErrorHandler for convenience functions and backward compatibility.

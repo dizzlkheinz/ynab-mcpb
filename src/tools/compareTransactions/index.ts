@@ -11,8 +11,8 @@ import type { YNABTransaction } from "./types.js";
 // Re-export core types for consumers
 export type {
 	BankTransaction,
-	YNABTransaction,
 	TransactionMatch,
+	YNABTransaction,
 } from "./types.js";
 
 /**

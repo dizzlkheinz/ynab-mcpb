@@ -3,11 +3,11 @@ import type * as ynab from "ynab";
 import { CacheKeys } from "../../server/cacheKeys.js";
 import {
 	GetCategorySchema,
-	ListCategoriesSchema,
-	UpdateCategorySchema,
 	handleGetCategory,
 	handleListCategories,
 	handleUpdateCategory,
+	ListCategoriesSchema,
+	UpdateCategorySchema,
 } from "../categoryTools.js";
 import {
 	createDeltaFetcherMock,

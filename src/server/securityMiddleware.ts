@@ -3,10 +3,10 @@
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { fromZodError } from "zod-validation-error";
 import { z } from "zod/v4";
+import { fromZodError } from "zod-validation-error";
 import { createErrorHandler } from "./errorHandler.js";
-import { RateLimitError, globalRateLimiter } from "./rateLimiter.js";
+import { globalRateLimiter, RateLimitError } from "./rateLimiter.js";
 import { globalRequestLogger } from "./requestLogger.js";
 import { responseFormatter } from "./responseFormatter.js";
 

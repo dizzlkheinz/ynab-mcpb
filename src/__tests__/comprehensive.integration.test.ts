@@ -12,8 +12,8 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { YNABMCPServer } from "../server/YNABMCPServer.js";
 import { cacheManager } from "../server/cacheManager.js";
+import { YNABMCPServer } from "../server/YNABMCPServer.js";
 import {
 	executeToolCall,
 	parseToolResult,
@@ -61,7 +61,10 @@ vi.mock("ynab", () => {
 	};
 
 	return {
-		API: vi.fn(() => mockAPI),
+		// biome-ignore lint: Vitest 4 requires non-arrow function for constructors
+		API: vi.fn(function () {
+			return mockAPI;
+		}),
 		utils: {
 			convertMilliUnitsToCurrencyAmount: vi.fn(
 				(milliunits: number, currencyDecimalDigits = 2) => {

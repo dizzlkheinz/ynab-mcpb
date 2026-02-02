@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { toMoneyValue } from "../../../utils/money.js";
-import { type AccountSnapshot, executeReconciliation } from "../executor.js";
 import type { NormalizedYnabError } from "../executor.js";
-import { normalizeYnabError, shouldPropagateYnabError } from "../executor.js";
+import {
+	type AccountSnapshot,
+	executeReconciliation,
+	normalizeYnabError,
+	shouldPropagateYnabError,
+} from "../executor.js";
 import type { ReconcileAccountRequest } from "../index.js";
 import type { ReconciliationAnalysis } from "../types.js";
 

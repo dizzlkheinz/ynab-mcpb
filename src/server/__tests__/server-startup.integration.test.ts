@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { skipOnRateLimit } from "../../__tests__/testUtils.js";
 import { ValidationError } from "../../types/index";
 import { YNABMCPServer } from "../YNABMCPServer";
+
 // StdioServerTransport import removed as it's not used in tests
 
 /**

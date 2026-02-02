@@ -93,20 +93,17 @@ describe("Tool Registration", () => {
 			["reconciliation", EXPECTED_TOOLS_BY_DOMAIN.reconciliation],
 			["utility", EXPECTED_TOOLS_BY_DOMAIN.utility],
 			["server", EXPECTED_TOOLS_BY_DOMAIN.server],
-		])(
-			"registers all %s domain tools",
-			(domain: string, expectedTools: readonly string[]) => {
-				const server = new YNABMCPServer(false);
-				const tools = server.getToolRegistry().listTools();
-				const toolNames = tools.map((t) => t.name);
+		])("registers all %s domain tools", (domain: string, expectedTools: readonly string[]) => {
+			const server = new YNABMCPServer(false);
+			const tools = server.getToolRegistry().listTools();
+			const toolNames = tools.map((t) => t.name);
 
-				for (const toolName of expectedTools) {
-					expect(toolNames, `Missing ${domain} tool: ${toolName}`).toContain(
-						toolName,
-					);
-				}
-			},
-		);
+			for (const toolName of expectedTools) {
+				expect(toolNames, `Missing ${domain} tool: ${toolName}`).toContain(
+					toolName,
+				);
+			}
+		});
 	});
 
 	describe("Tool Metadata Verification", () => {

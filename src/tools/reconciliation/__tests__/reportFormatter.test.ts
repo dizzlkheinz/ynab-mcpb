@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { LegacyReconciliationResult } from "../executor.js";
 import {
-	type ReportFormatterOptions,
 	formatBalanceInfo,
 	formatHumanReadableReport,
 	formatTransactionList,
+	type ReportFormatterOptions,
 } from "../reportFormatter.js";
 import type {
 	BankTransaction,

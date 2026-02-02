@@ -53,7 +53,7 @@ export type GetTransactionParams = z.infer<typeof GetTransactionSchema>;
 /**
  * Schema for ynab:create_transaction tool parameters
  */
-export const CreateTransactionSchema = z
+const CreateTransactionBaseSchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required"),
 		account_id: z.string().min(1, "Account ID is required"),
@@ -89,8 +89,10 @@ export const CreateTransactionSchema = z
 			.min(1, "At least one subtransaction is required when provided")
 			.optional(),
 	})
-	.strict()
-	.superRefine((data, ctx) => {
+	.strict();
+
+export const CreateTransactionSchema = CreateTransactionBaseSchema.superRefine(
+	(data, ctx) => {
 		if (data.subtransactions && data.subtransactions.length > 0) {
 			const total = data.subtransactions.reduce(
 				(sum, sub) => sum + sub.amount,
@@ -104,7 +106,8 @@ export const CreateTransactionSchema = z
 				});
 			}
 		}
-	});
+	},
+);
 
 export type CreateTransactionParams = z.infer<typeof CreateTransactionSchema>;
 
@@ -123,7 +126,7 @@ export interface SubtransactionInput {
 // Create Transactions (Bulk)
 // ============================================================================
 
-const BulkTransactionInputSchemaBase = CreateTransactionSchema.pick({
+const BulkTransactionInputSchemaBase = CreateTransactionBaseSchema.pick({
 	account_id: true,
 	amount: true,
 	date: true,

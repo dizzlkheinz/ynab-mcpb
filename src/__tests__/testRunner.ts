@@ -163,9 +163,9 @@ export class ComprehensiveTestRunner {
 			const successMatch =
 				output.includes("Test Files") && !output.includes("failed");
 
-			if (passedMatch) passed = Number.parseInt(passedMatch[1]!);
-			if (failedMatch) failed = Number.parseInt(failedMatch[1]!);
-			if (skippedMatch) skipped = Number.parseInt(skippedMatch[1]!);
+			if (passedMatch) passed = Number.parseInt(passedMatch[1]!, 10);
+			if (failedMatch) failed = Number.parseInt(failedMatch[1]!, 10);
+			if (skippedMatch) skipped = Number.parseInt(skippedMatch[1]!, 10);
 
 			success = successMatch && failed === 0;
 		} catch (error) {

@@ -6,9 +6,6 @@ import {
 	CreateTransactionsSchema,
 	DeleteTransactionSchema,
 	GetTransactionSchema,
-	ListTransactionsSchema,
-	UpdateTransactionSchema,
-	UpdateTransactionsSchema,
 	handleCreateReceiptSplitTransaction,
 	handleCreateTransaction,
 	handleCreateTransactions,
@@ -17,6 +14,9 @@ import {
 	handleListTransactions,
 	handleUpdateTransaction,
 	handleUpdateTransactions,
+	ListTransactionsSchema,
+	UpdateTransactionSchema,
+	UpdateTransactionsSchema,
 } from "../transactionTools.js";
 
 // Mock the YNAB API - declare first so it can be used in deltaSupport mock
@@ -4606,7 +4606,7 @@ describe("transactionTools", () => {
 
 				// Mock API to fail for 2 transactions (10% > 5% threshold)
 				(mockYnabAPI.transactions.getTransactionById as any).mockImplementation(
-					async (budgetId: string, transactionId: string) => {
+					async (_budgetId: string, transactionId: string) => {
 						if (
 							transactionId === "transaction-1" ||
 							transactionId === "transaction-2"
@@ -4655,7 +4655,7 @@ describe("transactionTools", () => {
 
 				// Mock API to fail for only 1 transaction (5% = threshold)
 				(mockYnabAPI.transactions.getTransactionById as any).mockImplementation(
-					async (budgetId: string, transactionId: string) => {
+					async (_budgetId: string, transactionId: string) => {
 						if (transactionId === "transaction-1") {
 							throw new Error("Transaction not found");
 						}

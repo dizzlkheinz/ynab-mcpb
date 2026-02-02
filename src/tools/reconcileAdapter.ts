@@ -4,8 +4,8 @@ import type {
 	LegacyReconciliationResult,
 } from "./reconciliation/executor.js";
 import {
-	type ReportFormatterOptions,
 	formatHumanReadableReport,
+	type ReportFormatterOptions,
 } from "./reconciliation/reportFormatter.js";
 import type {
 	BankTransaction,

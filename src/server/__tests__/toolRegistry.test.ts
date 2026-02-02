@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import {
-	ReconcileAccountSchema,
 	handleReconcileAccount,
+	ReconcileAccountSchema,
 } from "../../tools/reconciliation/index.js";
 import {
 	type ToolDefinition,
@@ -34,7 +34,7 @@ function makeTestDeps() {
 
 	const responseFormatter = {
 		runWithMinifyOverride: vi.fn(
-			<T>(minifyOverride: boolean | undefined, fn: () => T): T => fn(),
+			<T>(_minifyOverride: boolean | undefined, fn: () => T): T => fn(),
 		),
 		format: vi.fn((value) => JSON.stringify(value)),
 	};
@@ -361,7 +361,7 @@ describe("ToolRegistry", () => {
 		});
 
 		responseFormatter.runWithMinifyOverride.mockImplementationOnce(
-			(minify, fn) => {
+			(_minify, fn) => {
 				capturedFn = fn;
 				return formatterResolution;
 			},
@@ -405,7 +405,7 @@ describe("ToolRegistry", () => {
 		});
 
 		responseFormatter.runWithMinifyOverride.mockImplementationOnce(
-			(minify, fn) => {
+			(_minify, fn) => {
 				capturedFn = fn;
 				return formatterResolution;
 			},

@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import {
 	GetMonthSchema,
-	ListMonthsSchema,
 	handleGetMonth,
 	handleListMonths,
+	ListMonthsSchema,
 } from "../monthTools.js";
 import {
 	createDeltaFetcherMock,

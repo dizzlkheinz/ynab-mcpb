@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { parse } from "csv-parse/sync";
 import { parse as parseDateFns } from "date-fns";
-import { toMilli } from "../../utils/money.js";
 import type { Milli } from "../../utils/money.js";
+import { toMilli } from "../../utils/money.js";
 import type { BankTransaction, CSVFormat } from "./types.js";
 
 /**
