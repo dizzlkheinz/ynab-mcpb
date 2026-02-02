@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-02-01
+
+### Fixed
+
+- **Reconciliation Accuracy** - Multiple improvements to reconciliation reliability
+  - Sign detector returns null for insufficient evidence instead of defaulting to false
+  - Executor respects `auto_update_cleared_status` flag before marking transactions reconciled
+  - `clearedBalanceAsOf` now includes reconciled transactions
+  - Better report messaging for no-change scenarios
+  - Improved CSV thousands separator parsing
+
+### Changed
+
+- **Matching Algorithm** - Simplified amount scoring in matcher for more predictable results
+- **Documentation** - Updated internal CLAUDE.md docs across tools, schemas, types, and utils to reflect current codebase
+
 ## [0.18.4] - 2025-12-26
 
 ### Fixed
