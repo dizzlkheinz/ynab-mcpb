@@ -26,7 +26,7 @@ const DEFAULT_BUDGET_ID = "11111111-1111-1111-1111-111111111111";
 
 /**
  * Expected tool names organized by domain.
- * This serves as the authoritative list of all 30 registered tools.
+ * This serves as the authoritative list of all 28 registered tools.
  */
 const EXPECTED_TOOLS_BY_DOMAIN = {
 	budget: ["list_budgets", "get_budget"],
@@ -52,7 +52,6 @@ const EXPECTED_TOOLS_BY_DOMAIN = {
 		"get_default_budget",
 		"clear_cache",
 		"diagnostic_info",
-		"set_output_format",
 	],
 } as const;
 
@@ -60,13 +59,13 @@ const EXPECTED_TOOLS_BY_DOMAIN = {
 const ALL_EXPECTED_TOOLS = Object.values(EXPECTED_TOOLS_BY_DOMAIN).flat();
 
 /** Expected total tool count */
-const EXPECTED_TOOL_COUNT = 29;
+const EXPECTED_TOOL_COUNT = 28;
 
 describe("Tool Registration", () => {
 	// Config is mocked at module level, no env setup needed
 
 	describe("Tool Count Verification", () => {
-		it("registers exactly 29 tools", () => {
+		it("registers exactly 28 tools", () => {
 			const server = new YNABMCPServer(false);
 			const tools = server.getToolRegistry().listTools();
 			expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);

@@ -31,7 +31,7 @@ The `src/server/` directory implements:
 | **prompts.ts** | MCP prompt definitions and handlers | LOW | ~150 |
 | **diagnostics.ts** | System diagnostics, health monitoring, cache statistics | MEDIUM | ~200 |
 | **securityMiddleware.ts** | Security validation, wrapper functions | HIGH | ~150 |
-| **responseFormatter.ts** | JSON response formatting (minification/pretty-print) | LOW | ~100 |
+| **responseFormatter.ts** | JSON response formatting (always minified) | LOW | ~10 |
 | **rateLimiter.ts** | Rate limiting for YNAB API compliance | MEDIUM | ~150 |
 | **requestLogger.ts** | Request/response logging middleware | LOW | ~100 |
 | **cacheKeys.ts** | Centralized cache key generation utilities | MEDIUM | ~100 |

@@ -346,47 +346,6 @@ describe("Error Handler Integration Tests", () => {
 		);
 	});
 
-	describe("Minify override integration", () => {
-		it(
-			"should respect responseFormatter minify settings",
-			{ meta: { tier: "domain", domain: "server" } },
-			() => {
-				const errorHandler = createErrorHandler(responseFormatter);
-
-				// Test with minify override
-				const result = responseFormatter.runWithMinifyOverride(true, () => {
-					const error = new ValidationError("Test error");
-					return errorHandler.handleError(error, "testing");
-				});
-
-				// Should be minified (no extra whitespace)
-				expect(result.content[0].text).not.toContain("\n  ");
-			},
-		);
-
-		it(
-			"should handle pretty formatting",
-			{ meta: { tier: "domain", domain: "server" } },
-			() => {
-				const errorHandler = createErrorHandler(responseFormatter);
-
-				// Test with pretty formatting
-				const result = responseFormatter.runWithMinifyOverride(false, () => {
-					const error = new ValidationError("Test error");
-					return errorHandler.handleError(error, "testing");
-				});
-
-				// Should contain newlines for pretty formatting
-				const text = result.content[0].text;
-				expect(text).toMatch(/[\r\n]/);
-				// Pretty text should be longer than its compact form
-				const compact = JSON.stringify(JSON.parse(text));
-				expect(text.length).toBeGreaterThan(compact.length);
-				expect(() => JSON.parse(text)).not.toThrow();
-			},
-		);
-	});
-
 	describe("Static vs instance consistency", () => {
 		beforeEach(() => {
 			// Set up static ErrorHandler with same formatter

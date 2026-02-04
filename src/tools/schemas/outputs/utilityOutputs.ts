@@ -3,7 +3,7 @@
  *
  * This file contains comprehensive Zod schemas for validating the output
  * of utility tools including user info, budget defaults, cache management,
- * output formatting, and diagnostic information.
+ * and diagnostic information.
  *
  * All schemas include TypeScript type inference for type-safe usage throughout
  * the codebase. Reference the corresponding handler implementations for
@@ -129,35 +129,6 @@ export const ClearCacheOutputSchema = SuccessResponseSchema.pick({
 });
 
 export type ClearCacheOutput = z.infer<typeof ClearCacheOutputSchema>;
-
-// ============================================================================
-// SET OUTPUT FORMAT OUTPUT
-// ============================================================================
-
-/**
- * Output schema for set_output_format tool
- *
- * Confirms output format settings have been updated.
- *
- * @see src/server/YNABMCPServer.ts:870-898 - Handler implementation
- *
- * @example
- * ```typescript
- * const output: SetOutputFormatOutput = {
- *   success: true,
- *   message: "Output format configured: minify=true, spaces=2",
- *   options: { defaultMinify: true, prettySpaces: 2 }
- * };
- * ```
- */
-export const SetOutputFormatOutputSchema = SuccessResponseSchema.extend({
-	options: z.object({
-		defaultMinify: z.boolean().optional(),
-		prettySpaces: z.number().optional(),
-	}),
-});
-
-export type SetOutputFormatOutput = z.infer<typeof SetOutputFormatOutputSchema>;
 
 // ============================================================================
 // DIAGNOSTIC INFO OUTPUT

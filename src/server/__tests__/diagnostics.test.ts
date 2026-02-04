@@ -169,7 +169,6 @@ describe("diagnostics module", () => {
 								uptime_readable: "1h 1m 1s",
 								env: expect.objectContaining({
 									node_env: expect.any(String),
-									minify_output: expect.any(String),
 								}),
 							}),
 						}),

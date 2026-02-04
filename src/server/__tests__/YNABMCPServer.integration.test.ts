@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { skipOnRateLimit } from "../../__tests__/testUtils.js";
 import { cacheManager } from "../../server/cacheManager.js";
-import { responseFormatter } from "../../server/responseFormatter.js";
 import { ValidationError } from "../../types/index.js";
 import type { ToolRegistry } from "../toolRegistry.js";
 import { YNABMCPServer } from "../YNABMCPServer.js";
@@ -553,32 +552,6 @@ describeIntegration("YNABMCPServer", () => {
 							typeof diagnostics.cache.lastCleanup === "string",
 					).toBe(true);
 				}, ctx);
-			},
-		);
-
-		it(
-			"should configure output formatter via set_output_format tool",
-			{ meta: { tier: "domain", domain: "server" } },
-			async () => {
-				const baseline = responseFormatter.format({ probe: true });
-
-				try {
-					await registry.executeTool({
-						name: "set_output_format",
-						accessToken: accessToken(),
-						arguments: { default_minify: false, pretty_spaces: 4 },
-					});
-
-					const formatted = responseFormatter.format({ probe: true });
-					expect(formatted).not.toBe(baseline);
-					expect(formatted).toContain("\n");
-				} finally {
-					await registry.executeTool({
-						name: "set_output_format",
-						accessToken: accessToken(),
-						arguments: { default_minify: true, pretty_spaces: 2 },
-					});
-				}
 			},
 		);
 

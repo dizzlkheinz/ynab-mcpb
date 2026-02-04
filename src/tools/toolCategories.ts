@@ -120,7 +120,6 @@ export const ToolAnnotationPresets = {
 	 * interacting with the YNAB API.
 	 *
 	 * Examples:
-	 * - set_output_format: Configures local output formatting
 	 * - diagnostic_info: Returns local server diagnostic information
 	 * - clear_cache: Clears local in-memory cache
 	 *
@@ -145,7 +144,6 @@ export const ToolAnnotationPresets = {
 	 *
 	 * Examples:
 	 * - clear_cache: Clears local in-memory cache entries
-	 * - set_output_format: Updates local response formatting defaults
 	 */
 	UTILITY_LOCAL_MUTATION: {
 		readOnlyHint: false,

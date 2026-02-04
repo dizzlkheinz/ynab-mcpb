@@ -44,8 +44,6 @@ export {
 	ServerInfoSchema,
 	type SetDefaultBudgetOutput,
 	SetDefaultBudgetOutputSchema,
-	type SetOutputFormatOutput,
-	SetOutputFormatOutputSchema,
 	UserSchema,
 } from "./utilityOutputs.js";
 

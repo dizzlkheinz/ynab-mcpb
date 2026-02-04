@@ -96,7 +96,7 @@ The architecture is modular and service-oriented:
 - Adapter helpers (`src/tools/adapters.ts`): `adapt`, `adaptNoInput`, `adaptWithDelta`, `adaptWrite`, and `createBudgetResolver` to inject default budget IDs; covered by unit tests in `src/tools/__tests__/adapters.test.ts`.
 - Domain factories (`register*Tools`) live in each tool file: budget, account, transaction, category, payee, month, utility, reconciliation. `setupToolRegistry` now delegates to these factories.
 - Shared schemas: `emptyObjectSchema`, `looseObjectSchema` in `src/tools/schemas/common.ts`.
-- Server-owned inline tools that stay in `YNABMCPServer`: `set_default_budget`, `get_default_budget`, `diagnostic_info`, `clear_cache`, `set_output_format` (they depend on server internals).
+- Server-owned inline tools that stay in `YNABMCPServer`: `set_default_budget`, `get_default_budget`, `diagnostic_info`, `clear_cache` (they depend on server internals).
 
 ### Tool Implementation (`src/tools/`)
 
@@ -355,12 +355,12 @@ The system defines 5 preset annotation patterns in `src/tools/toolCategories.ts`
   - Characteristics: Write operations, destructive, idempotent, external API
 
 - **UTILITY_LOCAL** - Local utility tools without external API calls
-  - Examples: `clear_cache`, `diagnostic_info`, `set_output_format`
+  - Examples: `clear_cache`, `diagnostic_info`
   - Characteristics: Local operations, no external API dependencies
 
 ### Complete Tool Classification
 
-All 29 tools are classified into the following categories:
+All 28 tools are classified into the following categories:
 
 **Read-Only External (15 tools):**
 
@@ -378,9 +378,9 @@ All 29 tools are classified into the following categories:
 
 - `delete_transaction` ⚠️
 
-**Utility Local (4 tools):**
+**Utility Local (3 tools):**
 
-- `get_default_budget`, `diagnostic_info`, `clear_cache`, `set_output_format`
+- `get_default_budget`, `diagnostic_info`, `clear_cache`
 
 ### Usage Example
 
@@ -458,11 +458,6 @@ Optional (Caching):
 - `YNAB_MCP_CACHE_MAX_ENTRIES` (default: 1000)
 - `YNAB_MCP_CACHE_DEFAULT_TTL_MS` (default: 300000 / 5 min)
 - `YNAB_MCP_CACHE_STALE_MS` (default: 120000 / 2 min)
-
-Optional (Output):
-
-- `YNAB_MCP_MINIFY_OUTPUT` (default: true) - Minify JSON responses
-- `YNAB_MCP_PRETTY_SPACES` (default: 2) - Spaces for pretty-print when not minified
 
 Optional (Delta):
 

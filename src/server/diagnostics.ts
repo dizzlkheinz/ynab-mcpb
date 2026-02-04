@@ -51,7 +51,6 @@ export interface DiagnosticData {
 		uptime_readable: string;
 		env: {
 			node_env: string;
-			minify_output: string;
 		};
 	};
 	memory?: {
@@ -199,7 +198,6 @@ export class DiagnosticManager {
 				uptime_readable: formatUptime(uptimeMs),
 				env: {
 					node_env: process.env["NODE_ENV"] || "development",
-					minify_output: process.env["YNAB_MCP_MINIFY_OUTPUT"] ?? "true",
 				},
 			};
 		}

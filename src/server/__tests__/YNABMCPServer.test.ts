@@ -10,7 +10,6 @@ import {
 } from "vitest";
 
 import { cacheManager } from "../../server/cacheManager.js";
-import { responseFormatter } from "../../server/responseFormatter.js";
 import { AuthenticationError, ValidationError } from "../../types/index.js";
 import { createErrorHandler } from "../errorHandler.js";
 import type { ToolRegistry } from "../toolRegistry.js";
@@ -58,7 +57,6 @@ describe("YNABMCPServer", () => {
 		"get_user",
 		"diagnostic_info",
 		"clear_cache",
-		"set_output_format",
 	] as const;
 
 	beforeAll(() => {
@@ -544,28 +542,6 @@ describe("YNABMCPServer", () => {
 				expect.stringMatching(/^\d+\.\d{2}%$/),
 			);
 			expect(diagnostics.cache.performance_summary).toEqual(expect.any(String));
-		});
-
-		it("should configure output formatter via set_output_format tool", async () => {
-			const baseline = responseFormatter.format({ probe: true });
-
-			try {
-				await registry.executeTool({
-					name: "set_output_format",
-					accessToken: accessToken(),
-					arguments: { default_minify: false, pretty_spaces: 4 },
-				});
-
-				const formatted = responseFormatter.format({ probe: true });
-				expect(formatted).not.toBe(baseline);
-				expect(formatted).toContain("\n");
-			} finally {
-				await registry.executeTool({
-					name: "set_output_format",
-					accessToken: accessToken(),
-					arguments: { default_minify: true, pretty_spaces: 2 },
-				});
-			}
 		});
 
 		it("should surface validation errors for invalid inputs", async () => {

@@ -33,9 +33,6 @@ function makeTestDeps() {
 	}[] = [];
 
 	const responseFormatter = {
-		runWithMinifyOverride: vi.fn(
-			<T>(_minifyOverride: boolean | undefined, fn: () => T): T => fn(),
-		),
 		format: vi.fn((value) => JSON.stringify(value)),
 	};
 
@@ -104,13 +101,11 @@ describe("ToolRegistry", () => {
 		accessToken: string;
 		params: Record<string, unknown>;
 	}[];
-	let responseFormatter: ReturnType<typeof makeTestDeps>["responseFormatter"];
-
 	const handlerResult = createResult("handler-success");
 
 	beforeEach(() => {
 		const setup = makeTestDeps();
-		({ dependencies, securityInvocations, responseFormatter } = setup);
+		({ dependencies, securityInvocations } = setup);
 		registry = new ToolRegistry(dependencies);
 
 		// Spy on error handler methods for testing
@@ -124,7 +119,6 @@ describe("ToolRegistry", () => {
 			description: "Test tool for registry",
 			inputSchema: z.object({
 				id: z.string().min(1, "id required"),
-				minify: z.boolean().optional(),
 			}),
 			handler: vi.fn(
 				async ({ input }: ToolExecutionPayload<{ id: string }>) => {
@@ -180,7 +174,6 @@ describe("ToolRegistry", () => {
 			type: "object",
 			properties: expect.objectContaining({
 				id: expect.objectContaining({ type: "string" }),
-				minify: expect.objectContaining({ type: "boolean" }),
 			}),
 			required: ["id"],
 		});
@@ -340,98 +333,6 @@ describe("ToolRegistry", () => {
 		});
 
 		expect(handler).toHaveBeenCalledTimes(1);
-	});
-
-	it("extracts minify override from arguments when not explicitly provided", async () => {
-		const handler = vi.fn(async () => handlerResult);
-		registry.register({
-			name: "minify_hint_tool",
-			description: "Uses argument minify hint",
-			inputSchema: z.object({
-				id: z.string(),
-				_minify: z.boolean().optional(),
-			}),
-			handler,
-		});
-
-		let capturedFn: (() => Promise<CallToolResult>) | undefined;
-		let release: ((value: CallToolResult) => void) | undefined;
-		const formatterResolution = new Promise<CallToolResult>((resolve) => {
-			release = resolve;
-		});
-
-		responseFormatter.runWithMinifyOverride.mockImplementationOnce(
-			(_minify, fn) => {
-				capturedFn = fn;
-				return formatterResolution;
-			},
-		);
-
-		const execution = registry.executeTool({
-			name: "minify_hint_tool",
-			accessToken: "token",
-			arguments: { id: "abc", _minify: false },
-		});
-
-		expect(responseFormatter.runWithMinifyOverride).toHaveBeenCalledWith(
-			false,
-			expect.any(Function),
-		);
-		expect(capturedFn).toBeDefined();
-
-		const manualResult = await capturedFn?.();
-		expect(manualResult).toEqual(handlerResult);
-		expect(handler).toHaveBeenCalledTimes(1);
-
-		release?.(manualResult);
-
-		const finalResult = await execution;
-		expect(finalResult).toEqual(handlerResult);
-	});
-
-	it("prefers explicit minify override option over argument hints", async () => {
-		const handler = vi.fn(async () => handlerResult);
-		registry.register({
-			name: "minify_option_tool",
-			description: "Uses option minify",
-			inputSchema: z.object({ id: z.string(), minify: z.boolean().optional() }),
-			handler,
-		});
-
-		let capturedFn: (() => Promise<CallToolResult>) | undefined;
-		let release: ((value: CallToolResult) => void) | undefined;
-		const formatterResolution = new Promise<CallToolResult>((resolve) => {
-			release = resolve;
-		});
-
-		responseFormatter.runWithMinifyOverride.mockImplementationOnce(
-			(_minify, fn) => {
-				capturedFn = fn;
-				return formatterResolution;
-			},
-		);
-
-		const execution = registry.executeTool({
-			name: "minify_option_tool",
-			accessToken: "token",
-			arguments: { id: "abc", minify: false },
-			minifyOverride: true,
-		});
-
-		expect(responseFormatter.runWithMinifyOverride).toHaveBeenCalledWith(
-			true,
-			expect.any(Function),
-		);
-		expect(capturedFn).toBeDefined();
-
-		const manualResult = await capturedFn?.();
-		expect(manualResult).toEqual(handlerResult);
-		expect(handler).toHaveBeenCalledTimes(1);
-
-		release?.(manualResult);
-
-		const finalResult = await execution;
-		expect(finalResult).toEqual(handlerResult);
 	});
 
 	it("returns validation error result for unknown tools", async () => {
@@ -674,9 +575,9 @@ describe("ToolRegistry", () => {
 			const schema = tool?.outputSchema as Record<string, unknown> | undefined;
 			expect(schema).toBeDefined();
 			expect(schema?.type).toBe("object");
-			expect(
-				Array.isArray(schema?.anyOf) || Array.isArray(schema?.oneOf),
-			).toBe(true);
+			expect(Array.isArray(schema?.anyOf) || Array.isArray(schema?.oneOf)).toBe(
+				true,
+			);
 		});
 
 		it("rejects handler output that does not match output schema", async () => {

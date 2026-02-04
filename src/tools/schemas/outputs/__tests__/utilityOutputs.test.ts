@@ -2,7 +2,6 @@
  * Unit tests for utility output schemas
  *
  * Tests schema validation for utility tool outputs including:
- * - SetOutputFormatOutputSchema
  * - DiagnosticInfoOutputSchema with null cases
  */
 
@@ -12,94 +11,7 @@ import {
 	DeltaInfoSchema,
 	DiagnosticInfoOutputSchema,
 	EnvironmentInfoSchema,
-	SetOutputFormatOutputSchema,
 } from "../utilityOutputs.js";
-
-describe("SetOutputFormatOutputSchema", () => {
-	it("should validate output with success, message, and options", () => {
-		const validOutput = {
-			success: true,
-			message: "Output format configured: minify=true, spaces=2",
-			options: {
-				defaultMinify: true,
-				prettySpaces: 2,
-			},
-		};
-
-		const result = SetOutputFormatOutputSchema.safeParse(validOutput);
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data).toEqual(validOutput);
-		}
-	});
-
-	it("should validate output with only defaultMinify option", () => {
-		const validOutput = {
-			success: true,
-			message: "Output format configured: minify=false",
-			options: {
-				defaultMinify: false,
-			},
-		};
-
-		const result = SetOutputFormatOutputSchema.safeParse(validOutput);
-		expect(result.success).toBe(true);
-	});
-
-	it("should validate output with only prettySpaces option", () => {
-		const validOutput = {
-			success: true,
-			message: "Output format configured: spaces=4",
-			options: {
-				prettySpaces: 4,
-			},
-		};
-
-		const result = SetOutputFormatOutputSchema.safeParse(validOutput);
-		expect(result.success).toBe(true);
-	});
-
-	it("should validate output with empty options", () => {
-		const validOutput = {
-			success: true,
-			message: "Output format configured",
-			options: {},
-		};
-
-		const result = SetOutputFormatOutputSchema.safeParse(validOutput);
-		expect(result.success).toBe(true);
-	});
-
-	it("should fail validation when missing required success field", () => {
-		const invalidOutput = {
-			message: "Output format configured",
-			options: {},
-		};
-
-		const result = SetOutputFormatOutputSchema.safeParse(invalidOutput);
-		expect(result.success).toBe(false);
-	});
-
-	it("should fail validation when missing required message field", () => {
-		const invalidOutput = {
-			success: true,
-			options: {},
-		};
-
-		const result = SetOutputFormatOutputSchema.safeParse(invalidOutput);
-		expect(result.success).toBe(false);
-	});
-
-	it("should fail validation when missing required options field", () => {
-		const invalidOutput = {
-			success: true,
-			message: "Output format configured",
-		};
-
-		const result = SetOutputFormatOutputSchema.safeParse(invalidOutput);
-		expect(result.success).toBe(false);
-	});
-});
 
 describe("EnvironmentInfoSchema", () => {
 	it("should validate environment info with null token_preview", () => {
@@ -244,7 +156,6 @@ describe("DiagnosticInfoOutputSchema", () => {
 				uptime_readable: "1h 0m 0s",
 				env: {
 					node_env: "production",
-					minify_output: "true",
 				},
 			},
 			memory: {

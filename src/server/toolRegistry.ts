@@ -25,7 +25,7 @@ export interface ErrorHandlerContract {
 }
 
 export interface ResponseFormatterContract {
-	runWithMinifyOverride<T>(minifyOverride: boolean | undefined, fn: () => T): T;
+	format(value: unknown): string;
 }
 
 export interface ToolRegistryCacheHelpers {
@@ -117,7 +117,6 @@ export interface ToolExecutionOptions {
 	name: string;
 	accessToken: string;
 	arguments?: Record<string, unknown>;
-	minifyOverride?: boolean;
 	/**
 	 * Optional progress callback for emitting MCP progress notifications.
 	 * Should be provided when the request includes a progressToken.
@@ -132,8 +131,6 @@ export interface ToolRegistryDependencies {
 	cacheHelpers?: ToolRegistryCacheHelpers;
 	validateAccessToken?: (token: string) => Promise<void> | void;
 }
-
-const MINIFY_HINT_KEYS = ["minify", "_minify", "__minify"] as const;
 
 export class ToolRegistry {
 	private readonly tools = new Map<
@@ -289,62 +286,46 @@ export class ToolRegistry {
 			...(options.arguments ?? {}),
 		};
 
-		const minifyOverride = this.extractMinifyOverride(options, rawArguments);
-
-		const run = async (): Promise<CallToolResult> => {
-			try {
-				const secured = this.deps.withSecurityWrapper(
-					tool.security.namespace,
-					tool.security.operation,
-					tool.inputSchema,
-				)(options.accessToken)(rawArguments);
-
-				return await secured(async (validated) => {
-					try {
-						const context: ToolExecutionContext = {
-							accessToken: options.accessToken,
-							name: tool.name,
-							operation: tool.security.operation,
-							rawArguments,
-						};
-						if (this.deps.cacheHelpers) {
-							context.cache = this.deps.cacheHelpers;
-						}
-						if (options.sendProgress) {
-							context.sendProgress = options.sendProgress;
-						}
-						const handlerResult = await tool.handler({
-							input: validated,
-							context,
-						});
-						// Validate output against schema if present
-						// Skip validation if handler returned an error
-						if (handlerResult.isError) {
-							return handlerResult;
-						}
-						return this.validateOutput(tool.name, handlerResult);
-					} catch (handlerError) {
-						return this.deps.errorHandler.handleError(
-							handlerError,
-							`executing ${tool.name} - ${tool.security.operation}`,
-						);
-					}
-				});
-			} catch (securityError) {
-				return this.normalizeSecurityError(securityError, tool);
-			}
-		};
-
 		try {
-			return await this.deps.responseFormatter.runWithMinifyOverride(
-				minifyOverride,
-				run,
-			);
-		} catch (formatterError) {
-			return this.deps.errorHandler.handleError(
-				formatterError,
-				`formatting response for ${tool.name}`,
-			);
+			const secured = this.deps.withSecurityWrapper(
+				tool.security.namespace,
+				tool.security.operation,
+				tool.inputSchema,
+			)(options.accessToken)(rawArguments);
+
+			return await secured(async (validated) => {
+				try {
+					const context: ToolExecutionContext = {
+						accessToken: options.accessToken,
+						name: tool.name,
+						operation: tool.security.operation,
+						rawArguments,
+					};
+					if (this.deps.cacheHelpers) {
+						context.cache = this.deps.cacheHelpers;
+					}
+					if (options.sendProgress) {
+						context.sendProgress = options.sendProgress;
+					}
+					const handlerResult = await tool.handler({
+						input: validated,
+						context,
+					});
+					// Validate output against schema if present
+					// Skip validation if handler returned an error
+					if (handlerResult.isError) {
+						return handlerResult;
+					}
+					return this.validateOutput(tool.name, handlerResult);
+				} catch (handlerError) {
+					return this.deps.errorHandler.handleError(
+						handlerError,
+						`executing ${tool.name} - ${tool.security.operation}`,
+					);
+				}
+			});
+		} catch (securityError) {
+			return this.normalizeSecurityError(securityError, tool);
 		}
 	}
 
@@ -377,27 +358,6 @@ export class ToolRegistry {
 		}
 
 		return this.deps.errorHandler.handleError(error, `executing ${tool.name}`);
-	}
-
-	private extractMinifyOverride(
-		options: ToolExecutionOptions,
-		args: Record<string, unknown>,
-	): boolean | undefined {
-		if (typeof options.minifyOverride === "boolean") {
-			return options.minifyOverride;
-		}
-
-		for (const key of MINIFY_HINT_KEYS) {
-			const value = args[key];
-			if (typeof value === "boolean") {
-				// Remove the minify hint key from args
-				// eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-				delete args[key];
-				return value;
-			}
-		}
-
-		return undefined;
 	}
 
 	/**

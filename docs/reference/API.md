@@ -55,10 +55,6 @@ The server automatically converts YNAB's internal milliunits to dollars in all r
 
 **Note**: YNAB's internal representation uses milliunits (1/1000th of currency unit), but this is now transparent to users - all inputs and outputs use standard dollar amounts
 
-### Output Formatting Overrides
-
-All tool calls accept optional boolean hints `minify`, `_minify`, or `__minify` in their arguments to override JSON formatting for that call. These keys are removed before validation and do not affect tool behavior.
-
 ### Dates
 
 All dates use ISO 8601 format: `YYYY-MM-DD`
@@ -1297,7 +1293,7 @@ Returns comprehensive diagnostic information about the MCP server with flexible 
   "content": [
     {
       "type": "text",
-      "text": "{\n  \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n  \"server\": {\n    \"name\": \"ynab-mcp-server\",\n    \"version\": \"0.6.0\",\n    \"node_version\": \"v20.10.0\",\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"pid\": 12345,\n    \"uptime_ms\": 3600000,\n    \"uptime_readable\": \"1h 0m 0s\",\n    \"env\": {\n      \"node_env\": \"development\",\n      \"minify_output\": \"true\"\n    }\n  },\n  \"memory\": {\n    \"rss_mb\": 45.2,\n    \"heap_used_mb\": 32.1,\n    \"heap_total_mb\": 40.5,\n    \"external_mb\": 2.1,\n    \"array_buffers_mb\": 0.5,\n    \"description\": {\n      \"rss\": \"Resident Set Size - total memory allocated for the process\",\n      \"heap_used\": \"Used heap memory (objects, closures, etc.)\",\n      \"heap_total\": \"Total heap memory allocated\",\n      \"external\": \"Memory used by C++ objects bound to JavaScript objects\",\n      \"array_buffers\": \"Memory allocated for ArrayBuffer and SharedArrayBuffer\"\n    }\n  },\n  \"environment\": {\n    \"token_present\": true,\n    \"token_length\": 64,\n    \"token_preview\": \"abcd...xyz\",\n    \"ynab_env_keys_present\": [\"YNAB_ACCESS_TOKEN\"],\n    \"working_directory\": \"/path/to/project\"\n  },\n  \"security\": {\n    \"requests_processed\": 1250,\n    \"rate_limit_hits\": 0,\n    \"errors_logged\": 2\n  },\n  \"cache\": {\n    \"entries\": 15,\n    \"estimated_size_kb\": 128,\n    \"keys\": [\"budget_123\", \"account_456\"]\n  }\n}"
+      "text": "{\n  \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n  \"server\": {\n    \"name\": \"ynab-mcp-server\",\n    \"version\": \"0.6.0\",\n    \"node_version\": \"v20.10.0\",\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"pid\": 12345,\n    \"uptime_ms\": 3600000,\n    \"uptime_readable\": \"1h 0m 0s\",\n    \"env\": {\n      \"node_env\": \"development\",\n      }\n  },\n  \"memory\": {\n    \"rss_mb\": 45.2,\n    \"heap_used_mb\": 32.1,\n    \"heap_total_mb\": 40.5,\n    \"external_mb\": 2.1,\n    \"array_buffers_mb\": 0.5,\n    \"description\": {\n      \"rss\": \"Resident Set Size - total memory allocated for the process\",\n      \"heap_used\": \"Used heap memory (objects, closures, etc.)\",\n      \"heap_total\": \"Total heap memory allocated\",\n      \"external\": \"Memory used by C++ objects bound to JavaScript objects\",\n      \"array_buffers\": \"Memory allocated for ArrayBuffer and SharedArrayBuffer\"\n    }\n  },\n  \"environment\": {\n    \"token_present\": true,\n    \"token_length\": 64,\n    \"token_preview\": \"abcd...xyz\",\n    \"ynab_env_keys_present\": [\"YNAB_ACCESS_TOKEN\"],\n    \"working_directory\": \"/path/to/project\"\n  },\n  \"security\": {\n    \"requests_processed\": 1250,\n    \"rate_limit_hits\": 0,\n    \"errors_logged\": 2\n  },\n  \"cache\": {\n    \"entries\": 15,\n    \"estimated_size_kb\": 128,\n    \"keys\": [\"budget_123\", \"account_456\"]\n  }\n}"
     }
   ]
 }
@@ -1312,19 +1308,6 @@ Clears the in-memory cache. Safe; does not modify YNAB data.
 Example Request:
 ```json
 { "name": "clear_cache", "arguments": {} }
-```
-
-### set_output_format
-
-Configures default JSON formatting for responses.
-
-Parameters:
-- `default_minify` (boolean, optional): Minify JSON outputs by default (default: true)
-- `pretty_spaces` (number, optional): Spaces to use when pretty-printing (0-10)
-
-Example Request:
-```json
-{ "name": "set_output_format", "arguments": { "default_minify": false, "pretty_spaces": 2 } }
 ```
 
 ## Error Handling

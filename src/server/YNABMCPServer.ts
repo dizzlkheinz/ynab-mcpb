@@ -30,7 +30,6 @@ import {
 	DiagnosticInfoOutputSchema,
 	GetDefaultBudgetOutputSchema,
 	SetDefaultBudgetOutputSchema,
-	SetOutputFormatOutputSchema,
 } from "../tools/schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "../tools/toolCategories.js";
 import { registerTransactionTools } from "../tools/transactionTools.js";
@@ -326,33 +325,17 @@ export class YNABMCPServer {
 				const rawArgs = (request.params.arguments ?? undefined) as
 					| Record<string, unknown>
 					| undefined;
-				const minifyOverride = this.extractMinifyOverride(rawArgs);
-
-				const sanitizedArgs = rawArgs
-					? (() => {
-							const clone: Record<string, unknown> = { ...rawArgs };
-							clone["minify"] = undefined;
-							clone["_minify"] = undefined;
-							clone["__minify"] = undefined;
-							return clone;
-						})()
-					: undefined;
 
 				const executionOptions: {
 					name: string;
 					accessToken: string;
 					arguments: Record<string, unknown>;
-					minifyOverride?: boolean;
 					sendProgress?: ProgressCallback;
 				} = {
 					name: request.params.name,
 					accessToken: this.configInstance.YNAB_ACCESS_TOKEN,
-					arguments: sanitizedArgs ?? {},
+					arguments: rawArgs ?? {},
 				};
-
-				if (minifyOverride !== undefined) {
-					executionOptions.minifyOverride = minifyOverride;
-				}
 
 				// Create progress callback if client provided a progressToken
 				const progressToken = (
@@ -436,12 +419,6 @@ export class YNABMCPServer {
 				include_security: z.boolean().default(true),
 				include_cache: z.boolean().default(true),
 				include_delta: z.boolean().default(true),
-			})
-			.strict();
-		const setOutputFormatSchema = z
-			.object({
-				default_minify: z.boolean().optional(),
-				pretty_spaces: z.number().int().min(0).max(10).optional(),
 			})
 			.strict();
 		registerBudgetTools(this.toolRegistry, toolContext);
@@ -569,76 +546,6 @@ export class YNABMCPServer {
 				},
 			},
 		});
-
-		register({
-			name: "set_output_format",
-			description:
-				"Configure default JSON output formatting (minify or pretty spaces)",
-			inputSchema: setOutputFormatSchema,
-			outputSchema: SetOutputFormatOutputSchema,
-			handler: async ({ input }) => {
-				const options: { defaultMinify?: boolean; prettySpaces?: number } = {};
-				if (typeof input.default_minify === "boolean") {
-					options.defaultMinify = input.default_minify;
-				}
-				if (typeof input.pretty_spaces === "number") {
-					options.prettySpaces = Math.max(
-						0,
-						Math.min(10, Math.floor(input.pretty_spaces)),
-					);
-				}
-				responseFormatter.configure(options);
-
-				// Build human-readable message describing the new configuration
-				const parts: string[] = [];
-				if (options.defaultMinify !== undefined) {
-					parts.push(`minify=${options.defaultMinify}`);
-				}
-				if (options.prettySpaces !== undefined) {
-					parts.push(`spaces=${options.prettySpaces}`);
-				}
-				const message =
-					parts.length > 0
-						? `Output format configured: ${parts.join(", ")}`
-						: "Output format configured";
-
-				return {
-					content: [
-						{
-							type: "text",
-							text: responseFormatter.format({
-								success: true,
-								message,
-								options,
-							}),
-						},
-					],
-				};
-			},
-			metadata: {
-				annotations: {
-					...ToolAnnotationPresets.UTILITY_LOCAL_MUTATION,
-					title: "YNAB: Set Output Format",
-				},
-			},
-		});
-	}
-
-	private extractMinifyOverride(
-		args: Record<string, unknown> | undefined,
-	): boolean | undefined {
-		if (!args) {
-			return undefined;
-		}
-
-		for (const key of ["minify", "_minify", "__minify"] as const) {
-			const value = args[key];
-			if (typeof value === "boolean") {
-				return value;
-			}
-		}
-
-		return undefined;
 	}
 
 	/**
