@@ -24,7 +24,6 @@ Receipt workflow demo (3x speed, lightweight embed):
 
 ## Why install this
 
-- Faster than manual YNAB workflows for day-to-day checks and transaction entry
 - Powerful receipt itemization and split creation
 - Bank CSV reconciliation with fuzzy matching (beta)
 - Works with any MCP-compatible client
