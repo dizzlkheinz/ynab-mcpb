@@ -129,7 +129,7 @@ See `.env.example` for caching and output options.
 
 ## Available Tools
 
-29 tools for budgets, accounts, transactions, categories, payees, and analysis. Just ask in natural language.
+28 tools for budgets, accounts, transactions, categories, payees, and analysis. Just ask in natural language.
 
 For the complete list, see the [API Reference](docs/reference/API.md).
 

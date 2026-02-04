@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-02-04
+
+### Removed
+
+- **Output Minification** - Removed `set_output_format` tool and the entire output minification system
+  - Response formatter now always uses standard `JSON.stringify()`
+  - Removed `YNAB_MCP_MINIFY_OUTPUT` and `YNAB_MCP_PRETTY_SPACES` environment variables
+  - Removed minify override mechanism from tool registry and server
+  - Simplifies codebase by ~500 lines of rarely-used formatting logic
+  - Tool count reduced from 29 to 28
+
 ## [0.21.0] - 2026-02-02
 
 ### Changed
