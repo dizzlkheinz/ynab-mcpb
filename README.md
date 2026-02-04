@@ -21,16 +21,6 @@ Receipt workflow demo (3x speed, lightweight embed):
 
 - Receipt flow: paste receipt -> create transaction
 - Reconciliation flow: import CSV -> review matches -> apply changes
-- For a true itemized demo, explicitly ask the assistant to use `create_receipt_split_transaction`
-- Drop assets in `docs/assets/demo/` (recommended names below)
-
-```text
-docs/assets/demo/receipt-itemization-demo-lite.gif
-docs/assets/demo/receipt-itemization-demo.gif
-docs/assets/demo/reconciliation-demo.gif
-```
-
-Recording checklist: [docs/assets/demo/README.md](docs/assets/demo/README.md)
 
 ## Why install this
 
