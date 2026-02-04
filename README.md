@@ -17,6 +17,7 @@ Ask things like:
 Receipt workflow demo (3x speed, lightweight embed):
 
 ![Receipt workflow demo](docs/assets/demo/receipt-itemization-demo-lite.gif)
+[Open demo GIF directly](docs/assets/demo/receipt-itemization-demo-lite.gif)
 
 - Receipt flow: paste receipt -> create transaction
 - Reconciliation flow: import CSV -> review matches -> apply changes
@@ -57,10 +58,9 @@ Recording checklist: [docs/assets/demo/README.md](docs/assets/demo/README.md)
 
 ### 2) Add this MCP server
 
-Use one of the options below.
+Use one of the options below:
 
-<details>
-<summary><b>Claude Desktop</b> (recommended)</summary>
+#### Claude Desktop (recommended)
 
 Option A (`.mcpb` package):
 
@@ -85,10 +85,7 @@ Option B (`npx`):
 }
 ```
 
-</details>
-
-<details>
-<summary><b>Cline (VS Code)</b></summary>
+#### Cline (VS Code)
 
 ```json
 {
@@ -104,10 +101,7 @@ Option B (`npx`):
 }
 ```
 
-</details>
-
-<details>
-<summary><b>Codex</b></summary>
+#### Codex
 
 ```toml
 [mcp_servers.ynab-mcpb]
@@ -117,16 +111,11 @@ env = {"YNAB_ACCESS_TOKEN" = "your-token-here"}
 startup_timeout_sec = 120
 ```
 
-</details>
-
-<details>
-<summary><b>Any MCP client</b></summary>
+#### Any MCP client
 
 - Command: `npx`
 - Args: `["-y", "@dizzlkheinz/ynab-mcpb@latest"]`
 - Env: `YNAB_ACCESS_TOKEN=<your token>`
-
-</details>
 
 ### 3) Try these prompts
 
