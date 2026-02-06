@@ -96,6 +96,7 @@ The architecture is modular and service-oriented:
 - Adapter helpers (`src/tools/adapters.ts`): `adapt`, `adaptNoInput`, `adaptWithDelta`, `adaptWrite`, and `createBudgetResolver` to inject default budget IDs; covered by unit tests in `src/tools/__tests__/adapters.test.ts`.
 - Domain factories (`register*Tools`) live in each tool file: budget, account, transaction, category, payee, month, utility, reconciliation. `setupToolRegistry` now delegates to these factories.
 - Shared schemas: `emptyObjectSchema`, `looseObjectSchema` in `src/tools/schemas/common.ts`.
+- Output schemas: All 28 tools have Zod output schemas in `src/tools/schemas/outputs/`, registered via `outputSchema` field. The registry converts to JSON Schema for `tools/list` and validates handler output for `structuredContent`.
 - Server-owned inline tools that stay in `YNABMCPServer`: `set_default_budget`, `get_default_budget`, `diagnostic_info`, `clear_cache` (they depend on server internals).
 
 ### Tool Implementation (`src/tools/`)
@@ -135,7 +136,9 @@ Tools are organized by domain with some using modular sub-directories:
   - payeeNormalizer.ts - Payee name normalization for matching
   - ynabAdapter.ts - YNAB API integration layer
 - **schemas/** - Zod schemas for input/output validation
-  - outputs/ - Output schema definitions for all tools
+  - shared/commonOutputs.ts - Reusable base schemas (CacheMetadata, SuccessResponse, ErrorDetails)
+  - outputs/ - Output schema definitions for all 28 tools (11 domain files + index.ts)
+  - outputs/index.ts - Central export point for all output schemas and TypeScript types
 
 ### Type Definitions (`src/types/`)
 
@@ -163,7 +166,8 @@ All tools register through the centralized `ToolRegistry` for consistent validat
 registry.register({
   name: 'my_tool',
   description: 'Tool description',
-  inputSchema: MyToolSchema, // Zod schema
+  inputSchema: MyToolSchema,   // Zod input schema
+  outputSchema: MyOutputSchema, // Zod output schema (structuredContent)
   handler: adapt(handleMyTool), // Handler function
   defaultArgumentResolver: resolveBudgetId(), // Optional auto-resolution
 });
@@ -403,6 +407,71 @@ register({
 });
 ```
 
+## Output Schemas (Structured Content)
+
+All 28 tools define MCP-compliant `outputSchema` using Zod schemas, enabling clients to receive validated `structuredContent` alongside text responses. The registry converts Zod schemas to JSON Schema at tool listing time and validates handler output at execution time.
+
+### Schema Organization
+
+Output schemas live in `src/tools/schemas/outputs/` organized by domain:
+
+| File | Covers | Key Schemas |
+|------|--------|-------------|
+| `budgetOutputs.ts` | `list_budgets`, `get_budget` | `ListBudgetsOutputSchema`, `GetBudgetOutputSchema` |
+| `accountOutputs.ts` | `list_accounts`, `get_account`, `create_account` | `ListAccountsOutputSchema`, `GetAccountOutputSchema`, `CreateAccountOutputSchema` |
+| `transactionOutputs.ts` | `list_transactions`, `get_transaction` | `ListTransactionsOutputSchema` (union: normal/preview), `GetTransactionOutputSchema` |
+| `transactionMutationOutputs.ts` | `create_transaction`, `create_transactions`, `update_transaction`, `update_transactions`, `delete_transaction`, `create_receipt_split_transaction`, `update_category` | All mutation schemas with dry-run/execution unions |
+| `categoryOutputs.ts` | `list_categories`, `get_category` | `ListCategoriesOutputSchema`, `GetCategoryOutputSchema` |
+| `payeeOutputs.ts` | `list_payees`, `get_payee` | `ListPayeesOutputSchema`, `GetPayeeOutputSchema` |
+| `monthOutputs.ts` | `get_month`, `list_months` | `GetMonthOutputSchema`, `ListMonthsOutputSchema` |
+| `utilityOutputs.ts` | `get_user`, `get_default_budget`, `set_default_budget`, `clear_cache`, `diagnostic_info` | All utility output schemas |
+| `reconciliationOutputs.ts` | `reconcile_account` | `ReconcileAccountOutputSchema` (human-only or human+structured union) |
+| `comparisonOutputs.ts` | `compare_transactions`, `export_transactions` | `CompareTransactionsOutputSchema`, `ExportTransactionsOutputSchema` |
+
+### Shared Schema Components
+
+- `CacheMetadataSchema` (`schemas/shared/commonOutputs.ts`) — `cached`, `cache_info`, `usedDelta` fields, extended by read-only tool outputs
+- `SuccessResponseSchema` — `success` + `message` fields, extended by write tool outputs
+- `index.ts` — Central export point for all output schemas and TypeScript types
+
+### Schema Patterns
+
+**Read-only tools** extend `CacheMetadataSchema`:
+
+```typescript
+export const ListAccountsOutputSchema = CacheMetadataSchema.extend({
+  accounts: z.array(AccountSchema),
+  total_count: z.number().int(),
+  returned_count: z.number().int(),
+});
+```
+
+**Write tools** use discriminated unions for dry-run vs execution:
+
+```typescript
+export const CreateTransactionOutputSchema = z.union([
+  z.object({ dry_run: z.literal(true), action: z.literal("create_transaction"), request: z.record(z.string(), z.unknown()) }),
+  z.object({ transaction: TransactionWithBalanceSchema }),
+]);
+```
+
+**Reconciliation** uses a human-only / human+structured union:
+
+```typescript
+export const ReconcileAccountOutputSchema = z.union([
+  z.object({ human: z.string(), structured: StructuredReconciliationDataSchema }),
+  z.object({ human: z.string() }),
+]);
+```
+
+### Registry Integration
+
+The `ToolRegistry` (`src/server/toolRegistry.ts`) handles output schemas:
+
+1. **Conversion**: Zod schemas are converted to JSON Schema via `generateJsonSchema()` for the `tools/list` response
+2. **Validation**: Handler output is validated against `outputSchema` at execution time; validated output is returned as `structuredContent`
+3. **Backwards compatibility**: Text serialization of the structured output is also returned in `content` as a `TextContent` block
+
 ## Amount Handling (Critical!)
 
 YNAB uses **milliunits** internally (1 dollar = 1000 milliunits):
@@ -494,13 +563,15 @@ Strict mode enabled with extensive safety checks:
 
 ### Adding a New Tool
 
-1. Create Zod schema in appropriate tool file (e.g., `src/tools/myTools.ts`)
-2. Implement handler function following existing patterns
-3. Register the tool in the appropriate domain factory (e.g., `registerBudgetTools` in
-   `src/tools/budgetTools.ts`) using `ToolRegistry`
-4. Add unit tests in `src/tools/__tests__/myTools.test.ts`
-5. Add integration tests in `src/tools/__tests__/myTools.integration.test.ts`
-6. Update API documentation in `docs/reference/API.md`
+1. Create Zod input schema in appropriate tool file (e.g., `src/tools/myTools.ts`)
+2. Create Zod output schema in `src/tools/schemas/outputs/` and export from `index.ts`
+3. Implement handler function following existing patterns
+4. Register the tool in the appropriate domain factory (e.g., `registerBudgetTools` in
+   `src/tools/budgetTools.ts`) using `ToolRegistry` — include both `inputSchema` and `outputSchema`
+5. Add unit tests in `src/tools/__tests__/myTools.test.ts`
+6. Add output schema tests in `src/tools/schemas/outputs/__tests__/`
+7. Add integration tests in `src/tools/__tests__/myTools.integration.test.ts`
+8. Update API documentation in `docs/reference/API.md`
 
 ### Modifying Cache Behavior
 
