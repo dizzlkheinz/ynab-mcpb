@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-02-06
+
+### Changed
+
+- **Dependencies** - Updated all dependencies to latest versions
+  - @modelcontextprotocol/sdk 1.25.3 → 1.26.0
+  - @biomejs/biome 2.3.13 → 2.3.14
+  - @types/node 25.2.0 → 25.2.1
+  - dotenv 17.2.3 → 17.2.4
+  - esbuild 0.27.2 → 0.27.3
+- **Documentation** - Added comprehensive output schema documentation to CLAUDE.md
+  - Schema organization table, shared components, patterns for read/write/reconciliation tools
+  - Registry integration details (Zod → JSON Schema conversion, structuredContent validation)
+
 ## [0.21.1] - 2026-02-04
 
 ### Removed
