@@ -279,7 +279,8 @@ describe("Error Handler Integration Tests", () => {
 				const originalError = new Error(
 					"Authentication failed with token: abc123xyz and key: secret456",
 				);
-				const ynabError = ErrorHandler.createYNABError(
+				const errorHandler = createErrorHandler(responseFormatter);
+				const ynabError = errorHandler.createYNABError(
 					YNABErrorCode.UNAUTHORIZED,
 					"Test error",
 					originalError,
@@ -346,43 +347,40 @@ describe("Error Handler Integration Tests", () => {
 		);
 	});
 
-	describe("Static vs instance consistency", () => {
-		beforeEach(() => {
-			// Set up static ErrorHandler with same formatter
-			ErrorHandler.setFormatter(responseFormatter);
-		});
-
+	describe("Instance consistency", () => {
 		it(
-			"should produce identical results for static and instance calls",
+			"should produce identical results for two instances with same formatter",
 			{ meta: { tier: "domain", domain: "server" } },
 			() => {
-				const errorHandler = createErrorHandler(responseFormatter);
+				const errorHandler1 = createErrorHandler(responseFormatter);
+				const errorHandler2 = createErrorHandler(responseFormatter);
 
 				const error = new YNABAPIError(YNABErrorCode.NOT_FOUND, "Test error");
 
-				const staticResult = ErrorHandler.handleError(error, "testing");
-				const instanceResult = errorHandler.handleError(error, "testing");
+				const result1 = errorHandler1.handleError(error, "testing");
+				const result2 = errorHandler2.handleError(error, "testing");
 
-				expect(staticResult).toEqual(instanceResult);
+				expect(result1).toEqual(result2);
 			},
 		);
 
 		it(
-			"should produce identical results for createValidationError",
+			"should produce identical results for createValidationError across instances",
 			{ meta: { tier: "domain", domain: "server" } },
 			() => {
-				const errorHandler = createErrorHandler(responseFormatter);
+				const errorHandler1 = createErrorHandler(responseFormatter);
+				const errorHandler2 = createErrorHandler(responseFormatter);
 
-				const staticResult = ErrorHandler.createValidationError(
+				const result1 = errorHandler1.createValidationError(
 					"Test error",
 					"Details",
 				);
-				const instanceResult = errorHandler.createValidationError(
+				const result2 = errorHandler2.createValidationError(
 					"Test error",
 					"Details",
 				);
 
-				expect(staticResult).toEqual(instanceResult);
+				expect(result1).toEqual(result2);
 			},
 		);
 	});
