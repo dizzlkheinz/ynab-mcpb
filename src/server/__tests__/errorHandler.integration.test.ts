@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	createErrorHandler,
-	ErrorHandler,
 	ValidationError,
 	YNABAPIError,
 	YNABErrorCode,
