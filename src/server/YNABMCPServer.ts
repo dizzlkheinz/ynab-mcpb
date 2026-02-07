@@ -553,16 +553,26 @@ export class YNABMCPServer {
 	 */
 	async run(): Promise<void> {
 		try {
-			// Validate token before starting server
-			await this.validateToken();
-
+			// Connect transport first so the server can respond to MCP ping/inspect
+			// (required for Docker-based registries like Glama that probe the server)
 			const transport = new StdioServerTransport();
 			await this.server.connect(transport);
+
+			// Validate token after transport is connected (non-fatal)
+			try {
+				await this.validateToken();
+			} catch (error) {
+				const message =
+					error instanceof Error ? error.message : String(error);
+				console.error(`⚠️ Token validation warning: ${message}`);
+				console.error(
+					"Server is running but YNAB API calls will fail until a valid token is provided.",
+				);
+			}
 
 			console.error("YNAB MCP Server started successfully");
 		} catch (error) {
 			if (
-				error instanceof AuthenticationError ||
 				error instanceof ConfigurationError ||
 				error instanceof ConfigValidationError ||
 				error instanceof ValidationError ||

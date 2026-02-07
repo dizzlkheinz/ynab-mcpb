@@ -1,4 +1,4 @@
-name: Publish to npm
+name: Publish to npm & MCP Registry
 
 on:
   workflow_dispatch:
@@ -40,3 +40,24 @@ jobs:
         run: |
           npm run test:unit
           npm publish --provenance --access public
+
+      ### Publish to MCP Registry
+      - name: Sync server.json version from tag
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          # For workflow_dispatch, extract from input tag
+          if [ -n "${{ inputs.tag }}" ]; then
+            VERSION=$(echo "${{ inputs.tag }}" | sed 's/^v//')
+          fi
+          jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp && mv server.tmp server.json
+          echo "Publishing MCP Registry version: $VERSION"
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish
