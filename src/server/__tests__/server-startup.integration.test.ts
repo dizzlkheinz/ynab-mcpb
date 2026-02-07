@@ -330,7 +330,7 @@ describeIntegration("Server Startup and Transport Integration", () => {
 		);
 
 		it(
-			"should validate token before attempting transport connection",
+			"should validate token after transport connection",
 			{ meta: { tier: "domain", domain: "server" } },
 			async (ctx) => {
 				await skipOnRateLimit(async () => {
@@ -395,7 +395,7 @@ describeIntegration("Server Startup and Transport Integration", () => {
 		);
 
 		it(
-			"should handle startup errors without exposing sensitive information",
+			"should not expose sensitive information in token validation warnings",
 			{ meta: { tier: "domain", domain: "server" } },
 			async (ctx) => {
 				await skipOnRateLimit(async () => {
@@ -404,14 +404,25 @@ describeIntegration("Server Startup and Transport Integration", () => {
 
 					try {
 						const server = new YNABMCPServer(false);
-						await expect(server.run()).rejects.toThrow();
+						const consoleSpy = vi
+							.spyOn(console, "error")
+							.mockImplementation(() => {
+								// Mock implementation for testing
+							});
 
-						// Verify error doesn't contain the actual token
 						try {
 							await server.run();
-						} catch (error) {
-							expect(error.message).not.toContain("invalid-token");
+						} catch {
+							// Transport may fail in test environment
 						}
+
+						// Verify warning messages don't contain the actual token
+						const allMessages = consoleSpy.mock.calls
+							.map((call) => call.join(" "))
+							.join(" ");
+						expect(allMessages).not.toContain("invalid-token");
+
+						consoleSpy.mockRestore();
 					} finally {
 						process.env.YNAB_ACCESS_TOKEN = originalToken;
 					}
@@ -500,7 +511,7 @@ describeIntegration("Server Startup and Transport Integration", () => {
 		);
 
 		it(
-			"should fail fast on authentication errors",
+			"should warn but not crash on authentication errors",
 			{ meta: { tier: "domain", domain: "server" } },
 			async (ctx) => {
 				await skipOnRateLimit(async () => {
@@ -509,12 +520,31 @@ describeIntegration("Server Startup and Transport Integration", () => {
 
 					try {
 						const server = new YNABMCPServer(false);
+						const consoleSpy = vi
+							.spyOn(console, "error")
+							.mockImplementation(() => {
+								// Mock implementation for testing
+							});
 
-						// Should fail on token validation, before transport setup
-						await expect(server.run()).rejects.toHaveProperty(
-							"name",
-							"AuthenticationError",
-						);
+						try {
+							// run() should not reject due to auth errors
+							// (transport may still fail in test environment)
+							await server.run();
+						} catch (error) {
+							// If it throws, it should be a transport error, not auth
+							expect(error).not.toHaveProperty(
+								"name",
+								"AuthenticationError",
+							);
+						}
+
+						// Should have logged a token validation warning
+						const allMessages = consoleSpy.mock.calls
+							.map((call) => call.join(" "))
+							.join(" ");
+						expect(allMessages).toContain("Token validation warning");
+
+						consoleSpy.mockRestore();
 					} finally {
 						process.env.YNAB_ACCESS_TOKEN = originalToken;
 					}
