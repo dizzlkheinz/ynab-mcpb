@@ -4343,9 +4343,9 @@ describe("transactionTools", () => {
 				const updateCall = (mockYnabAPI.transactions.updateTransactions as any)
 					.mock.calls[0];
 				const updatePayload = updateCall[1].transactions[0];
-				expect(updatePayload.transaction.memo).toBe("Updated memo only");
-				expect(updatePayload.transaction.amount).toBeUndefined();
-				expect(updatePayload.transaction.account_id).toBeUndefined();
+				expect(updatePayload.memo).toBe("Updated memo only");
+				expect(updatePayload.amount).toBeUndefined();
+				expect(updatePayload.account_id).toBeUndefined();
 			});
 		});
 

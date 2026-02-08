@@ -118,8 +118,15 @@ export async function handleListTransactions(
 			const sizeLimit = 90000; // Conservative limit under 100KB
 
 			if (estimatedSize > sizeLimit) {
-				// Return summary and suggest export
-				const preview = transactions.slice(0, 50);
+				// Return summary and suggest export (show most recent entries)
+				const preview = [...transactions]
+					.sort((a, b) => {
+						const dateA = a.date ?? "";
+						const dateB = b.date ?? "";
+						if (dateA === dateB) return 0;
+						return dateA < dateB ? 1 : -1;
+					})
+					.slice(0, 50);
 				return {
 					content: [
 						{
@@ -128,7 +135,7 @@ export async function handleListTransactions(
 								message: `Found ${transactions.length} transactions (${Math.round(estimatedSize / 1024)}KB). Too large to display all.`,
 								suggestion:
 									"Use 'export_transactions' tool to save all transactions to a file.",
-								showing: `First ${preview.length} transactions:`,
+								showing: `Most recent ${preview.length} transactions:`,
 								total_count: transactions.length,
 								estimated_size_kb: Math.round(estimatedSize / 1024),
 								cached: cacheHit,

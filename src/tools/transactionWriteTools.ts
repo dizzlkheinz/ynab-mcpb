@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import type { SaveSubTransaction } from "ynab/dist/models/SaveSubTransaction.js";
 import type { SaveTransaction } from "ynab/dist/models/SaveTransaction.js";
+import type { SaveTransactionWithIdOrImportId } from "ynab/dist/models/SaveTransactionWithIdOrImportId.js";
 import type { z } from "zod/v4";
 import { CacheManager, cacheManager } from "../server/cacheManager.js";
 import type { DeltaCache } from "../server/deltaCache.js";
@@ -1831,9 +1832,11 @@ export async function handleUpdateTransactions(
 			}
 
 			// Prepare update transactions for the YNAB API
-			const updateTransactions: { id: string; transaction: SaveTransaction }[] =
+			const updateTransactions: SaveTransactionWithIdOrImportId[] =
 				transactions.map((transaction) => {
-					const transactionData: SaveTransaction = {};
+					const transactionData: SaveTransactionWithIdOrImportId = {
+						id: transaction.id,
+					};
 
 					// Note: account_id is intentionally excluded as account moves are not supported
 					if (transaction.amount !== undefined) {
@@ -1866,10 +1869,7 @@ export async function handleUpdateTransactions(
 							transaction.flag_color as ynab.TransactionFlagColor;
 					}
 
-					return {
-						id: transaction.id,
-						transaction: transactionData,
-					};
+					return transactionData;
 				});
 
 			// Execute bulk update
