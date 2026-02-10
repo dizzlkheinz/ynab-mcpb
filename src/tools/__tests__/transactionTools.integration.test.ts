@@ -74,16 +74,28 @@ describeIntegration("Transaction Tools Integration", () => {
 			const result = await handleListTransactions(ynabAPI, params);
 			const response = JSON.parse(result.content[0].text);
 
-			expect(response.transactions).toBeDefined();
-			expect(Array.isArray(response.transactions)).toBe(true);
+			// Handle large response case (preview_transactions instead of transactions)
+			const transactions =
+				response.transactions || response.preview_transactions;
+			expect(transactions).toBeDefined();
+			expect(Array.isArray(transactions)).toBe(true);
 
-			// All transactions should be from the specified account
-			response.transactions.forEach((transaction: any) => {
-				expect(transaction.account_id).toBe(testAccountId);
-			});
+			if (response.transactions) {
+				// All transactions should be from the specified account
+				response.transactions.forEach((transaction: any) => {
+					expect(transaction.account_id).toBe(testAccountId);
+				});
+			} else {
+				// Preview mode should still include account_id for account-filter validation
+				response.preview_transactions.forEach((transaction: any) => {
+					expect(transaction.account_id).toBe(testAccountId);
+				});
+			}
 
 			console.warn(
-				`✅ Successfully listed ${response.transactions.length} transactions for account`,
+				`✅ Successfully listed ${
+					response.total_count || transactions.length
+				} transactions for account`,
 			);
 		},
 	);

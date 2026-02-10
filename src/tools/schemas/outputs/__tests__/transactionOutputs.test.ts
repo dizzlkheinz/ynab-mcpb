@@ -204,6 +204,7 @@ describe("TransactionPreviewSchema", () => {
 			date: "2025-11-17",
 			amount: -45.5,
 			memo: "Grocery shopping",
+			account_id: "account-123",
 			payee_name: "Whole Foods",
 			category_name: "Groceries",
 		};
@@ -213,6 +214,7 @@ describe("TransactionPreviewSchema", () => {
 		if (result.success) {
 			expect(result.data.id).toBe("txn-preview-123");
 			expect(result.data.amount).toBe(-45.5);
+			expect(result.data.account_id).toBe("account-123");
 			expect(result.data.payee_name).toBe("Whole Foods");
 		}
 	});
@@ -222,6 +224,7 @@ describe("TransactionPreviewSchema", () => {
 			id: "txn-preview-456",
 			date: "2025-11-17",
 			amount: 100.0,
+			account_id: "account-456",
 		};
 
 		const result = TransactionPreviewSchema.safeParse(validPreview);
@@ -322,6 +325,7 @@ describe("ListTransactionsOutputSchema - Preview Mode", () => {
 					date: "2025-11-17",
 					amount: -45.5,
 					memo: "Grocery shopping",
+					account_id: "account-123",
 					payee_name: "Whole Foods",
 					category_name: "Groceries",
 				},
@@ -329,6 +333,7 @@ describe("ListTransactionsOutputSchema - Preview Mode", () => {
 					id: "txn-preview-2",
 					date: "2025-11-16",
 					amount: -30.0,
+					account_id: "account-123",
 					payee_name: "Gas Station",
 				},
 			],
@@ -359,6 +364,7 @@ describe("ListTransactionsOutputSchema - Preview Mode", () => {
 					id: "txn-1",
 					date: "2025-11-17",
 					amount: 100.0,
+					account_id: "account-123",
 				},
 			],
 		};

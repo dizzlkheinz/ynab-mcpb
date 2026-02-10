@@ -147,6 +147,7 @@ export async function handleListTransactions(
 									date: transaction.date,
 									amount: milliunitsToAmount(transaction.amount),
 									memo: transaction.memo,
+									account_id: transaction.account_id,
 									payee_name: transaction.payee_name,
 									category_name: transaction.category_name,
 								})),

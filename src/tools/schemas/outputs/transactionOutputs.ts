@@ -177,6 +177,9 @@ export const TransactionPreviewSchema = z.object({
 	/** Optional transaction memo */
 	memo: z.string().optional().describe("Transaction memo"),
 
+	/** Account ID for this transaction */
+	account_id: z.string().describe("Account ID"),
+
 	/** Payee name (enriched field, optional) */
 	payee_name: z.string().optional().describe("Payee name"),
 
