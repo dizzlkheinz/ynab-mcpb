@@ -1,6 +1,6 @@
 {
 	"name": "@dizzlkheinz/ynab-mcpb",
-	"version": "0.21.2",
+	"version": "0.22.0",
 	"mcpName": "io.github.dizzlkheinz/ynab-mcpb",
 	"description": "Model Context Protocol server for YNAB (You Need A Budget) integration",
 	"main": "dist/index.js",

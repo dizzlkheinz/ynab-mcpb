@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-02-21
+
+### Added
+
+- **MCP Registry & Glama** - Added MCP Registry publishing support and Glama integration
+
+### Changed
+
+- **Reconciliation** - Cleaned up architecture debt (6 issues)
+- **Reconciliation** - Exact amount matching is now required; removed all tolerance-based matching paths
+- **Dependencies** - Updated all dependencies and Biome schema
+
+### Fixed
+
+- **list_transactions** - Preview output now includes `account_id` field
+- **Bulk Operations** - Corrected bulk update payloads and list preview order
+
 ## [0.21.2] - 2026-02-06
 
 ### Changed
