@@ -244,7 +244,6 @@ function buildPerformanceParams(
 		statement_balance: statementBalance,
 		statement_date: "2025-08-31",
 		date_tolerance_days: 1,
-		amount_tolerance_cents: 1,
 		auto_match_threshold: 90,
 		suggestion_threshold: 60,
 		auto_create_transactions: true,
@@ -252,9 +251,6 @@ function buildPerformanceParams(
 		auto_unclear_missing: false,
 		auto_adjust_dates: false,
 		dry_run: false,
-		require_exact_match: true,
-		confidence_threshold: 0.8,
-		max_resolution_attempts: 3,
 		include_structured_data: false,
 		...overrides,
 	};

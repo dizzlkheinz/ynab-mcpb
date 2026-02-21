@@ -247,9 +247,7 @@ export async function executeReconciliation(
 		initialAccount.cleared_balance ?? 0,
 		-statementTargetMilli,
 	);
-	const balanceToleranceMilli =
-		Math.max(0, params.amount_tolerance_cents ?? DEFAULT_TOLERANCE_CENTS) *
-		CENTS_TO_MILLI;
+	const balanceToleranceMilli = DEFAULT_TOLERANCE_CENTS * CENTS_TO_MILLI;
 	let balanceAligned = false;
 
 	const applyClearedDelta = (delta: number) => {

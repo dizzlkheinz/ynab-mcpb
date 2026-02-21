@@ -157,7 +157,6 @@ const buildBulkParams = (
 	statement_balance: statementBalance.value, // Use decimal value for params
 	statement_date: "2025-10-31",
 	date_tolerance_days: 1,
-	amount_tolerance_cents: 1,
 	auto_match_threshold: 90,
 	suggestion_threshold: 60,
 	auto_create_transactions: true,
@@ -165,9 +164,6 @@ const buildBulkParams = (
 	auto_unclear_missing: false,
 	auto_adjust_dates: false,
 	dry_run: false,
-	require_exact_match: true,
-	confidence_threshold: 0.8,
-	max_resolution_attempts: 3,
 	...overrides,
 });
 
@@ -244,7 +240,6 @@ describe("executeReconciliation (dry run)", () => {
 			csv_data: "Date,Description,Amount",
 			statement_balance: -921.24,
 			date_tolerance_days: 2,
-			amount_tolerance_cents: 1,
 			auto_match_threshold: 90,
 			suggestion_threshold: 60,
 			auto_create_transactions: true,
@@ -252,9 +247,6 @@ describe("executeReconciliation (dry run)", () => {
 			auto_unclear_missing: true,
 			auto_adjust_dates: true,
 			dry_run: true,
-			require_exact_match: true,
-			confidence_threshold: 0.8,
-			max_resolution_attempts: 5,
 		} satisfies any;
 
 		const initialAccount: AccountSnapshot = {
@@ -294,7 +286,6 @@ describe("executeReconciliation (apply mode)", () => {
 			statement_balance: -921.24,
 			statement_date: "2025-10-31",
 			date_tolerance_days: 2,
-			amount_tolerance_cents: 1,
 			auto_match_threshold: 90,
 			suggestion_threshold: 60,
 			auto_create_transactions: true,
@@ -302,9 +293,6 @@ describe("executeReconciliation (apply mode)", () => {
 			auto_unclear_missing: true,
 			auto_adjust_dates: true,
 			dry_run: false,
-			require_exact_match: true,
-			confidence_threshold: 0.8,
-			max_resolution_attempts: 5,
 		} satisfies any;
 
 		const initialAccount: AccountSnapshot = {
@@ -460,7 +448,6 @@ describe("executeReconciliation (ordered halting)", () => {
 			csv_data: "Date,Description,Amount",
 			statement_balance: 100,
 			date_tolerance_days: 2,
-			amount_tolerance_cents: 1,
 			auto_match_threshold: 90,
 			suggestion_threshold: 60,
 			auto_create_transactions: false,
@@ -468,9 +455,6 @@ describe("executeReconciliation (ordered halting)", () => {
 			auto_unclear_missing: false,
 			auto_adjust_dates: false,
 			dry_run: true,
-			require_exact_match: true,
-			confidence_threshold: 0.8,
-			max_resolution_attempts: 5,
 		} satisfies any;
 
 		const initialAccount: AccountSnapshot = {

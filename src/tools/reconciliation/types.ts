@@ -163,8 +163,6 @@ export interface MatchingConfig {
 		payee: number; // Recommended: 0.35
 	};
 
-	// Tolerances (in MILLIUNITS for amount)
-	amountToleranceMilliunits: number; // Default: 10 (1 cent)
 	dateToleranceDays: number; // Default: 7
 
 	// Thresholds
@@ -173,7 +171,6 @@ export interface MatchingConfig {
 	minimumCandidateScore: number; // Default: 40
 
 	// Bonuses for perfect matches
-	exactAmountBonus: number; // Default: 10
 	exactDateBonus: number; // Default: 5
 	exactPayeeBonus: number; // Default: 10
 }

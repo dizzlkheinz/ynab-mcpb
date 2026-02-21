@@ -16,12 +16,10 @@ describe("matcher", () => {
 				date: 0.15,
 				payee: 0.35,
 			},
-			amountToleranceMilliunits: 10,
 			dateToleranceDays: 2,
 			autoMatchThreshold: 90,
 			suggestedMatchThreshold: 60,
 			minimumCandidateScore: 40,
-			exactAmountBonus: 10,
 			exactDateBonus: 5,
 			exactPayeeBonus: 10,
 		};
@@ -43,8 +41,8 @@ describe("matcher", () => {
 						id: "y1",
 						date: "2025-10-15",
 						amount: -45230, // milliunits
-						payee_name: "Shell Gas Station",
-						category_name: "Auto: Gas",
+						payee: "Shell Gas Station",
+						categoryName: "Auto: Gas",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -71,8 +69,8 @@ describe("matcher", () => {
 						id: "y1",
 						date: "2025-10-15",
 						amount: -100000,
-						payee_name: "Netflix Com",
-						category_name: "Entertainment",
+						payee: "Netflix Com",
+						categoryName: "Entertainment",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -125,8 +123,8 @@ describe("matcher", () => {
 						id: "y1",
 						date: "2025-10-20",
 						amount: -127430,
-						payee_name: "Amazon Prime",
-						category_name: "Shopping",
+						payee: "Amazon Prime",
+						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -156,8 +154,8 @@ describe("matcher", () => {
 						id: "y1",
 						date: "2025-10-15",
 						amount: -50000,
-						payee_name: "Italian Restaurant",
-						category_name: "Dining",
+						payee: "Italian Restaurant",
+						categoryName: "Dining",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -165,8 +163,8 @@ describe("matcher", () => {
 						id: "y2",
 						date: "2025-10-16",
 						amount: -50000,
-						payee_name: "Chinese Restaurant",
-						category_name: "Dining",
+						payee: "Chinese Restaurant",
+						categoryName: "Dining",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -195,8 +193,8 @@ describe("matcher", () => {
 						id: "y1",
 						date: "2025-10-15",
 						amount: -100000, // Different amount
-						payee_name: "Shell",
-						category_name: "Auto: Gas",
+						payee: "Shell",
+						categoryName: "Auto: Gas",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -223,8 +221,8 @@ describe("matcher", () => {
 						id: "y1",
 						date: "2025-10-15",
 						amount: -50000, // Negative (purchase)
-						payee_name: "Amazon",
-						category_name: "Shopping",
+						payee: "Amazon",
+						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -252,8 +250,8 @@ describe("matcher", () => {
 						id: "y1",
 						date: "2025-10-15",
 						amount: -50000,
-						payee_name: "Coffee Shop",
-						category_name: "Dining",
+						payee: "Coffee Shop",
+						categoryName: "Dining",
 						cleared: "cleared",
 						approved: true,
 					},
@@ -261,8 +259,8 @@ describe("matcher", () => {
 						id: "y2",
 						date: "2025-10-15",
 						amount: -50000,
-						payee_name: "Coffee Shop",
-						category_name: "Dining",
+						payee: "Coffee Shop",
+						categoryName: "Dining",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -288,8 +286,8 @@ describe("matcher", () => {
 						id: "y1",
 						date: "2025-10-13", // 2 days away
 						amount: -50000,
-						payee_name: "Store",
-						category_name: "Shopping",
+						payee: "Store",
+						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -297,8 +295,8 @@ describe("matcher", () => {
 						id: "y2",
 						date: "2025-10-14", // 1 day away
 						amount: -50000,
-						payee_name: "Store",
-						category_name: "Shopping",
+						payee: "Store",
+						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -312,7 +310,7 @@ describe("matcher", () => {
 		});
 
 		describe("amount tolerance", () => {
-			it("should match within amount tolerance", () => {
+			it("should match when amounts are equal", () => {
 				const bankTxn: BankTransaction = {
 					id: "b1",
 					date: "2025-10-15",
@@ -325,9 +323,9 @@ describe("matcher", () => {
 					{
 						id: "y1",
 						date: "2025-10-15",
-						amount: -45240, // $45.24 - within 1 cent tolerance
-						payee_name: "Shell",
-						category_name: "Auto: Gas",
+						amount: -45230, // exact match
+						payee: "Shell",
+						categoryName: "Auto: Gas",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -339,9 +337,7 @@ describe("matcher", () => {
 				expect(match.bestMatch?.ynabTransaction).toBeDefined();
 			});
 
-			it("should not match outside amount tolerance", () => {
-				config.amountToleranceMilliunits = 10; // 1 cent
-
+			it("should not match when amounts differ", () => {
 				const bankTxn: BankTransaction = {
 					id: "b1",
 					date: "2025-10-15",
@@ -354,9 +350,9 @@ describe("matcher", () => {
 					{
 						id: "y1",
 						date: "2025-10-15",
-						amount: -45050, // $45.05 - outside 1 cent tolerance
-						payee_name: "Shell",
-						category_name: "Auto: Gas",
+						amount: -45050, // different amount - no match
+						payee: "Shell",
+						categoryName: "Auto: Gas",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -383,8 +379,8 @@ describe("matcher", () => {
 						id: "y1",
 						date: "2025-10-15",
 						amount: -50000,
-						payee_name: "Store",
-						category_name: "Shopping",
+						payee: "Store",
+						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
 					},
@@ -423,8 +419,8 @@ describe("matcher", () => {
 					id: "y1",
 					date: "2025-10-15",
 					amount: -45230,
-					payee_name: "Shell Gas",
-					category_name: "Auto: Gas",
+					payee: "Shell Gas",
+					categoryName: "Auto: Gas",
 					cleared: "uncleared",
 					approved: true,
 				},
@@ -432,8 +428,8 @@ describe("matcher", () => {
 					id: "y2",
 					date: "2025-10-16",
 					amount: -100000,
-					payee_name: "Netflix",
-					category_name: "Entertainment",
+					payee: "Netflix",
+					categoryName: "Entertainment",
 					cleared: "uncleared",
 					approved: true,
 				},
@@ -469,8 +465,8 @@ describe("matcher", () => {
 					id: "y1",
 					date: "2025-10-15",
 					amount: -50000,
-					payee_name: "Store",
-					category_name: "Shopping",
+					payee: "Store",
+					categoryName: "Shopping",
 					cleared: "uncleared",
 					approved: true,
 				},
@@ -511,8 +507,8 @@ describe("matcher", () => {
 					id: "y1",
 					date: "2025-10-15",
 					amount: -45230,
-					payee_name: "Shell",
-					category_name: "Auto: Gas",
+					payee: "Shell",
+					categoryName: "Auto: Gas",
 					cleared: "uncleared",
 					approved: true,
 				},
@@ -533,12 +529,10 @@ describe("matcher", () => {
 					date: 0.15,
 					payee: 0.35,
 				},
-				amountToleranceMilliunits: 100, // 10 cents
 				dateToleranceDays: 5,
 				autoMatchThreshold: 85,
 				suggestedMatchThreshold: 50,
 				minimumCandidateScore: 40,
-				exactAmountBonus: 10,
 				exactDateBonus: 5,
 				exactPayeeBonus: 10,
 			};
@@ -557,9 +551,9 @@ describe("matcher", () => {
 				{
 					id: "y1",
 					date: "2025-10-11", // 4 days difference (within custom tolerance)
-					amount: -50090, // $50.09 (within custom tolerance)
-					payee_name: "Store",
-					category_name: "Shopping",
+					amount: -50000, // exact amount match
+					payee: "Store",
+					categoryName: "Shopping",
 					cleared: "uncleared",
 					approved: true,
 				},
@@ -601,8 +595,8 @@ describe("matcher", () => {
 					id: "y1",
 					date: "2025-10-15",
 					amount: -50000,
-					payee_name: null,
-					category_name: "Shopping",
+					payee: null,
+					categoryName: "Shopping",
 					cleared: "uncleared",
 					approved: true,
 				},
@@ -628,8 +622,8 @@ describe("matcher", () => {
 					id: "y1",
 					date: "2025-10-15",
 					amount: -10, // 1 cent in milliunits
-					payee_name: "Micro Transaction",
-					category_name: "Misc",
+					payee: "Micro Transaction",
+					categoryName: "Misc",
 					cleared: "uncleared",
 					approved: true,
 				},
@@ -653,8 +647,8 @@ describe("matcher", () => {
 					id: "y1",
 					date: "2025-10-15",
 					amount: -10000000, // $10,000 in milliunits
-					payee_name: "Large Purchase",
-					category_name: "Shopping",
+					payee: "Large Purchase",
+					categoryName: "Shopping",
 					cleared: "uncleared",
 					approved: true,
 				},

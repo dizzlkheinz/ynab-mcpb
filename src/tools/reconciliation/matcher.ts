@@ -39,12 +39,10 @@ export const DEFAULT_CONFIG: MatchingConfig = {
 		date: 0.15,
 		payee: 0.35,
 	},
-	amountToleranceMilliunits: 10, // 1 cent
 	dateToleranceDays: 7,
 	autoMatchThreshold: 85,
 	suggestedMatchThreshold: 60,
 	minimumCandidateScore: 40,
-	exactAmountBonus: 10,
 	exactDateBonus: 5,
 	exactPayeeBonus: 10,
 };
@@ -56,9 +54,6 @@ export function normalizeConfig(config?: MatchingConfig): MatchingConfig {
 
 	return {
 		weights: config.weights ?? DEFAULT_CONFIG.weights,
-		amountToleranceMilliunits:
-			config.amountToleranceMilliunits ??
-			DEFAULT_CONFIG.amountToleranceMilliunits,
 		dateToleranceDays:
 			config.dateToleranceDays ?? DEFAULT_CONFIG.dateToleranceDays,
 		autoMatchThreshold:
@@ -67,8 +62,6 @@ export function normalizeConfig(config?: MatchingConfig): MatchingConfig {
 			config.suggestedMatchThreshold ?? DEFAULT_CONFIG.suggestedMatchThreshold,
 		minimumCandidateScore:
 			config.minimumCandidateScore ?? DEFAULT_CONFIG.minimumCandidateScore,
-		exactAmountBonus:
-			config.exactAmountBonus ?? DEFAULT_CONFIG.exactAmountBonus,
 		exactDateBonus: config.exactDateBonus ?? DEFAULT_CONFIG.exactDateBonus,
 		exactPayeeBonus: config.exactPayeeBonus ?? DEFAULT_CONFIG.exactPayeeBonus,
 	};
@@ -141,9 +134,8 @@ function findCandidates(
 			continue;
 		}
 
-		const amountDiff = Math.abs(bankTxn.amount - ynabTxn.amount);
-		if (amountDiff > config.amountToleranceMilliunits) {
-			// Outside configured amount tolerance - treat as no candidate
+		// Amounts must match exactly (milliunits)
+		if (bankTxn.amount !== ynabTxn.amount) {
 			continue;
 		}
 
@@ -191,9 +183,8 @@ function calculateScores(
 	ynabTxn: NormalizedYNABTransaction,
 	config: MatchingConfig,
 ): MatchCandidate["scores"] {
-	// Amount score - exact match only (candidates outside tolerance already filtered)
-	const amountDiff = Math.abs(bankTxn.amount - ynabTxn.amount);
-	const amountScore = amountDiff === 0 ? 100 : 95;
+	// Amount score - always 100 (candidates with different amounts are filtered out)
+	const amountScore = 100;
 
 	// Date score
 	const bankDate = new Date(bankTxn.date);
@@ -222,7 +213,6 @@ function calculateScores(
 		payeeScore * config.weights.payee;
 
 	// Apply bonuses
-	if (amountScore === 100) combined += config.exactAmountBonus;
 	if (dateScore === 100) combined += config.exactDateBonus;
 	if (payeeScore >= 95) combined += config.exactPayeeBonus;
 
@@ -258,11 +248,7 @@ function buildMatchReasons(
 ): string[] {
 	const reasons: string[] = [];
 
-	if (scores.amount === 100) {
-		reasons.push("Exact amount match");
-	} else if (scores.amount >= 95) {
-		reasons.push("Amount within tolerance");
-	}
+	reasons.push("Exact amount match");
 
 	if (scores.date === 100) {
 		reasons.push("Same date");

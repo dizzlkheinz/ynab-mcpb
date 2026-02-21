@@ -125,10 +125,8 @@ export const ReconcileAccountSchema = z
 
 		// Matching configuration (optional)
 		date_tolerance_days: z.number().min(0).max(7).optional().default(7),
-		amount_tolerance_cents: z.number().min(0).max(100).optional().default(1),
 		auto_match_threshold: z.number().min(0).max(100).optional().default(85),
 		suggestion_threshold: z.number().min(0).max(100).optional().default(60),
-		amount_tolerance: z.number().min(0).max(1).optional(),
 
 		auto_create_transactions: z.boolean().optional().default(false),
 		auto_update_cleared_status: z.boolean().optional().default(false),
@@ -140,16 +138,6 @@ export const ReconcileAccountSchema = z
 			.enum(["ANALYSIS_ONLY", "GUIDED_RESOLUTION", "AUTO_RESOLVE"])
 			.optional()
 			.default("ANALYSIS_ONLY"),
-		require_exact_match: z.boolean().optional().default(true),
-		confidence_threshold: z.number().min(0).max(1).optional().default(0.8),
-		max_resolution_attempts: z
-			.number()
-			.int()
-			.min(1)
-			.max(10)
-			.optional()
-			.default(5),
-
 		// Response options
 		include_structured_data: z.boolean().optional().default(false),
 		force_full_refresh: z.boolean().optional().default(true),
@@ -201,11 +189,9 @@ export async function handleReconcileAccount(
 					payee: 0.35,
 				},
 				dateToleranceDays: params.date_tolerance_days ?? 7,
-				amountToleranceMilliunits: (params.amount_tolerance_cents ?? 1) * 10,
 				autoMatchThreshold: params.auto_match_threshold ?? 85,
 				suggestedMatchThreshold: params.suggestion_threshold ?? 60,
 				minimumCandidateScore: 40,
-				exactAmountBonus: 10,
 				exactDateBonus: 5,
 				exactPayeeBonus: 10,
 			};
