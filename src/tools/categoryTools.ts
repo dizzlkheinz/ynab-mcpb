@@ -33,6 +33,8 @@ import { ToolAnnotationPresets } from "./toolCategories.js";
 export const ListCategoriesSchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required"),
+		limit: z.number().int().positive().optional(),
+		offset: z.number().int().min(0).optional(),
 	})
 	.strict();
 
@@ -122,7 +124,7 @@ export async function handleListCategories(
 			const wasCached = result.wasCached;
 
 			// Flatten categories from all category groups
-			const allCategories = categoryGroups.flatMap((group) =>
+			const flatCategories = categoryGroups.flatMap((group) =>
 				group.categories.map((category) => ({
 					id: category.id,
 					category_group_id: category.category_group_id,
@@ -142,18 +144,29 @@ export async function handleListCategories(
 				})),
 			);
 
+			// Apply pagination to the flat categories list
+			const limit = params.limit ?? 200;
+			const offset = params.offset ?? 0;
+			const categories = flatCategories.slice(offset, offset + limit);
+			const hasMore = offset + limit < flatCategories.length;
+
 			return {
 				content: [
 					{
 						type: "text",
 						text: responseFormatter.format({
-							categories: allCategories,
+							categories,
 							category_groups: categoryGroups.map((group) => ({
 								id: group.id,
 								name: group.name,
 								hidden: group.hidden,
 								deleted: group.deleted,
 							})),
+							total_count: flatCategories.length,
+							returned_count: categories.length,
+							offset,
+							has_more: hasMore,
+							next_offset: hasMore ? offset + limit : undefined,
 							cached: wasCached,
 							cache_info: wasCached
 								? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`

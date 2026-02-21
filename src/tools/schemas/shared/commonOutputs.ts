@@ -136,6 +136,25 @@ export type ConfirmationResponse = z.infer<typeof ConfirmationResponseSchema>;
  * }
  * ```
  */
+/**
+ * PaginationMetadataSchema
+ *
+ * Standard pagination fields for list tools that support limit/offset.
+ */
+export const PaginationMetadataSchema = z.object({
+	total_count: z.number().int().describe("Total number of items available"),
+	returned_count: z.number().int().describe("Number of items returned"),
+	offset: z.number().int().describe("Offset used for this response"),
+	has_more: z.boolean().describe("Whether more items exist beyond this page"),
+	next_offset: z
+		.number()
+		.int()
+		.optional()
+		.describe("Offset for next page, if has_more is true"),
+});
+
+export type PaginationMetadata = z.infer<typeof PaginationMetadataSchema>;
+
 export const ErrorDetailsSchema = z.object({
 	error: z.string().describe("Error message"),
 	code: z.string().optional().describe("Error code for categorization"),

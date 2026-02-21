@@ -229,6 +229,9 @@ describe("ListAccountsOutputSchema", () => {
 			],
 			total_count: 5,
 			returned_count: 2,
+			offset: 0,
+			has_more: true,
+			next_offset: 2,
 			cached: true,
 			cache_info: "Data retrieved from cache for improved performance",
 		};
@@ -260,6 +263,8 @@ describe("ListAccountsOutputSchema", () => {
 			],
 			total_count: 1,
 			returned_count: 1,
+			offset: 0,
+			has_more: false,
 			cached: false,
 			cache_info: "Fresh data retrieved from YNAB API",
 		};
@@ -279,6 +284,8 @@ describe("ListAccountsOutputSchema", () => {
 			accounts: [],
 			total_count: 0,
 			returned_count: 0,
+			offset: 0,
+			has_more: false,
 			cached: false,
 			cache_info: "No accounts found",
 		};

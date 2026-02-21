@@ -90,7 +90,10 @@
  */
 
 import { z } from "zod/v4";
-import { CacheMetadataSchema } from "../shared/commonOutputs.js";
+import {
+	CacheMetadataSchema,
+	PaginationMetadataSchema,
+} from "../shared/commonOutputs.js";
 
 /**
  * Schema for a complete transaction object.
@@ -192,10 +195,9 @@ export const TransactionPreviewSchema = z.object({
  *
  * Returns all transactions when count <= 100.
  */
-const ListTransactionsNormalSchema = CacheMetadataSchema.extend({
-	/** Total number of transactions */
-	total_count: z.number().int().describe("Total transaction count"),
-
+const ListTransactionsNormalSchema = CacheMetadataSchema.merge(
+	PaginationMetadataSchema,
+).extend({
 	/** Array of complete transaction objects */
 	transactions: z.array(TransactionSchema).describe("List of transactions"),
 });

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import { ValidationError } from "../utils/errors.js";
 
@@ -25,7 +25,6 @@ const envSchema = z.object({
 		.uuid("YNAB_DEFAULT_BUDGET_ID must be a valid UUID")
 		.optional(),
 	YNAB_MCP_ENABLE_DELTA: z.enum(["true", "false"]).optional(),
-	MCP_PORT: z.coerce.number().int().positive().optional(),
 	LOG_LEVEL: z
 		.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 		.default("info"),
@@ -41,5 +40,3 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 	}
 	return result.data;
 }
-
-export const config = loadConfig();

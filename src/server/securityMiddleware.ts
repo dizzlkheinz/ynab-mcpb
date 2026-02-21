@@ -44,16 +44,32 @@ export class SecurityMiddleware {
 				context.parameters,
 			);
 
-			// 2. Rate limiting check
-			await SecurityMiddleware.checkRateLimit(context.accessToken);
+			// 2. Rate limiting — atomically check and record
+			const tokenHash = SecurityMiddleware.hashToken(context.accessToken);
+			const rateLimitCheck = globalRateLimiter.tryAcquire(tokenHash);
+			if (rateLimitCheck.isLimited) {
+				throw new RateLimitError(
+					"Rate limit exceeded. Please wait before making additional requests.",
+					rateLimitCheck.resetTime,
+					rateLimitCheck.remaining,
+				);
+			}
 
-			// 3. Record the request for rate limiting
-			globalRateLimiter.recordRequest(
-				SecurityMiddleware.hashToken(context.accessToken),
-			);
-
-			// 4. Execute the operation
-			const result = await operation(validatedParams);
+			// 3. Execute the operation
+			let result: CallToolResult;
+			try {
+				result = await operation(validatedParams);
+			} catch (opError) {
+				// Detect real YNAB 429 responses and mark limiter as exhausted
+				if (
+					opError instanceof Error &&
+					(opError.message.includes("429") ||
+						opError.message.includes("Too Many Requests"))
+				) {
+					globalRateLimiter.markExhausted(tokenHash);
+				}
+				throw opError;
+			}
 
 			// 5. Log successful request
 			const duration = Date.now() - startTime;
@@ -132,22 +148,6 @@ export class SecurityMiddleware {
 				throw new Error(`Validation failed: ${validationError.message}`);
 			}
 			throw error;
-		}
-	}
-
-	/**
-	 * Check rate limit for the given access token
-	 */
-	private static async checkRateLimit(accessToken: string): Promise<void> {
-		const tokenHash = SecurityMiddleware.hashToken(accessToken);
-		const rateLimitInfo = globalRateLimiter.isAllowed(tokenHash);
-
-		if (rateLimitInfo.isLimited) {
-			throw new RateLimitError(
-				"Rate limit exceeded. Please wait before making additional requests.",
-				rateLimitInfo.resetTime,
-				rateLimitInfo.remaining,
-			);
 		}
 	}
 

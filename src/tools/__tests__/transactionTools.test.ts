@@ -524,10 +524,10 @@ describe("transactionTools", () => {
 
 			const parsedResponse = JSON.parse(content?.text);
 
-			// Should have cached property even in large response path
-			expect(parsedResponse.cached).toBeDefined();
-			expect(parsedResponse.cached).toBe(false);
-			expect(parsedResponse.cache_info).toBeDefined();
+			// Large response path returns preview with message and preview_transactions
+			expect(parsedResponse.message).toBeDefined();
+			expect(parsedResponse.total_count).toBeDefined();
+			expect(parsedResponse.preview_transactions).toBeDefined();
 		});
 	});
 

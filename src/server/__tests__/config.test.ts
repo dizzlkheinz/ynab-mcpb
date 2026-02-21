@@ -24,16 +24,6 @@ describe("Config Module", () => {
 		expect(loadConfig().YNAB_ACCESS_TOKEN).toBe("updated-token-456");
 	});
 
-	it("keeps the config singleton as a one-time parse", async () => {
-		process.env.YNAB_ACCESS_TOKEN = "initial-token";
-		const { config, loadConfig } = await import("../config");
-		expect(config.YNAB_ACCESS_TOKEN).toBe("initial-token");
-
-		process.env.YNAB_ACCESS_TOKEN = "later-token";
-		expect(config.YNAB_ACCESS_TOKEN).toBe("initial-token");
-		expect(loadConfig().YNAB_ACCESS_TOKEN).toBe("later-token");
-	});
-
 	it("throws a detailed error if YNAB_ACCESS_TOKEN is missing", async () => {
 		const { loadConfig } = await import("../config");
 		const env = { ...process.env };
@@ -45,44 +35,6 @@ describe("Config Module", () => {
 		} catch (error) {
 			expect((error as { name?: string }).name).toBe("ValidationError");
 			expect((error as Error).message).toMatch(/YNAB_ACCESS_TOKEN/i);
-		}
-	});
-
-	it("parses optional MCP_PORT correctly", async () => {
-		const { loadConfig } = await import("../config");
-		const env = {
-			...process.env,
-			YNAB_ACCESS_TOKEN: "token",
-			MCP_PORT: "8080",
-		};
-
-		const parsed = loadConfig(env);
-		expect(parsed.MCP_PORT).toBe(8080);
-	});
-
-	it("handles missing optional MCP_PORT", async () => {
-		const { loadConfig } = await import("../config");
-		const env = { ...process.env, YNAB_ACCESS_TOKEN: "token" };
-		env.MCP_PORT = undefined;
-
-		const parsed = loadConfig(env);
-		expect(parsed.MCP_PORT).toBeUndefined();
-	});
-
-	it("throws an error for an invalid MCP_PORT", async () => {
-		const { loadConfig } = await import("../config");
-		const env = {
-			...process.env,
-			YNAB_ACCESS_TOKEN: "token",
-			MCP_PORT: "invalid-port",
-		};
-
-		expect.assertions(2);
-		try {
-			loadConfig(env);
-		} catch (error) {
-			expect((error as { name?: string }).name).toBe("ValidationError");
-			expect((error as Error).message).toMatch(/MCP_PORT/i);
 		}
 	});
 

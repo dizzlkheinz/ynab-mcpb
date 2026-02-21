@@ -65,7 +65,7 @@
 		"budget",
 		"finance"
 	],
-	"author": "",
+	"author": "dizzlkheinz",
 	"license": "AGPL-3.0",
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.26.0",

@@ -34,6 +34,7 @@ export const ListAccountsSchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required"),
 		limit: z.number().int().positive().optional(),
+		offset: z.number().int().min(0).optional(),
 	})
 	.strict();
 
@@ -101,14 +102,14 @@ export async function handleListAccounts(
 	return await withToolErrorHandling(
 		async () => {
 			const result = await deltaFetcher.fetchAccounts(params.budget_id);
-			let accounts = result.data;
+			const allAccounts = result.data;
 			const wasCached = result.wasCached;
 
-			// Apply limit if specified
-			const totalCount = accounts.length;
-			if (params.limit !== undefined) {
-				accounts = accounts.slice(0, params.limit);
-			}
+			// Apply pagination
+			const limit = params.limit ?? 200;
+			const offset = params.offset ?? 0;
+			const accounts = allAccounts.slice(offset, offset + limit);
+			const hasMore = offset + limit < allAccounts.length;
 
 			return {
 				content: [
@@ -131,8 +132,11 @@ export async function handleListAccounts(
 								direct_import_linked: account.direct_import_linked,
 								direct_import_in_error: account.direct_import_in_error,
 							})),
-							total_count: totalCount,
+							total_count: allAccounts.length,
 							returned_count: accounts.length,
+							offset,
+							has_more: hasMore,
+							next_offset: hasMore ? offset + limit : undefined,
 							cached: wasCached,
 							cache_info: wasCached
 								? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`

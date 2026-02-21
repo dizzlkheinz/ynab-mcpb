@@ -27,6 +27,7 @@ export const ListPayeesSchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required"),
 		limit: z.number().int().positive().optional(),
+		offset: z.number().int().min(0).optional(),
 	})
 	.strict();
 
@@ -71,14 +72,14 @@ export async function handleListPayees(
 	return await withToolErrorHandling(
 		async () => {
 			const result = await deltaFetcher.fetchPayees(params.budget_id);
-			let payees = result.data;
+			const allPayees = result.data;
 			const wasCached = result.wasCached;
 
-			// Apply limit if specified
-			const totalCount = payees.length;
-			if (params.limit !== undefined) {
-				payees = payees.slice(0, params.limit);
-			}
+			// Apply pagination
+			const limit = params.limit ?? 200;
+			const offset = params.offset ?? 0;
+			const payees = allPayees.slice(offset, offset + limit);
+			const hasMore = offset + limit < allPayees.length;
 
 			return {
 				content: [
@@ -91,8 +92,11 @@ export async function handleListPayees(
 								transfer_account_id: payee.transfer_account_id,
 								deleted: payee.deleted,
 							})),
-							total_count: totalCount,
+							total_count: allPayees.length,
 							returned_count: payees.length,
+							offset,
+							has_more: hasMore,
+							next_offset: hasMore ? offset + limit : undefined,
 							cached: wasCached,
 							cache_info: wasCached
 								? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`

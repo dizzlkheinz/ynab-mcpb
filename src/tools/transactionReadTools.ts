@@ -113,13 +113,19 @@ export async function handleListTransactions(
 				usedDelta = result.usedDelta;
 			}
 
+			// Apply pagination before size check
+			const limit = params.limit ?? 200;
+			const offset = params.offset ?? 0;
+			const paged = transactions.slice(offset, offset + limit);
+			const hasMore = offset + limit < transactions.length;
+
 			// Check if response might be too large for MCP
-			const estimatedSize = JSON.stringify(transactions).length;
+			const estimatedSize = JSON.stringify(paged).length;
 			const sizeLimit = 90000; // Conservative limit under 100KB
 
 			if (estimatedSize > sizeLimit) {
 				// Return summary and suggest export (show most recent entries)
-				const preview = [...transactions]
+				const preview = [...paged]
 					.sort((a, b) => {
 						const dateA = a.date ?? "";
 						const dateB = b.date ?? "";
@@ -138,10 +144,6 @@ export async function handleListTransactions(
 								showing: `Most recent ${preview.length} transactions:`,
 								total_count: transactions.length,
 								estimated_size_kb: Math.round(estimatedSize / 1024),
-								cached: cacheHit,
-								cache_info: cacheHit
-									? `Data retrieved from cache for improved performance${usedDelta ? " (delta merge applied)" : ""}`
-									: "Fresh data retrieved from YNAB API",
 								preview_transactions: preview.map((transaction) => ({
 									id: transaction.id,
 									date: transaction.date,
@@ -163,11 +165,15 @@ export async function handleListTransactions(
 						type: "text",
 						text: responseFormatter.format({
 							total_count: transactions.length,
+							returned_count: paged.length,
+							offset,
+							has_more: hasMore,
+							next_offset: hasMore ? offset + limit : undefined,
 							cached: cacheHit,
 							cache_info: cacheHit
 								? `Data retrieved from cache for improved performance${usedDelta ? " (delta merge applied)" : ""}`
 								: "Fresh data retrieved from YNAB API",
-							transactions: transactions.map((transaction) => ({
+							transactions: paged.map((transaction) => ({
 								id: transaction.id,
 								date: transaction.date,
 								amount: milliunitsToAmount(transaction.amount),

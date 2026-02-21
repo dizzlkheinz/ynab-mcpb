@@ -253,6 +253,171 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		},
 	},
 	{
+		uriTemplate: "ynab://budgets/{budget_id}/categories",
+		name: "Budget Categories",
+		description: "Flattened list of all categories for a specific budget",
+		mimeType: "application/json",
+		handler: async (
+			uri,
+			params,
+			{ ynabAPI, responseFormatter, cacheManager },
+		) => {
+			const budget_id = params["budget_id"];
+			if (!budget_id) {
+				throw new McpError(
+					ErrorCode.InvalidParams,
+					"Missing budget_id parameter",
+				);
+			}
+			const cacheKey = CacheManager.generateKey(
+				"resources",
+				"categories",
+				"list",
+				budget_id,
+			);
+			return cacheManager.wrap<ResourceContents[]>(cacheKey, {
+				ttl: CACHE_TTLS.CATEGORIES,
+				loader: async () => {
+					try {
+						const response = await ynabAPI.categories.getCategories(budget_id);
+						const groups = response.data.category_groups;
+						const categories = groups.flatMap((group) =>
+							group.categories.map((cat) => ({
+								id: cat.id,
+								category_group_id: cat.category_group_id,
+								category_group_name: group.name,
+								name: cat.name,
+								hidden: cat.hidden,
+								note: cat.note,
+								budgeted: cat.budgeted,
+								activity: cat.activity,
+								balance: cat.balance,
+								goal_type: cat.goal_type,
+								deleted: cat.deleted,
+							})),
+						);
+						return [
+							{
+								uri,
+								mimeType: "application/json",
+								text: responseFormatter.format({ categories }),
+							},
+						];
+					} catch (error) {
+						const message =
+							error instanceof Error ? error.message : String(error);
+						throw new Error(
+							`Failed to fetch categories for budget ${budget_id}: ${message}`,
+						);
+					}
+				},
+			});
+		},
+	},
+	{
+		uriTemplate: "ynab://budgets/{budget_id}/months",
+		name: "Budget Months",
+		description: "List of month summaries for a specific budget",
+		mimeType: "application/json",
+		handler: async (
+			uri,
+			params,
+			{ ynabAPI, responseFormatter, cacheManager },
+		) => {
+			const budget_id = params["budget_id"];
+			if (!budget_id) {
+				throw new McpError(
+					ErrorCode.InvalidParams,
+					"Missing budget_id parameter",
+				);
+			}
+			const cacheKey = CacheManager.generateKey(
+				"resources",
+				"months",
+				"list",
+				budget_id,
+			);
+			return cacheManager.wrap<ResourceContents[]>(cacheKey, {
+				ttl: CACHE_TTLS.MONTHS,
+				loader: async () => {
+					try {
+						const response = await ynabAPI.months.getBudgetMonths(budget_id);
+						return [
+							{
+								uri,
+								mimeType: "application/json",
+								text: responseFormatter.format({
+									months: response.data.months,
+								}),
+							},
+						];
+					} catch (error) {
+						const message =
+							error instanceof Error ? error.message : String(error);
+						throw new Error(
+							`Failed to fetch months for budget ${budget_id}: ${message}`,
+						);
+					}
+				},
+			});
+		},
+	},
+	{
+		uriTemplate: "ynab://budgets/{budget_id}/months/{month}",
+		name: "Budget Month Detail",
+		description:
+			"Detailed budget data for a specific month (month = YYYY-MM-DD first of month)",
+		mimeType: "application/json",
+		handler: async (
+			uri,
+			params,
+			{ ynabAPI, responseFormatter, cacheManager },
+		) => {
+			const budget_id = params["budget_id"];
+			const month = params["month"];
+			if (!budget_id) {
+				throw new McpError(
+					ErrorCode.InvalidParams,
+					"Missing budget_id parameter",
+				);
+			}
+			if (!month) {
+				throw new McpError(ErrorCode.InvalidParams, "Missing month parameter");
+			}
+			const cacheKey = CacheManager.generateKey(
+				"resources",
+				"months",
+				"get",
+				budget_id,
+				month,
+			);
+			return cacheManager.wrap<ResourceContents[]>(cacheKey, {
+				ttl: CACHE_TTLS.MONTHS,
+				loader: async () => {
+					try {
+						const response = await ynabAPI.months.getBudgetMonth(
+							budget_id,
+							month,
+						);
+						return [
+							{
+								uri,
+								mimeType: "application/json",
+								text: responseFormatter.format(response.data.month),
+							},
+						];
+					} catch (error) {
+						const message =
+							error instanceof Error ? error.message : String(error);
+						throw new Error(
+							`Failed to fetch month ${month} for budget ${budget_id}: ${message}`,
+						);
+					}
+				},
+			});
+		},
+	},
+	{
 		uriTemplate: "ynab://budgets/{budget_id}/accounts/{account_id}",
 		name: "Account Details",
 		description: "Detailed information for a specific account within a budget",

@@ -41,6 +41,8 @@ export type GetMonthParams = z.infer<typeof GetMonthSchema>;
 export const ListMonthsSchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required"),
+		limit: z.number().int().positive().optional(),
+		offset: z.number().int().min(0).optional(),
 	})
 	.strict();
 
@@ -157,9 +159,15 @@ export async function handleListMonths(
 		async () => {
 			// Always use cache
 			const result = await deltaFetcher.fetchMonths(params.budget_id);
-			const months = result.data;
+			const allMonths = result.data;
 			const wasCached = result.wasCached;
 			const usedDelta = result.usedDelta;
+
+			// Apply pagination
+			const limit = params.limit ?? 200;
+			const offset = params.offset ?? 0;
+			const months = allMonths.slice(offset, offset + limit);
+			const hasMore = offset + limit < allMonths.length;
 
 			return {
 				content: [
@@ -176,6 +184,11 @@ export async function handleListMonths(
 								age_of_money: month.age_of_money,
 								deleted: month.deleted,
 							})),
+							total_count: allMonths.length,
+							returned_count: months.length,
+							offset,
+							has_more: hasMore,
+							next_offset: hasMore ? offset + limit : undefined,
 							cached: wasCached,
 							cache_info: wasCached
 								? `Data retrieved from cache for improved performance${usedDelta ? " (delta merge applied)" : ""}`

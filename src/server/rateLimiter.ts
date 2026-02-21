@@ -89,6 +89,38 @@ export class RateLimiter {
 	}
 
 	/**
+	 * Atomically check and record a request in one call.
+	 * Returns rate limit info; if not limited, the request is recorded.
+	 */
+	tryAcquire(identifier: string): RateLimitInfo {
+		const info = this.isAllowed(identifier);
+		if (!info.isLimited) {
+			this.recordRequest(identifier);
+		}
+		return info;
+	}
+
+	/**
+	 * Mark the identifier's rate limit window as exhausted.
+	 * Used when a real YNAB 429 response is received.
+	 */
+	markExhausted(identifier: string): void {
+		const now = Date.now();
+		const windowStart = now - this.config.windowMs;
+		// Fill window with maxRequests timestamps to force isLimited = true
+		const timestamps = Array.from(
+			{ length: this.config.maxRequests },
+			(_, i) => windowStart + i,
+		);
+		this.requests.set(identifier, timestamps);
+		if (this.config.enableLogging) {
+			console.error(
+				`Rate limit marked exhausted for ${this.hashIdentifier(identifier)}`,
+			);
+		}
+	}
+
+	/**
 	 * Reset rate limit for a specific identifier (useful for testing)
 	 */
 	reset(identifier?: string): void {

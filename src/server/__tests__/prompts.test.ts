@@ -84,6 +84,36 @@ describe("prompts module", () => {
 							],
 						},
 						{
+							name: "reconcile-account",
+							description:
+								"Reconcile a YNAB account against a bank statement or CSV export",
+							arguments: [
+								{
+									name: "budget_name",
+									description:
+										"Name of the budget (optional, uses first budget if not specified)",
+									required: false,
+								},
+								{
+									name: "account_name",
+									description: "Name of the account to reconcile",
+									required: true,
+								},
+								{
+									name: "statement_balance",
+									description:
+										"Ending balance from the bank statement (in dollars)",
+									required: true,
+								},
+								{
+									name: "csv_data",
+									description:
+										"Paste CSV data directly (optional, omit if providing a file path instead)",
+									required: false,
+								},
+							],
+						},
+						{
 							name: "account-balances",
 							description: "Check balances across all accounts",
 							arguments: [

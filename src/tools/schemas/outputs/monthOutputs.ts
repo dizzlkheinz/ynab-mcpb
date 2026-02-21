@@ -80,7 +80,10 @@
  */
 
 import { z } from "zod/v4";
-import { CacheMetadataSchema } from "../shared/commonOutputs.js";
+import {
+	CacheMetadataSchema,
+	PaginationMetadataSchema,
+} from "../shared/commonOutputs.js";
 
 /**
  * Schema for a category within month data.
@@ -245,7 +248,9 @@ export const GetMonthOutputSchema = CacheMetadataSchema.extend({
  *
  * Returns summary of all months without category details.
  */
-export const ListMonthsOutputSchema = CacheMetadataSchema.extend({
+export const ListMonthsOutputSchema = CacheMetadataSchema.merge(
+	PaginationMetadataSchema,
+).extend({
 	/** Array of month summary objects */
 	months: z.array(MonthSummarySchema).describe("List of months"),
 });

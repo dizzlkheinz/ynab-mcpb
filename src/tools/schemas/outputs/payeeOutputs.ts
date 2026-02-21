@@ -52,7 +52,10 @@
  */
 
 import { z } from "zod/v4";
-import { CacheMetadataSchema } from "../shared/commonOutputs.js";
+import {
+	CacheMetadataSchema,
+	PaginationMetadataSchema,
+} from "../shared/commonOutputs.js";
 
 /**
  * Schema for a payee object.
@@ -78,15 +81,11 @@ export const PayeeSchema = z.object({
  *
  * Returns all payees for a budget with pagination and cache metadata.
  */
-export const ListPayeesOutputSchema = CacheMetadataSchema.extend({
+export const ListPayeesOutputSchema = CacheMetadataSchema.merge(
+	PaginationMetadataSchema,
+).extend({
 	/** Array of payee objects */
 	payees: z.array(PayeeSchema).describe("List of payees"),
-
-	/** Total number of payees in budget */
-	total_count: z.number().int().describe("Total payee count"),
-
-	/** Number of payees returned in this response */
-	returned_count: z.number().int().describe("Returned payee count"),
 });
 
 /**

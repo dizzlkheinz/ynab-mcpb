@@ -251,6 +251,10 @@ describe("ListTransactionsOutputSchema - Normal Mode", () => {
 	it("should validate normal mode output with multiple transactions", () => {
 		const validOutput = {
 			total_count: 50,
+			returned_count: 2,
+			offset: 0,
+			has_more: true,
+			next_offset: 2,
 			cached: true,
 			cache_info: "Data retrieved from cache for improved performance",
 			transactions: [
@@ -297,6 +301,9 @@ describe("ListTransactionsOutputSchema - Normal Mode", () => {
 	it("should validate normal mode output with empty transactions array", () => {
 		const validOutput = {
 			total_count: 0,
+			returned_count: 0,
+			offset: 0,
+			has_more: false,
 			cached: false,
 			cache_info: "No transactions found",
 			transactions: [],

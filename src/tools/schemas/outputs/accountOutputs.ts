@@ -60,7 +60,10 @@
  */
 
 import { z } from "zod/v4";
-import { CacheMetadataSchema } from "../shared/commonOutputs.js";
+import {
+	CacheMetadataSchema,
+	PaginationMetadataSchema,
+} from "../shared/commonOutputs.js";
 
 /**
  * Schema for an account object.
@@ -116,15 +119,11 @@ export const AccountSchema = z.object({
  *
  * Returns all accounts for a budget with pagination and cache metadata.
  */
-export const ListAccountsOutputSchema = CacheMetadataSchema.extend({
+export const ListAccountsOutputSchema = CacheMetadataSchema.merge(
+	PaginationMetadataSchema,
+).extend({
 	/** Array of account objects */
 	accounts: z.array(AccountSchema).describe("List of accounts"),
-
-	/** Total number of accounts in budget */
-	total_count: z.number().int().describe("Total account count"),
-
-	/** Number of accounts returned in this response */
-	returned_count: z.number().int().describe("Returned account count"),
 });
 
 /**

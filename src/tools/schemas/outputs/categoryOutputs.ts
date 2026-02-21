@@ -76,7 +76,10 @@
  */
 
 import { z } from "zod/v4";
-import { CacheMetadataSchema } from "../shared/commonOutputs.js";
+import {
+	CacheMetadataSchema,
+	PaginationMetadataSchema,
+} from "../shared/commonOutputs.js";
 
 /**
  * Schema for a category object.
@@ -187,7 +190,9 @@ export const CategoryGroupSchema = z.object({
  *
  * Returns all categories and category groups for a budget month with cache metadata.
  */
-export const ListCategoriesOutputSchema = CacheMetadataSchema.extend({
+export const ListCategoriesOutputSchema = CacheMetadataSchema.merge(
+	PaginationMetadataSchema,
+).extend({
 	/** Array of category objects */
 	categories: z.array(CategorySchema).describe("List of categories"),
 

@@ -379,6 +379,10 @@ describe("ListMonthsOutputSchema", () => {
 					deleted: false,
 				},
 			],
+			total_count: 2,
+			returned_count: 2,
+			offset: 0,
+			has_more: false,
 			cached: true,
 			cache_info: "Data retrieved from cache for improved performance",
 		};
@@ -405,6 +409,10 @@ describe("ListMonthsOutputSchema", () => {
 					deleted: false,
 				},
 			],
+			total_count: 1,
+			returned_count: 1,
+			offset: 0,
+			has_more: false,
 			cached: false,
 			cache_info: "Fresh data retrieved from YNAB API",
 		};
@@ -420,6 +428,10 @@ describe("ListMonthsOutputSchema", () => {
 	it("should validate output with empty months array", () => {
 		const validOutput = {
 			months: [],
+			total_count: 0,
+			returned_count: 0,
+			offset: 0,
+			has_more: false,
 			cached: false,
 			cache_info: "No months found",
 		};

@@ -17,6 +17,9 @@ export function milliunitsToAmount(milliunits: number): number {
  * @returns Amount in milliunits
  */
 export function amountToMilliunits(amount: number): number {
+	if (!Number.isFinite(amount)) {
+		throw new Error(`Invalid amount: ${amount} is not a finite number`);
+	}
 	return Math.round(amount * 1000);
 }
 

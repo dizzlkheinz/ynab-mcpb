@@ -141,6 +141,9 @@ describe("ListPayeesOutputSchema", () => {
 			],
 			total_count: 50,
 			returned_count: 3,
+			offset: 0,
+			has_more: true,
+			next_offset: 3,
 			cached: true,
 			cache_info: "Data retrieved from cache for improved performance",
 		};
@@ -166,6 +169,8 @@ describe("ListPayeesOutputSchema", () => {
 			],
 			total_count: 1,
 			returned_count: 1,
+			offset: 0,
+			has_more: false,
 			cached: false,
 			cache_info: "Fresh data retrieved from YNAB API",
 		};
@@ -185,6 +190,8 @@ describe("ListPayeesOutputSchema", () => {
 			payees: [],
 			total_count: 0,
 			returned_count: 0,
+			offset: 0,
+			has_more: false,
 			cached: false,
 			cache_info: "No payees found",
 		};
@@ -213,6 +220,8 @@ describe("ListPayeesOutputSchema", () => {
 			],
 			total_count: 2,
 			returned_count: 2,
+			offset: 0,
+			has_more: false,
 			cached: true,
 			cache_info:
 				"Data retrieved from cache for improved performance (delta merge applied)",

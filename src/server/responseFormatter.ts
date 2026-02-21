@@ -1,6 +1,6 @@
 class ResponseFormatter {
 	format(value: unknown): string {
-		return JSON.stringify(value);
+		return JSON.stringify(value, null, 2);
 	}
 }
 
