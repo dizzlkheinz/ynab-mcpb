@@ -1,19 +1,43 @@
 import type * as ynab from "ynab";
 import type { SaveTransaction } from "ynab/dist/models/SaveTransaction.js";
-import { YNABAPIError, YNABErrorCode } from "../../server/errorHandler.js";
 import type { ProgressCallback } from "../../server/toolRegistry.js";
-import { addMilli, toMilli, toMoneyValue } from "../../utils/money.js";
+import { addMilli, toMoneyValue } from "../../utils/money.js";
 import {
 	correlateResults,
 	generateCorrelationKey,
 	toCorrelationPayload,
 } from "../transactionTools.js";
+import {
+	buildBalanceReconciliation,
+	resolveStatementBalanceMilli,
+} from "./balanceReconciliation.js";
+import {
+	attachStatusToError,
+	normalizeYnabError,
+	shouldPropagateYnabError,
+} from "./executorErrors.js";
+import {
+	buildRecommendations,
+	chunkArray,
+	computeUpdateFlags,
+	type ExecutionSummary,
+	formatDisplay,
+	sleep,
+	sortByDateDescending,
+	sortMatchesByBankDateDescending,
+	truncateMemo,
+	updateReason,
+} from "./executorHelpers.js";
 import type { ReconcileAccountRequest } from "./index.js";
-import type {
-	BankTransaction,
-	ReconciliationAnalysis,
-	TransactionMatch,
-} from "./types.js";
+import type { BankTransaction, ReconciliationAnalysis } from "./types.js";
+
+// Re-export extracted types/functions for backward compatibility
+export type { NormalizedYnabError } from "./executorErrors.js";
+export {
+	normalizeYnabError,
+	shouldPropagateYnabError,
+} from "./executorErrors.js";
+export type { ExecutionSummary } from "./executorHelpers.js";
 
 export interface AccountSnapshot {
 	balance: number; // milliunits
@@ -43,18 +67,6 @@ export interface ExecutionActionRecord {
 	bulk_chunk_index?: number;
 	correlation_key?: string;
 	duplicate?: boolean;
-}
-
-export interface ExecutionSummary {
-	bank_transactions_count: number;
-	ynab_transactions_count: number;
-	matches_found: number;
-	missing_in_ynab: number;
-	missing_in_bank: number;
-	transactions_created: number;
-	transactions_updated: number;
-	dates_adjusted: number;
-	dry_run: boolean;
 }
 
 /**
@@ -90,39 +102,11 @@ export interface ExecutionResult {
 	bulk_operation_details?: BulkOperationDetails;
 }
 
-interface UpdateFlags {
-	needsClearedUpdate: boolean;
-	needsDateUpdate: boolean;
-}
-
-const MONEY_EPSILON_MILLI = 100; // $0.10
 const DEFAULT_TOLERANCE_CENTS = 1;
 const CENTS_TO_MILLI = 10;
 const MAX_BULK_CREATE_CHUNK = 100;
 const MAX_BULK_UPDATE_CHUNK = 100; // YNAB API supports up to 100 transactions per batch for updates
 const BATCH_DELAY_MS = 200; // Delay between batch chunks to avoid rate limiting
-const MAX_MEMO_LENGTH = 500; // YNAB's maximum memo length
-
-function chunkArray<T>(array: T[], size: number): T[][] {
-	if (size <= 0) {
-		throw new Error("chunk size must be positive");
-	}
-	const chunks: T[][] = [];
-	for (let i = 0; i < array.length; i += size) {
-		chunks.push(array.slice(i, i + size));
-	}
-	return chunks;
-}
-
-function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function truncateMemo(memo: string | null | undefined): string {
-	if (!memo) return "Auto-reconciled from bank statement";
-	if (memo.length <= MAX_MEMO_LENGTH) return memo;
-	return `${memo.substring(0, MAX_MEMO_LENGTH - 3)}...`;
-}
 
 interface StatementWindow {
 	start?: Date;
@@ -1010,245 +994,6 @@ export async function executeReconciliation(
 	return result;
 }
 
-export interface NormalizedYnabError {
-	status?: number;
-	name?: string;
-	message: string;
-	detail?: string;
-}
-
-const FATAL_YNAB_STATUS_CODES = new Set([400, 401, 403, 404, 429, 500, 503]);
-
-export function normalizeYnabError(error: unknown): NormalizedYnabError {
-	const parseStatus = (value: unknown): number | undefined => {
-		if (typeof value === "number" && Number.isFinite(value)) return value;
-		if (typeof value === "string") {
-			const numeric = Number(value);
-			if (Number.isFinite(numeric)) return numeric;
-		}
-		return undefined;
-	};
-
-	if (error instanceof Error) {
-		const status =
-			parseStatus((error as { status?: unknown }).status) ??
-			parseStatus(
-				(error as { response?: { status?: unknown } }).response?.status,
-			);
-		const detailSource = (error as { detail?: unknown }).detail;
-		const detail =
-			typeof detailSource === "string" && detailSource.trim().length > 0
-				? detailSource
-				: undefined;
-
-		const result: NormalizedYnabError = {
-			name: error.name,
-			message: error.message || "Unknown error occurred",
-		};
-
-		if (status !== undefined) result.status = status;
-		if (detail !== undefined) result.detail = detail;
-
-		return result;
-	}
-
-	if (error && typeof error === "object") {
-		const errObj = (error as { error?: unknown }).error ?? error;
-		const status = parseStatus(
-			(errObj as { id?: unknown }).id ??
-				(errObj as { status?: unknown }).status,
-		);
-		const detailCandidate =
-			(errObj as { detail?: unknown }).detail ??
-			(errObj as { message?: unknown }).message ??
-			(errObj as { name?: unknown }).name;
-		const detail =
-			typeof detailCandidate === "string" && detailCandidate.trim().length > 0
-				? detailCandidate
-				: undefined;
-		const message =
-			detail ??
-			(typeof errObj === "string" && errObj.trim().length > 0
-				? errObj
-				: "Unknown error occurred");
-		const name =
-			typeof (errObj as { name?: unknown }).name === "string"
-				? ((errObj as { name: string }).name as string)
-				: undefined;
-
-		const result: NormalizedYnabError = { message };
-
-		if (status !== undefined) result.status = status;
-		if (name !== undefined) result.name = name;
-		if (detail !== undefined) result.detail = detail;
-
-		return result;
-	}
-
-	if (typeof error === "string") {
-		return { message: error };
-	}
-
-	return { message: "Unknown error occurred" };
-}
-
-export function shouldPropagateYnabError(error: NormalizedYnabError): boolean {
-	return (
-		error.status !== undefined && FATAL_YNAB_STATUS_CODES.has(error.status)
-	);
-}
-
-function attachStatusToError(
-	error: NormalizedYnabError,
-	originalError?: unknown,
-): Error {
-	const message = error.message || "YNAB API error";
-
-	const isKnownCode =
-		error.status === YNABErrorCode.BAD_REQUEST ||
-		error.status === YNABErrorCode.UNAUTHORIZED ||
-		error.status === YNABErrorCode.FORBIDDEN ||
-		error.status === YNABErrorCode.NOT_FOUND ||
-		error.status === YNABErrorCode.TOO_MANY_REQUESTS ||
-		error.status === YNABErrorCode.INTERNAL_SERVER_ERROR;
-
-	if (isKnownCode) {
-		return new YNABAPIError(
-			error.status as YNABErrorCode,
-			message,
-			originalError,
-		);
-	}
-
-	const statusFragment = error.status ? ` (HTTP ${error.status})` : "";
-	const detailFragment =
-		error.detail && !message.includes(error.detail) ? ` (${error.detail})` : "";
-	const err = new Error(`${message}${statusFragment}${detailFragment}`);
-	if (error.status !== undefined) {
-		(err as { status?: number }).status = error.status;
-	}
-	if (error.name) {
-		err.name = error.name;
-	}
-	return err;
-}
-
-function formatDisplay(amount: number, currency: string): string {
-	return toMoneyValue(amount, currency).value_display;
-}
-
-function computeUpdateFlags(
-	match: TransactionMatch,
-	params: ReconcileAccountRequest,
-): UpdateFlags {
-	const ynabTxn = match.ynabTransaction;
-	const bankTxn = match.bankTransaction;
-	if (!ynabTxn) {
-		return { needsClearedUpdate: false, needsDateUpdate: false };
-	}
-	const needsClearedUpdate = Boolean(
-		params.auto_update_cleared_status && ynabTxn.cleared !== "cleared",
-	);
-	const needsDateUpdate = Boolean(
-		params.auto_adjust_dates && ynabTxn.date !== bankTxn.date,
-	);
-	return { needsClearedUpdate, needsDateUpdate };
-}
-
-function updateReason(
-	match: TransactionMatch,
-	flags: UpdateFlags,
-	_currency: string,
-): string {
-	const parts: string[] = [];
-	if (flags.needsClearedUpdate) {
-		parts.push("marked as cleared");
-	}
-	if (flags.needsDateUpdate) {
-		parts.push(`date adjusted to ${match.bankTransaction.date}`);
-	}
-	return parts.join(", ");
-}
-
-async function buildBalanceReconciliation(args: {
-	ynabAPI: ynab.API;
-	budgetId: string;
-	accountId: string;
-	statementDate: string;
-	statementBalanceMilli: number;
-	analysis: ReconciliationAnalysis;
-}) {
-	const { ynabAPI, budgetId, accountId, statementDate, statementBalanceMilli } =
-		args;
-	const ynabMilli = await clearedBalanceAsOf(
-		ynabAPI,
-		budgetId,
-		accountId,
-		statementDate,
-	);
-	const bankMilli = statementBalanceMilli;
-	const discrepancy = bankMilli - ynabMilli;
-	const status =
-		discrepancy === 0 ? "PERFECTLY_RECONCILED" : "DISCREPANCY_FOUND";
-
-	const precision_calculations = {
-		bank_statement_balance_milliunits: bankMilli,
-		ynab_calculated_balance_milliunits: ynabMilli,
-		discrepancy_milliunits: discrepancy,
-		discrepancy_dollars: discrepancy / 1000,
-	};
-
-	const discrepancy_analysis =
-		discrepancy === 0 ? undefined : buildLikelyCauses(discrepancy);
-
-	const result: {
-		status: string;
-		precision_calculations: typeof precision_calculations;
-		discrepancy_analysis?: ReturnType<typeof buildLikelyCauses>;
-		final_verification: {
-			balance_matches_exactly: boolean;
-			all_transactions_accounted: boolean;
-			audit_trail_complete: boolean;
-			reconciliation_complete: boolean;
-		};
-	} = {
-		status,
-		precision_calculations,
-		final_verification: {
-			balance_matches_exactly: discrepancy === 0,
-			all_transactions_accounted: discrepancy === 0,
-			audit_trail_complete: discrepancy === 0,
-			reconciliation_complete: discrepancy === 0,
-		},
-	};
-
-	if (discrepancy_analysis !== undefined) {
-		result.discrepancy_analysis = discrepancy_analysis;
-	}
-
-	return result;
-}
-
-async function clearedBalanceAsOf(
-	api: ynab.API,
-	budgetId: string,
-	accountId: string,
-	dateISO: string,
-): Promise<number> {
-	const response = await api.transactions.getTransactionsByAccount(
-		budgetId,
-		accountId,
-	);
-	const asOf = new Date(dateISO);
-	const cleared = response.data.transactions.filter(
-		(txn) =>
-			(txn.cleared === "cleared" || txn.cleared === "reconciled") &&
-			new Date(txn.date) <= asOf,
-	);
-	const sum = cleared.reduce((acc, txn) => addMilli(acc, txn.amount ?? 0), 0);
-	return sum;
-}
-
 async function refreshAccountSnapshot(
 	api: ynab.API,
 	budgetId: string,
@@ -1271,138 +1016,4 @@ async function refreshAccountSnapshot(
 	};
 }
 
-function buildLikelyCauses(discrepancyMilli: number) {
-	const causes = [] as {
-		cause_type: string;
-		description: string;
-		confidence: number;
-		amount_milliunits: number;
-		suggested_resolution: string;
-		evidence: unknown[];
-	}[];
-
-	const abs = Math.abs(discrepancyMilli);
-	if (abs % 1000 === 0 || abs % 500 === 0) {
-		causes.push({
-			cause_type: "bank_fee",
-			description: "Round amount suggests a bank fee or interest adjustment.",
-			confidence: 0.8,
-			amount_milliunits: discrepancyMilli,
-			suggested_resolution:
-				discrepancyMilli < 0
-					? "Create bank fee transaction and mark cleared"
-					: "Record interest income",
-			evidence: [],
-		});
-	}
-
-	return causes.length > 0
-		? {
-				confidence_level: Math.max(...causes.map((cause) => cause.confidence)),
-				likely_causes: causes,
-				risk_assessment: "LOW",
-			}
-		: undefined;
-}
-
-function buildRecommendations(args: {
-	summary: ExecutionSummary;
-	params: ReconcileAccountRequest;
-	analysis: ReconciliationAnalysis;
-	balanceChangeMilli: number;
-	currencyCode: string;
-}): string[] {
-	const { summary, params, analysis, balanceChangeMilli, currencyCode } = args;
-	const recommendations: string[] = [];
-
-	if (summary.dates_adjusted > 0) {
-		recommendations.push(
-			`✅ Adjusted ${summary.dates_adjusted} transaction date(s) to match bank statement dates`,
-		);
-	}
-
-	if (analysis.summary.unmatched_bank > 0 && !params.auto_create_transactions) {
-		recommendations.push(
-			`Consider enabling auto_create_transactions to automatically create ${analysis.summary.unmatched_bank} missing transaction(s)`,
-		);
-	}
-
-	if (!params.auto_adjust_dates && analysis.auto_matches.length > 0) {
-		recommendations.push(
-			"Consider enabling auto_adjust_dates to align YNAB dates with bank statement dates",
-		);
-	}
-
-	if (analysis.summary.unmatched_ynab > 0) {
-		recommendations.push(
-			`${analysis.summary.unmatched_ynab} transaction(s) exist in YNAB but not on the bank statement — review for duplicates or pending items`,
-		);
-	}
-
-	if (params.dry_run) {
-		recommendations.push(
-			"Dry run only — re-run with dry_run=false to apply these changes",
-		);
-	}
-
-	if (Math.abs(balanceChangeMilli) > MONEY_EPSILON_MILLI) {
-		recommendations.push(
-			`Account balance changed by ${toMoneyValue(balanceChangeMilli, currencyCode).value_display} during reconciliation`,
-		);
-	}
-
-	return recommendations;
-}
-
 export type { ExecutionResult as LegacyReconciliationResult };
-
-function resolveStatementBalanceMilli(
-	balanceInfo: ReconciliationAnalysis["balance_info"],
-): number {
-	return (
-		extractMoneyValue(balanceInfo?.target_statement) ??
-		extractMoneyValue(balanceInfo?.current_cleared) ??
-		0
-	);
-}
-
-function extractMoneyValue(value: unknown): number | undefined {
-	if (typeof value === "number" && Number.isFinite(value)) {
-		return toMilli(value);
-	}
-	if (
-		value &&
-		typeof value === "object" &&
-		"value_milliunits" in value &&
-		typeof (value as { value_milliunits: unknown }).value_milliunits ===
-			"number"
-	) {
-		return (value as { value_milliunits: number }).value_milliunits;
-	}
-	return undefined;
-}
-
-function sortByDateDescending<T extends { date: string }>(items: T[]): T[] {
-	return [...items].sort((a, b) => compareDates(b.date, a.date));
-}
-
-function sortMatchesByBankDateDescending(
-	matches: TransactionMatch[],
-): TransactionMatch[] {
-	return [...matches].sort((a, b) =>
-		compareDates(b.bankTransaction.date, a.bankTransaction.date),
-	);
-}
-
-function compareDates(dateA: string, dateB: string): number {
-	return toChronoValue(dateA) - toChronoValue(dateB);
-}
-
-function toChronoValue(date: string): number {
-	const parsed = Date.parse(date);
-	if (!Number.isNaN(parsed)) {
-		return parsed;
-	}
-	const fallback = Date.parse(`${date}T00:00:00Z`);
-	return Number.isNaN(fallback) ? 0 : fallback;
-}

@@ -158,7 +158,6 @@ export interface ReconciliationAction {
  */
 export interface MatchingConfig {
 	weights: {
-		amount: number; // Recommended: 0.50
 		date: number; // Recommended: 0.15
 		payee: number; // Recommended: 0.35
 	};

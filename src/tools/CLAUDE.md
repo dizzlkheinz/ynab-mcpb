@@ -31,7 +31,6 @@ src/tools/
 ├── toolCategories.ts           # Tool categorization and annotations
 ├── compareTransactions.ts      # CSV comparison tool entry point
 ├── exportTransactions.ts       # Transaction export to JSON files
-├── reconcileAdapter.ts         # Legacy adapter for reconciliation tool
 ├── deltaFetcher.ts             # Delta request utilities
 ├── deltaSupport.ts             # Delta request support utilities
 ├── compareTransactions/        # CSV comparison modular components
@@ -43,6 +42,10 @@ src/tools/
 │   ├── matcher.ts              # Fuzzy matching engine
 │   ├── analyzer.ts             # Transaction analysis
 │   ├── executor.ts             # Bulk transaction operations
+│   ├── executorErrors.ts       # YNAB error normalization/propagation
+│   ├── executorHelpers.ts      # Executor utilities (chunking, sorting)
+│   ├── balanceReconciliation.ts # Balance verification and likely causes
+│   ├── outputBuilder.ts        # Dual-channel payload builder
 │   ├── recommendationEngine.ts # Smart reconciliation recommendations
 │   ├── reportFormatter.ts      # Human-readable reports
 │   ├── signDetector.ts         # Auto-detection of debit/credit signs

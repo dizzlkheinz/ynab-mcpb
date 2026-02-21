@@ -532,10 +532,7 @@ describeIntegration("Server Startup and Transport Integration", () => {
 							await server.run();
 						} catch (error) {
 							// If it throws, it should be a transport error, not auth
-							expect(error).not.toHaveProperty(
-								"name",
-								"AuthenticationError",
-							);
+							expect(error).not.toHaveProperty("name", "AuthenticationError");
 						}
 
 						// Should have logged a token validation warning

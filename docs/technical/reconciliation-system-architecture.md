@@ -104,11 +104,10 @@ graph LR
     B --> E[Matcher Integer Comparison]
     D --> E
 
-    E -->|amount === amount| F[Exact Match 100 score]
-    E -->|Math.abs diff <= tolerance| G[Tolerance Match 95 score]
+    E -->|amount === amount| F[Exact Match - BASE_SCORE 50]
+    E -->|amount !== amount| G[Rejected - No Match]
 
     F --> H[High Confidence 85+]
-    G --> H
 
     H --> I[Auto-Match Execution]
 ```
@@ -178,18 +177,16 @@ graph TD
 
 ```typescript
 // V2 Matching Configuration from Request Parameters
+// Amounts must match exactly (no tolerance) — BASE_SCORE = 50 is awarded automatically
 const config: MatchingConfig = {
   weights: {
-    amount: 0.5,    // 50% weight
     date: 0.15,     // 15% weight
     payee: 0.35,    // 35% weight
   },
-  dateToleranceDays: params.date_tolerance_days ?? 5,
-  amountToleranceMilliunits: (params.amount_tolerance_cents ?? 1) * 10,
-  autoMatchThreshold: params.auto_match_threshold ?? 90,
+  dateToleranceDays: params.date_tolerance_days ?? 7,
+  autoMatchThreshold: params.auto_match_threshold ?? 85,
   suggestedMatchThreshold: params.suggestion_threshold ?? 60,
   minimumCandidateScore: 40,
-  exactAmountBonus: 10,
   exactDateBonus: 5,
   exactPayeeBonus: 10,
 };
@@ -343,26 +340,24 @@ rawDesc = rawDesc
 graph TD
     A[BankTransaction] --> B{Sign Check}
     B -->|Signs Differ| C[Skip Candidate]
-    B -->|Signs Match| D{Amount Tolerance}
+    B -->|Signs Match| D{Exact Amount Match?}
 
-    D -->|Diff > Tolerance| C
-    D -->|Diff <= Tolerance| E[Calculate Scores]
+    D -->|amount !== amount| C
+    D -->|amount === amount| E[Calculate Scores]
 
-    E --> F[Amount Score 0-100]
+    E --> F[BASE_SCORE = 50]
     E --> G[Date Score 0-100]
     E --> H[Payee Score 0-100]
 
-    F --> I[Weighted Combination]
+    F --> I[Combined = BASE + date×0.15 + payee×0.35]
     G --> I
     H --> I
 
     I --> J{Apply Bonuses}
-    J -->|Amount === exact| K[+10 bonus]
     J -->|Date === exact| L[+5 bonus]
     J -->|Payee >= 95| M[+10 bonus]
 
-    K --> N[Final Combined Score]
-    L --> N
+    L --> N[Final Combined Score]
     M --> N
 
     N --> O{Score >= Min Candidate?}
@@ -384,22 +379,14 @@ graph TD
 
 **Scoring Algorithms:**
 
-**Amount Score (Integer Comparison):**
+**Amount Matching (Exact Integer Comparison):**
 
 ```typescript
-const amountDiff = Math.abs(bankTxn.amount - ynabTxn.amount);
-let amountScore: number;
-
-if (amountDiff === 0) {
-  // Exact integer match - no floating point issues!
-  amountScore = 100;
-} else if (amountDiff <= config.amountToleranceMilliunits) {  // Default: 10 (1 cent)
-  amountScore = 95;
-} else if (amountDiff <= 1000) {  // Within $1
-  amountScore = 80 - (amountDiff / 1000 * 20);
-} else {
-  amountScore = Math.max(0, 60 - (amountDiff / 1000 * 5));
+// Amounts must match exactly — candidates with different amounts are rejected
+if (bankTxn.amount !== ynabTxn.amount) {
+  continue; // Skip candidate — no tolerance
 }
+// BASE_SCORE = 50 is awarded for the exact match (replaces weighted amount score)
 ```
 
 **Date Score (Days Difference):**
@@ -1097,25 +1084,25 @@ graph LR
 The reconciliation system uses a **multi-dimensional weighted scoring algorithm** with configurable thresholds and bonuses.
 
 **Core Principles:**
-1. **Amount is King** (50% weight) - Most reliable signal
+1. **Amount is Exact** (hard filter) - Amounts must match exactly in milliunits; BASE_SCORE of 50 awarded
 2. **Dates are Unreliable** (15% weight) - Banks delay posting 3-7 days
 3. **Payees are Fuzzy** (35% weight) - Merchant names vary significantly
 
 **Default Configuration:**
 
 ```typescript
+// Fixed base score for exact amount match
+const BASE_SCORE = 50;
+
 export const DEFAULT_CONFIG: MatchingConfig = {
   weights: {
-    amount: 0.5,    // 50%
     date: 0.15,     // 15%
     payee: 0.35,    // 35%
   },
-  amountToleranceMilliunits: 10,  // 1 cent (10 milliunits)
   dateToleranceDays: 7,
   autoMatchThreshold: 85,
   suggestedMatchThreshold: 60,
   minimumCandidateScore: 40,
-  exactAmountBonus: 10,
   exactDateBonus: 5,
   exactPayeeBonus: 10,
 };
@@ -1130,13 +1117,13 @@ Bank:   { date: '2025-09-15', amount: -45230, payee: 'Shell Gas' }
 YNAB:   { date: '2025-09-15', amount: -45230, payee: 'Shell' }
 
 Scores:
-  Amount: 100 (exact match: -45230 === -45230)
+  Amount: exact match (-45230 === -45230) → BASE_SCORE = 50
   Date:   100 (same day)
   Payee:   85 (fuzz.token_set_ratio('Shell Gas', 'Shell'))
 
-Combined = (100 * 0.5) + (100 * 0.15) + (85 * 0.35) = 94.75
-Bonuses  = +10 (exact amount) + 5 (exact date) = +15
-Final    = 94.75 + 15 = 109.75 → capped at 100
+Combined = 50 + (100 * 0.15) + (85 * 0.35) = 94.75
+Bonuses  = +5 (exact date) = +5
+Final    = 94.75 + 5 = 99.75 → capped at 100
 
 Confidence: HIGH (≥ 85)
 ```
@@ -1148,49 +1135,41 @@ Bank:   { date: '2025-09-15', amount: -12799, payee: 'Amazon Marketplace' }
 YNAB:   { date: '2025-09-20', amount: -12799, payee: 'Amazon' }
 
 Scores:
-  Amount: 100 (exact match)
+  Amount: exact match → BASE_SCORE = 50
   Date:    55 (5 days diff within tolerance)
   Payee:   92 (fuzz.token_set_ratio)
 
-Combined = (100 * 0.5) + (55 * 0.15) + (92 * 0.35) = 90.45
-Bonuses  = +10 (exact amount) + 10 (payee ≥ 95) = +20
-Final    = 90.45 + 20 = 110.45 → capped at 100
+Combined = 50 + (55 * 0.15) + (92 * 0.35) = 90.45
+Bonuses  = 0 (payee 92 < 95)
+Final    = 90.45
 
 Confidence: HIGH (≥ 85)
 ```
 
-**Example 3: Suggested Match**
+**Example 3: No Match (Amount Differs)**
 
 ```
 Bank:   { date: '2025-09-15', amount: -4520, payee: 'Coffee Shop A' }
 YNAB:   { date: '2025-09-16', amount: -4530, payee: 'Coffee Shop B' }
 
-Scores:
-  Amount:  95 (10 milliunits diff within tolerance)
-  Date:    95 (1 day diff)
-  Payee:   70 (partial match)
-
-Combined = (95 * 0.5) + (95 * 0.15) + (70 * 0.35) = 86.25
-Bonuses  = 0 (no exact matches)
-Final    = 86.25
-
-Confidence: HIGH (≥ 85) but close to threshold
+Result: REJECTED — amounts differ (-4520 !== -4530), candidate skipped entirely.
+(Exact amount matching means even 10 milliunits difference rejects the candidate.)
 ```
 
-**Example 4: Low Confidence**
+**Example 4: Low Confidence (Weak Payee/Date)**
 
 ```
 Bank:   { date: '2025-09-15', amount: -5000, payee: 'Transfer' }
-YNAB:   { date: '2025-09-22', amount: -5005, payee: 'Payment' }
+YNAB:   { date: '2025-09-22', amount: -5000, payee: 'Payment' }
 
 Scores:
-  Amount:  95 (5 milliunits diff)
+  Amount: exact match → BASE_SCORE = 50
   Date:    35 (7 days diff at edge of tolerance)
   Payee:   40 (weak match)
 
-Combined = (95 * 0.5) + (35 * 0.15) + (40 * 0.35) = 66.25
+Combined = 50 + (35 * 0.15) + (40 * 0.35) = 69.25
 Bonuses  = 0
-Final    = 66.25
+Final    = 69.25
 
 Confidence: MEDIUM (60-84)
 ```
@@ -1207,9 +1186,8 @@ if (bankSign !== ynabSign && bankSign !== 0 && ynabSign !== 0) {
   continue;  // Skip candidate
 }
 
-// 2. Amount Tolerance Check - hard filter
-const amountDiff = Math.abs(bankTxn.amount - ynabTxn.amount);
-if (amountDiff > config.amountToleranceMilliunits) {
+// 2. Exact Amount Match - hard filter (no tolerance)
+if (bankTxn.amount !== ynabTxn.amount) {
   continue;  // Skip candidate
 }
 ```
@@ -1229,7 +1207,7 @@ if (scores.combined >= config.minimumCandidateScore) {
 
 | Condition | Rationale |
 |-----------|-----------|
-| Amount score < 80 | Amount is most reliable signal |
+| Amount not exact match | Amount must match exactly in milliunits |
 | Date gap > 14 days | Even with delays, 2+ weeks is suspicious |
 | Multiple candidates within 5 points | Ambiguous, needs human review |
 | Payee score < 40 AND date score < 60 | Neither secondary signal is strong |
@@ -1739,9 +1717,8 @@ export const ReconcileAccountSchema = z.object({
   statement_end_date: z.string().optional(),
   statement_date: z.string().optional(),
 
-  // Matching Configuration
+  // Matching Configuration (amounts must match exactly, no tolerance parameter)
   date_tolerance_days: z.number().min(0).max(7).default(7),
-  amount_tolerance_cents: z.number().min(0).max(100).default(1),
   auto_match_threshold: z.number().min(0).max(100).default(85),
   suggestion_threshold: z.number().min(0).max(100).default(60),
 
@@ -2031,14 +2008,12 @@ sequenceDiagram
             alt Signs differ
                 M->>M: Skip candidate
             else Signs match
-                M->>M: Calculate amountDiff = |bank - ynab|
+                M->>M: Check exact amount match
 
-                alt amountDiff > tolerance
+                alt amount !== amount
                     M->>M: Skip candidate
-                else Within tolerance
-                    M->>M: Calculate amount score (0-100)
-
-                    Note over M: Amount Scoring:<br/>diff === 0 → 100<br/>diff <= tolerance → 95<br/>diff <= $1 → 80-100<br/>else → 60-0
+                else Exact match
+                    M->>M: Award BASE_SCORE = 50
 
                     M->>M: Calculate date score (0-100)
 
@@ -2053,11 +2028,11 @@ sequenceDiagram
 
                     F-->>M: max(scores)
 
-                    M->>M: combined = amount×0.5 + date×0.15 + payee×0.35
+                    M->>M: combined = 50 + date×0.15 + payee×0.35
 
                     M->>M: Apply bonuses
 
-                    Note over M: Bonuses:<br/>amount === 100 → +10<br/>date === 100 → +5<br/>payee >= 95 → +10
+                    Note over M: Bonuses:<br/>date === 100 → +5<br/>payee >= 95 → +10
 
                     M->>M: combined = min(100, combined + bonuses)
 
@@ -2097,7 +2072,6 @@ sequenceDiagram
 ```json
 {
   "date_tolerance_days": 3,
-  "amount_tolerance_cents": 0,
   "auto_match_threshold": 95,
   "suggestion_threshold": 75,
   "auto_create_transactions": false,
@@ -2110,8 +2084,7 @@ sequenceDiagram
 
 ```json
 {
-  "date_tolerance_days": 14,
-  "amount_tolerance_cents": 5,
+  "date_tolerance_days": 7,
   "auto_match_threshold": 75,
   "suggestion_threshold": 50,
   "auto_create_transactions": true,

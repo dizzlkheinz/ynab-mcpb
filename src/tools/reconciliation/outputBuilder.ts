@@ -1,19 +1,19 @@
-import { toMoneyValue, toMoneyValueFromDecimal } from "../utils/money.js";
+import { toMoneyValue, toMoneyValueFromDecimal } from "../../utils/money.js";
 import type {
 	AccountSnapshot,
 	LegacyReconciliationResult,
-} from "./reconciliation/executor.js";
+} from "./executor.js";
 import {
 	formatHumanReadableReport,
 	type ReportFormatterOptions,
-} from "./reconciliation/reportFormatter.js";
+} from "./reportFormatter.js";
 import type {
 	BankTransaction,
 	ReconciliationAnalysis,
 	ReconciliationInsight,
 	TransactionMatch,
 	YNABTransaction,
-} from "./reconciliation/types.js";
+} from "./types.js";
 
 const OUTPUT_VERSION = "2.0";
 const SCHEMA_URL =
@@ -281,8 +281,6 @@ const convertExecution = (
 
 	return result;
 };
-
-// Helper functions for converting data structures (kept for structured output)
 
 /**
  * Build human-readable narrative using the comprehensive report formatter

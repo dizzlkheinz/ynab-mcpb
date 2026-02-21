@@ -38,10 +38,14 @@ CSV File → Parser → Matcher → Analyzer → Executor → Reporter
 | **csvParser.ts** | CSV parsing with bank presets (TD, RBC, Scotiabank, etc.) | ~400 | HIGH |
 | **matcher.ts** | Fuzzy matching engine with configurable scoring | ~500 | CRITICAL |
 | **analyzer.ts** | Transaction analysis and discrepancy detection | ~600 | CRITICAL |
-| **executor.ts** | Bulk transaction operations (create/update/unclear) | ~700 | HIGH |
+| **executor.ts** | Bulk transaction operations (create/update/unclear) | ~580 | HIGH |
+| **executorErrors.ts** | YNAB error normalization and propagation | ~120 | HIGH |
+| **executorHelpers.ts** | Executor utilities (chunking, sorting, recommendations) | ~150 | MEDIUM |
+| **balanceReconciliation.ts** | Balance verification and likely-cause analysis | ~130 | HIGH |
+| **outputBuilder.ts** | Dual-channel payload builder (human + structured) | ~370 | MEDIUM |
 | **recommendationEngine.ts** | Smart reconciliation recommendations | ~300 | MEDIUM |
 | **reportFormatter.ts** | Human-readable reconciliation reports | ~400 | MEDIUM |
-| **signDetector.ts** | Auto-detection of debit/credit sign conventions | ~200 | HIGH |
+| **signDetector.ts** | Auto-detection of debit/credit sign conventions | ~130 | HIGH |
 | **payeeNormalizer.ts** | Payee name normalization for matching | ~150 | MEDIUM |
 | **ynabAdapter.ts** | YNAB API integration layer | ~300 | HIGH |
 
@@ -85,14 +89,14 @@ const inRangeTransactions = ynabTransactions.filter((t) => {
 
 ### 2. Matching Algorithm
 
-The matcher uses weighted scoring with configurable thresholds:
+The matcher requires exact amount matching and uses weighted scoring for date and payee:
 
 ```typescript
 interface MatchScoring {
-  amountWeight: 0.5; // 50% weight on amount match
+  // Amounts must match exactly (milliunits) — no tolerance
+  // Base score of 50 is awarded for exact amount match
   payeeWeight: 0.35; // 35% weight on payee match
   dateWeight: 0.15; // 15% weight on date match
-  amountTolerance: 10; // 1 cent (10 milliunits)
   dateTolerance: 7; // 7 days
   autoMatchThreshold: 85; // 85% score for auto-match
 }
@@ -100,15 +104,16 @@ interface MatchScoring {
 
 **Matching Logic**:
 
-1. **Amount Score**: 100% if within tolerance (1 cent), 0% otherwise
-2. **Payee Score**: Fuzzy token-set-ratio (handles merchant name variations)
-3. **Date Score**: 100% if exact match, linear decay over 7 days
-4. **Total Score**: Weighted average of above
-5. **Auto-Match**: Score ≥85% automatically matches
+1. **Amount Filter**: Candidates with different amounts are rejected (exact milliunits match required)
+2. **Base Score**: 50 points awarded for exact amount match (replaces weighted amount score)
+3. **Payee Score**: Fuzzy token-set-ratio (handles merchant name variations), weighted at 35%
+4. **Date Score**: 100% if exact match, linear decay over 7 days, weighted at 15%
+5. **Total Score**: `BASE_SCORE(50) + dateScore × 0.15 + payeeScore × 0.35 + bonuses`
+6. **Auto-Match**: Score ≥85% automatically matches
 
-**Why Critical**: Balance between precision (no false matches) and recall (catch all matches).
+**Why Critical**: Exact amount matching eliminates false positives from similar amounts. Scoring range is 50–100.
 
-**What Breaks**: Too low threshold → false matches. Too high threshold → missed matches. Wrong weights → poor matching accuracy.
+**What Breaks**: Too low threshold → false matches. Too high threshold → missed matches.
 
 ### 3. Bulk Operations with Progress
 
@@ -231,14 +236,16 @@ Default configuration values:
 
 ```typescript
 const DEFAULT_CONFIG = {
-  amountTolerance: 10, // 1 cent (10 milliunits)
+  // Amounts must match exactly (no tolerance)
   dateTolerance: 7, // 7 days (accommodates bank posting delays)
-  amountWeight: 0.5, // 50% weight
   payeeWeight: 0.35, // 35% weight
   dateWeight: 0.15, // 15% weight
   autoMatchThreshold: 85, // 85% score
+  exactDateBonus: 5, // Bonus for exact date match
+  exactPayeeBonus: 10, // Bonus for payee score ≥95
   maxBulkSize: 100, // Max transactions per API request
 };
+// BASE_SCORE = 50 is a fixed constant for exact amount match
 ```
 
 ## Common Development Tasks
@@ -264,12 +271,11 @@ const DEFAULT_CONFIG = {
 
 To adjust matching sensitivity:
 
-1. **Update scoring weights** in `matcher.ts`:
+1. **Update scoring weights** in `matcher.ts` (date + payee only; amount matching is exact):
    ```typescript
    const SCORING = {
-     amountWeight: 0.6, // Increase amount importance
      payeeWeight: 0.3, // Decrease payee importance
-     dateWeight: 0.1,
+     dateWeight: 0.2, // Increase date importance
    };
    ```
 2. **Update auto-match threshold**:
@@ -485,7 +491,7 @@ These fields help users understand why certain YNAB transactions weren't matched
 
 ### With Tools (`src/tools/`)
 
-- **reconcileAdapter.ts**: Legacy adapter for reconciliation tool
+- **outputBuilder.ts**: Builds dual-channel payload (human narrative + structured JSON)
 - **transactionTools.ts**: Uses bulk transaction creation/update
 
 ### With Server (`src/server/`)

@@ -118,7 +118,6 @@ Tools are organized by domain with some using modular sub-directories:
 - **toolCategories.ts** - Tool categorization utilities
 - **compareTransactions.ts** - Transaction comparison tool entry point
 - **exportTransactions.ts** - Transaction export to JSON files
-- **reconcileAdapter.ts** - Legacy adapter for reconciliation tool
 - **deltaFetcher.ts** - Delta request utilities for efficient API updates
 - **deltaSupport.ts** - Delta request support utilities and helpers
 
@@ -130,6 +129,10 @@ Tools are organized by domain with some using modular sub-directories:
   - matcher.ts - Fuzzy matching engine with configurable scoring
   - analyzer.ts - Transaction analysis and discrepancy detection
   - executor.ts - Bulk transaction operations (create/update/unclear)
+  - executorErrors.ts - YNAB error normalization and propagation logic
+  - executorHelpers.ts - Executor utilities (chunking, sorting, recommendations)
+  - balanceReconciliation.ts - Balance verification and likely-cause analysis
+  - outputBuilder.ts - Dual-channel payload builder (human narrative + structured JSON)
   - recommendationEngine.ts - Smart reconciliation recommendations
   - reportFormatter.ts - Human-readable reconciliation reports
   - signDetector.ts - Auto-detection of debit/credit sign conventions
@@ -609,9 +612,9 @@ The reconciliation tool (`reconcile_account`) is a comprehensive account reconci
 
 ### Configuration
 
-- Amount tolerance: 1 cent (10 milliunits) by default
+- Amount matching: exact (milliunits must be identical)
 - Date tolerance: 7 days (accommodates bank posting delays)
-- Scoring weights: amount 50%, payee 35%, date 15%
+- Scoring: fixed base score (50) for exact amount match + weighted payee (35%) and date (15%)
 - Auto-match threshold: 85%
 
 ### Date Range Filtering (v0.18.4)

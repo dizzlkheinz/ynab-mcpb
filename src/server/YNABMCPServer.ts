@@ -562,8 +562,7 @@ export class YNABMCPServer {
 			try {
 				await this.validateToken();
 			} catch (error) {
-				const message =
-					error instanceof Error ? error.message : String(error);
+				const message = error instanceof Error ? error.message : String(error);
 				console.error(`⚠️ Token validation warning: ${message}`);
 				console.error(
 					"Server is running but YNAB API calls will fail until a valid token is provided.",

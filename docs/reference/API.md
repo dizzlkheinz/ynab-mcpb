@@ -579,15 +579,14 @@ Performs comprehensive account reconciliation with bank statement data. The tool
 - `csv_file_path` or `csv_data` (one required)
 - `statement_balance` (number, required) – ending cleared balance from the statement in dollars
 - `statement_start_date`, `statement_end_date`, `statement_date` (string, optional)
-- Matching controls: `date_tolerance_days` (default 2), `amount_tolerance_cents` (default 1), `auto_match_threshold` (default 90), `suggestion_threshold` (default 60)
+- Matching controls: `date_tolerance_days` (default 7), `auto_match_threshold` (default 85), `suggestion_threshold` (default 60). Amounts must match exactly (no tolerance parameter)
 - Execution controls (optional):
   - `auto_create_transactions` (default `false`)
   - `auto_update_cleared_status` (default `false`)
   - `auto_unclear_missing` (default `true`)
   - `auto_adjust_dates` (default `false`)
   - `dry_run` (default `true`)
-  - `amount_tolerance` (deprecated decimal fallback – automatically inferred from `amount_tolerance_cents`)
-- Other legacy options remain accepted for compatibility (`expected_bank_balance`, `balance_verification_mode`, `require_exact_match`, etc.).
+- Other legacy options remain accepted for compatibility (`expected_bank_balance`, `require_exact_match`, etc.).
 
 **Example Request:**
 ```json

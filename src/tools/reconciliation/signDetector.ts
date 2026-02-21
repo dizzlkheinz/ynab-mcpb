@@ -38,9 +38,18 @@ export function detectSignInversion(
 		return null; // Insufficient evidence
 	}
 
-	// Sample up to 20 transactions for performance
-	const sampleSize = Math.min(20, bankTransactions.length);
-	const sample = bankTransactions.slice(0, sampleSize);
+	// Sample evenly across the array for representative coverage
+	const maxSamples = 50;
+	const stride = Math.max(1, Math.floor(bankTransactions.length / maxSamples));
+	const sample: BankTransaction[] = [];
+	for (
+		let i = 0;
+		i < bankTransactions.length && sample.length < maxSamples;
+		i += stride
+	) {
+		const txn = bankTransactions[i];
+		if (txn) sample.push(txn);
+	}
 
 	const matches: SignMatch[] = [];
 

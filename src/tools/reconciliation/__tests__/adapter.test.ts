@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-	buildReconciliationPayload,
-	type LegacyReconciliationResult,
-} from "../../reconcileAdapter.js";
+import type { LegacyReconciliationResult } from "../executor.js";
+import { buildReconciliationPayload } from "../outputBuilder.js";
 import type { ReconciliationAnalysis } from "../types.js";
 
 const makeMoney = (value: number, currency = "USD") => ({

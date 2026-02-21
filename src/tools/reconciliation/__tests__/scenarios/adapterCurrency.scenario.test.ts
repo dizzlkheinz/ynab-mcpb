@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReconciliationPayload } from "../../../reconcileAdapter.js";
+import { buildReconciliationPayload } from "../../outputBuilder.js";
 import type { ReconciliationAnalysis, TransactionMatch } from "../../types.js";
 
 const makeMoney = (value: number, currency = "USD") => ({

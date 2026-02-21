@@ -35,7 +35,6 @@ export interface MatchResult {
 
 export const DEFAULT_CONFIG: MatchingConfig = {
 	weights: {
-		amount: 0.5,
 		date: 0.15,
 		payee: 0.35,
 	},
@@ -178,14 +177,14 @@ function findCandidates(
 	return candidates;
 }
 
+// Fixed base score for exact amount match (amounts must match exactly, so this is always awarded)
+const BASE_SCORE = 50;
+
 function calculateScores(
 	bankTxn: CanonicalBankTransaction,
 	ynabTxn: NormalizedYNABTransaction,
 	config: MatchingConfig,
 ): MatchCandidate["scores"] {
-	// Amount score - always 100 (candidates with different amounts are filtered out)
-	const amountScore = 100;
-
 	// Date score
 	const bankDate = new Date(bankTxn.date);
 	const ynabDate = new Date(ynabTxn.date);
@@ -206,9 +205,9 @@ function calculateScores(
 	// Payee score using fuzzball
 	const payeeScore = calculatePayeeScore(bankTxn.payee, ynabTxn.payee);
 
-	// Combined score with weights
+	// Combined score: fixed base from exact amount match + weighted date/payee
 	let combined =
-		amountScore * config.weights.amount +
+		BASE_SCORE +
 		dateScore * config.weights.date +
 		payeeScore * config.weights.payee;
 
@@ -219,7 +218,7 @@ function calculateScores(
 	combined = Math.min(100, combined);
 
 	return {
-		amount: Math.round(amountScore),
+		amount: 100, // Always 100 (candidates with different amounts are filtered out)
 		date: Math.round(dateScore),
 		payee: Math.round(payeeScore),
 		combined: Math.round(combined),

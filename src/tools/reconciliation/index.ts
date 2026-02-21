@@ -19,7 +19,6 @@ import {
 } from "../compareTransactions/index.js";
 import type { DeltaFetcher } from "../deltaFetcher.js";
 import { resolveDeltaFetcherArgs } from "../deltaSupport.js";
-import { buildReconciliationPayload } from "../reconcileAdapter.js";
 import {
 	CompareTransactionsOutputSchema,
 	ReconcileAccountOutputSchema,
@@ -37,6 +36,7 @@ import {
 	type LegacyReconciliationResult,
 } from "./executor.js";
 import type { MatchingConfig } from "./matcher.js";
+import { buildReconciliationPayload } from "./outputBuilder.js";
 import { detectSignInversion } from "./signDetector.js";
 import type { BankTransaction } from "./types.js";
 import { normalizeYNABTransactions } from "./ynabAdapter.js";
@@ -134,10 +134,6 @@ export const ReconcileAccountSchema = z
 		auto_adjust_dates: z.boolean().optional().default(false),
 		invert_bank_amounts: z.boolean().optional(),
 		dry_run: z.boolean().optional().default(true),
-		balance_verification_mode: z
-			.enum(["ANALYSIS_ONLY", "GUIDED_RESOLUTION", "AUTO_RESOLVE"])
-			.optional()
-			.default("ANALYSIS_ONLY"),
 		// Response options
 		include_structured_data: z.boolean().optional().default(false),
 		force_full_refresh: z.boolean().optional().default(true),
@@ -184,7 +180,6 @@ export async function handleReconcileAccount(
 			// Build matching configuration from parameters (V2 Format)
 			const config: MatchingConfig = {
 				weights: {
-					amount: 0.5,
 					date: 0.15,
 					payee: 0.35,
 				},
@@ -373,13 +368,16 @@ export async function handleReconcileAccount(
 				}
 			}
 
-			const parseResult =
-				finalInvertAmounts === false
-					? rawCsvResult
-					: parseCSV(csvContent, {
-							...csvOptions,
-							invertAmounts: finalInvertAmounts,
-						});
+			// If inversion is needed, negate amounts in-place instead of re-parsing
+			const parseResult: CSVParseResult = finalInvertAmounts
+				? {
+						...rawCsvResult,
+						transactions: rawCsvResult.transactions.map((txn) => ({
+							...txn,
+							amount: -txn.amount,
+						})),
+					}
+				: rawCsvResult;
 
 			const auditMetadata = {
 				data_freshness: getDataFreshness(transactionsResult, forceFullRefresh),
@@ -438,7 +436,6 @@ export async function handleReconcileAccount(
 				params.auto_update_cleared_status ||
 				params.auto_unclear_missing ||
 				params.auto_adjust_dates ||
-				params.balance_verification_mode !== "ANALYSIS_ONLY" ||
 				wantsBalanceVerification;
 
 			if (shouldExecute) {

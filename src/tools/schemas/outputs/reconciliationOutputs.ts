@@ -6,7 +6,7 @@
  * @see src/tools/reconciliation/index.ts - Main reconciliation handler (lines 147-362)
  * @see src/tools/reconciliation/types.ts - Type definitions for reconciliation entities
  * @see src/tools/reconciliation/executor.ts - Execution engine for auto-applying recommendations
- * @see src/tools/reconcileAdapter.ts - Adapter for building reconciliation payloads
+ * @see src/tools/reconciliation/outputBuilder.ts - Adapter for building reconciliation payloads
  * @see src/utils/money.ts - Money value formatting utilities
  *
  * @example
@@ -115,7 +115,7 @@ export const IsoDateWithCalendarValidationSchema = z
  * even though the internal type may use Date objects during analysis.
  *
  * @see src/tools/reconciliation/types.ts - BankTransaction interface (internal type)
- * @see src/tools/reconcileAdapter.ts:77-80 - toBankTransactionView function
+ * @see src/tools/reconciliation/outputBuilder.ts:77-80 - toBankTransactionView function
  */
 export const BankTransactionSchema = z.object({
 	id: z.string().uuid(),
@@ -139,7 +139,7 @@ export type BankTransaction = z.infer<typeof BankTransactionSchema>;
  * even though the internal type may use Date objects during analysis.
  *
  * @see src/tools/reconciliation/types.ts - YNABTransaction interface (internal type)
- * @see src/tools/reconcileAdapter.ts:82-85 - toYNABTransactionView function
+ * @see src/tools/reconciliation/outputBuilder.ts:82-85 - toYNABTransactionView function
  */
 export const YNABTransactionSimpleSchema = z.object({
 	id: z.string(),
@@ -403,7 +403,7 @@ export type ActionableRecommendation = z.infer<
  * Account balance snapshot with money formatting.
  * Used in execution result to show before/after balance states.
  *
- * @see src/tools/reconcileAdapter.ts:138-142 - convertAccountSnapshot function
+ * @see src/tools/reconciliation/outputBuilder.ts:138-142 - convertAccountSnapshot function
  */
 export const AccountSnapshotSchema = z.object({
 	balance: MoneyValueSchema,
@@ -591,11 +591,11 @@ export type BulkOperationDetails = z.infer<typeof BulkOperationDetailsSchema>;
  *
  * @remarks
  * This schema matches the actual payload shape built by convertExecution()
- * in reconcileAdapter.ts, which differs from the legacy ExecutionResult interface.
+ * in outputBuilder.ts, which differs from the legacy ExecutionResult interface.
  * The adapter converts the ExecutionResult to a structured payload with formatted
  * money values and nested balance snapshots.
  *
- * @see src/tools/reconcileAdapter.ts:199-232 - convertExecution function
+ * @see src/tools/reconciliation/outputBuilder.ts:199-232 - convertExecution function
  * @see src/tools/reconciliation/executor.ts:69-79 - ExecutionResult interface
  */
 export const ExecutionResultSchema = z.object({
@@ -622,7 +622,7 @@ export type ExecutionResult = z.infer<typeof ExecutionResultSchema>;
  * but additional fields can be passed through without validation errors.
  *
  * @see src/tools/reconciliation/index.ts:272-284 - Audit metadata construction
- * @see src/tools/reconcileAdapter.ts:19-25 - AdapterOptions interface with extensible auditMetadata
+ * @see src/tools/reconciliation/outputBuilder.ts:19-25 - AdapterOptions interface with extensible auditMetadata
  */
 export const AuditMetadataSchema = z
 	.object({
@@ -651,7 +651,7 @@ export type AuditMetadata = z.infer<typeof AuditMetadataSchema>;
  * Discriminated union for human-only vs human+structured response modes.
  *
  * @see src/tools/reconciliation/index.ts:147-362 - Main handler
- * @see src/tools/reconcileAdapter.ts - buildReconciliationPayload function
+ * @see src/tools/reconciliation/outputBuilder.ts - buildReconciliationPayload function
  *
  * @example
  * // Human-readable narrative only (default)

@@ -12,7 +12,6 @@ describe("matcher", () => {
 	beforeEach(() => {
 		config = {
 			weights: {
-				amount: 0.5,
 				date: 0.15,
 				payee: 0.35,
 			},
@@ -525,7 +524,6 @@ describe("matcher", () => {
 		it("should use custom configuration", () => {
 			const customConfig: MatchingConfig = {
 				weights: {
-					amount: 0.5,
 					date: 0.15,
 					payee: 0.35,
 				},
