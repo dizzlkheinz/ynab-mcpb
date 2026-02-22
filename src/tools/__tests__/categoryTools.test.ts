@@ -130,6 +130,7 @@ describe("Category Tools", () => {
 
 			const result = await handleListCategories(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -212,6 +213,7 @@ describe("Category Tools", () => {
 
 			const result = await handleListCategories(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -253,6 +255,7 @@ describe("Category Tools", () => {
 
 			const result = await handleListCategories(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -269,6 +272,7 @@ describe("Category Tools", () => {
 
 			const result = await handleListCategories(mockYnabAPI, fetcher, {
 				budget_id: "invalid-budget",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -301,6 +305,7 @@ describe("Category Tools", () => {
 			const result = await handleGetCategory(mockYnabAPI, {
 				budget_id: "budget-1",
 				category_id: "category-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -355,6 +360,7 @@ describe("Category Tools", () => {
 			const result = await handleGetCategory(mockYnabAPI, {
 				budget_id: "budget-1",
 				category_id: "category-1",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -372,6 +378,7 @@ describe("Category Tools", () => {
 			const result = await handleGetCategory(mockYnabAPI, {
 				budget_id: "budget-1",
 				category_id: "invalid-category",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -564,7 +571,7 @@ describe("Category Tools", () => {
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.dry_run).toBe(true);
-			expect(parsedContent.action).toBe("update_category");
+			expect(parsedContent.action).toBe("ynab_update_category");
 			expect(parsedContent.request).toMatchObject({
 				budget_id: "budget-1",
 				category_id: "category-1",

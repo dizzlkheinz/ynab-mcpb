@@ -534,12 +534,9 @@ export class ToolRegistry {
 		let parsedOutput: unknown;
 		try {
 			parsedOutput = JSON.parse(firstContent.text);
-		} catch (parseError) {
-			return this.deps.errorHandler.createValidationError(
-				`Output validation failed for ${toolName}`,
-				`Invalid JSON in handler output: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
-				["Ensure the handler returns valid JSON"],
-			);
+		} catch {
+			// Non-JSON response (e.g. markdown) — pass through without structuredContent
+			return output;
 		}
 
 		// Validate against schema

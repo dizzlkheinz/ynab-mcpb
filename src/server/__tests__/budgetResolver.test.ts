@@ -143,7 +143,7 @@ describe("BudgetResolver", () => {
 				expect(errorText).toContain(
 					"No budget ID provided and no default budget set",
 				);
-				expect(errorText).toContain("set_default_budget");
+				expect(errorText).toContain("ynab_set_default_budget");
 			});
 
 			it("should return error when provided ID is undefined and no default", () => {
@@ -207,7 +207,7 @@ describe("BudgetResolver", () => {
 					?.text;
 				expect(errorText).toContain("Invalid budget ID format");
 				expect(errorText).toContain("UUID v4 format");
-				expect(errorText).toContain("list_budgets");
+				expect(errorText).toContain("ynab_list_budgets");
 			});
 
 			it("should return error for malformed UUID", () => {
@@ -350,7 +350,7 @@ describe("BudgetResolver", () => {
 				expect(errorText).toContain(
 					"No budget ID provided and no default budget set",
 				);
-				expect(errorText).toContain("set_default_budget");
+				expect(errorText).toContain("ynab_set_default_budget");
 			});
 		});
 
@@ -365,7 +365,7 @@ describe("BudgetResolver", () => {
 				expect(errorText).toContain("Invalid budget ID format");
 				expect(errorText).toContain(details);
 				expect(errorText).toContain("UUID v4 format");
-				expect(errorText).toContain("list_budgets");
+				expect(errorText).toContain("ynab_list_budgets");
 			});
 		});
 	});
@@ -433,14 +433,14 @@ describe("BudgetResolver", () => {
 			const missingResult =
 				BudgetResolver.createMissingBudgetError() as CallToolResult;
 			const missingText = (missingResult.content?.[0] as any)?.text;
-			expect(missingText).toContain("set_default_budget");
+			expect(missingText).toContain("ynab_set_default_budget");
 			expect(missingText).toContain("budget_id parameter");
 
 			const invalidResult = BudgetResolver.createInvalidBudgetError(
 				"test",
 			) as CallToolResult;
 			const invalidText = (invalidResult.content?.[0] as any)?.text;
-			expect(invalidText).toContain("list_budgets");
+			expect(invalidText).toContain("ynab_list_budgets");
 			expect(invalidText).toContain("UUID format");
 		});
 	});

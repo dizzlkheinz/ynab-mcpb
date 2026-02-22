@@ -227,7 +227,10 @@ describe("transactionTools", () => {
 				mockResponse,
 			);
 
-			const params = { budget_id: "budget-123" };
+			const params = {
+				budget_id: "budget-123",
+				response_format: "json" as const,
+			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
 			// In test environment, cache should be bypassed
@@ -269,6 +272,7 @@ describe("transactionTools", () => {
 			const params = {
 				budget_id: "budget-123",
 				account_id: "account-456",
+				response_format: "json" as const,
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
@@ -299,7 +303,10 @@ describe("transactionTools", () => {
 				mockResponse,
 			);
 
-			const params = { budget_id: "budget-123" };
+			const params = {
+				budget_id: "budget-123",
+				response_format: "json" as const,
+			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
 			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
@@ -337,6 +344,7 @@ describe("transactionTools", () => {
 			const params = {
 				budget_id: "budget-123",
 				account_id: "account-456",
+				response_format: "json" as const,
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
@@ -369,6 +377,7 @@ describe("transactionTools", () => {
 			const params = {
 				budget_id: "budget-123",
 				category_id: "category-789",
+				response_format: "json" as const,
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
@@ -410,7 +419,10 @@ describe("transactionTools", () => {
 				error,
 			);
 
-			const params = { budget_id: "budget-123" };
+			const params = {
+				budget_id: "budget-123",
+				response_format: "json" as const,
+			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
 			const response = JSON.parse(result.content[0].text);
@@ -440,7 +452,10 @@ describe("transactionTools", () => {
 				error,
 			);
 
-			const params = { budget_id: "budget-123" };
+			const params = {
+				budget_id: "budget-123",
+				response_format: "json" as const,
+			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
 			const response = JSON.parse(result.content[0].text);
@@ -455,7 +470,10 @@ describe("transactionTools", () => {
 				error,
 			);
 
-			const params = { budget_id: "budget-123" };
+			const params = {
+				budget_id: "budget-123",
+				response_format: "json" as const,
+			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
 			const response = JSON.parse(result.content[0].text);
@@ -463,14 +481,15 @@ describe("transactionTools", () => {
 		});
 
 		it("should include cached property in large response path", async () => {
-			// Create large transaction list (> 90KB)
+			// Create large transaction list (> 90KB for paginated slice)
+			// Each item needs ~1800+ bytes so 50 items (default page) exceeds 90KB limit
 			const largeTransactionList: ynab.TransactionDetail[] = [];
 			for (let i = 0; i < 5000; i++) {
 				largeTransactionList.push({
 					id: `transaction-${i}`,
 					date: "2025-01-01",
 					amount: -10000,
-					memo: "Test transaction with long memo to increase size ".repeat(10),
+					memo: "Test transaction with long memo to increase size ".repeat(40),
 					cleared: "cleared",
 					approved: true,
 					flag_color: null,
@@ -516,6 +535,7 @@ describe("transactionTools", () => {
 			const result = await handleListTransactions(mockYnabAPI, {
 				budget_id: "test-budget",
 				account_id: "test-account",
+				response_format: "json" as const,
 			});
 
 			const content = result.content?.[0];
@@ -615,6 +635,7 @@ describe("transactionTools", () => {
 			const params = {
 				budget_id: "budget-123",
 				transaction_id: "transaction-456",
+				response_format: "json" as const,
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
@@ -640,6 +661,7 @@ describe("transactionTools", () => {
 			const params = {
 				budget_id: "budget-123",
 				transaction_id: "invalid-transaction",
+				response_format: "json" as const,
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
@@ -658,6 +680,7 @@ describe("transactionTools", () => {
 			const params = {
 				budget_id: "budget-123",
 				transaction_id: "transaction-456",
+				response_format: "json" as const,
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
@@ -676,6 +699,7 @@ describe("transactionTools", () => {
 			const params = {
 				budget_id: "budget-123",
 				transaction_id: "transaction-456",
+				response_format: "json" as const,
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
@@ -1264,7 +1288,7 @@ describe("transactionTools", () => {
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.dry_run).toBe(true);
-			expect(parsedContent.action).toBe("create_transaction");
+			expect(parsedContent.action).toBe("ynab_create_transaction");
 			expect(parsedContent.request).toMatchObject({
 				budget_id: "budget-123",
 				account_id: "account-456",
@@ -2796,7 +2820,7 @@ describe("transactionTools", () => {
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.dry_run).toBe(true);
-			expect(parsedContent.action).toBe("update_transaction");
+			expect(parsedContent.action).toBe("ynab_update_transaction");
 			expect(parsedContent.request).toEqual({
 				budget_id: "budget-123",
 				transaction_id: "transaction-456",
@@ -3225,7 +3249,7 @@ describe("transactionTools", () => {
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.dry_run).toBe(true);
-			expect(parsedContent.action).toBe("delete_transaction");
+			expect(parsedContent.action).toBe("ynab_delete_transaction");
 			expect(parsedContent.request).toEqual({
 				budget_id: "budget-123",
 				transaction_id: "transaction-456",

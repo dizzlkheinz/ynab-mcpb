@@ -97,7 +97,7 @@ export async function handleCreateTransaction(
 						type: "text",
 						text: responseFormatter.format({
 							dry_run: true,
-							action: "create_transaction",
+							action: "ynab_create_transaction",
 							request: params,
 						}),
 					},
@@ -773,7 +773,7 @@ export async function handleCreateReceiptSplitTransaction(
 					type: "text",
 					text: responseFormatter.format({
 						dry_run: true,
-						action: "create_receipt_split_transaction",
+						action: "ynab_create_receipt_split_transaction",
 						transaction_preview: {
 							account_id: params.account_id,
 							payee_name: params.payee_name,
@@ -866,7 +866,7 @@ export async function handleUpdateTransaction(
 						type: "text",
 						text: responseFormatter.format({
 							dry_run: true,
-							action: "update_transaction",
+							action: "ynab_update_transaction",
 							request: params,
 						}),
 					},
@@ -1071,7 +1071,7 @@ export async function handleDeleteTransaction(
 						type: "text",
 						text: responseFormatter.format({
 							dry_run: true,
-							action: "delete_transaction",
+							action: "ynab_delete_transaction",
 							request: params,
 						}),
 					},
@@ -1285,7 +1285,7 @@ export async function handleCreateTransactions(
 							type: "text",
 							text: responseFormatter.format({
 								dry_run: true,
-								action: "create_transactions",
+								action: "ynab_create_transactions",
 								validation: "passed",
 								summary: {
 									total_transactions: transactions.length,
@@ -1759,7 +1759,7 @@ export async function handleUpdateTransactions(
 
 				const response: Record<string, unknown> = {
 					dry_run: true,
-					action: "update_transactions",
+					action: "ynab_update_transactions",
 					validation: "passed",
 					summary: {
 						total_transactions: transactions.length,
@@ -2023,8 +2023,26 @@ export function registerTransactionWriteTools(
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
-		name: "create_transaction",
-		description: "Create a new transaction in the specified budget and account",
+		name: "ynab_create_transaction",
+		description: `Create a single transaction in YNAB.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - account_id (string, required): Account UUID.
+  - amount (int, required): Amount in milliunits (dollars × 1000). Negative for expenses.
+  - date (string, required): ISO date YYYY-MM-DD.
+  - payee_name (string, optional): Payee name (creates new payee if not found).
+  - payee_id (string, optional): Existing payee UUID (alternative to payee_name).
+  - category_id (string, optional): Category UUID.
+  - memo (string, optional): Memo text.
+  - cleared (string, optional): "cleared", "uncleared", or "reconciled". Default: "uncleared".
+  - approved (boolean, optional): Mark as approved. Default: false.
+  - dry_run (boolean, optional): Preview without saving. Default: false.
+
+Returns: created transaction with account_balance.
+
+Examples:
+  - $50 expense: set amount=-50000 (milliunits)`,
 		inputSchema: CreateTransactionSchema,
 		outputSchema: CreateTransactionOutputSchema,
 		handler: adaptWrite(handleCreateTransaction),
@@ -2039,9 +2057,19 @@ export function registerTransactionWriteTools(
 	});
 
 	registry.register({
-		name: "create_transactions",
-		description:
-			"Create multiple transactions in a single batch (1-100 items) with duplicate detection, dry-run validation, and automatic response size management with correlation metadata.",
+		name: "ynab_create_transactions",
+		description: `Create 1–100 transactions in a single batch with duplicate detection and dry-run support.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - transactions (array, required): Up to 100 transaction objects (each requires account_id, amount, date).
+  - dry_run (boolean, optional): Validate without saving. Default: false.
+
+Returns: summary (created, duplicates, failed), results[], transactions[].
+
+Examples:
+  - Dry run first: set dry_run=true to validate before committing
+  - Avoid duplicate import: set import_id on each transaction`,
 		inputSchema: CreateTransactionsSchema,
 		outputSchema: CreateTransactionsOutputSchema,
 		handler: adaptWrite(handleCreateTransactions),
@@ -2056,9 +2084,20 @@ export function registerTransactionWriteTools(
 	});
 
 	registry.register({
-		name: "create_receipt_split_transaction",
-		description:
-			"Create a split transaction from receipt items with proportional tax allocation",
+		name: "ynab_create_receipt_split_transaction",
+		description: `Create a split transaction from itemized receipt data with proportional tax allocation.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - account_id (string, required): Account UUID.
+  - payee_name (string, optional): Store/payee name.
+  - receipt_total (number, required): Total amount in dollars (positive).
+  - receipt_tax (number, required): Tax amount in dollars (0 if none).
+  - categories (array, required): Category groups with items. Each item needs name, amount.
+  - date (string, optional): ISO date. Default: today.
+  - dry_run (boolean, optional): Preview subtransactions without saving. Default: false.
+
+Returns: transaction with subtransactions and receipt_summary.`,
 		inputSchema: CreateReceiptSplitTransactionSchema,
 		outputSchema: CreateReceiptSplitTransactionOutputSchema,
 		handler: adaptWrite(handleCreateReceiptSplitTransaction),
@@ -2073,8 +2112,22 @@ export function registerTransactionWriteTools(
 	});
 
 	registry.register({
-		name: "update_transaction",
-		description: "Update an existing transaction",
+		name: "ynab_update_transaction",
+		description: `Update fields on an existing YNAB transaction.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - transaction_id (string, required): Transaction UUID to update.
+  - amount (int, optional): New amount in milliunits.
+  - date (string, optional): New date YYYY-MM-DD.
+  - payee_name / payee_id (string, optional): New payee.
+  - category_id (string, optional): New category UUID.
+  - memo (string, optional): New memo.
+  - cleared (string, optional): "cleared", "uncleared", or "reconciled".
+  - approved (boolean, optional): Approval status.
+  - dry_run (boolean, optional): Preview without saving.
+
+Returns: updated transaction with updated_balance.`,
 		inputSchema: UpdateTransactionSchema,
 		outputSchema: UpdateTransactionOutputSchema,
 		handler: adaptWrite(handleUpdateTransaction),
@@ -2089,9 +2142,18 @@ export function registerTransactionWriteTools(
 	});
 
 	registry.register({
-		name: "update_transactions",
-		description:
-			"Update multiple transactions in a single batch (1-100 items) with dry-run validation, automatic cache invalidation, and response size management. Supports optional original_account_id and original_date metadata for efficient cache invalidation.",
+		name: "ynab_update_transactions",
+		description: `Update 1–100 transactions in a single batch with dry-run preview.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - transactions (array, required): Up to 100 objects, each requires id plus fields to update.
+  - dry_run (boolean, optional): Preview changes without saving. Default: false.
+
+Returns: summary (updated, failed), results[], transactions[].
+
+Examples:
+  - Dry run: set dry_run=true to preview before/after for first 10 items`,
 		inputSchema: UpdateTransactionsSchema,
 		outputSchema: UpdateTransactionsOutputSchema,
 		handler: adaptWrite(handleUpdateTransactions),
@@ -2106,8 +2168,18 @@ export function registerTransactionWriteTools(
 	});
 
 	registry.register({
-		name: "delete_transaction",
-		description: "Delete a transaction from the specified budget",
+		name: "ynab_delete_transaction",
+		description: `Delete a transaction from YNAB. This action is irreversible.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - transaction_id (string, required): Transaction UUID to delete.
+  - dry_run (boolean, optional): Preview without deleting. Default: false.
+
+Returns: deleted transaction id and updated account balance.
+
+Errors:
+  - "Transaction not found" → invalid transaction_id`,
 		inputSchema: DeleteTransactionSchema,
 		outputSchema: DeleteTransactionOutputSchema,
 		handler: adaptWrite(handleDeleteTransaction),

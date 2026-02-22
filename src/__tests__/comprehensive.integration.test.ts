@@ -166,7 +166,9 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				mockYnabAPI.budgets.getBudgets.mockResolvedValue(mockBudgets);
 
 				// Test budget listing
-				const listResult = await executeToolCall(server, "ynab:list_budgets");
+				const listResult = await executeToolCall(server, "ynab:list_budgets", {
+					response_format: "json",
+				});
 				validateToolResult(listResult);
 
 				const budgets = parseToolResult(listResult);
@@ -207,6 +209,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				// Test specific budget retrieval
 				const getResult = await executeToolCall(server, "ynab:get_budget", {
 					budget_id: "budget-1",
+					response_format: "json",
 				});
 				validateToolResult(getResult);
 
@@ -295,6 +298,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				// Test account listing
 				const listResult = await executeToolCall(server, "ynab:list_accounts", {
 					budget_id: budgetId,
+					response_format: "json",
 				});
 				validateToolResult(listResult);
 
@@ -316,6 +320,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				const getResult = await executeToolCall(server, "ynab:get_account", {
 					budget_id: budgetId,
 					account_id: "account-1",
+					response_format: "json",
 				});
 				validateToolResult(getResult);
 
@@ -438,6 +443,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 					{
 						budget_id: budgetId,
 						account_id: accountId,
+						response_format: "json",
 					},
 				);
 				validateToolResult(listResult);
@@ -465,6 +471,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 					{
 						budget_id: budgetId,
 						transaction_id: "transaction-1",
+						response_format: "json",
 					},
 				);
 				validateToolResult(getResult);
@@ -512,6 +519,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 						memo: "Test transaction",
 						date: "2024-01-17",
 						cleared: "uncleared",
+						response_format: "json",
 					},
 				);
 				validateToolResult(createResult);
@@ -542,6 +550,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 						budget_id: budgetId,
 						transaction_id: "transaction-3",
 						memo: "Updated memo",
+						response_format: "json",
 					},
 				);
 				validateToolResult(updateResult);
@@ -741,6 +750,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 					"ynab:list_categories",
 					{
 						budget_id: budgetId,
+						response_format: "json",
 					},
 				);
 				validateToolResult(listResult);
@@ -763,6 +773,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				const getResult = await executeToolCall(server, "ynab:get_category", {
 					budget_id: budgetId,
 					category_id: "category-1",
+					response_format: "json",
 				});
 				validateToolResult(getResult);
 
@@ -833,7 +844,9 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				mockYnabAPI.user.getUser.mockResolvedValue(mockUser);
 
 				// Test user retrieval
-				const userResult = await executeToolCall(server, "ynab:get_user");
+				const userResult = await executeToolCall(server, "ynab:get_user", {
+					response_format: "json",
+				});
 				validateToolResult(userResult);
 
 				const user = parseToolResult(userResult);
@@ -989,7 +1002,9 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				const initialSize = statsBeforeFirstCall.size;
 
 				// First call - should hit API and cache result
-				const firstResult = await executeToolCall(server, "ynab:list_budgets");
+				const firstResult = await executeToolCall(server, "ynab:list_budgets", {
+					response_format: "json",
+				});
 				validateToolResult(firstResult);
 
 				const firstParsed = parseToolResult(firstResult);
@@ -1003,7 +1018,11 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				expect(statsAfterFirstCall.size).toBeGreaterThan(initialSize);
 
 				// Second call - should hit cache
-				const secondResult = await executeToolCall(server, "ynab:list_budgets");
+				const secondResult = await executeToolCall(
+					server,
+					"ynab:list_budgets",
+					{ response_format: "json" },
+				);
 				validateToolResult(secondResult);
 
 				const secondParsed = parseToolResult(secondResult);
@@ -1131,6 +1150,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 					"ynab:list_transactions",
 					{
 						budget_id: budgetId,
+						response_format: "json",
 					},
 				);
 				const unfilteredParsed = parseToolResult(unfilteredResult);
@@ -1148,6 +1168,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 					{
 						budget_id: budgetId,
 						account_id: "account-1",
+						response_format: "json",
 					},
 				);
 				const filteredParsed = parseToolResult(filteredResult);
@@ -1281,12 +1302,18 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				mockYnabAPI.budgets.getBudgets.mockResolvedValue(mockBudgets);
 
 				// First call - cache miss
-				const firstResult = await executeToolCall(server, "ynab:list_budgets");
+				const firstResult = await executeToolCall(server, "ynab:list_budgets", {
+					response_format: "json",
+				});
 				const firstParsed = parseToolResult(firstResult);
 				expect(firstParsed.data.cached).toBe(false);
 
 				// Second call - cache hit
-				const secondResult = await executeToolCall(server, "ynab:list_budgets");
+				const secondResult = await executeToolCall(
+					server,
+					"ynab:list_budgets",
+					{ response_format: "json" },
+				);
 				const secondParsed = parseToolResult(secondResult);
 				expect(secondParsed.data.cached).toBe(true);
 

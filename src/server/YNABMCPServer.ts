@@ -47,6 +47,10 @@ import { type AppConfig, loadConfig } from "./config.js";
 import { DeltaCache } from "./deltaCache.js";
 import { DiagnosticManager } from "./diagnostics.js";
 import { createErrorHandler, type ErrorHandler } from "./errorHandler.js";
+import {
+	formatDefaultBudget,
+	formatDiagnosticInfo,
+} from "./markdownFormatter.js";
 import { PromptManager } from "./prompts.js";
 import { ResourceManager } from "./resources.js";
 import { responseFormatter } from "./responseFormatter.js";
@@ -419,6 +423,10 @@ export class YNABMCPServer {
 				include_security: z.boolean().default(true),
 				include_cache: z.boolean().default(true),
 				include_delta: z.boolean().default(true),
+				response_format: z
+					.enum(["json", "markdown"])
+					.default("markdown")
+					.optional(),
 			})
 			.strict();
 		registerBudgetTools(this.toolRegistry, toolContext);
@@ -433,8 +441,19 @@ export class YNABMCPServer {
 		// Server-owned inline tools stay here because they depend on instance state (default budget,
 		// diagnostics manager, cache manager, response formatter) rather than the factory context.
 		register({
-			name: "set_default_budget",
-			description: "Set the default budget for subsequent operations",
+			name: "ynab_set_default_budget",
+			description: `Set a default budget so other tools don't require budget_id every call.
+
+Args:
+  - budget_id (string, required): Budget UUID to set as default. Validates against YNAB API.
+
+Returns: success, default_budget_id, cache_warm_started.
+
+Examples:
+  - Set default: provide the UUID from ynab_list_budgets
+
+Errors:
+  - "Budget not found" → invalid budget_id`,
 			inputSchema: setDefaultBudgetSchema,
 			outputSchema: SetDefaultBudgetOutputSchema,
 			handler: async ({ input }) => {
@@ -469,25 +488,46 @@ export class YNABMCPServer {
 			},
 		});
 
+		const getDefaultBudgetSchema = z
+			.object({
+				response_format: z
+					.enum(["json", "markdown"])
+					.default("markdown")
+					.optional(),
+			})
+			.strict();
+
 		register({
-			name: "get_default_budget",
-			description: "Get the currently set default budget",
-			inputSchema: emptyObjectSchema,
+			name: "ynab_get_default_budget",
+			description: `Get the currently configured default budget ID.
+
+Args:
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: default_budget_id (null if not set), has_default.`,
+			inputSchema: getDefaultBudgetSchema,
 			outputSchema: GetDefaultBudgetOutputSchema,
-			handler: async () => {
+			handler: async ({ input }) => {
 				try {
 					const defaultBudget = this.getDefaultBudget();
+					const fmtGDB =
+						((input as Record<string, unknown>)["response_format"] as string) ??
+						"markdown";
+					const dataObjectGDB = {
+						default_budget_id: defaultBudget ?? null,
+						has_default: !!defaultBudget,
+						message: defaultBudget
+							? `Default budget is set to: ${defaultBudget}`
+							: "No default budget is currently set",
+					};
 					return {
 						content: [
 							{
 								type: "text",
-								text: responseFormatter.format({
-									default_budget_id: defaultBudget ?? null,
-									has_default: !!defaultBudget,
-									message: defaultBudget
-										? `Default budget is set to: ${defaultBudget}`
-										: "No default budget is currently set",
-								}),
+								text:
+									fmtGDB === "markdown"
+										? formatDefaultBudget(dataObjectGDB)
+										: responseFormatter.format(dataObjectGDB),
 							},
 						],
 					};
@@ -510,13 +550,50 @@ export class YNABMCPServer {
 		});
 
 		register({
-			name: "diagnostic_info",
-			description:
-				"Get comprehensive diagnostic information about the MCP server",
+			name: "ynab_diagnostic_info",
+			description: `Get comprehensive diagnostic information about the MCP server (health, cache, delta, security).
+
+Args:
+  - include_memory (boolean, optional): Include memory usage. Default: true.
+  - include_environment (boolean, optional): Include env info. Default: true.
+  - include_server (boolean, optional): Include server info. Default: true.
+  - include_security (boolean, optional): Include security stats. Default: true.
+  - include_cache (boolean, optional): Include cache metrics. Default: true.
+  - include_delta (boolean, optional): Include delta cache info. Default: true.
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: diagnostics object with requested sections.`,
 			inputSchema: diagnosticInfoSchema,
 			outputSchema: DiagnosticInfoOutputSchema,
 			handler: async ({ input }) => {
-				return this.diagnosticManager.collectDiagnostics(input);
+				const diagnosticsResult =
+					await this.diagnosticManager.collectDiagnostics(input);
+				const fmtDiag =
+					(input as Record<string, unknown>)["response_format"] ?? "markdown";
+				if (fmtDiag === "markdown") {
+					const textContent = diagnosticsResult.content.find(
+						(c) => c.type === "text",
+					);
+					if (textContent && "text" in textContent) {
+						try {
+							const diagData = JSON.parse(textContent.text) as Record<
+								string,
+								unknown
+							>;
+							return {
+								content: [
+									{
+										type: "text" as const,
+										text: formatDiagnosticInfo(diagData),
+									},
+								],
+							};
+						} catch {
+							// Fall through to return original
+						}
+					}
+				}
+				return diagnosticsResult;
 			},
 			metadata: {
 				annotations: {
@@ -527,8 +604,14 @@ export class YNABMCPServer {
 		});
 
 		register({
-			name: "clear_cache",
-			description: "Clear the in-memory cache (safe, no YNAB data is modified)",
+			name: "ynab_clear_cache",
+			description: `Clear all in-memory caches. Safe operation — no YNAB data is modified.
+
+Args: (none)
+
+Returns: success.
+
+Use when: you need fresh data after external YNAB changes, or to free memory.`,
 			inputSchema: emptyObjectSchema,
 			outputSchema: ClearCacheOutputSchema,
 			handler: async () => {

@@ -1,6 +1,11 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import {
+	isAuthError,
+	isRateLimitError,
+	skipOnRateLimit,
+} from "../../__tests__/testUtils.js";
 import { CacheManager } from "../../server/cacheManager.js";
 import { DeltaCache } from "../../server/deltaCache.js";
 import { ServerKnowledgeStore } from "../../server/serverKnowledgeStore.js";
@@ -21,25 +26,42 @@ describeIntegration("Delta-backed account tool handlers", () => {
 	let testAccountId: string;
 	let deltaFetcher: DeltaFetcher;
 	let previousNodeEnv: string | undefined;
+	let setupRateLimited = false;
 
 	beforeAll(async () => {
-		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
-		ynabAPI = new ynab.API(accessToken);
-		const budgetsResponse = await ynabAPI.budgets.getBudgets();
-		const budget = budgetsResponse.data.budgets[0];
-		if (!budget) {
-			throw new Error("No budgets available for delta integration tests.");
-		}
-		testBudgetId = budget.id;
+		try {
+			const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+			ynabAPI = new ynab.API(accessToken);
+			const budgetsResponse = await ynabAPI.budgets.getBudgets();
+			const budget = budgetsResponse.data.budgets[0];
+			if (!budget) {
+				throw new Error("No budgets available for delta integration tests.");
+			}
+			testBudgetId = budget.id;
 
-		const accountsResponse = await ynabAPI.accounts.getAccounts(testBudgetId);
-		const account = accountsResponse.data.accounts.find((acct) => !acct.closed);
-		if (!account) {
-			throw new Error(
-				"No open accounts available for delta integration tests.",
+			const accountsResponse = await ynabAPI.accounts.getAccounts(testBudgetId);
+			const account = accountsResponse.data.accounts.find(
+				(acct) => !acct.closed,
 			);
+			if (!account) {
+				throw new Error(
+					"No open accounts available for delta integration tests.",
+				);
+			}
+			testAccountId = account.id;
+		} catch (error) {
+			if (isRateLimitError(error) || isAuthError(error)) {
+				setupRateLimited = true;
+				const reason = isAuthError(error)
+					? "authentication failure"
+					: "YNAB API rate limit";
+				console.warn(
+					`⏭️  Skipping account delta integration tests due to ${reason} during setup`,
+				);
+				return;
+			}
+			throw error;
 		}
-		testAccountId = account.id;
 	});
 
 	beforeEach(() => {
@@ -67,79 +89,117 @@ describeIntegration("Delta-backed account tool handlers", () => {
 		if (!content || content.type !== "text") {
 			throw new Error("Unexpected tool response format");
 		}
-		return JSON.parse(content.text);
+		const parsed = JSON.parse(content.text);
+		if (
+			result.isError ||
+			(parsed && typeof parsed === "object" && "error" in parsed)
+		) {
+			throw new Error(content.text);
+		}
+		return parsed;
+	};
+
+	const withRateLimitSkip = async (
+		ctx: { skip: () => void },
+		testFn: () => Promise<void>,
+	) => {
+		if (setupRateLimited) {
+			ctx.skip();
+			return;
+		}
+		await skipOnRateLimit(testFn, ctx);
 	};
 
 	it(
 		"serves cached account results on the second invocation",
 		{ meta: { tier: "domain", domain: "delta" } },
-		async () => {
-			const params = { budget_id: testBudgetId };
-			const firstCall = await handleListAccounts(ynabAPI, deltaFetcher, params);
-			const firstPayload = parseResponse(firstCall);
-			expect(firstPayload.cached).toBe(false);
+		async (ctx) => {
+			await withRateLimitSkip(ctx, async () => {
+				const params = {
+					budget_id: testBudgetId,
+					response_format: "json" as const,
+				};
+				const firstCall = await handleListAccounts(
+					ynabAPI,
+					deltaFetcher,
+					params,
+				);
+				const firstPayload = parseResponse(firstCall);
+				expect(firstPayload.cached).toBe(false);
 
-			const secondCall = await handleListAccounts(
-				ynabAPI,
-				deltaFetcher,
-				params,
-			);
-			const secondPayload = parseResponse(secondCall);
-			expect(secondPayload.cached).toBe(true);
-			expect(secondPayload.cache_info).toMatch(/cache/i);
-		},
-	);
-
-	it(
-		"reports delta usage for list_transactions after a change",
-		{ meta: { tier: "domain", domain: "delta" } },
-		async () => {
-			const params = { budget_id: testBudgetId, account_id: testAccountId };
-			const firstCall = await handleListTransactions(
-				ynabAPI,
-				deltaFetcher,
-				params,
-			);
-			const firstPayload = parseResponse(firstCall);
-			expect(firstPayload.cached).toBe(false);
-
-			const transactionDate = new Date().toISOString().split("T")[0];
-			const memo = `delta-integration-${Date.now()}`;
-			const transactionPayload: ynab.SaveTransaction = {
-				account_id: testAccountId,
-				date: transactionDate,
-				amount: -1000,
-				memo,
-				payee_name: "Delta Integration Test",
-				approved: false,
-				cleared: "uncleared",
-			};
-
-			const createResponse = await ynabAPI.transactions.createTransaction(
-				testBudgetId,
-				{
-					transaction: transactionPayload,
-				},
-			);
-			expect(createResponse.data.transaction).toBeDefined();
-			const createdId = createResponse.data.transaction?.id;
-			expect(createdId).toBeTruthy();
-
-			try {
-				const secondCall = await handleListTransactions(
+				const secondCall = await handleListAccounts(
 					ynabAPI,
 					deltaFetcher,
 					params,
 				);
 				const secondPayload = parseResponse(secondCall);
 				expect(secondPayload.cached).toBe(true);
-				// Check for delta-related keywords (flexible assertion)
-				expect(secondPayload.cache_info).toMatch(/delta.*merge|merge.*delta/i);
-			} finally {
-				if (createdId) {
-					await ynabAPI.transactions.deleteTransaction(testBudgetId, createdId);
+				expect(secondPayload.cache_info).toMatch(/cache/i);
+			});
+		},
+	);
+
+	it(
+		"reports delta usage for list_transactions after a change",
+		{ meta: { tier: "domain", domain: "delta" } },
+		async (ctx) => {
+			await withRateLimitSkip(ctx, async () => {
+				const params = {
+					budget_id: testBudgetId,
+					account_id: testAccountId,
+					response_format: "json" as const,
+				};
+				const firstCall = await handleListTransactions(
+					ynabAPI,
+					deltaFetcher,
+					params,
+				);
+				const firstPayload = parseResponse(firstCall);
+				expect(firstPayload.cached).toBe(false);
+
+				const transactionDate = new Date().toISOString().split("T")[0];
+				const memo = `delta-integration-${Date.now()}`;
+				const transactionPayload: ynab.SaveTransaction = {
+					account_id: testAccountId,
+					date: transactionDate,
+					amount: -1000,
+					memo,
+					payee_name: "Delta Integration Test",
+					approved: false,
+					cleared: "uncleared",
+				};
+
+				const createResponse = await ynabAPI.transactions.createTransaction(
+					testBudgetId,
+					{
+						transaction: transactionPayload,
+					},
+				);
+				expect(createResponse.data.transaction).toBeDefined();
+				const createdId = createResponse.data.transaction?.id;
+				expect(createdId).toBeTruthy();
+
+				try {
+					const secondCall = await handleListTransactions(
+						ynabAPI,
+						deltaFetcher,
+						params,
+					);
+					const secondPayload = parseResponse(secondCall);
+					expect(secondPayload.cached).toBe(true);
+					// Check for delta-related keywords (flexible assertion)
+					expect(secondPayload.cache_info).toMatch(
+						/delta.*merge|merge.*delta/i,
+					);
+				} finally {
+					if (createdId) {
+						await ynabAPI.transactions.deleteTransaction(
+							testBudgetId,
+							createdId,
+						);
+					}
 				}
-			}
+			});
 		},
 	);
 });

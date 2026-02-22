@@ -27,6 +27,10 @@ export const ListTransactionsSchema = z
 		type: z.enum(["uncategorized", "unapproved"]).optional(),
 		limit: z.number().int().positive().optional(),
 		offset: z.number().int().min(0).optional(),
+		response_format: z
+			.enum(["json", "markdown"])
+			.default("markdown")
+			.optional(),
 	})
 	.strict();
 
@@ -43,6 +47,10 @@ export const GetTransactionSchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required"),
 		transaction_id: z.string().min(1, "Transaction ID is required"),
+		response_format: z
+			.enum(["json", "markdown"])
+			.default("markdown")
+			.optional(),
 	})
 	.strict();
 

@@ -106,6 +106,7 @@ describe("Account Tools", () => {
 
 			const result = await handleListAccounts(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			const fetchAccountsMock = fetcher.fetchAccounts as ReturnType<
@@ -156,6 +157,7 @@ describe("Account Tools", () => {
 
 			const result = await handleListAccounts(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -191,6 +193,7 @@ describe("Account Tools", () => {
 
 			const result = await handleListAccounts(mockYnabAPI, fetcher, {
 				budget_id: "invalid-budget",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -208,6 +211,7 @@ describe("Account Tools", () => {
 
 			const result = await handleListAccounts(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -225,6 +229,7 @@ describe("Account Tools", () => {
 
 			const result = await handleListAccounts(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -257,6 +262,7 @@ describe("Account Tools", () => {
 			const result = await handleGetAccount(mockYnabAPI, {
 				budget_id: "budget-1",
 				account_id: "account-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -307,6 +313,7 @@ describe("Account Tools", () => {
 			const result = await handleGetAccount(mockYnabAPI, {
 				budget_id: "budget-1",
 				account_id: "account-1",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -324,6 +331,7 @@ describe("Account Tools", () => {
 			const result = await handleGetAccount(mockYnabAPI, {
 				budget_id: "budget-1",
 				account_id: "invalid-account",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -341,6 +349,7 @@ describe("Account Tools", () => {
 			const result = await handleGetAccount(mockYnabAPI, {
 				budget_id: "budget-1",
 				account_id: "account-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -571,7 +580,7 @@ describe("Account Tools", () => {
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.dry_run).toBe(true);
-			expect(parsedContent.action).toBe("create_account");
+			expect(parsedContent.action).toBe("ynab_create_account");
 			expect(parsedContent.request).toMatchObject({
 				budget_id: "budget-1",
 				name: "New Account",

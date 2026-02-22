@@ -40,3 +40,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 	}
 	return result.data;
 }
+
+export const RESPONSE_SIZE_LIMIT_BYTES = 90_000;

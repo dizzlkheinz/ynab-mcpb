@@ -506,9 +506,16 @@ export const registerReconciliationTools: ToolFactory = (registry, context) => {
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
-		name: "compare_transactions",
-		description:
-			"Compare bank transactions from CSV with YNAB transactions to find missing entries",
+		name: "ynab_compare_transactions",
+		description: `Compare bank CSV transactions with YNAB transactions to find missing or mismatched entries.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - account_id (string, required): Account UUID to compare against.
+  - csv_file_path or csv_data (string, required): Bank export file path or inline CSV text.
+  - statement_balance (number, required): Ending balance from the bank statement (dollars).
+
+Returns: comparison report with matched, unmatched_bank, unmatched_ynab transactions.`,
 		inputSchema: CompareTransactionsSchema,
 		outputSchema: CompareTransactionsOutputSchema,
 		handler: adapt(handleCompareTransactions),
@@ -523,9 +530,24 @@ export const registerReconciliationTools: ToolFactory = (registry, context) => {
 	});
 
 	registry.register({
-		name: "reconcile_account",
-		description:
-			"Guided reconciliation workflow with human narrative, insight detection, and optional execution (create/update/unclear). Set include_structured_data=true to also get full JSON output (large).",
+		name: "ynab_reconcile_account",
+		description: `Guided account reconciliation: match bank CSV transactions to YNAB, detect discrepancies, and optionally execute bulk create/update/unclear operations.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - account_id (string, required): Account UUID to reconcile.
+  - csv_file_path or csv_data (string, required): Bank export file path or inline CSV text.
+  - statement_balance (number, required): Ending balance from the bank statement (dollars).
+  - dry_run (boolean, optional): Preview actions without executing. Default: true.
+  - auto_create_transactions (boolean, optional): Auto-create missing transactions. Default: false.
+  - auto_update_cleared_status (boolean, optional): Auto-mark matched transactions as cleared. Default: false.
+  - include_structured_data (boolean, optional): Include full JSON output alongside narrative. Default: false.
+
+Returns: human-readable reconciliation narrative; optionally structured JSON data.
+
+Examples:
+  - Preview reconciliation: set dry_run=true (default)
+  - Execute: set dry_run=false, auto_update_cleared_status=true`,
 		inputSchema: ReconcileAccountSchema,
 		outputSchema: ReconcileAccountOutputSchema,
 		handler: adaptWithDeltaAndProgress(handleReconcileAccount),

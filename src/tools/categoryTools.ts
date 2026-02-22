@@ -9,6 +9,10 @@ import {
 } from "../server/cacheManager.js";
 import type { DeltaCache } from "../server/deltaCache.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	formatCategoriesList,
+	formatCategoryDetail,
+} from "../server/markdownFormatter.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
@@ -35,6 +39,10 @@ export const ListCategoriesSchema = z
 		budget_id: z.string().min(1, "Budget ID is required"),
 		limit: z.number().int().positive().optional(),
 		offset: z.number().int().min(0).optional(),
+		response_format: z
+			.enum(["json", "markdown"])
+			.default("markdown")
+			.optional(),
 	})
 	.strict();
 
@@ -47,6 +55,10 @@ export const GetCategorySchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required"),
 		category_id: z.string().min(1, "Category ID is required"),
+		response_format: z
+			.enum(["json", "markdown"])
+			.default("markdown")
+			.optional(),
 	})
 	.strict();
 
@@ -145,33 +157,38 @@ export async function handleListCategories(
 			);
 
 			// Apply pagination to the flat categories list
-			const limit = params.limit ?? 200;
+			const limit = params.limit ?? 50;
 			const offset = params.offset ?? 0;
 			const categories = flatCategories.slice(offset, offset + limit);
 			const hasMore = offset + limit < flatCategories.length;
 
+			const fmt = params.response_format ?? "markdown";
+			const dataObject = {
+				categories,
+				category_groups: categoryGroups.map((group) => ({
+					id: group.id,
+					name: group.name,
+					hidden: group.hidden,
+					deleted: group.deleted,
+				})),
+				total_count: flatCategories.length,
+				returned_count: categories.length,
+				offset,
+				has_more: hasMore,
+				next_offset: hasMore ? offset + limit : undefined,
+				cached: wasCached,
+				cache_info: wasCached
+					? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`
+					: "Fresh data retrieved from YNAB API",
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							categories,
-							category_groups: categoryGroups.map((group) => ({
-								id: group.id,
-								name: group.name,
-								hidden: group.hidden,
-								deleted: group.deleted,
-							})),
-							total_count: flatCategories.length,
-							returned_count: categories.length,
-							offset,
-							has_more: hasMore,
-							next_offset: hasMore ? offset + limit : undefined,
-							cached: wasCached,
-							cache_info: wasCached
-								? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`
-								: "Fresh data retrieved from YNAB API",
-						}),
+						text:
+							fmt === "markdown"
+								? formatCategoriesList(dataObject)
+								: responseFormatter.format(dataObject),
 					},
 				],
 			};
@@ -212,32 +229,37 @@ export async function handleGetCategory(
 				},
 			});
 
+			const fmt = params.response_format ?? "markdown";
+			const dataObject = {
+				category: {
+					id: category.id,
+					category_group_id: category.category_group_id,
+					name: category.name,
+					hidden: category.hidden,
+					original_category_group_id: category.original_category_group_id,
+					note: category.note,
+					budgeted: milliunitsToAmount(category.budgeted),
+					activity: milliunitsToAmount(category.activity),
+					balance: milliunitsToAmount(category.balance),
+					goal_type: category.goal_type,
+					goal_creation_month: category.goal_creation_month,
+					...convertGoalFields(category),
+					goal_target_month: category.goal_target_month,
+					goal_percentage_complete: category.goal_percentage_complete,
+				},
+				cached: wasCached,
+				cache_info: wasCached
+					? "Data retrieved from cache for improved performance"
+					: "Fresh data retrieved from YNAB API",
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							category: {
-								id: category.id,
-								category_group_id: category.category_group_id,
-								name: category.name,
-								hidden: category.hidden,
-								original_category_group_id: category.original_category_group_id,
-								note: category.note,
-								budgeted: milliunitsToAmount(category.budgeted),
-								activity: milliunitsToAmount(category.activity),
-								balance: milliunitsToAmount(category.balance),
-								goal_type: category.goal_type,
-								goal_creation_month: category.goal_creation_month,
-								...convertGoalFields(category),
-								goal_target_month: category.goal_target_month,
-								goal_percentage_complete: category.goal_percentage_complete,
-							},
-							cached: wasCached,
-							cache_info: wasCached
-								? "Data retrieved from cache for improved performance"
-								: "Fresh data retrieved from YNAB API",
-						}),
+						text:
+							fmt === "markdown"
+								? formatCategoryDetail(dataObject)
+								: responseFormatter.format(dataObject),
 					},
 				],
 			};
@@ -284,7 +306,7 @@ export async function handleUpdateCategory(
 						type: "text",
 						text: responseFormatter.format({
 							dry_run: true,
-							action: "update_category",
+							action: "ynab_update_category",
 							request: {
 								budget_id: params.budget_id,
 								category_id: params.category_id,
@@ -386,8 +408,23 @@ export const registerCategoryTools: ToolFactory = (registry, context) => {
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
-		name: "list_categories",
-		description: "List all categories for a specific budget",
+		name: "ynab_list_categories",
+		description: `List all budget categories for a budget with pagination.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - limit (int, optional): Max results per page. Default: 50.
+  - offset (int, optional): Zero-based offset for pagination. Default: 0.
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: categories[], category_groups[], total_count, returned_count, offset, has_more, next_offset, cached, cache_info
+
+Examples:
+  - List categories (default budget): call with no args
+  - Page 2: set limit=50, offset=50
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: ListCategoriesSchema,
 		outputSchema: ListCategoriesOutputSchema,
 		handler: adaptWithDelta(handleListCategories),
@@ -401,8 +438,19 @@ export const registerCategoryTools: ToolFactory = (registry, context) => {
 	});
 
 	registry.register({
-		name: "get_category",
-		description: "Get detailed information for a specific category",
+		name: "ynab_get_category",
+		description: `Get current month details for a specific budget category.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - category_id (string, optional): Category UUID.
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: category (id, name, budgeted, activity, balance, goal_type, goal_target, goal_percentage_complete), cached, cache_info
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first
+  - "Category not found" → invalid category_id`,
 		inputSchema: GetCategorySchema,
 		outputSchema: GetCategoryOutputSchema,
 		handler: adapt(handleGetCategory),
@@ -416,9 +464,23 @@ export const registerCategoryTools: ToolFactory = (registry, context) => {
 	});
 
 	registry.register({
-		name: "update_category",
-		description:
-			"Update the budgeted amount for a category in the current month",
+		name: "ynab_update_category",
+		description: `Update the budgeted amount for a category in the current month.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - category_id (string, required): Category UUID.
+  - budgeted (int, required): New budgeted amount in milliunits (dollars × 1000).
+  - dry_run (boolean, optional): Preview without saving. Default: false.
+
+Returns: updated category with new budgeted, activity, balance.
+
+Examples:
+  - Budget $100: set budgeted=100000 (milliunits)
+  - Dry run: set dry_run=true
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: UpdateCategorySchema,
 		outputSchema: UpdateCategoryOutputSchema,
 		handler: adaptWrite(handleUpdateCategory),

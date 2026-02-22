@@ -32,31 +32,31 @@ describe("YNABMCPServer", () => {
 
 	// Shared constant for expected tool names
 	const expectedToolNames = [
-		"list_budgets",
-		"get_budget",
-		"set_default_budget",
-		"get_default_budget",
-		"list_accounts",
-		"get_account",
-		"create_account",
-		"list_transactions",
-		"export_transactions",
-		"compare_transactions",
-		"reconcile_account",
-		"get_transaction",
-		"create_transaction",
-		"update_transaction",
-		"delete_transaction",
-		"list_categories",
-		"get_category",
-		"update_category",
-		"list_payees",
-		"get_payee",
-		"get_month",
-		"list_months",
-		"get_user",
-		"diagnostic_info",
-		"clear_cache",
+		"ynab_list_budgets",
+		"ynab_get_budget",
+		"ynab_set_default_budget",
+		"ynab_get_default_budget",
+		"ynab_list_accounts",
+		"ynab_get_account",
+		"ynab_create_account",
+		"ynab_list_transactions",
+		"ynab_export_transactions",
+		"ynab_compare_transactions",
+		"ynab_reconcile_account",
+		"ynab_get_transaction",
+		"ynab_create_transaction",
+		"ynab_update_transaction",
+		"ynab_delete_transaction",
+		"ynab_list_categories",
+		"ynab_get_category",
+		"ynab_update_category",
+		"ynab_list_payees",
+		"ynab_get_payee",
+		"ynab_get_month",
+		"ynab_list_months",
+		"ynab_get_user",
+		"ynab_diagnostic_info",
+		"ynab_clear_cache",
 	] as const;
 
 	beforeAll(() => {
@@ -262,7 +262,7 @@ describe("YNABMCPServer", () => {
 
 		const ensureDefaultBudget = async (): Promise<string> => {
 			const budgetsResult = await registry.executeTool({
-				name: "list_budgets",
+				name: "ynab_list_budgets",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -271,7 +271,7 @@ describe("YNABMCPServer", () => {
 			expect(firstBudget?.id).toBeDefined();
 
 			await registry.executeTool({
-				name: "set_default_budget",
+				name: "ynab_set_default_budget",
 				accessToken: accessToken(),
 				arguments: { budget_id: firstBudget.id },
 			});
@@ -293,7 +293,7 @@ describe("YNABMCPServer", () => {
 
 		it("should execute get_user tool via the registry", async () => {
 			const result = await registry.executeTool({
-				name: "get_user",
+				name: "ynab_get_user",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -305,7 +305,7 @@ describe("YNABMCPServer", () => {
 			const budgetId = await ensureDefaultBudget();
 
 			const defaultResult = await registry.executeTool({
-				name: "get_default_budget",
+				name: "ynab_get_default_budget",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -317,7 +317,7 @@ describe("YNABMCPServer", () => {
 		it("should trigger cache warming after setting default budget", async () => {
 			// Clear cache before test
 			await registry.executeTool({
-				name: "clear_cache",
+				name: "ynab_clear_cache",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -327,7 +327,7 @@ describe("YNABMCPServer", () => {
 
 			// Get a budget ID
 			const budgetsResult = await registry.executeTool({
-				name: "list_budgets",
+				name: "ynab_list_budgets",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -337,7 +337,7 @@ describe("YNABMCPServer", () => {
 
 			// Set default budget (this should trigger cache warming)
 			await registry.executeTool({
-				name: "set_default_budget",
+				name: "ynab_set_default_budget",
 				accessToken: accessToken(),
 				arguments: { budget_id: firstBudget.id },
 			});
@@ -386,7 +386,7 @@ describe("YNABMCPServer", () => {
 		it("should handle cache warming errors gracefully", async () => {
 			// Get a real budget ID first, since API validation is in place
 			const budgetsResult = await registry.executeTool({
-				name: "list_budgets",
+				name: "ynab_list_budgets",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -397,7 +397,7 @@ describe("YNABMCPServer", () => {
 
 			// This should succeed with API validation in place
 			const result = await registry.executeTool({
-				name: "set_default_budget",
+				name: "ynab_set_default_budget",
 				accessToken: accessToken(),
 				arguments: { budget_id: realBudgetId },
 			});
@@ -412,7 +412,7 @@ describe("YNABMCPServer", () => {
 
 			// Server should still be functional
 			const defaultResult = await registry.executeTool({
-				name: "get_default_budget",
+				name: "ynab_get_default_budget",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -424,7 +424,7 @@ describe("YNABMCPServer", () => {
 			await ensureDefaultBudget();
 
 			const accountsResult = await registry.executeTool({
-				name: "list_accounts",
+				name: "ynab_list_accounts",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -432,7 +432,7 @@ describe("YNABMCPServer", () => {
 			expect(Array.isArray(accountsPayload.accounts)).toBe(true);
 
 			const categoriesResult = await registry.executeTool({
-				name: "list_categories",
+				name: "ynab_list_categories",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -442,7 +442,7 @@ describe("YNABMCPServer", () => {
 
 		it("should provide diagnostic info with requested sections", async () => {
 			const diagResult = await registry.executeTool({
-				name: "diagnostic_info",
+				name: "ynab_diagnostic_info",
 				accessToken: accessToken(),
 				arguments: {
 					include_server: true,
@@ -467,7 +467,7 @@ describe("YNABMCPServer", () => {
 			expect(statsBeforeClear.size).toBeGreaterThan(0);
 
 			await registry.executeTool({
-				name: "clear_cache",
+				name: "ynab_clear_cache",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -486,7 +486,7 @@ describe("YNABMCPServer", () => {
 
 			// Execute a tool that should use caching
 			await registry.executeTool({
-				name: "list_budgets",
+				name: "ynab_list_budgets",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -496,7 +496,7 @@ describe("YNABMCPServer", () => {
 
 			// Execute the same tool again - should hit cache
 			await registry.executeTool({
-				name: "list_budgets",
+				name: "ynab_list_budgets",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -520,7 +520,7 @@ describe("YNABMCPServer", () => {
 			cacheManager.get("test:nonexistent"); // Miss
 
 			const result = await registry.executeTool({
-				name: "diagnostic_info",
+				name: "ynab_diagnostic_info",
 				accessToken: accessToken(),
 				arguments: {
 					include_server: false,
@@ -546,7 +546,7 @@ describe("YNABMCPServer", () => {
 
 		it("should surface validation errors for invalid inputs", async () => {
 			const result = await registry.executeTool({
-				name: "get_budget",
+				name: "ynab_get_budget",
 				accessToken: accessToken(),
 				arguments: {} as Record<string, unknown>,
 			});
@@ -568,24 +568,24 @@ describe("YNABMCPServer", () => {
 			});
 
 			const budgetDependentTools = [
-				"list_accounts",
-				"get_account",
-				"create_account",
-				"list_transactions",
-				"get_transaction",
-				"create_transaction",
-				"update_transaction",
-				"delete_transaction",
-				"list_categories",
-				"get_category",
-				"update_category",
-				"list_payees",
-				"get_payee",
-				"get_month",
-				"list_months",
-				"export_transactions",
-				"compare_transactions",
-				"reconcile_account",
+				"ynab_list_accounts",
+				"ynab_get_account",
+				"ynab_create_account",
+				"ynab_list_transactions",
+				"ynab_get_transaction",
+				"ynab_create_transaction",
+				"ynab_update_transaction",
+				"ynab_delete_transaction",
+				"ynab_list_categories",
+				"ynab_get_category",
+				"ynab_update_category",
+				"ynab_list_payees",
+				"ynab_get_payee",
+				"ynab_get_month",
+				"ynab_list_months",
+				"ynab_export_transactions",
+				"ynab_compare_transactions",
+				"ynab_reconcile_account",
 			] as const;
 
 			budgetDependentTools.forEach((toolName) => {
@@ -608,7 +608,7 @@ describe("YNABMCPServer", () => {
 					expect(
 						payload.error.suggestions.some(
 							(suggestion: string) =>
-								suggestion.includes("set_default_budget") ||
+								suggestion.includes("ynab_set_default_budget") ||
 								suggestion.includes("budget_id parameter"),
 						),
 					).toBe(true);
@@ -618,7 +618,7 @@ describe("YNABMCPServer", () => {
 			it("should return standardized error for invalid budget ID format", async () => {
 				const invalidBudgetId = "not-a-valid-uuid";
 				const result = await freshRegistry.executeTool({
-					name: "list_accounts",
+					name: "ynab_list_accounts",
 					accessToken: accessToken(),
 					arguments: { budget_id: invalidBudgetId },
 				});
@@ -634,7 +634,7 @@ describe("YNABMCPServer", () => {
 					payload.error.suggestions.some(
 						(suggestion: string) =>
 							suggestion.includes("UUID v4 format") ||
-							suggestion.includes("list_budgets"),
+							suggestion.includes("ynab_list_budgets"),
 					),
 				).toBe(true);
 			});
@@ -642,7 +642,7 @@ describe("YNABMCPServer", () => {
 			it("should work normally after setting a default budget", async () => {
 				// First, ensure we get the "no default budget" error
 				let result = await freshRegistry.executeTool({
-					name: "list_accounts",
+					name: "ynab_list_accounts",
 					accessToken: accessToken(),
 					arguments: {},
 				});
@@ -654,14 +654,14 @@ describe("YNABMCPServer", () => {
 				// Now set a default budget
 				const defaultBudgetId = await ensureDefaultBudget();
 				await freshRegistry.executeTool({
-					name: "set_default_budget",
+					name: "ynab_set_default_budget",
 					accessToken: accessToken(),
 					arguments: { budget_id: defaultBudgetId },
 				});
 
 				// Now the same call should work
 				result = await freshRegistry.executeTool({
-					name: "list_accounts",
+					name: "ynab_list_accounts",
 					accessToken: accessToken(),
 					arguments: {},
 				});
@@ -695,7 +695,9 @@ describe("YNABMCPServer", () => {
 							),
 							userMessage: expect.any(String),
 							suggestions: expect.arrayContaining([
-								expect.stringMatching(/set_default_budget|budget_id parameter/),
+								expect.stringMatching(
+									/ynab_set_default_budget|budget_id parameter/,
+								),
 							]),
 						}),
 					);
@@ -751,7 +753,7 @@ describe("YNABMCPServer", () => {
 			// Verify diagnostic tool is registered
 			const tools = registry.listTools();
 			const diagnosticTool = tools.find(
-				(tool) => tool.name === "diagnostic_info",
+				(tool) => tool.name === "ynab_diagnostic_info",
 			);
 			expect(diagnosticTool).toBeDefined();
 			expect(diagnosticTool?.description).toContain("diagnostic information");
@@ -789,7 +791,7 @@ describe("YNABMCPServer", () => {
 
 			// Test that diagnostic_info tool works and returns expected structure
 			const result = await registry.executeTool({
-				name: "diagnostic_info",
+				name: "ynab_diagnostic_info",
 				accessToken,
 				arguments: {
 					include_server: true,
@@ -856,7 +858,7 @@ describe("YNABMCPServer", () => {
 
 			// Test that error responses still have the expected structure
 			const result = await registry.executeTool({
-				name: "get_budget",
+				name: "ynab_get_budget",
 				accessToken: process.env.YNAB_ACCESS_TOKEN!,
 				arguments: {} as Record<string, unknown>,
 			});

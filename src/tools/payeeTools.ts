@@ -8,6 +8,10 @@ import {
 	cacheManager,
 } from "../server/cacheManager.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	formatPayeeDetail,
+	formatPayeesList,
+} from "../server/markdownFormatter.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
@@ -28,6 +32,10 @@ export const ListPayeesSchema = z
 		budget_id: z.string().min(1, "Budget ID is required"),
 		limit: z.number().int().positive().optional(),
 		offset: z.number().int().min(0).optional(),
+		response_format: z
+			.enum(["json", "markdown"])
+			.default("markdown")
+			.optional(),
 	})
 	.strict();
 
@@ -40,6 +48,10 @@ export const GetPayeeSchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required"),
 		payee_id: z.string().min(1, "Payee ID is required"),
+		response_format: z
+			.enum(["json", "markdown"])
+			.default("markdown")
+			.optional(),
 	})
 	.strict();
 
@@ -76,32 +88,37 @@ export async function handleListPayees(
 			const wasCached = result.wasCached;
 
 			// Apply pagination
-			const limit = params.limit ?? 200;
+			const limit = params.limit ?? 50;
 			const offset = params.offset ?? 0;
 			const payees = allPayees.slice(offset, offset + limit);
 			const hasMore = offset + limit < allPayees.length;
 
+			const fmt = params.response_format ?? "markdown";
+			const dataObject = {
+				payees: payees.map((payee) => ({
+					id: payee.id,
+					name: payee.name,
+					transfer_account_id: payee.transfer_account_id,
+					deleted: payee.deleted,
+				})),
+				total_count: allPayees.length,
+				returned_count: payees.length,
+				offset,
+				has_more: hasMore,
+				next_offset: hasMore ? offset + limit : undefined,
+				cached: wasCached,
+				cache_info: wasCached
+					? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`
+					: "Fresh data retrieved from YNAB API",
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							payees: payees.map((payee) => ({
-								id: payee.id,
-								name: payee.name,
-								transfer_account_id: payee.transfer_account_id,
-								deleted: payee.deleted,
-							})),
-							total_count: allPayees.length,
-							returned_count: payees.length,
-							offset,
-							has_more: hasMore,
-							next_offset: hasMore ? offset + limit : undefined,
-							cached: wasCached,
-							cache_info: wasCached
-								? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`
-								: "Fresh data retrieved from YNAB API",
-						}),
+						text:
+							fmt === "markdown"
+								? formatPayeesList(dataObject)
+								: responseFormatter.format(dataObject),
 					},
 				],
 			};
@@ -142,22 +159,27 @@ export async function handleGetPayee(
 				},
 			});
 
+			const fmt = params.response_format ?? "markdown";
+			const dataObject = {
+				payee: {
+					id: payee.id,
+					name: payee.name,
+					transfer_account_id: payee.transfer_account_id,
+					deleted: payee.deleted,
+				},
+				cached: wasCached,
+				cache_info: wasCached
+					? "Data retrieved from cache for improved performance"
+					: "Fresh data retrieved from YNAB API",
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							payee: {
-								id: payee.id,
-								name: payee.name,
-								transfer_account_id: payee.transfer_account_id,
-								deleted: payee.deleted,
-							},
-							cached: wasCached,
-							cache_info: wasCached
-								? "Data retrieved from cache for improved performance"
-								: "Fresh data retrieved from YNAB API",
-						}),
+						text:
+							fmt === "markdown"
+								? formatPayeeDetail(dataObject)
+								: responseFormatter.format(dataObject),
 					},
 				],
 			};
@@ -176,8 +198,23 @@ export const registerPayeeTools: ToolFactory = (registry, context) => {
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
-		name: "list_payees",
-		description: "List all payees for a specific budget",
+		name: "ynab_list_payees",
+		description: `List all payees for a budget with pagination.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - limit (int, optional): Max results per page. Default: 50.
+  - offset (int, optional): Zero-based offset for pagination. Default: 0.
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: payees[], total_count, returned_count, offset, has_more, next_offset, cached, cache_info
+
+Examples:
+  - List all payees: call with no args
+  - Page 2: set limit=50, offset=50
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: ListPayeesSchema,
 		outputSchema: ListPayeesOutputSchema,
 		handler: adaptWithDelta(handleListPayees),
@@ -191,8 +228,19 @@ export const registerPayeeTools: ToolFactory = (registry, context) => {
 	});
 
 	registry.register({
-		name: "get_payee",
-		description: "Get detailed information for a specific payee",
+		name: "ynab_get_payee",
+		description: `Get details for a specific payee.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - payee_id (string, required): Payee UUID.
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: payee (id, name, transfer_account_id, deleted), cached, cache_info
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first
+  - "Payee not found" → invalid payee_id`,
 		inputSchema: GetPayeeSchema,
 		outputSchema: GetPayeeOutputSchema,
 		handler: adapt(handleGetPayee),

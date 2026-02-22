@@ -128,7 +128,7 @@ describe("Transaction Mutation Schema Type Safety", () => {
 		it("should accept valid dry-run response with strongly-typed preview", () => {
 			const validDryRunResponse = {
 				dry_run: true,
-				action: "create_receipt_split_transaction",
+				action: "ynab_create_receipt_split_transaction",
 				transaction_preview: {
 					account_id: "acct-123",
 					date: "2024-11-18",
@@ -170,7 +170,7 @@ describe("Transaction Mutation Schema Type Safety", () => {
 			// but should now be rejected with strongly-typed schemas
 			const invalidDryRunResponse = {
 				dry_run: true,
-				action: "create_receipt_split_transaction",
+				action: "ynab_create_receipt_split_transaction",
 				transaction_preview: {
 					// Missing required 'account_id'
 					date: "2024-11-18",
@@ -193,7 +193,7 @@ describe("Transaction Mutation Schema Type Safety", () => {
 		it("should reject subtransactions with server-generated id fields", () => {
 			const dryRunWithInvalidSubtransactions = {
 				dry_run: true,
-				action: "create_receipt_split_transaction",
+				action: "ynab_create_receipt_split_transaction",
 				transaction_preview: {
 					account_id: "acct-123",
 					date: "2024-11-18",

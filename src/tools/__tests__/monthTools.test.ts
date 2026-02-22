@@ -87,6 +87,7 @@ describe("Month Tools", () => {
 			const result = await handleGetMonth(mockYnabAPI, {
 				budget_id: "budget-1",
 				month: "2024-01-01",
+				response_format: "json",
 			});
 
 			// Verify the mock cache was called (and bypassed to call the loader)
@@ -125,6 +126,7 @@ describe("Month Tools", () => {
 			const result = await handleGetMonth(mockYnabAPI, {
 				budget_id: "budget-1",
 				month: "2024-01-01",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -193,6 +195,7 @@ describe("Month Tools", () => {
 			const result = await handleGetMonth(mockYnabAPI, {
 				budget_id: "budget-1",
 				month: "2024-01-01",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -218,6 +221,7 @@ describe("Month Tools", () => {
 			const result = await handleGetMonth(mockYnabAPI, {
 				budget_id: "budget-1",
 				month: "2024-01-01",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -235,6 +239,7 @@ describe("Month Tools", () => {
 			const result = await handleGetMonth(mockYnabAPI, {
 				budget_id: "budget-1",
 				month: "2024-01-01",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -252,6 +257,7 @@ describe("Month Tools", () => {
 			const result = await handleGetMonth(mockYnabAPI, {
 				budget_id: "invalid-budget",
 				month: "2024-01-01",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -267,6 +273,7 @@ describe("Month Tools", () => {
 			const result = await handleGetMonth(mockYnabAPI, {
 				budget_id: "budget-1",
 				month: "2024-01-01",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -284,6 +291,7 @@ describe("Month Tools", () => {
 			const result = await handleGetMonth(mockYnabAPI, {
 				budget_id: "budget-1",
 				month: "2024-01-01",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -301,6 +309,7 @@ describe("Month Tools", () => {
 			const result = await handleGetMonth(mockYnabAPI, {
 				budget_id: "budget-1",
 				month: "2024-01-01",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -331,6 +340,7 @@ describe("Month Tools", () => {
 
 			const result = await handleListMonths(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -363,6 +373,7 @@ describe("Month Tools", () => {
 
 			const result = await handleListMonths(mockYnabAPI, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -417,6 +428,7 @@ describe("Month Tools", () => {
 
 			const result = await handleListMonths(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -458,6 +470,7 @@ describe("Month Tools", () => {
 
 			const result = await handleListMonths(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -475,6 +488,7 @@ describe("Month Tools", () => {
 
 			const result = await handleListMonths(mockYnabAPI, fetcher, {
 				budget_id: "invalid-budget",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -489,6 +503,7 @@ describe("Month Tools", () => {
 
 			const result = await handleListMonths(mockYnabAPI, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);

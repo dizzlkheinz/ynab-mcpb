@@ -248,7 +248,7 @@ Format the response in a clear, easy-to-read summary.`,
 			args?.["statement_balance"] || "[STATEMENT_BALANCE]";
 		const csvData = args?.["csv_data"]
 			? `\n\nCSV data provided:\n\`\`\`\n${args["csv_data"]}\n\`\`\``
-			: "\n\nNo CSV data provided — you can pass the CSV file path to the reconcile_account tool.";
+			: "\n\nNo CSV data provided — you can pass the CSV file path to the ynab_reconcile_account tool.";
 
 		return {
 			description: `Reconcile ${accountName} against bank statement`,
@@ -262,14 +262,14 @@ Format the response in a clear, easy-to-read summary.`,
 Statement ending balance: $${statementBalance} (this is in dollars, not milliunits)${csvData}
 
 Reconciliation workflow:
-1. Use list_budgets to find the correct budget ID
-2. Use list_accounts to find the account ID for "${accountName}"
-3. Call reconcile_account with dry_run: true first to preview matches without making changes
+1. Use ynab_list_budgets to find the correct budget ID
+2. Use ynab_list_accounts to find the account ID for "${accountName}"
+3. Call ynab_reconcile_account with dry_run: true first to preview matches without making changes
 4. Review the output carefully:
    - "matched" transactions are paired between YNAB and bank — verify these look correct
    - "unmatched_ynab" transactions exist in YNAB but not the bank statement — may be future or missing
    - "unmatched_bank" transactions are in the bank statement but not YNAB — may need to be created
-5. If the dry run looks correct, call reconcile_account again with dry_run: false to apply changes
+5. If the dry run looks correct, call ynab_reconcile_account again with dry_run: false to apply changes
 
 Important notes:
 - The statement_balance parameter is in dollars (e.g., 1234.56)
@@ -277,7 +277,7 @@ Important notes:
 - Amount matching is exact — amounts must match precisely
 - Review recommendations in the output before executing
 
-The reconcile_account tool will mark cleared transactions as reconciled and can optionally create missing transactions.`,
+The ynab_reconcile_account tool will mark cleared transactions as reconciled and can optionally create missing transactions.`,
 					},
 				},
 			],

@@ -262,8 +262,8 @@ describeIntegration("YNABMCPServer", () => {
 				const tools = registry.listTools();
 				expect(tools.length).toBeGreaterThan(0);
 				const names = tools.map((tool) => tool.name);
-				expect(names).toContain("list_budgets");
-				expect(names).toContain("diagnostic_info");
+				expect(names).toContain("ynab_list_budgets");
+				expect(names).toContain("ynab_diagnostic_info");
 			},
 		);
 
@@ -273,7 +273,7 @@ describeIntegration("YNABMCPServer", () => {
 			async (ctx) => {
 				await skipOnRateLimit(async () => {
 					const result = await registry.executeTool({
-						name: "get_user",
+						name: "ynab_get_user",
 						accessToken: accessToken(),
 						arguments: {},
 					});
@@ -295,7 +295,7 @@ describeIntegration("YNABMCPServer", () => {
 			async (ctx) => {
 				await skipOnRateLimit(async () => {
 					const budgetsResult = await registry.executeTool({
-						name: "list_budgets",
+						name: "ynab_list_budgets",
 						accessToken: accessToken(),
 						arguments: {},
 					});
@@ -312,13 +312,13 @@ describeIntegration("YNABMCPServer", () => {
 					expect(firstBudget).toBeDefined();
 
 					await registry.executeTool({
-						name: "set_default_budget",
+						name: "ynab_set_default_budget",
 						accessToken: accessToken(),
 						arguments: { budget_id: firstBudget.id },
 					});
 
 					const defaultResult = await registry.executeTool({
-						name: "get_default_budget",
+						name: "ynab_get_default_budget",
 						accessToken: accessToken(),
 						arguments: {},
 					});
@@ -336,7 +336,7 @@ describeIntegration("YNABMCPServer", () => {
 			{ meta: { tier: "domain", domain: "server" } },
 			async () => {
 				const diagResult = await registry.executeTool({
-					name: "diagnostic_info",
+					name: "ynab_diagnostic_info",
 					accessToken: accessToken(),
 					arguments: {
 						include_server: true,
@@ -344,6 +344,7 @@ describeIntegration("YNABMCPServer", () => {
 						include_cache: true,
 						include_memory: false,
 						include_environment: false,
+						response_format: "json",
 					},
 				});
 				const diagnostics = JSON.parse(diagResult.content?.[0]?.text ?? "{}");
@@ -365,7 +366,7 @@ describeIntegration("YNABMCPServer", () => {
 				expect(statsBeforeClear.size).toBeGreaterThan(0);
 
 				await registry.executeTool({
-					name: "clear_cache",
+					name: "ynab_clear_cache",
 					accessToken: accessToken(),
 					arguments: {},
 				});
@@ -496,20 +497,20 @@ describeIntegration("YNABMCPServer", () => {
 				await skipOnRateLimit(async () => {
 					// Generate some real cache activity
 					await registry.executeTool({
-						name: "list_budgets",
+						name: "ynab_list_budgets",
 						accessToken: accessToken(),
 						arguments: {},
 					});
 
 					await registry.executeTool({
-						name: "get_user",
+						name: "ynab_get_user",
 						accessToken: accessToken(),
 						arguments: {},
 					});
 
 					// Call diagnostics tool with cache enabled
 					const result = await registry.executeTool({
-						name: "diagnostic_info",
+						name: "ynab_diagnostic_info",
 						accessToken: accessToken(),
 						arguments: {
 							include_server: false,
@@ -560,7 +561,7 @@ describeIntegration("YNABMCPServer", () => {
 			{ meta: { tier: "domain", domain: "server" } },
 			async () => {
 				const result = await registry.executeTool({
-					name: "get_budget",
+					name: "ynab_get_budget",
 					accessToken: accessToken(),
 					arguments: {} as Record<string, unknown>,
 				});
@@ -602,7 +603,7 @@ describeIntegration("YNABMCPServer", () => {
 
 					// Test 1: User info via API (tests core YNAB integration)
 					const userResult = await registry.executeTool({
-						name: "get_user",
+						name: "ynab_get_user",
 						accessToken: accessToken(),
 						arguments: {},
 					});
@@ -618,7 +619,7 @@ describeIntegration("YNABMCPServer", () => {
 
 					// Test 2: Budget listing (tests resource-like functionality)
 					const budgetsResult = await registry.executeTool({
-						name: "list_budgets",
+						name: "ynab_list_budgets",
 						accessToken: accessToken(),
 						arguments: {},
 					});
@@ -636,7 +637,7 @@ describeIntegration("YNABMCPServer", () => {
 
 					// Test 3: Diagnostic info (tests diagnostic manager integration)
 					const diagResult = await registry.executeTool({
-						name: "diagnostic_info",
+						name: "ynab_diagnostic_info",
 						accessToken: accessToken(),
 						arguments: {
 							include_server: true,
@@ -668,7 +669,7 @@ describeIntegration("YNABMCPServer", () => {
 			async () => {
 				// Test error handling through the modules with real API
 				const result = await registry.executeTool({
-					name: "get_budget",
+					name: "ynab_get_budget",
 					accessToken: accessToken(),
 					arguments: {} as Record<string, unknown>, // Missing required budget_id
 				});
@@ -700,7 +701,7 @@ describeIntegration("YNABMCPServer", () => {
 
 		const getFirstAvailableBudgetId = async (): Promise<string> => {
 			const result = await registry.executeTool({
-				name: "list_budgets",
+				name: "ynab_list_budgets",
 				accessToken: accessToken(),
 				arguments: {},
 			});
@@ -728,7 +729,7 @@ describeIntegration("YNABMCPServer", () => {
 			async () => {
 				// Test with no default budget set - should get standardized error
 				const result = await registry.executeTool({
-					name: "list_accounts",
+					name: "ynab_list_accounts",
 					accessToken: accessToken(),
 					arguments: {},
 				});
@@ -749,7 +750,7 @@ describeIntegration("YNABMCPServer", () => {
 			async () => {
 				const invalidBudgetId = "invalid-uuid-format";
 				const result = await registry.executeTool({
-					name: "list_accounts",
+					name: "ynab_list_accounts",
 					accessToken: accessToken(),
 					arguments: { budget_id: invalidBudgetId },
 				});
@@ -774,7 +775,7 @@ describeIntegration("YNABMCPServer", () => {
 				await skipOnRateLimit(async () => {
 					// Step 1: Verify error with no default budget for a tool that requires budget_id
 					let result = await registry.executeTool({
-						name: "list_accounts",
+						name: "ynab_list_accounts",
 						accessToken: accessToken(),
 						arguments: {}, // No budget_id provided, should use default budget
 					});
@@ -786,14 +787,14 @@ describeIntegration("YNABMCPServer", () => {
 					// Step 2: Get a valid budget ID and set as default
 					const budgetId = await getFirstAvailableBudgetId();
 					await registry.executeTool({
-						name: "set_default_budget",
+						name: "ynab_set_default_budget",
 						accessToken: accessToken(),
 						arguments: { budget_id: budgetId },
 					});
 
 					// Step 3: Verify list_accounts now works with real API using default budget
 					result = await registry.executeTool({
-						name: "list_accounts",
+						name: "ynab_list_accounts",
 						accessToken: accessToken(),
 						arguments: {}, // No budget_id provided, should use default budget now
 					});
@@ -822,7 +823,7 @@ describeIntegration("YNABMCPServer", () => {
 						"123e4567-e89b-12d3-a456-426614174000";
 
 					const result = await registry.executeTool({
-						name: "list_accounts",
+						name: "ynab_list_accounts",
 						accessToken: accessToken(),
 						arguments: { budget_id: nonExistentButValidUuid },
 					});
@@ -842,7 +843,7 @@ describeIntegration("YNABMCPServer", () => {
 				await skipOnRateLimit(async () => {
 					const budgetId = await getFirstAvailableBudgetId();
 					await registry.executeTool({
-						name: "set_default_budget",
+						name: "ynab_set_default_budget",
 						accessToken: accessToken(),
 						arguments: { budget_id: budgetId },
 					});
@@ -852,17 +853,17 @@ describeIntegration("YNABMCPServer", () => {
 					// Make multiple concurrent calls that use budget resolution
 					const promises = [
 						registry.executeTool({
-							name: "list_accounts",
+							name: "ynab_list_accounts",
 							accessToken: accessToken(),
 							arguments: {},
 						}),
 						registry.executeTool({
-							name: "list_categories",
+							name: "ynab_list_categories",
 							accessToken: accessToken(),
 							arguments: {},
 						}),
 						registry.executeTool({
-							name: "list_payees",
+							name: "ynab_list_payees",
 							accessToken: accessToken(),
 							arguments: {},
 						}),
@@ -896,7 +897,7 @@ describeIntegration("YNABMCPServer", () => {
 				await skipOnRateLimit(async () => {
 					// Test that security middleware still works with budget resolution
 					const result = await registry.executeTool({
-						name: "list_accounts",
+						name: "ynab_list_accounts",
 						accessToken: "invalid-token",
 						arguments: {},
 					});

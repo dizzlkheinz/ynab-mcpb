@@ -28,7 +28,9 @@ describe("Utility Tools", () => {
 
 			(mockYnabAPI.user.getUser as any).mockResolvedValue(mockResponse);
 
-			const result = await handleGetUser(mockYnabAPI);
+			const result = await handleGetUser(mockYnabAPI, {
+				response_format: "json",
+			});
 			const parsed = JSON.parse(result.content[0].text);
 			expect(parsed.user).toBeDefined();
 			expect(parsed.user.id).toBe("user-123");
@@ -39,7 +41,9 @@ describe("Utility Tools", () => {
 			const error = new Error("401 Unauthorized");
 			(mockYnabAPI.user.getUser as any).mockRejectedValue(error);
 
-			const result = await handleGetUser(mockYnabAPI);
+			const result = await handleGetUser(mockYnabAPI, {
+				response_format: "json",
+			});
 
 			expect(result.content[0].text).toContain(
 				"Invalid or expired YNAB access token",
@@ -50,7 +54,9 @@ describe("Utility Tools", () => {
 			const error = new Error("403 Forbidden");
 			(mockYnabAPI.user.getUser as any).mockRejectedValue(error);
 
-			const result = await handleGetUser(mockYnabAPI);
+			const result = await handleGetUser(mockYnabAPI, {
+				response_format: "json",
+			});
 
 			expect(result.content[0].text).toContain(
 				"Insufficient permissions to access YNAB data",
@@ -61,7 +67,9 @@ describe("Utility Tools", () => {
 			const error = new Error("429 Too Many Requests");
 			(mockYnabAPI.user.getUser as any).mockRejectedValue(error);
 
-			const result = await handleGetUser(mockYnabAPI);
+			const result = await handleGetUser(mockYnabAPI, {
+				response_format: "json",
+			});
 
 			expect(result.content[0].text).toContain(
 				"Rate limit exceeded. Please try again later",
@@ -72,7 +80,9 @@ describe("Utility Tools", () => {
 			const error = new Error("500 Internal Server Error");
 			(mockYnabAPI.user.getUser as any).mockRejectedValue(error);
 
-			const result = await handleGetUser(mockYnabAPI);
+			const result = await handleGetUser(mockYnabAPI, {
+				response_format: "json",
+			});
 
 			expect(result.content[0].text).toContain(
 				"YNAB service is currently unavailable",
@@ -83,7 +93,9 @@ describe("Utility Tools", () => {
 			const error = new Error("Network error");
 			(mockYnabAPI.user.getUser as any).mockRejectedValue(error);
 
-			const result = await handleGetUser(mockYnabAPI);
+			const result = await handleGetUser(mockYnabAPI, {
+				response_format: "json",
+			});
 
 			expect(result.content[0].text).toContain(
 				"Failed to get user information",

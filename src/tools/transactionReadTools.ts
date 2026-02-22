@@ -6,7 +6,12 @@ import {
 	CacheManager,
 	cacheManager,
 } from "../server/cacheManager.js";
+import { RESPONSE_SIZE_LIMIT_BYTES } from "../server/config.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	formatTransactionDetail,
+	formatTransactionsList,
+} from "../server/markdownFormatter.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
 import { withToolErrorHandling } from "../types/index.js";
@@ -114,14 +119,14 @@ export async function handleListTransactions(
 			}
 
 			// Apply pagination before size check
-			const limit = params.limit ?? 200;
+			const limit = params.limit ?? 50;
 			const offset = params.offset ?? 0;
 			const paged = transactions.slice(offset, offset + limit);
 			const hasMore = offset + limit < transactions.length;
 
 			// Check if response might be too large for MCP
 			const estimatedSize = JSON.stringify(paged).length;
-			const sizeLimit = 90000; // Conservative limit under 100KB
+			const sizeLimit = RESPONSE_SIZE_LIMIT_BYTES;
 
 			if (estimatedSize > sizeLimit) {
 				// Return summary and suggest export (show most recent entries)
@@ -133,64 +138,74 @@ export async function handleListTransactions(
 						return dateA < dateB ? 1 : -1;
 					})
 					.slice(0, 50);
+				const fmt = params.response_format ?? "markdown";
+				const previewData = {
+					message: `Found ${transactions.length} transactions (${Math.round(estimatedSize / 1024)}KB). Too large to display all.`,
+					suggestion:
+						"Use 'export_transactions' tool to save all transactions to a file.",
+					showing: `Most recent ${preview.length} transactions:`,
+					total_count: transactions.length,
+					estimated_size_kb: Math.round(estimatedSize / 1024),
+					preview_transactions: preview.map((transaction) => ({
+						id: transaction.id,
+						date: transaction.date,
+						amount: milliunitsToAmount(transaction.amount),
+						memo: transaction.memo,
+						account_id: transaction.account_id,
+						payee_name: transaction.payee_name,
+						category_name: transaction.category_name,
+					})),
+				};
 				return {
 					content: [
 						{
 							type: "text",
-							text: responseFormatter.format({
-								message: `Found ${transactions.length} transactions (${Math.round(estimatedSize / 1024)}KB). Too large to display all.`,
-								suggestion:
-									"Use 'export_transactions' tool to save all transactions to a file.",
-								showing: `Most recent ${preview.length} transactions:`,
-								total_count: transactions.length,
-								estimated_size_kb: Math.round(estimatedSize / 1024),
-								preview_transactions: preview.map((transaction) => ({
-									id: transaction.id,
-									date: transaction.date,
-									amount: milliunitsToAmount(transaction.amount),
-									memo: transaction.memo,
-									account_id: transaction.account_id,
-									payee_name: transaction.payee_name,
-									category_name: transaction.category_name,
-								})),
-							}),
+							text:
+								fmt === "markdown"
+									? formatTransactionsList(previewData)
+									: responseFormatter.format(previewData),
 						},
 					],
 				};
 			}
 
+			const fmtNormal = params.response_format ?? "markdown";
+			const normalData = {
+				total_count: transactions.length,
+				returned_count: paged.length,
+				offset,
+				has_more: hasMore,
+				next_offset: hasMore ? offset + limit : undefined,
+				cached: cacheHit,
+				cache_info: cacheHit
+					? `Data retrieved from cache for improved performance${usedDelta ? " (delta merge applied)" : ""}`
+					: "Fresh data retrieved from YNAB API",
+				transactions: paged.map((transaction) => ({
+					id: transaction.id,
+					date: transaction.date,
+					amount: milliunitsToAmount(transaction.amount),
+					memo: transaction.memo,
+					cleared: transaction.cleared,
+					approved: transaction.approved,
+					flag_color: transaction.flag_color,
+					account_id: transaction.account_id,
+					payee_id: transaction.payee_id,
+					category_id: transaction.category_id,
+					transfer_account_id: transaction.transfer_account_id,
+					transfer_transaction_id: transaction.transfer_transaction_id,
+					matched_transaction_id: transaction.matched_transaction_id,
+					import_id: transaction.import_id,
+					deleted: transaction.deleted,
+				})),
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							total_count: transactions.length,
-							returned_count: paged.length,
-							offset,
-							has_more: hasMore,
-							next_offset: hasMore ? offset + limit : undefined,
-							cached: cacheHit,
-							cache_info: cacheHit
-								? `Data retrieved from cache for improved performance${usedDelta ? " (delta merge applied)" : ""}`
-								: "Fresh data retrieved from YNAB API",
-							transactions: paged.map((transaction) => ({
-								id: transaction.id,
-								date: transaction.date,
-								amount: milliunitsToAmount(transaction.amount),
-								memo: transaction.memo,
-								cleared: transaction.cleared,
-								approved: transaction.approved,
-								flag_color: transaction.flag_color,
-								account_id: transaction.account_id,
-								payee_id: transaction.payee_id,
-								category_id: transaction.category_id,
-								transfer_account_id: transaction.transfer_account_id,
-								transfer_transaction_id: transaction.transfer_transaction_id,
-								matched_transaction_id: transaction.matched_transaction_id,
-								import_id: transaction.import_id,
-								deleted: transaction.deleted,
-							})),
-						}),
+						text:
+							fmtNormal === "markdown"
+								? formatTransactionsList(normalData)
+								: responseFormatter.format(normalData),
 					},
 				],
 			};
@@ -250,36 +265,41 @@ export async function handleGetTransaction(
 			);
 		}
 
+		const fmtTx = params.response_format ?? "markdown";
+		const txData = {
+			transaction: {
+				id: transaction.id,
+				date: transaction.date,
+				amount: milliunitsToAmount(transaction.amount),
+				memo: transaction.memo,
+				cleared: transaction.cleared,
+				approved: transaction.approved,
+				flag_color: transaction.flag_color,
+				account_id: transaction.account_id,
+				payee_id: transaction.payee_id,
+				category_id: transaction.category_id,
+				transfer_account_id: transaction.transfer_account_id,
+				transfer_transaction_id: transaction.transfer_transaction_id,
+				matched_transaction_id: transaction.matched_transaction_id,
+				import_id: transaction.import_id,
+				deleted: transaction.deleted,
+				account_name: transaction.account_name,
+				payee_name: transaction.payee_name,
+				category_name: transaction.category_name,
+			},
+			cached: cacheHit,
+			cache_info: cacheHit
+				? "Data retrieved from cache for improved performance"
+				: "Fresh data retrieved from YNAB API",
+		};
 		return {
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format({
-						transaction: {
-							id: transaction.id,
-							date: transaction.date,
-							amount: milliunitsToAmount(transaction.amount),
-							memo: transaction.memo,
-							cleared: transaction.cleared,
-							approved: transaction.approved,
-							flag_color: transaction.flag_color,
-							account_id: transaction.account_id,
-							payee_id: transaction.payee_id,
-							category_id: transaction.category_id,
-							transfer_account_id: transaction.transfer_account_id,
-							transfer_transaction_id: transaction.transfer_transaction_id,
-							matched_transaction_id: transaction.matched_transaction_id,
-							import_id: transaction.import_id,
-							deleted: transaction.deleted,
-							account_name: transaction.account_name,
-							payee_name: transaction.payee_name,
-							category_name: transaction.category_name,
-						},
-						cached: cacheHit,
-						cache_info: cacheHit
-							? "Data retrieved from cache for improved performance"
-							: "Fresh data retrieved from YNAB API",
-					}),
+					text:
+						fmtTx === "markdown"
+							? formatTransactionDetail(txData)
+							: responseFormatter.format(txData),
 				},
 			],
 		};
@@ -299,8 +319,30 @@ export function registerTransactionReadTools(
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
-		name: "list_transactions",
-		description: "List transactions for a budget with optional filtering",
+		name: "ynab_list_transactions",
+		description: `List transactions for a budget with optional filtering and pagination.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - account_id (string, optional): Filter by account.
+  - category_id (string, optional): Filter by category.
+  - since_date (string, optional): ISO date (YYYY-MM-DD) to filter transactions on or after.
+  - type (string, optional): "uncategorized" or "unapproved".
+  - limit (int, optional): Max results per page. Default: 50.
+  - offset (int, optional): Zero-based offset for pagination. Default: 0.
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: transactions[], total_count, returned_count, offset, has_more, next_offset, cached, cache_info
+
+Examples:
+  - All transactions: call with no args (uses default budget)
+  - Filter by account: set account_id
+  - Last 30 days: set since_date to 30 days ago
+  - Page 2: set limit=50, offset=50
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first
+  - Large result → use ynab_export_transactions to save to file`,
 		inputSchema: ListTransactionsSchema,
 		outputSchema: ListTransactionsOutputSchema,
 		handler: adaptWithDelta(handleListTransactions),
@@ -315,9 +357,22 @@ export function registerTransactionReadTools(
 	});
 
 	registry.register({
-		name: "export_transactions",
-		description:
-			"Export all transactions to a JSON file with descriptive filename",
+		name: "ynab_export_transactions",
+		description: `Export all transactions for a budget to a local JSON file.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - account_id (string, optional): Filter by account.
+  - since_date (string, optional): ISO date (YYYY-MM-DD) to filter transactions on or after.
+
+Returns: file_path, transaction_count, file_size_kb
+
+Examples:
+  - Export all transactions: call with no args
+  - Export account: set account_id
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: ExportTransactionsSchema,
 		outputSchema: ExportTransactionsOutputSchema,
 		handler: adapt(handleExportTransactions),
@@ -332,8 +387,19 @@ export function registerTransactionReadTools(
 	});
 
 	registry.register({
-		name: "get_transaction",
-		description: "Get detailed information for a specific transaction",
+		name: "ynab_get_transaction",
+		description: `Get full details for a single transaction by ID.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - transaction_id (string, required): Transaction UUID.
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: transaction (id, date, amount, memo, cleared, approved, account_id, payee_name, category_name, subtransactions), cached, cache_info
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first
+  - "Transaction not found" → invalid transaction_id`,
 		inputSchema: GetTransactionSchema,
 		outputSchema: GetTransactionOutputSchema,
 		handler: adapt(handleGetTransaction),

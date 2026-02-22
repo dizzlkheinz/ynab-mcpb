@@ -438,7 +438,9 @@ describe("YNAB MCP Server - Performance Tests", () => {
 			});
 
 			const startTime = Date.now();
-			const result = await executeToolCall(server, "ynab:list_budgets");
+			const result = await executeToolCall(server, "ynab:list_budgets", {
+				response_format: "json",
+			});
 			const endTime = Date.now();
 
 			const responseTime = endTime - startTime;
@@ -478,6 +480,7 @@ describe("YNAB MCP Server - Performance Tests", () => {
 			const startTime = Date.now();
 			const result = await executeToolCall(server, "ynab:list_transactions", {
 				budget_id: "123e4567-e89b-12d3-a456-426614174000", // Valid UUID
+				response_format: "json",
 			});
 			const endTime = Date.now();
 
@@ -581,6 +584,7 @@ describe("YNAB MCP Server - Performance Tests", () => {
 			for (let i = 0; i < 10; i++) {
 				const result = await executeToolCall(server, "ynab:list_categories", {
 					budget_id: "123e4567-e89b-12d3-a456-426614174000", // Valid UUID
+					response_format: "json",
 				});
 
 				// Validate response structure

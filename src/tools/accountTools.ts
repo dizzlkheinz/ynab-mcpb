@@ -9,6 +9,10 @@ import {
 } from "../server/cacheManager.js";
 import type { DeltaCache } from "../server/deltaCache.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	formatAccountDetail,
+	formatAccountsList,
+} from "../server/markdownFormatter.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
@@ -35,6 +39,10 @@ export const ListAccountsSchema = z
 		budget_id: z.string().min(1, "Budget ID is required"),
 		limit: z.number().int().positive().optional(),
 		offset: z.number().int().min(0).optional(),
+		response_format: z
+			.enum(["json", "markdown"])
+			.default("markdown")
+			.optional(),
 	})
 	.strict();
 
@@ -47,6 +55,10 @@ export const GetAccountSchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required"),
 		account_id: z.string().min(1, "Account ID is required"),
+		response_format: z
+			.enum(["json", "markdown"])
+			.default("markdown")
+			.optional(),
 	})
 	.strict();
 
@@ -106,42 +118,45 @@ export async function handleListAccounts(
 			const wasCached = result.wasCached;
 
 			// Apply pagination
-			const limit = params.limit ?? 200;
+			const limit = params.limit ?? 50;
 			const offset = params.offset ?? 0;
 			const accounts = allAccounts.slice(offset, offset + limit);
 			const hasMore = offset + limit < allAccounts.length;
 
+			const fmt = params.response_format ?? "markdown";
+			const dataObject = {
+				accounts: accounts.map((account) => ({
+					id: account.id,
+					name: account.name,
+					type: account.type,
+					on_budget: account.on_budget,
+					closed: account.closed,
+					note: account.note,
+					balance: milliunitsToAmount(account.balance),
+					cleared_balance: milliunitsToAmount(account.cleared_balance),
+					uncleared_balance: milliunitsToAmount(account.uncleared_balance),
+					transfer_payee_id: account.transfer_payee_id,
+					direct_import_linked: account.direct_import_linked,
+					direct_import_in_error: account.direct_import_in_error,
+				})),
+				total_count: allAccounts.length,
+				returned_count: accounts.length,
+				offset,
+				has_more: hasMore,
+				next_offset: hasMore ? offset + limit : undefined,
+				cached: wasCached,
+				cache_info: wasCached
+					? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`
+					: "Fresh data retrieved from YNAB API",
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							accounts: accounts.map((account) => ({
-								id: account.id,
-								name: account.name,
-								type: account.type,
-								on_budget: account.on_budget,
-								closed: account.closed,
-								note: account.note,
-								balance: milliunitsToAmount(account.balance),
-								cleared_balance: milliunitsToAmount(account.cleared_balance),
-								uncleared_balance: milliunitsToAmount(
-									account.uncleared_balance,
-								),
-								transfer_payee_id: account.transfer_payee_id,
-								direct_import_linked: account.direct_import_linked,
-								direct_import_in_error: account.direct_import_in_error,
-							})),
-							total_count: allAccounts.length,
-							returned_count: accounts.length,
-							offset,
-							has_more: hasMore,
-							next_offset: hasMore ? offset + limit : undefined,
-							cached: wasCached,
-							cache_info: wasCached
-								? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`
-								: "Fresh data retrieved from YNAB API",
-						}),
+						text:
+							fmt === "markdown"
+								? formatAccountsList(dataObject)
+								: responseFormatter.format(dataObject),
 					},
 				],
 			};
@@ -182,32 +197,35 @@ export async function handleGetAccount(
 				},
 			});
 
+			const fmt = params.response_format ?? "markdown";
+			const dataObject = {
+				account: {
+					id: account.id,
+					name: account.name,
+					type: account.type,
+					on_budget: account.on_budget,
+					closed: account.closed,
+					note: account.note,
+					balance: milliunitsToAmount(account.balance),
+					cleared_balance: milliunitsToAmount(account.cleared_balance),
+					uncleared_balance: milliunitsToAmount(account.uncleared_balance),
+					transfer_payee_id: account.transfer_payee_id,
+					direct_import_linked: account.direct_import_linked,
+					direct_import_in_error: account.direct_import_in_error,
+				},
+				cached: wasCached,
+				cache_info: wasCached
+					? "Data retrieved from cache for improved performance"
+					: "Fresh data retrieved from YNAB API",
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							account: {
-								id: account.id,
-								name: account.name,
-								type: account.type,
-								on_budget: account.on_budget,
-								closed: account.closed,
-								note: account.note,
-								balance: milliunitsToAmount(account.balance),
-								cleared_balance: milliunitsToAmount(account.cleared_balance),
-								uncleared_balance: milliunitsToAmount(
-									account.uncleared_balance,
-								),
-								transfer_payee_id: account.transfer_payee_id,
-								direct_import_linked: account.direct_import_linked,
-								direct_import_in_error: account.direct_import_in_error,
-							},
-							cached: wasCached,
-							cache_info: wasCached
-								? "Data retrieved from cache for improved performance"
-								: "Fresh data retrieved from YNAB API",
-						}),
+						text:
+							fmt === "markdown"
+								? formatAccountDetail(dataObject)
+								: responseFormatter.format(dataObject),
 					},
 				],
 			};
@@ -253,7 +271,7 @@ export async function handleCreateAccount(
 							type: "text",
 							text: responseFormatter.format({
 								dry_run: true,
-								action: "create_account",
+								action: "ynab_create_account",
 								request: {
 									budget_id: params.budget_id,
 									name: params.name,
@@ -327,8 +345,24 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
-		name: "list_accounts",
-		description: "List all accounts for a specific budget",
+		name: "ynab_list_accounts",
+		description: `List all accounts for a budget.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - limit (int, optional): Max results per page. Default: 50.
+  - offset (int, optional): Zero-based offset for pagination. Default: 0.
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: accounts[], total_count, returned_count, offset, has_more, next_offset, cached, cache_info
+
+Examples:
+  - List all accounts (default budget): call with no args
+  - Page 2: set limit=20, offset=20
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first
+  - "UNAUTHORIZED" → YNAB token expired`,
 		inputSchema: ListAccountsSchema,
 		outputSchema: ListAccountsOutputSchema,
 		handler: adaptWithDelta(handleListAccounts),
@@ -343,8 +377,19 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
 	});
 
 	registry.register({
-		name: "get_account",
-		description: "Get detailed information for a specific account",
+		name: "ynab_get_account",
+		description: `Get details for a single account including current balance.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - account_id (string, required): Account UUID.
+  - response_format (string, optional): "json" or "markdown" (default: "markdown").
+
+Returns: account (id, name, type, balance, cleared_balance, uncleared_balance, on_budget, closed), cached, cache_info
+
+Errors:
+  - "No default budget set" → run ynab_set_default_budget first
+  - "Account not found" → invalid account_id`,
 		inputSchema: GetAccountSchema,
 		outputSchema: GetAccountOutputSchema,
 		handler: adapt(handleGetAccount),
@@ -358,8 +403,21 @@ export const registerAccountTools: ToolFactory = (registry, context) => {
 	});
 
 	registry.register({
-		name: "create_account",
-		description: "Create a new account in the specified budget",
+		name: "ynab_create_account",
+		description: `Create a new account in a YNAB budget.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - name (string, required): Account name.
+  - type (string, required): One of: checking, savings, creditCard, cash, lineOfCredit, otherAsset, otherLiability.
+  - balance (number, optional): Opening balance in dollars. Default: 0.
+  - dry_run (boolean, optional): Preview the request without creating. Default: false.
+
+Returns: account object with id, name, type, balance fields.
+
+Examples:
+  - Create checking account: set name="My Checking", type="checking"
+  - Dry run: set dry_run=true to preview without saving`,
 		inputSchema: CreateAccountSchema,
 		outputSchema: CreateAccountOutputSchema,
 		handler: adaptWrite(handleCreateAccount),

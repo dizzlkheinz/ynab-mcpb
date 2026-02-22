@@ -94,8 +94,9 @@ export async function executeToolCall(
 	}
 
 	const registry = server.getToolRegistry();
+	// Convert legacy "ynab:tool_name" colon-style to current "ynab_tool_name" underscore-style
 	const normalizedName = toolName.startsWith("ynab:")
-		? toolName.slice(toolName.indexOf(":") + 1)
+		? `ynab_${toolName.slice(toolName.indexOf(":") + 1)}`
 		: toolName;
 
 	return await registry.executeTool({

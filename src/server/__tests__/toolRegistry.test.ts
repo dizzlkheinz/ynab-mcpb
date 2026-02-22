@@ -260,14 +260,14 @@ describe("ToolRegistry", () => {
 				handler(mockYnabAPI, input);
 
 		registry.register({
-			name: "reconcile_account",
+			name: "ynab_reconcile_account",
 			description: "Guided reconciliation workflow with dual-channel output",
 			inputSchema: ReconcileAccountSchema,
 			handler: adapt(handleReconcileAccount),
 		});
 
 		const result = await registry.executeTool({
-			name: "reconcile_account",
+			name: "ynab_reconcile_account",
 			accessToken: "token-xyz",
 			arguments: {
 				budget_id: "budget-1",
@@ -283,7 +283,9 @@ describe("ToolRegistry", () => {
 		expect(mockYnabAPI.accounts.getAccount).toHaveBeenCalled();
 
 		const toolNames = registry.listTools().map((tool) => tool.name);
-		expect(toolNames).toEqual(expect.arrayContaining(["reconcile_account"]));
+		expect(toolNames).toEqual(
+			expect.arrayContaining(["ynab_reconcile_account"]),
+		);
 	});
 
 	it("merges default arguments before validation", async () => {
@@ -660,33 +662,36 @@ describe("ToolRegistry", () => {
 			expect(result.content[0]?.text).toContain("missing_field_tool");
 		});
 
-		it("rejects handler output with invalid JSON", async () => {
+		it("passes through non-JSON handler output (e.g. markdown)", async () => {
 			const outputSchema = z.object({
 				success: z.boolean(),
 			});
 
-			const handler = vi.fn(async () => createResult("not valid json {"));
+			const handler = vi.fn(async () =>
+				createResult("## Markdown output\n\nThis is markdown, not JSON"),
+			);
 
 			registry.register({
-				name: "invalid_json_tool",
-				description: "Returns invalid JSON",
+				name: "markdown_output_tool",
+				description: "Returns markdown",
 				inputSchema: z.object({ id: z.string() }),
 				outputSchema,
 				handler,
 			});
 
 			const result = await registry.executeTool({
-				name: "invalid_json_tool",
+				name: "markdown_output_tool",
 				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
 			expect(handler).toHaveBeenCalledTimes(1);
-			expect(
-				dependencies.errorHandler.createValidationError,
-			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain("Invalid JSON");
+			// Non-JSON passes through without error, no structuredContent
+			expect(result.isError).toBeFalsy();
+			expect(result.content[0]?.text).toBe(
+				"## Markdown output\n\nThis is markdown, not JSON",
+			);
+			expect(result.structuredContent).toBeUndefined();
 		});
 
 		it("rejects handler output with empty content", async () => {

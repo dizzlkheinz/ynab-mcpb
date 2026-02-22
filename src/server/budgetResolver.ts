@@ -33,7 +33,7 @@ export class BudgetResolver {
 	 *
 	 * Note: While YNAB API natively supports the "default" keyword, this MCP server
 	 * intentionally intercepts it to use its own locally-stored default budget ID
-	 * (set via set_default_budget tool). This provides caching, consistency, and
+	 * (set via ynab_set_default_budget tool). This provides caching, consistency, and
 	 * allows the MCP server to maintain default budget state independently of YNAB's
 	 * OAuth default budget setting.
 	 *
@@ -69,9 +69,9 @@ export class BudgetResolver {
 					'The "last-used" keyword is not supported yet. Please use a specific budget ID or set a default budget.',
 					[
 						"Use a specific budget ID (UUID format)",
-						"Set a default budget using the set_default_budget tool",
+						"Set a default budget using the ynab_set_default_budget tool",
 						'Use the "default" keyword after setting a default budget',
-						"Run the list_budgets tool to see available budget IDs",
+						"Run the ynab_list_budgets tool to see available budget IDs",
 					],
 				);
 			}
@@ -142,14 +142,14 @@ export class BudgetResolver {
 	static createMissingBudgetError(errorHandler?: ErrorHandler): CallToolResult {
 		const detailMessage = `A budget ID is required for this operation. You can either:
 1. Provide a specific budget_id parameter
-2. Set a default budget using the set_default_budget tool first`;
+2. Set a default budget using the ynab_set_default_budget tool first`;
 
 		const eh = errorHandler ?? fallbackErrorHandler;
 		return eh.createValidationError(
 			"No budget ID provided and no default budget set",
 			detailMessage,
 			[
-				"Set a default budget first using the set_default_budget tool",
+				"Set a default budget first using the ynab_set_default_budget tool",
 				"Provide a budget_id parameter when invoking the tool",
 			],
 		);
@@ -171,12 +171,12 @@ Valid formats:
 - UUID format (versions 1-5, e.g., "123e4567-e89b-12d3-a456-426614174000")
 - Special keywords: ${BudgetResolver.ALLOWED_KEYWORDS.map((k) => `"${k}"`).join(", ")}
 
-You can use the list_budgets tool to see available budget IDs.`;
+You can use the ynab_list_budgets tool to see available budget IDs.`;
 
 		const eh = errorHandler ?? fallbackErrorHandler;
 		return eh.createValidationError("Invalid budget ID format", detailMessage, [
 			"Use a valid UUID format (UUID v1-v5, e.g., 123e4567-e89b-12d3-a456-426614174000; standard UUID v4 format works as well)",
-			"Run the list_budgets tool to view available budget IDs",
+			"Run the ynab_list_budgets tool to view available budget IDs",
 			'Use the special keyword "default" for convenience',
 		]);
 	}

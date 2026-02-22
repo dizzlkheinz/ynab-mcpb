@@ -66,7 +66,9 @@ describe("Budget Tools", () => {
 				usedDelta: true,
 			});
 
-			const result = await handleListBudgets(mockYnabAPI, fetcher, {});
+			const result = await handleListBudgets(mockYnabAPI, fetcher, {
+				response_format: "json",
+			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
@@ -99,7 +101,9 @@ describe("Budget Tools", () => {
 				wasCached: false,
 			});
 
-			const result = await handleListBudgets(mockYnabAPI, fetcher, {});
+			const result = await handleListBudgets(mockYnabAPI, fetcher, {
+				response_format: "json",
+			});
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -116,7 +120,9 @@ describe("Budget Tools", () => {
 				new Error("401 Unauthorized"),
 			);
 
-			const result = await handleListBudgets(mockYnabAPI, fetcher, {});
+			const result = await handleListBudgets(mockYnabAPI, fetcher, {
+				response_format: "json",
+			});
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -143,6 +149,7 @@ describe("Budget Tools", () => {
 
 			const result = await handleGetBudget(mockYnabAPI, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			// handleGetBudget should not use cache (direct API call)
@@ -212,6 +219,7 @@ describe("Budget Tools", () => {
 
 			const result = await handleGetBudget(mockYnabAPI, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -252,6 +260,7 @@ describe("Budget Tools", () => {
 
 			const result = await handleGetBudget(mockYnabAPI, {
 				budget_id: "budget-2",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -380,6 +389,7 @@ describe("Budget Tools", () => {
 
 			const result = await handleGetBudget(mockYnabAPI, {
 				budget_id: "budget-3",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -407,6 +417,7 @@ describe("Budget Tools", () => {
 
 			const result = await handleGetBudget(mockYnabAPI, {
 				budget_id: "invalid-budget",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -421,6 +432,7 @@ describe("Budget Tools", () => {
 
 			const result = await handleGetBudget(mockYnabAPI, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);

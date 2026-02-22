@@ -278,7 +278,7 @@ export type DryRunWarning = z.infer<typeof DryRunWarningSchema>;
 export const CreateTransactionOutputSchema = z.union([
 	z.object({
 		dry_run: z.literal(true),
-		action: z.literal("create_transaction"),
+		action: z.literal("ynab_create_transaction"),
 		request: z.record(z.string(), z.unknown()),
 	}),
 	z.object({
@@ -355,7 +355,7 @@ export const CreateTransactionsOutputSchema = z.union([
 	z
 		.object({
 			dry_run: z.literal(true),
-			action: z.literal("create_transactions"),
+			action: z.literal("ynab_create_transactions"),
 			validation: z.literal("passed"),
 			summary: z.object({
 				total_transactions: z.number(),
@@ -417,7 +417,7 @@ export type CreateTransactionsOutput = z.infer<
 export const UpdateTransactionOutputSchema = z.union([
 	z.object({
 		dry_run: z.literal(true),
-		action: z.literal("update_transaction"),
+		action: z.literal("ynab_update_transaction"),
 		request: z.record(z.string(), z.unknown()),
 	}),
 	z.object({
@@ -478,7 +478,7 @@ export const UpdateTransactionsOutputSchema = z.union([
 	z
 		.object({
 			dry_run: z.literal(true),
-			action: z.literal("update_transactions"),
+			action: z.literal("ynab_update_transactions"),
 			validation: z.literal("passed"),
 			summary: z.object({
 				total_transactions: z.number(),
@@ -534,7 +534,7 @@ export type UpdateTransactionsOutput = z.infer<
 export const DeleteTransactionOutputSchema = z.union([
 	z.object({
 		dry_run: z.literal(true),
-		action: z.literal("delete_transaction"),
+		action: z.literal("ynab_delete_transaction"),
 		request: z.record(z.string(), z.unknown()),
 	}),
 	z.object({
@@ -656,7 +656,7 @@ export type SubtransactionPreview = z.infer<typeof SubtransactionPreviewSchema>;
 export const CreateReceiptSplitTransactionOutputSchema = z.union([
 	z.object({
 		dry_run: z.literal(true),
-		action: z.literal("create_receipt_split_transaction"),
+		action: z.literal("ynab_create_receipt_split_transaction"),
 		transaction_preview: TransactionDryRunPreviewSchema,
 		receipt_summary: ReceiptSummarySchema,
 		subtransactions: z.array(SubtransactionPreviewSchema),
@@ -717,7 +717,7 @@ export type CreateAccountDryRunRequest = z.infer<
 export const CreateAccountOutputSchema = z.union([
 	z.object({
 		dry_run: z.literal(true),
-		action: z.literal("create_account"),
+		action: z.literal("ynab_create_account"),
 		request: CreateAccountDryRunRequestSchema,
 	}),
 	z.object({
@@ -774,7 +774,7 @@ export type UpdateCategoryDryRunRequest = z.infer<
 export const UpdateCategoryOutputSchema = z.union([
 	z.object({
 		dry_run: z.literal(true),
-		action: z.literal("update_category"),
+		action: z.literal("ynab_update_category"),
 		request: UpdateCategoryDryRunRequestSchema,
 	}),
 	z.object({

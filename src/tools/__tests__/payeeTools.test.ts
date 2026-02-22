@@ -90,6 +90,7 @@ describe("Payee Tools", () => {
 
 			const result = await handleListPayees(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -170,6 +171,7 @@ describe("Payee Tools", () => {
 
 			const result = await handleListPayees(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -203,6 +205,7 @@ describe("Payee Tools", () => {
 
 			const result = await handleListPayees(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -220,6 +223,7 @@ describe("Payee Tools", () => {
 
 			const result = await handleListPayees(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -237,6 +241,7 @@ describe("Payee Tools", () => {
 
 			const result = await handleListPayees(mockYnabAPI, fetcher, {
 				budget_id: "invalid-budget",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -252,6 +257,7 @@ describe("Payee Tools", () => {
 
 			const result = await handleListPayees(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -269,6 +275,7 @@ describe("Payee Tools", () => {
 
 			const result = await handleListPayees(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -286,6 +293,7 @@ describe("Payee Tools", () => {
 
 			const result = await handleListPayees(mockYnabAPI, fetcher, {
 				budget_id: "budget-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -314,6 +322,7 @@ describe("Payee Tools", () => {
 			const result = await handleGetPayee(mockYnabAPI, {
 				budget_id: "budget-1",
 				payee_id: "payee-1",
+				response_format: "json",
 			});
 
 			// Verify cache was used
@@ -353,6 +362,7 @@ describe("Payee Tools", () => {
 			const result = await handleGetPayee(mockYnabAPI, {
 				budget_id: "budget-1",
 				payee_id: "payee-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -382,6 +392,7 @@ describe("Payee Tools", () => {
 			const result = await handleGetPayee(mockYnabAPI, {
 				budget_id: "budget-1",
 				payee_id: "payee-2",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -397,6 +408,7 @@ describe("Payee Tools", () => {
 			const result = await handleGetPayee(mockYnabAPI, {
 				budget_id: "budget-1",
 				payee_id: "invalid-payee",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -412,6 +424,7 @@ describe("Payee Tools", () => {
 			const result = await handleGetPayee(mockYnabAPI, {
 				budget_id: "budget-1",
 				payee_id: "payee-1",
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);

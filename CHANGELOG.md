@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-02-22
+
+### Added
+
+- **MCP Audit** - Added audit improvements including pretty-printing, pagination, rate limiting enhancements, resource updates, and prompt updates
+
+### Changed
+
+- **Documentation** - Improved README with Mermaid diagrams, refined badges, and collapsible setup sections
+
 ## [0.22.0] - 2026-02-21
 
 ### Added
