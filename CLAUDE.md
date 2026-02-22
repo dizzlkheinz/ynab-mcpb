@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integration, enabling AI assistants to interact with YNAB budgets, accounts, transactions, and categories. The codebase uses TypeScript with a modular, service-oriented architecture.
 
-**Current Version:** 0.23.0
+**Current Version:** 0.24.0
 
 ## Essential Commands
 
@@ -97,7 +97,7 @@ The architecture is modular and service-oriented:
 - Domain factories (`register*Tools`) live in each tool file: budget, account, transaction, category, payee, month, utility, reconciliation. `setupToolRegistry` now delegates to these factories.
 - Shared schemas: `emptyObjectSchema`, `looseObjectSchema` in `src/tools/schemas/common.ts`.
 - Output schemas: All 28 tools have Zod output schemas in `src/tools/schemas/outputs/`, registered via `outputSchema` field. The registry converts to JSON Schema for `tools/list` and validates handler output for `structuredContent`.
-- Server-owned inline tools that stay in `YNABMCPServer`: `set_default_budget`, `get_default_budget`, `diagnostic_info`, `clear_cache` (they depend on server internals).
+- Server-owned inline tools that stay in `YNABMCPServer`: `ynab_set_default_budget`, `ynab_get_default_budget`, `ynab_diagnostic_info`, `ynab_clear_cache` (they depend on server internals).
 
 ### Tool Implementation (`src/tools/`)
 
@@ -167,7 +167,7 @@ All tools register through the centralized `ToolRegistry` for consistent validat
 
 ```typescript
 registry.register({
-  name: 'my_tool',
+  name: 'ynab_my_tool',
   description: 'Tool description',
   inputSchema: MyToolSchema,   // Zod input schema
   outputSchema: MyOutputSchema, // Zod output schema (structuredContent)
@@ -304,7 +304,7 @@ Long-running operations can emit MCP progress notifications to provide real-time
 - **ProgressCallback** type defined in `src/server/toolRegistry.ts`
 - Optional callback passed to tool handlers via adapter pattern
 - Usage: `await sendProgress?.({ progress, total, message })`
-- Currently used by: `reconcile_account` tool
+- Currently used by: `ynab_reconcile_account` tool
 
 ### Progress Notification Pattern
 
@@ -325,7 +325,7 @@ async function handleLongOperation(
 
 ### Tools with Progress Support
 
-- **reconcile_account** - Reports progress during CSV parsing, matching, and bulk operations
+- **ynab_reconcile_account** - Reports progress during CSV parsing, matching, and bulk operations
 
 ## Tool Annotations
 
@@ -346,23 +346,23 @@ Each tool includes the following annotation fields:
 The system defines 5 preset annotation patterns in `src/tools/toolCategories.ts`:
 
 - **READ_ONLY_EXTERNAL** - Read-only tools querying YNAB API
-  - Examples: `list_budgets`, `get_account`, `list_transactions`
+  - Examples: `ynab_list_budgets`, `ynab_get_account`, `ynab_list_transactions`
   - Characteristics: Read-only, idempotent, external API calls
 
 - **WRITE_EXTERNAL_CREATE** - Tools creating new resources, non-idempotent
-  - Examples: `create_transaction`, `create_account`
+  - Examples: `ynab_create_transaction`, `ynab_create_account`
   - Characteristics: Write operations, non-idempotent (repeated calls create duplicates), external API
 
 - **WRITE_EXTERNAL_UPDATE** - Tools updating existing resources, idempotent
-  - Examples: `update_transaction`, `set_default_budget`, `reconcile_account`
+  - Examples: `ynab_update_transaction`, `ynab_set_default_budget`, `ynab_reconcile_account`
   - Characteristics: Write operations, idempotent (repeated calls produce same result), external API
 
 - **WRITE_EXTERNAL_DELETE** - Destructive tools deleting resources
-  - Example: `delete_transaction` ⚠️
+  - Example: `ynab_delete_transaction` ⚠️
   - Characteristics: Write operations, destructive, idempotent, external API
 
 - **UTILITY_LOCAL** - Local utility tools without external API calls
-  - Examples: `clear_cache`, `diagnostic_info`
+  - Examples: `ynab_clear_cache`, `ynab_diagnostic_info`
   - Characteristics: Local operations, no external API dependencies
 
 ### Complete Tool Classification
@@ -371,23 +371,23 @@ All 28 tools are classified into the following categories:
 
 **Read-Only External (15 tools):**
 
-- `list_budgets`, `get_budget`, `list_accounts`, `get_account`, `list_transactions`, `export_transactions`, `compare_transactions`, `get_transaction`, `list_categories`, `get_category`, `list_payees`, `get_payee`, `get_month`, `list_months`, `get_user`
+- `ynab_list_budgets`, `ynab_get_budget`, `ynab_list_accounts`, `ynab_get_account`, `ynab_list_transactions`, `ynab_export_transactions`, `ynab_compare_transactions`, `ynab_get_transaction`, `ynab_list_categories`, `ynab_get_category`, `ynab_list_payees`, `ynab_get_payee`, `ynab_get_month`, `ynab_list_months`, `ynab_get_user`
 
 **Write External - Create (4 tools):**
 
-- `create_account`, `create_transaction`, `create_transactions`, `create_receipt_split_transaction`
+- `ynab_create_account`, `ynab_create_transaction`, `ynab_create_transactions`, `ynab_create_receipt_split_transaction`
 
 **Write External - Update (5 tools):**
 
-- `set_default_budget`, `reconcile_account`, `update_transaction`, `update_transactions`, `update_category`
+- `ynab_set_default_budget`, `ynab_reconcile_account`, `ynab_update_transaction`, `ynab_update_transactions`, `ynab_update_category`
 
 **Write External - Delete (1 tool):**
 
-- `delete_transaction` ⚠️
+- `ynab_delete_transaction` ⚠️
 
 **Utility Local (3 tools):**
 
-- `get_default_budget`, `diagnostic_info`, `clear_cache`
+- `ynab_get_default_budget`, `ynab_diagnostic_info`, `ynab_clear_cache`
 
 ### Usage Example
 
@@ -397,7 +397,7 @@ Tool annotations are applied during tool registration using preset patterns:
 import { ToolAnnotationPresets } from '../tools/toolCategories.js';
 
 register({
-  name: 'delete_transaction',
+  name: 'ynab_delete_transaction',
   description: 'Delete a transaction',
   inputSchema: DeleteTransactionSchema,
   handler: adaptWrite(handleDeleteTransaction),
@@ -420,16 +420,16 @@ Output schemas live in `src/tools/schemas/outputs/` organized by domain:
 
 | File | Covers | Key Schemas |
 |------|--------|-------------|
-| `budgetOutputs.ts` | `list_budgets`, `get_budget` | `ListBudgetsOutputSchema`, `GetBudgetOutputSchema` |
-| `accountOutputs.ts` | `list_accounts`, `get_account`, `create_account` | `ListAccountsOutputSchema`, `GetAccountOutputSchema`, `CreateAccountOutputSchema` |
-| `transactionOutputs.ts` | `list_transactions`, `get_transaction` | `ListTransactionsOutputSchema` (union: normal/preview), `GetTransactionOutputSchema` |
-| `transactionMutationOutputs.ts` | `create_transaction`, `create_transactions`, `update_transaction`, `update_transactions`, `delete_transaction`, `create_receipt_split_transaction`, `update_category` | All mutation schemas with dry-run/execution unions |
-| `categoryOutputs.ts` | `list_categories`, `get_category` | `ListCategoriesOutputSchema`, `GetCategoryOutputSchema` |
-| `payeeOutputs.ts` | `list_payees`, `get_payee` | `ListPayeesOutputSchema`, `GetPayeeOutputSchema` |
-| `monthOutputs.ts` | `get_month`, `list_months` | `GetMonthOutputSchema`, `ListMonthsOutputSchema` |
-| `utilityOutputs.ts` | `get_user`, `get_default_budget`, `set_default_budget`, `clear_cache`, `diagnostic_info` | All utility output schemas |
-| `reconciliationOutputs.ts` | `reconcile_account` | `ReconcileAccountOutputSchema` (human-only or human+structured union) |
-| `comparisonOutputs.ts` | `compare_transactions`, `export_transactions` | `CompareTransactionsOutputSchema`, `ExportTransactionsOutputSchema` |
+| `budgetOutputs.ts` | `ynab_list_budgets`, `ynab_get_budget` | `ListBudgetsOutputSchema`, `GetBudgetOutputSchema` |
+| `accountOutputs.ts` | `ynab_list_accounts`, `ynab_get_account`, `ynab_create_account` | `ListAccountsOutputSchema`, `GetAccountOutputSchema`, `CreateAccountOutputSchema` |
+| `transactionOutputs.ts` | `ynab_list_transactions`, `ynab_get_transaction` | `ListTransactionsOutputSchema` (union: normal/preview), `GetTransactionOutputSchema` |
+| `transactionMutationOutputs.ts` | `ynab_create_transaction`, `ynab_create_transactions`, `ynab_update_transaction`, `ynab_update_transactions`, `ynab_delete_transaction`, `ynab_create_receipt_split_transaction`, `ynab_update_category` | All mutation schemas with dry-run/execution unions |
+| `categoryOutputs.ts` | `ynab_list_categories`, `ynab_get_category` | `ListCategoriesOutputSchema`, `GetCategoryOutputSchema` |
+| `payeeOutputs.ts` | `ynab_list_payees`, `ynab_get_payee` | `ListPayeesOutputSchema`, `GetPayeeOutputSchema` |
+| `monthOutputs.ts` | `ynab_get_month`, `ynab_list_months` | `GetMonthOutputSchema`, `ListMonthsOutputSchema` |
+| `utilityOutputs.ts` | `ynab_get_user`, `ynab_get_default_budget`, `ynab_set_default_budget`, `ynab_clear_cache`, `ynab_diagnostic_info` | All utility output schemas |
+| `reconciliationOutputs.ts` | `ynab_reconcile_account` | `ReconcileAccountOutputSchema` (human-only or human+structured union) |
+| `comparisonOutputs.ts` | `ynab_compare_transactions`, `ynab_export_transactions` | `CompareTransactionsOutputSchema`, `ExportTransactionsOutputSchema` |
 
 ### Shared Schema Components
 
@@ -598,7 +598,7 @@ Service modules (like diagnostics, resources, prompts) follow a pattern:
 
 ## Reconciliation System
 
-The reconciliation tool (`reconcile_account`) is a comprehensive account reconciliation system with advanced features:
+The reconciliation tool (`ynab_reconcile_account`) is a comprehensive account reconciliation system with advanced features:
 
 ### Key Components
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-02-22
+
+### Changed
+
+- **SDK** - Upgraded @modelcontextprotocol/sdk from 1.26.0 to 1.27.0
+- **Server Info** - Added `title`, `description`, and `websiteUrl` to MCP server metadata
+- **Logging** - Declared `logging` capability in server initialization
+- **Resource Annotations** - Added `audience` and `priority` annotations to all resources and resource templates
+- **Documentation** - Fixed all tool name references in CLAUDE.md to use actual `ynab_` prefixed names
+
 ## [0.23.0] - 2026-02-22
 
 ### Added

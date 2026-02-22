@@ -47,6 +47,16 @@ export type TemplateHandler = (
 ) => Promise<ResourceContents[]>;
 
 /**
+ * MCP resource annotations for audience, priority, and freshness hints
+ */
+export interface ResourceAnnotations {
+	/** Who this resource is intended for */
+	audience?: ("user" | "assistant")[];
+	/** Relative priority hint (0.0 = lowest, 1.0 = highest) */
+	priority?: number;
+}
+
+/**
  * Resource definition structure
  */
 export interface ResourceDefinition {
@@ -54,6 +64,7 @@ export interface ResourceDefinition {
 	name: string;
 	description: string;
 	mimeType: string;
+	annotations?: ResourceAnnotations;
 }
 
 /**
@@ -149,12 +160,14 @@ const defaultResourceDefinitions: ResourceDefinition[] = [
 		name: "YNAB Budgets",
 		description: "List of all available budgets",
 		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.8 },
 	},
 	{
 		uri: "ynab://user",
 		name: "YNAB User Info",
 		description: "Current user information including ID and email address",
 		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.3 },
 	},
 ];
 
@@ -167,6 +180,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		name: "Budget Details",
 		description: "Detailed information for a specific budget",
 		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.7 },
 		handler: async (
 			uri,
 			params,
@@ -211,6 +225,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		name: "Budget Accounts",
 		description: "List of accounts for a specific budget",
 		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.7 },
 		handler: async (
 			uri,
 			params,
@@ -257,6 +272,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		name: "Budget Categories",
 		description: "Flattened list of all categories for a specific budget",
 		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.6 },
 		handler: async (
 			uri,
 			params,
@@ -319,6 +335,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		name: "Budget Months",
 		description: "List of month summaries for a specific budget",
 		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.5 },
 		handler: async (
 			uri,
 			params,
@@ -368,6 +385,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		description:
 			"Detailed budget data for a specific month (month = YYYY-MM-DD first of month)",
 		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.5 },
 		handler: async (
 			uri,
 			params,
@@ -422,6 +440,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		name: "Account Details",
 		description: "Detailed information for a specific account within a budget",
 		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.6 },
 		handler: async (
 			uri,
 			params,
@@ -524,6 +543,7 @@ export class ResourceManager {
 				name: r.name,
 				description: r.description,
 				mimeType: r.mimeType,
+				...(r.annotations ? { annotations: r.annotations } : {}),
 			})),
 		};
 	}
@@ -538,6 +558,7 @@ export class ResourceManager {
 				name: t.name,
 				description: t.description,
 				mimeType: t.mimeType,
+				...(t.annotations ? { annotations: t.annotations } : {}),
 			})),
 		};
 	}

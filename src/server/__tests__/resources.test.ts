@@ -62,6 +62,7 @@ describe("resources module", () => {
 							name: "YNAB Budgets",
 							description: "List of all available budgets",
 							mimeType: "application/json",
+							annotations: { audience: ["assistant"], priority: 0.8 },
 						},
 						{
 							uri: "ynab://user",
@@ -69,6 +70,7 @@ describe("resources module", () => {
 							description:
 								"Current user information including ID and email address",
 							mimeType: "application/json",
+							annotations: { audience: ["assistant"], priority: 0.3 },
 						},
 					],
 				});

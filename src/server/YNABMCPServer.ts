@@ -101,7 +101,11 @@ export class YNABMCPServer {
 		this.server = new Server(
 			{
 				name: "ynab-mcp-server",
+				title: "YNAB MCP Server",
 				version: this.serverVersion,
+				description:
+					"MCP server for YNAB (You Need A Budget) integration — budgets, accounts, transactions, categories, and reconciliation",
+				websiteUrl: "https://github.com/dizzlkheinz/ynab-mcpb",
 			},
 			{
 				capabilities: {
@@ -112,6 +116,7 @@ export class YNABMCPServer {
 					},
 					prompts: { listChanged: false },
 					completions: {},
+					logging: {},
 				},
 			},
 		);
