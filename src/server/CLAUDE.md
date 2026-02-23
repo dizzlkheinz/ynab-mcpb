@@ -31,10 +31,11 @@ The `src/server/` directory implements:
 | **prompts.ts** | MCP prompt definitions and handlers | LOW | ~150 |
 | **diagnostics.ts** | System diagnostics, health monitoring, cache statistics | MEDIUM | ~200 |
 | **securityMiddleware.ts** | Security validation, wrapper functions | HIGH | ~150 |
-| **responseFormatter.ts** | JSON response formatting (always minified) | LOW | ~10 |
-| **rateLimiter.ts** | Rate limiting for YNAB API compliance | MEDIUM | ~150 |
-| **requestLogger.ts** | Request/response logging middleware | LOW | ~100 |
-| **cacheKeys.ts** | Centralized cache key generation utilities | MEDIUM | ~100 |
+| **responseFormatter.ts** | JSON response formatting (pretty-printed, 2-space indent) | LOW | ~10 |
+| **markdownFormatter.ts** | Human-readable markdown output for all read tools (tables, detail views, pagination footers) | HIGH | ~600 |
+| **rateLimiter.ts** | Rate limiting for YNAB API compliance | MEDIUM | ~200 |
+| **requestLogger.ts** | Request/response logging middleware | LOW | ~370 |
+| **cacheKeys.ts** | Centralized cache key generation utilities | LOW | ~10 |
 
 ## Critical Patterns & Conventions
 
@@ -180,6 +181,35 @@ const result = await deltaCache.fetchWithDelta({
 **Why Critical**: Reduces API bandwidth, faster responses, respects YNAB rate limits.
 
 **What Breaks**: Missing merge function → cache corruption. Incorrect cache keys → stale data. Not using Date.UTC → timezone bugs.
+
+### 7. Response Format Pattern (Markdown / JSON)
+
+All read-only tools accept a `response_format` parameter (`"markdown"` | `"json"`, default: `"markdown"`). Formatting functions live in `markdownFormatter.ts`:
+
+```typescript
+// In tool handler
+const fmt = params.response_format ?? "markdown";
+return {
+  content: [{
+    type: "text",
+    text: fmt === "json" ? JSON.stringify(data, null, 2) : formatBudgetsList(data),
+  }],
+  structuredContent: data, // Always returned for output schema validation
+};
+```
+
+**markdownFormatter.ts** exports domain-specific formatters:
+- `formatBudgetsList`, `formatBudgetDetail`
+- `formatAccountsList`, `formatAccountDetail`
+- `formatTransactionsList`, `formatTransactionDetail`
+- `formatCategoriesList`, `formatCategoryDetail`
+- `formatPayeesList`, `formatPayeeDetail`
+- `formatMonthsList`, `formatMonthDetail`
+- `formatUserInfo`, `formatDefaultBudget`, `formatDiagnosticInfo`
+
+**Why Important**: Markdown tables are more context-efficient for LLMs and human-readable in MCP clients.
+
+**What Breaks**: Returning raw JSON when markdown is requested → verbose output, wastes context window.
 
 ## Dependencies
 
@@ -430,9 +460,10 @@ class MyService {
 **Fix**: Always use `config.ts` for environment-based configuration:
 
 ```typescript
-import { config } from './config.js';
+import { loadConfig } from './config.js';
 
-const token = config.ynabAccessToken; // From env var
+const config = loadConfig();
+const token = config.YNAB_ACCESS_TOKEN; // From env var
 ```
 
 ## Integration Points
@@ -443,6 +474,7 @@ const token = config.ynabAccessToken; // From env var
 - **Tool Registration**: Tools register via `toolRegistry.register()`
 - **Cache Access**: Tools use `cacheManager` via ToolContext
 - **Error Handling**: Tools use `errorHandler` via adapters
+- **Markdown Formatting**: Tools import `format*` functions from `markdownFormatter.ts` for `response_format="markdown"`
 
 ### With Types (`src/types/`)
 

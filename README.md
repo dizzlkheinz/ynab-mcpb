@@ -56,6 +56,7 @@ graph LR
 - **Bank reconciliation (beta)** — Import a bank CSV, fuzzy-match against YNAB, detect missing or mismatched transactions, and apply bulk fixes.
 - **28 YNAB tools** — Full coverage of budgets, accounts, transactions, categories, payees, months, and utilities.
 - **Delta sync** — Fetches only changed data since the last request, keeping things fast.
+- **Markdown or JSON** — All read tools support `response_format`: human-readable markdown tables (default) or structured JSON.
 - **MCP-native** — Structured outputs, annotations, completions API, and resource templates.
 
 ---
@@ -198,6 +199,8 @@ Create a transaction: $42.18 at Trader Joe's yesterday.
 | Months | `list_months` `get_month` |
 | Reconciliation | `reconcile_account` |
 | Utilities | `get_user` `diagnostic_info` `clear_cache` |
+
+All read tools accept `response_format` (`"markdown"` or `"json"`, default: `"markdown"`).
 
 Full reference: [docs/reference/API.md](docs/reference/API.md)
 

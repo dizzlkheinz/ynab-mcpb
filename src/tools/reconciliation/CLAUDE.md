@@ -48,6 +48,7 @@ CSV File → Parser → Matcher → Analyzer → Executor → Reporter
 | **signDetector.ts** | Auto-detection of debit/credit sign conventions | ~130 | HIGH |
 | **payeeNormalizer.ts** | Payee name normalization for matching | ~150 | MEDIUM |
 | **ynabAdapter.ts** | YNAB API integration layer | ~300 | HIGH |
+| **types.ts** | Reconciliation domain types (BankTransaction, MatchCandidate, MatchingConfig, recommendations) | ~300 | HIGH |
 
 ## Critical Patterns & Conventions
 

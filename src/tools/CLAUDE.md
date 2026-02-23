@@ -29,14 +29,16 @@ src/tools/
 ├── utilityTools.ts             # User info and amount conversion
 ├── adapters.ts                 # Tool adapter implementations
 ├── toolCategories.ts           # Tool categorization and annotations
-├── compareTransactions.ts      # CSV comparison tool entry point
+├── compareTransactions.ts      # CSV comparison re-export facade
 ├── exportTransactions.ts       # Transaction export to JSON files
 ├── deltaFetcher.ts             # Delta request utilities
 ├── deltaSupport.ts             # Delta request support utilities
 ├── compareTransactions/        # CSV comparison modular components
+│   ├── index.ts                # Main entry point (schemas, handlers)
 │   ├── parser.ts               # CSV parsing
 │   ├── matcher.ts              # Transaction matching
-│   └── formatter.ts            # Report formatting
+│   ├── formatter.ts            # Report formatting
+│   └── types.ts                # Type definitions (BankTransaction, etc.)
 ├── reconciliation/             # Comprehensive reconciliation system (v2)
 │   ├── csvParser.ts            # CSV parsing with bank presets
 │   ├── matcher.ts              # Fuzzy matching engine
@@ -68,11 +70,14 @@ export function registerBudgetTools(
   registry: ToolRegistry,
   context: ToolContext
 ): void {
+  const { adapt, adaptWithDelta } = createAdapters(context);
+
   registry.register({
-    name: 'list_budgets',
+    name: 'ynab_list_budgets',
     description: 'List all budgets',
-    inputSchema: emptyObjectSchema,
-    handler: adaptNoInput(handleListBudgets, context),
+    inputSchema: ListBudgetsSchema,
+    outputSchema: ListBudgetsOutputSchema,
+    handler: adaptWithDelta(handleListBudgets),
     metadata: {
       annotations: {
         ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
@@ -89,32 +94,39 @@ export function registerBudgetTools(
 
 ### 2. Adapter Pattern
 
-Use adapter helpers from `adapters.ts` to wrap handlers with dependency injection:
+Use `createAdapters(context)` from `adapters.ts` to get adapter functions bound to the ToolContext:
 
 ```typescript
-import { adapt, adaptWrite, adaptWithDelta, adaptNoInput } from './adapters.js';
+import { createAdapters } from './adapters.js';
+
+// In tool factory function
+const { adapt, adaptNoInput, adaptWithDelta, adaptWithDeltaAndProgress, adaptWrite } = createAdapters(context);
 
 // Read-only tool with input
-handler: adapt(handleGetBudget, context);
-
-// Write tool (invalidates cache)
-handler: adaptWrite(handleUpdateTransaction, context);
-
-// Delta-aware tool
-handler: adaptWithDelta(handleListTransactions, context);
+handler: adapt(handleGetBudget),
 
 // No-input tool
-handler: adaptNoInput(handleGetUser, context);
+handler: adaptNoInput(handleGetUser),
+
+// Delta-aware tool
+handler: adaptWithDelta(handleListTransactions),
+
+// Delta-aware tool with progress notifications
+handler: adaptWithDeltaAndProgress(handleReconcileAccount),
+
+// Write tool (invalidates cache)
+handler: adaptWrite(handleUpdateTransaction),
 ```
 
-**Adapter Types**:
+**Adapter Types** (5 total):
 
-- `adapt` - Standard read-only handler with input
-- `adaptWrite` - Write handler (invalidates cache, supports progress)
-- `adaptWithDelta` - Delta-aware handler for efficient updates
-- `adaptNoInput` - Handler with no input parameters
+- `adapt` - Standard read-only handler with input → injects `(ynabAPI, input, errorHandler)`
+- `adaptNoInput` - Handler with no input parameters → injects `(ynabAPI, errorHandler)`
+- `adaptWithDelta` - Delta-aware handler → injects `(ynabAPI, deltaFetcher, input, errorHandler)`
+- `adaptWithDeltaAndProgress` - Delta + progress callback → injects `(ynabAPI, deltaFetcher, input, sendProgress?, errorHandler)`
+- `adaptWrite` - Write handler → injects `(ynabAPI, deltaCache, serverKnowledgeStore, input, errorHandler)`
 
-**Why Critical**: Adapters inject ToolContext dependencies, enable progress notifications, and ensure consistent error handling.
+**Why Critical**: Adapters bind ToolContext dependencies at registration time, so handlers receive only what they need.
 
 **What Breaks**: Not using adapters → no DI, missing errorHandler, no progress support, inconsistent behavior.
 
@@ -228,6 +240,30 @@ context.cacheManager.delete(`account:${accountId}`); // Account balance changed
 
 **What Breaks**: Missing invalidation → stale data persists until TTL expires (2-10 minutes).
 
+### 7. Response Format (Markdown / JSON)
+
+All read-only tools accept `response_format` (`"markdown"` | `"json"`, default: `"markdown"`). When `"markdown"`, the tool uses formatters from `src/server/markdownFormatter.ts` to return human-readable tables and detail views:
+
+```typescript
+import { formatAccountsList } from '../server/markdownFormatter.js';
+
+// In handler
+const fmt = params.response_format ?? "markdown";
+return {
+  content: [{
+    type: "text",
+    text: fmt === "json" ? JSON.stringify(data, null, 2) : formatAccountsList(data),
+  }],
+  structuredContent: data,
+};
+```
+
+**Supported tools**: All list/get tools across budgets, accounts, transactions, categories, payees, months, and get_user.
+
+**Why Important**: Markdown is more context-efficient for LLMs and human-readable. JSON is useful for programmatic processing.
+
+**What Breaks**: Forgetting to pass `response_format` through to the formatter → always returns one format regardless of request.
+
 ## Transaction Tools (Special Note)
 
 Transaction tooling is split into focused modules for maintainability:
@@ -326,11 +362,14 @@ The `create_receipt_split_transaction` tool uses smart itemization logic:
      registry: ToolRegistry,
      context: ToolContext
    ): void {
+     const { adapt } = createAdapters(context);
+
      registry.register({
-       name: 'my_tool',
+       name: 'ynab_my_tool',
        description: 'My tool description',
        inputSchema: MyToolSchema,
-       handler: adapt(handleMyTool, context),
+       outputSchema: MyOutputSchema,
+       handler: adapt(handleMyTool),
        metadata: {
          annotations: {
            ...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
@@ -368,9 +407,10 @@ The `create_receipt_split_transaction` tool uses smart itemization logic:
    ): Promise<MyOutput>
    ```
 
-2. **Use `adaptWrite` adapter** (supports progress):
+2. **Use `adaptWithDeltaAndProgress` or `adaptWrite` adapter**:
    ```typescript
-   handler: adaptWrite(handleMyTool, context);
+   const { adaptWithDeltaAndProgress } = createAdapters(context);
+   handler: adaptWithDeltaAndProgress(handleMyTool),
    ```
 
 3. **Emit progress updates**:
@@ -521,14 +561,15 @@ import { adapt } from './adapters.js';
 
 **Impact**: No dependency injection, missing errorHandler, no progress support, inconsistent error handling.
 
-**Fix**: Always use adapter helpers:
+**Fix**: Always use adapter helpers via `createAdapters(context)`:
 
 ```typescript
 // BAD
 handler: async (input) => handleMyTool(input);
 
 // GOOD
-handler: adapt(handleMyTool, context);
+const { adapt } = createAdapters(context);
+handler: adapt(handleMyTool),
 ```
 
 ### 6. Direct YNAB API Calls
@@ -578,6 +619,7 @@ metadata: {
 - **ToolRegistry**: All tools register via `registry.register()`
 - **ToolContext**: Injected by adapters, provides ynabAPI, cacheManager, etc.
 - **Error Handling**: Uses `errorHandler` from ToolContext
+- **Markdown Formatting**: Read tools import `format*` functions from `markdownFormatter.ts` for `response_format="markdown"`
 
 ### With Types (`src/types/`)
 

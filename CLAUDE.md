@@ -85,7 +85,8 @@ The architecture is modular and service-oriented:
 - **prompts.ts** - MCP prompt definitions and handlers
 - **diagnostics.ts** - System diagnostics and health monitoring
 - **securityMiddleware.ts** - Security validation and wrapper functions
-- **responseFormatter.ts** - JSON response formatting (minification/pretty-print)
+- **responseFormatter.ts** - JSON response formatting (pretty-print)
+- **markdownFormatter.ts** - Human-readable markdown output for all read tools (tables, detail views, pagination footers)
 - **rateLimiter.ts** - Rate limiting for YNAB API compliance
 - **requestLogger.ts** - Request/response logging middleware
 - **cacheKeys.ts** - Centralized cache key generation utilities
@@ -174,6 +175,27 @@ registry.register({
   handler: adapt(handleMyTool), // Handler function
   defaultArgumentResolver: resolveBudgetId(), // Optional auto-resolution
 });
+```
+
+### Response Format (Markdown / JSON)
+
+All read-only tools accept a `response_format` parameter (`"markdown"` | `"json"`, default: `"markdown"`):
+
+- **`"markdown"`** — Human-readable tables and detail views via `markdownFormatter.ts`. Includes pagination footers and cache info.
+- **`"json"`** — Structured JSON (pretty-printed). Also returned as `structuredContent` for clients that support output schemas.
+
+**Supported tools**: `ynab_list_budgets`, `ynab_get_budget`, `ynab_list_accounts`, `ynab_get_account`, `ynab_list_transactions`, `ynab_get_transaction`, `ynab_list_categories`, `ynab_get_category`, `ynab_list_payees`, `ynab_get_payee`, `ynab_get_month`, `ynab_list_months`, `ynab_get_user`
+
+```typescript
+// In tool handler
+const fmt = params.response_format ?? "markdown";
+return {
+  content: [{
+    type: "text",
+    text: fmt === "json" ? JSON.stringify(data, null, 2) : formatBudgetsList(data),
+  }],
+  structuredContent: data,
+};
 ```
 
 ### Enhanced Caching with Delta Support
