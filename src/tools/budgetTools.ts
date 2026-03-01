@@ -179,7 +179,6 @@ Examples:
 Errors:
   - "UNAUTHORIZED" → YNAB token expired or invalid`,
 		inputSchema: ListBudgetsSchema,
-		outputSchema: ListBudgetsOutputSchema,
 		handler: adaptWithDelta(handleListBudgets),
 		metadata: {
 			annotations: {
@@ -205,7 +204,6 @@ Examples:
 Errors:
   - "Budget not found" → invalid or inaccessible budget_id`,
 		inputSchema: GetBudgetSchema,
-		outputSchema: GetBudgetOutputSchema,
 		handler: adapt(handleGetBudget),
 		metadata: {
 			annotations: {

@@ -344,7 +344,6 @@ Errors:
   - "No default budget set" → run ynab_set_default_budget first
   - Large result → use ynab_export_transactions to save to file`,
 		inputSchema: ListTransactionsSchema,
-		outputSchema: ListTransactionsOutputSchema,
 		handler: adaptWithDelta(handleListTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof ListTransactionsSchema>>(),
@@ -374,7 +373,6 @@ Examples:
 Errors:
   - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: ExportTransactionsSchema,
-		outputSchema: ExportTransactionsOutputSchema,
 		handler: adapt(handleExportTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof ExportTransactionsSchema>>(),
@@ -401,7 +399,6 @@ Errors:
   - "No default budget set" → run ynab_set_default_budget first
   - "Transaction not found" → invalid transaction_id`,
 		inputSchema: GetTransactionSchema,
-		outputSchema: GetTransactionOutputSchema,
 		handler: adapt(handleGetTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof GetTransactionSchema>>(),

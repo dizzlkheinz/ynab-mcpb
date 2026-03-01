@@ -426,7 +426,6 @@ Examples:
 Errors:
   - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: ListCategoriesSchema,
-		outputSchema: ListCategoriesOutputSchema,
 		handler: adaptWithDelta(handleListCategories),
 		defaultArgumentResolver: budgetResolver<ListCategoriesParams>(),
 		metadata: {
@@ -452,7 +451,6 @@ Errors:
   - "No default budget set" → run ynab_set_default_budget first
   - "Category not found" → invalid category_id`,
 		inputSchema: GetCategorySchema,
-		outputSchema: GetCategoryOutputSchema,
 		handler: adapt(handleGetCategory),
 		defaultArgumentResolver: budgetResolver<GetCategoryParams>(),
 		metadata: {
@@ -482,7 +480,6 @@ Examples:
 Errors:
   - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: UpdateCategorySchema,
-		outputSchema: UpdateCategoryOutputSchema,
 		handler: adaptWrite(handleUpdateCategory),
 		defaultArgumentResolver: budgetResolver<UpdateCategoryParams>(),
 		metadata: {

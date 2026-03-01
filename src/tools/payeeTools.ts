@@ -216,7 +216,6 @@ Examples:
 Errors:
   - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: ListPayeesSchema,
-		outputSchema: ListPayeesOutputSchema,
 		handler: adaptWithDelta(handleListPayees),
 		defaultArgumentResolver: budgetResolver<z.infer<typeof ListPayeesSchema>>(),
 		metadata: {
@@ -242,7 +241,6 @@ Errors:
   - "No default budget set" → run ynab_set_default_budget first
   - "Payee not found" → invalid payee_id`,
 		inputSchema: GetPayeeSchema,
-		outputSchema: GetPayeeOutputSchema,
 		handler: adapt(handleGetPayee),
 		defaultArgumentResolver: budgetResolver<z.infer<typeof GetPayeeSchema>>(),
 		metadata: {

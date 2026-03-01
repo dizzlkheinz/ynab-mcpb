@@ -364,7 +364,6 @@ Errors:
   - "No default budget set" → run ynab_set_default_budget first
   - "UNAUTHORIZED" → YNAB token expired`,
 		inputSchema: ListAccountsSchema,
-		outputSchema: ListAccountsOutputSchema,
 		handler: adaptWithDelta(handleListAccounts),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof ListAccountsSchema>>(),
@@ -391,7 +390,6 @@ Errors:
   - "No default budget set" → run ynab_set_default_budget first
   - "Account not found" → invalid account_id`,
 		inputSchema: GetAccountSchema,
-		outputSchema: GetAccountOutputSchema,
 		handler: adapt(handleGetAccount),
 		defaultArgumentResolver: budgetResolver<z.infer<typeof GetAccountSchema>>(),
 		metadata: {
@@ -419,7 +417,6 @@ Examples:
   - Create checking account: set name="My Checking", type="checking"
   - Dry run: set dry_run=true to preview without saving`,
 		inputSchema: CreateAccountSchema,
-		outputSchema: CreateAccountOutputSchema,
 		handler: adaptWrite(handleCreateAccount),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateAccountSchema>>(),

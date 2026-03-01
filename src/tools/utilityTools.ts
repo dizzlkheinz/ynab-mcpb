@@ -85,7 +85,6 @@ Returns: user (id)
 Errors:
   - "UNAUTHORIZED" → YNAB token expired or invalid`,
 		inputSchema: GetUserSchema,
-		outputSchema: GetUserOutputSchema,
 		handler: adapt(handleGetUser),
 		metadata: {
 			annotations: {

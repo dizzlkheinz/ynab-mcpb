@@ -249,7 +249,6 @@ Examples:
 Errors:
   - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: GetMonthSchema,
-		outputSchema: GetMonthOutputSchema,
 		handler: adapt(handleGetMonth),
 		defaultArgumentResolver: budgetResolver<z.infer<typeof GetMonthSchema>>(),
 		metadata: {
@@ -279,7 +278,6 @@ Examples:
 Errors:
   - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: ListMonthsSchema,
-		outputSchema: ListMonthsOutputSchema,
 		handler: adaptWithDelta(handleListMonths),
 		defaultArgumentResolver: budgetResolver<z.infer<typeof ListMonthsSchema>>(),
 		metadata: {

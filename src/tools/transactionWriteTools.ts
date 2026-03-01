@@ -2044,7 +2044,6 @@ Returns: created transaction with account_balance.
 Examples:
   - $50 expense: set amount=-50000 (milliunits)`,
 		inputSchema: CreateTransactionSchema,
-		outputSchema: CreateTransactionOutputSchema,
 		handler: adaptWrite(handleCreateTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionSchema>>(),
@@ -2071,7 +2070,6 @@ Examples:
   - Dry run first: set dry_run=true to validate before committing
   - Avoid duplicate import: set import_id on each transaction`,
 		inputSchema: CreateTransactionsSchema,
-		outputSchema: CreateTransactionsOutputSchema,
 		handler: adaptWrite(handleCreateTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionsSchema>>(),
@@ -2099,7 +2097,6 @@ Args:
 
 Returns: transaction with subtransactions and receipt_summary.`,
 		inputSchema: CreateReceiptSplitTransactionSchema,
-		outputSchema: CreateReceiptSplitTransactionOutputSchema,
 		handler: adaptWrite(handleCreateReceiptSplitTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
@@ -2129,7 +2126,6 @@ Args:
 
 Returns: updated transaction with updated_balance.`,
 		inputSchema: UpdateTransactionSchema,
-		outputSchema: UpdateTransactionOutputSchema,
 		handler: adaptWrite(handleUpdateTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionSchema>>(),
@@ -2155,7 +2151,6 @@ Returns: summary (updated, failed), results[], transactions[].
 Examples:
   - Dry run: set dry_run=true to preview before/after for first 10 items`,
 		inputSchema: UpdateTransactionsSchema,
-		outputSchema: UpdateTransactionsOutputSchema,
 		handler: adaptWrite(handleUpdateTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionsSchema>>(),
@@ -2181,7 +2176,6 @@ Returns: deleted transaction id and updated account balance.
 Errors:
   - "Transaction not found" → invalid transaction_id`,
 		inputSchema: DeleteTransactionSchema,
-		outputSchema: DeleteTransactionOutputSchema,
 		handler: adaptWrite(handleDeleteTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof DeleteTransactionSchema>>(),
