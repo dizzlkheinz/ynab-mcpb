@@ -765,7 +765,7 @@ describe("parser", () => {
 			});
 
 			expect(() => readCSVFile("/nonexistent/file.csv")).toThrow(
-				"Unable to read CSV file: File not found",
+				"Unable to read CSV file. Tried path(s): /nonexistent/file.csv. File not found",
 			);
 		});
 
@@ -775,7 +775,7 @@ describe("parser", () => {
 			});
 
 			expect(() => readCSVFile("/path/to/file.csv")).toThrow(
-				"Unable to read CSV file: Unknown error",
+				"Unable to read CSV file. Tried path(s): /path/to/file.csv. Unknown error",
 			);
 		});
 	});

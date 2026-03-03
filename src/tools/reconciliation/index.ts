@@ -13,6 +13,7 @@ import type { ProgressCallback } from "../../server/toolRegistry.js";
 import { withToolErrorHandling } from "../../types/index.js";
 import type { ToolFactory } from "../../types/toolRegistration.js";
 import { createAdapters, createBudgetResolver } from "../adapters.js";
+import { resolveCsvPathCandidates } from "../csvFilePath.js";
 import {
 	CompareTransactionsSchema,
 	handleCompareTransactions,
@@ -38,6 +39,11 @@ import {
 import type { MatchingConfig } from "./matcher.js";
 import { buildReconciliationPayload } from "./outputBuilder.js";
 import { detectSignInversion } from "./signDetector.js";
+import {
+	clampCSVToStatementWindow,
+	formatStatementWindow,
+	normalizeStatementDate,
+} from "./statementWindow.js";
 import type { BankTransaction } from "./types.js";
 import { normalizeYNABTransactions } from "./ynabAdapter.js";
 
@@ -272,15 +278,34 @@ export async function handleReconcileAccount(
 			// Load CSV content from either inline data or filesystem path
 			let csvContent = params.csv_data ?? "";
 			if (!csvContent && params.csv_file_path) {
-				try {
-					csvContent = await fs.readFile(params.csv_file_path, "utf8");
-				} catch (error) {
+				const pathCandidates = resolveCsvPathCandidates(params.csv_file_path);
+				let lastReadError: unknown;
+
+				for (const candidatePath of pathCandidates) {
+					try {
+						csvContent = await fs.readFile(candidatePath, "utf8");
+						if (candidatePath !== params.csv_file_path) {
+							narrativeNotes.push(
+								`Read CSV using normalized path "${candidatePath}" from "${params.csv_file_path}".`,
+							);
+						}
+						break;
+					} catch (error) {
+						lastReadError = error;
+					}
+				}
+
+				if (!csvContent) {
+					const attemptedPaths =
+						pathCandidates.length > 0
+							? pathCandidates.join(", ")
+							: params.csv_file_path;
 					const message =
-						error instanceof Error && error.message
-							? error.message
+						lastReadError instanceof Error && lastReadError.message
+							? lastReadError.message
 							: "Unknown error while reading CSV file";
 					throw new Error(
-						`Failed to read CSV file at path ${params.csv_file_path}: ${message}`,
+						`Failed to read CSV file. Tried path(s): ${attemptedPaths}. ${message}. If this path is from another runtime (for example an uploaded sandbox file), pass the CSV via csv_data instead.`,
 					);
 				}
 			}
@@ -304,6 +329,39 @@ export async function handleReconcileAccount(
 						? error.message
 						: "Unknown error while parsing CSV";
 				throw new Error(`Failed to parse CSV data: ${message}`);
+			}
+
+			const statementWindowStart = normalizeStatementDate(
+				params.statement_start_date,
+			);
+			const statementWindowEnd = normalizeStatementDate(
+				params.statement_end_date ?? params.statement_date,
+			);
+			const statementWindowBounds = {
+				...(statementWindowStart !== undefined && {
+					startDate: statementWindowStart,
+				}),
+				...(statementWindowEnd !== undefined && {
+					endDate: statementWindowEnd,
+				}),
+			};
+			const clampedCsv = clampCSVToStatementWindow(rawCsvResult, {
+				...statementWindowBounds,
+			});
+			rawCsvResult = clampedCsv.parseResult;
+			if (clampedCsv.excludedCount > 0) {
+				narrativeNotes.push(
+					`Filtered ${clampedCsv.excludedCount} CSV transaction(s) outside statement window ${formatStatementWindow(statementWindowBounds)}.`,
+				);
+			}
+
+			if (
+				clampedCsv.windowApplied &&
+				rawCsvResult.transactions.length === 0
+			) {
+				throw new Error(
+					`No CSV transactions remain after applying statement window ${formatStatementWindow(clampedCsv.windowApplied)}.`,
+				);
 			}
 
 			// Fetch YNAB transactions for the account using inferred date window
@@ -513,7 +571,8 @@ Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
   - account_id (string, required): Account UUID to compare against.
   - csv_file_path or csv_data (string, required): Bank export file path or inline CSV text.
-  - statement_balance (number, required): Ending balance from the bank statement (dollars).
+  - statement_start_date (string, optional): Filter comparison window start date (YYYY-MM-DD).
+  - statement_date (string, optional): Filter comparison window end date (YYYY-MM-DD).
 
 Returns: comparison report with matched, unmatched_bank, unmatched_ynab transactions.`,
 		inputSchema: CompareTransactionsSchema,

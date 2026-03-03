@@ -3,6 +3,7 @@ import { parse } from "csv-parse/sync";
 import { parse as parseDateFns } from "date-fns";
 import type { Milli } from "../../utils/money.js";
 import { toMilli } from "../../utils/money.js";
+import { resolveCsvPathCandidates } from "../csvFilePath.js";
 import type { BankTransaction, CSVFormat } from "./types.js";
 
 /**
@@ -542,13 +543,24 @@ export function parseBankCSV(
  * Read CSV file safely with error handling
  */
 export function readCSVFile(filePath: string): string {
-	try {
-		return readFileSync(filePath, "utf-8");
-	} catch (error) {
-		throw new Error(
-			`Unable to read CSV file: ${error instanceof Error ? error.message : "Unknown error"}`,
-		);
+	const pathCandidates = resolveCsvPathCandidates(filePath);
+	let lastReadError: unknown;
+
+	for (const candidatePath of pathCandidates) {
+		try {
+			return readFileSync(candidatePath, "utf-8");
+		} catch (error) {
+			lastReadError = error;
+		}
 	}
+
+	const attemptedPaths =
+		pathCandidates.length > 0 ? pathCandidates.join(", ") : filePath;
+	throw new Error(
+		`Unable to read CSV file. Tried path(s): ${attemptedPaths}. ${
+			lastReadError instanceof Error ? lastReadError.message : "Unknown error"
+		}`,
+	);
 }
 
 /**

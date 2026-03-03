@@ -28,6 +28,7 @@ describeIntegration("Account Tools Integration", () => {
 		async () => {
 			const result = await handleListAccounts(ynabAPI, {
 				budget_id: testBudgetId,
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
@@ -59,6 +60,7 @@ describeIntegration("Account Tools Integration", () => {
 			// First get the list of accounts to get a valid account ID
 			const listResult = await handleListAccounts(ynabAPI, {
 				budget_id: testBudgetId,
+				response_format: "json",
 			});
 			const parsedListContent = JSON.parse(listResult.content[0].text);
 
@@ -74,6 +76,7 @@ describeIntegration("Account Tools Integration", () => {
 			const result = await handleGetAccount(ynabAPI, {
 				budget_id: testBudgetId,
 				account_id: testAccountId,
+				response_format: "json",
 			});
 
 			expect(result.content).toHaveLength(1);
