@@ -67,7 +67,10 @@ describeIntegration("Delta-backed payee tool handler", () => {
 		"serves cached payee results on the second invocation",
 		{ meta: { tier: "domain", domain: "delta" } },
 		async () => {
-			const params = { budget_id: testBudgetId };
+			const params = {
+				budget_id: testBudgetId,
+				response_format: "json" as const,
+			};
 			const firstCall = await handleListPayees(ynabAPI, deltaFetcher, params);
 			const firstPayload = parseResponse(firstCall);
 			expect(firstPayload.cached).toBe(false);

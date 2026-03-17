@@ -67,7 +67,10 @@ describeIntegration("Delta-backed month tool handler", () => {
 		"serves cached month summaries on the second invocation",
 		{ meta: { tier: "domain", domain: "delta" } },
 		async () => {
-			const params = { budget_id: testBudgetId };
+			const params = {
+				budget_id: testBudgetId,
+				response_format: "json" as const,
+			};
 			const firstCall = await handleListMonths(ynabAPI, deltaFetcher, params);
 			const firstPayload = parseResponse(firstCall);
 			expect(firstPayload.cached).toBe(false);

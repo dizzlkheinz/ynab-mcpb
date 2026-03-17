@@ -67,7 +67,10 @@ describeIntegration("Delta-backed category tool handler", () => {
 		"serves cached category results on the second invocation",
 		{ meta: { tier: "domain", domain: "delta" } },
 		async () => {
-			const params = { budget_id: testBudgetId };
+			const params = {
+				budget_id: testBudgetId,
+				response_format: "json" as const,
+			};
 			const firstCall = await handleListCategories(
 				ynabAPI,
 				deltaFetcher,
