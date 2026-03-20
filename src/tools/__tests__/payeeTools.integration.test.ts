@@ -29,6 +29,7 @@ describeIntegration("Payee Tools Integration", () => {
 			async () => {
 				const result = await handleListPayees(ynabAPI, {
 					budget_id: testBudgetId,
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -69,6 +70,7 @@ describeIntegration("Payee Tools Integration", () => {
 			async () => {
 				const result = await handleListPayees(ynabAPI, {
 					budget_id: "invalid-budget-id",
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -94,6 +96,7 @@ describeIntegration("Payee Tools Integration", () => {
 				const result = await handleGetPayee(ynabAPI, {
 					budget_id: testBudgetId,
 					payee_id: testPayeeId,
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -126,6 +129,7 @@ describeIntegration("Payee Tools Integration", () => {
 				const result = await handleGetPayee(ynabAPI, {
 					budget_id: testBudgetId,
 					payee_id: "invalid-payee-id",
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -148,6 +152,7 @@ describeIntegration("Payee Tools Integration", () => {
 				const result = await handleGetPayee(ynabAPI, {
 					budget_id: "invalid-budget-id",
 					payee_id: testPayeeId,
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);

@@ -29,7 +29,9 @@ describeIntegration("Budget Tools Integration", () => {
 			{ meta: { tier: "core", domain: "budgets" } },
 			async (ctx) => {
 				await skipOnRateLimit(async () => {
-					const result = await handleListBudgets(ynabAPI);
+					const result = await handleListBudgets(ynabAPI, {
+						response_format: "json",
+					});
 
 					expect(result.content).toHaveLength(1);
 					expect(result.content[0].type).toBe("text");
@@ -73,7 +75,9 @@ describeIntegration("Budget Tools Integration", () => {
 					// Get a budget ID if not set by previous test
 					let budgetId = testBudgetId;
 					if (!budgetId) {
-						const listResult = await handleListBudgets(ynabAPI);
+						const listResult = await handleListBudgets(ynabAPI, {
+							response_format: "json",
+						});
 						const listContent = JSON.parse(listResult.content[0].text);
 						if (listContent.error) {
 							throw new Error(JSON.stringify(listContent.error));
@@ -87,6 +91,7 @@ describeIntegration("Budget Tools Integration", () => {
 					// Use the budget ID
 					const result = await handleGetBudget(ynabAPI, {
 						budget_id: budgetId,
+						response_format: "json",
 					});
 
 					expect(result.content).toHaveLength(1);
@@ -123,6 +128,7 @@ describeIntegration("Budget Tools Integration", () => {
 				await skipOnRateLimit(async () => {
 					const result = await handleGetBudget(ynabAPI, {
 						budget_id: "invalid-budget-id",
+						response_format: "json",
 					});
 
 					expect(result.content).toHaveLength(1);

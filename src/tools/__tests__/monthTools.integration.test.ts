@@ -41,6 +41,7 @@ describeIntegration("Month Tools Integration", () => {
 			async () => {
 				const result = await handleListMonths(ynabAPI, {
 					budget_id: testBudgetId,
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -75,6 +76,7 @@ describeIntegration("Month Tools Integration", () => {
 			async () => {
 				const result = await handleListMonths(ynabAPI, {
 					budget_id: "invalid-budget-id",
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -99,6 +101,7 @@ describeIntegration("Month Tools Integration", () => {
 				const result = await handleGetMonth(ynabAPI, {
 					budget_id: testBudgetId,
 					month: testMonth,
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -146,6 +149,7 @@ describeIntegration("Month Tools Integration", () => {
 				const result = await handleGetMonth(ynabAPI, {
 					budget_id: "invalid-budget-id",
 					month: testMonth,
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -168,6 +172,7 @@ describeIntegration("Month Tools Integration", () => {
 				const result = await handleGetMonth(ynabAPI, {
 					budget_id: testBudgetId,
 					month: "2024-13-01", // Invalid month
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);

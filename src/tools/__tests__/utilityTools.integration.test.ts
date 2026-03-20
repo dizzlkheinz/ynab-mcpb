@@ -25,7 +25,9 @@ describeIntegration("Utility Tools Integration Tests", () => {
 			{ meta: { tier: "core", domain: "utility" } },
 			async (ctx) => {
 				await skipOnRateLimit(async () => {
-					const result = await handleGetUser(ynabAPI);
+					const result = await handleGetUser(ynabAPI, {
+						response_format: "json",
+					});
 					const response = JSON.parse(result.content[0].text);
 
 					// If response contains an error, throw it so skipOnRateLimit can catch it

@@ -36,6 +36,7 @@ describeIntegration("Category Tools Integration", () => {
 			async () => {
 				const result = await handleListCategories(ynabAPI, {
 					budget_id: testBudgetId,
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -96,6 +97,7 @@ describeIntegration("Category Tools Integration", () => {
 			async () => {
 				const result = await handleListCategories(ynabAPI, {
 					budget_id: "invalid-budget-id",
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -125,6 +127,7 @@ describeIntegration("Category Tools Integration", () => {
 				const result = await handleGetCategory(ynabAPI, {
 					budget_id: testBudgetId,
 					category_id: testCategoryId,
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
@@ -156,6 +159,7 @@ describeIntegration("Category Tools Integration", () => {
 				const result = await handleGetCategory(ynabAPI, {
 					budget_id: testBudgetId,
 					category_id: "invalid-category-id",
+					response_format: "json",
 				});
 
 				expect(result.content).toHaveLength(1);
