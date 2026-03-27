@@ -453,7 +453,15 @@ describeIntegration("Transaction Tools Integration", () => {
 			async (ctx) => {
 				await withRateLimitSkip(ctx, async () => {
 					const memo = `Cache Invalidation ${randomUUID()}`;
-					await fetchBudgetTransactions(); // warm cache to ensure invalidation path executes
+					// Warm cache for today's transactions to ensure invalidation path executes.
+					// Use since_date to avoid pagination issues on budgets with many historical transactions.
+					throwIfError(
+						await handleListTransactions(ynabAPI, {
+							budget_id: testBudgetId,
+							since_date: today(),
+							response_format: "json" as const,
+						}),
+					);
 
 					await executeBulkCreate({
 						budget_id: testBudgetId,
@@ -471,7 +479,15 @@ describeIntegration("Transaction Tools Integration", () => {
 					// Use 30s timeout for CI stability - YNAB API can have propagation delays
 					await waitFor(
 						async () => {
-							const afterList = await fetchBudgetTransactions();
+							// Fetch only today's transactions so the new transaction is within
+							// the default limit=50, regardless of total budget transaction count.
+							const todayResult = await handleListTransactions(ynabAPI, {
+								budget_id: testBudgetId,
+								since_date: today(),
+								response_format: "json" as const,
+							});
+							throwIfError(todayResult);
+							const afterList = parseToolResult(todayResult);
 							transactions =
 								afterList.transactions ||
 								afterList.preview_transactions ||
