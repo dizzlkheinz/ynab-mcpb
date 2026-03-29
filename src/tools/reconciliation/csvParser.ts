@@ -692,7 +692,7 @@ function parseAmount(str: string): {
 	valueMilliunits: number;
 	reason?: string;
 } {
-	if (!str || !str.trim()) {
+	if (!str?.trim()) {
 		return { valid: false, valueMilliunits: 0, reason: "Missing amount value" };
 	}
 

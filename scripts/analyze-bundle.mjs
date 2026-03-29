@@ -28,7 +28,7 @@ console.log(
 	`\n📦 Total input size: ${(totalBytes / 1024 / 1024).toFixed(2)} MB`,
 );
 const outputKey = "dist/bundle/index.cjs";
-if (!meta.outputs || !meta.outputs[outputKey]) {
+if (!meta.outputs?.[outputKey]) {
 	console.error(
 		`❌ Error: meta.outputs['${outputKey}'] is missing in meta.json`,
 	);

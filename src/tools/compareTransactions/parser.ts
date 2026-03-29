@@ -239,7 +239,7 @@ export function autoDetectCSVFormat(csvContent: string): CSVFormat {
 
 	// Safely handle the first line - check if it exists and is not empty after trimming
 	const firstLineRaw = linesRaw[0];
-	if (!firstLineRaw || !firstLineRaw.trim()) {
+	if (!firstLineRaw?.trim()) {
 		throw new Error("CSV file contains empty first line");
 	}
 

@@ -651,7 +651,7 @@ describeIntegration("Transaction Tools Integration", () => {
 		const createdTransactionIds: string[] = [];
 
 		const parseToolResult = (result: any) => {
-			if (!result.content || !result.content[0]?.text) {
+			if (!result.content?.[0]?.text) {
 				throw new Error("Invalid tool result structure");
 			}
 			return JSON.parse(result.content[0].text);
