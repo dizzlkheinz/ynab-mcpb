@@ -75,7 +75,7 @@
 		"dotenv": "^17.3.1",
 		"fuzzball": "^2.2.3",
 		"papaparse": "^5.5.3",
-		"ynab": "^2.10.0",
+		"ynab": "^4.0.0",
 		"zod": "^4.3.6",
 		"zod-validation-error": "^5.0.0"
 	},

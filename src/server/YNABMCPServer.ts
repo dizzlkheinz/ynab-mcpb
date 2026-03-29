@@ -463,7 +463,7 @@ Errors:
 			outputSchema: SetDefaultBudgetOutputSchema,
 			handler: async ({ input }) => {
 				const { budget_id } = input;
-				await this.ynabAPI.budgets.getBudgetById(budget_id);
+				await this.ynabAPI.plans.getPlanById(budget_id);
 				this.setDefaultBudget(budget_id);
 
 				// Cache warming for frequently accessed data (fire-and-forget)

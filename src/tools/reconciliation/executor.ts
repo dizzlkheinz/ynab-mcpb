@@ -1,5 +1,5 @@
 import type * as ynab from "ynab";
-import type { SaveTransaction } from "ynab/dist/models/SaveTransaction.js";
+import type { NewTransaction } from "ynab";
 import type { ProgressCallback } from "../../server/toolRegistry.js";
 import { addMilli, toMoneyValue } from "../../utils/money.js";
 import {
@@ -115,7 +115,7 @@ interface StatementWindow {
 
 interface PreparedBulkCreateEntry {
 	bankTransaction: BankTransaction;
-	saveTransaction: SaveTransaction;
+	saveTransaction: NewTransaction;
 	amountMilli: number;
 	correlationKey: string;
 }
@@ -293,7 +293,7 @@ export async function executeReconciliation(
 			bankTxn: BankTransaction,
 		): PreparedBulkCreateEntry => {
 			const amountMilli = bankTxn.amount;
-			const saveTransaction: SaveTransaction = {
+			const saveTransaction: NewTransaction = {
 				account_id: accountId,
 				amount: amountMilli,
 				date: bankTxn.date,

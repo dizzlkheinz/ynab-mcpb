@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
+import type { ExistingTransaction, NewTransaction } from "ynab";
 import type { SaveSubTransaction } from "ynab/dist/models/SaveSubTransaction.js";
-import type { SaveTransaction } from "ynab/dist/models/SaveTransaction.js";
 import type { SaveTransactionWithIdOrImportId } from "ynab/dist/models/SaveTransactionWithIdOrImportId.js";
 import type { z } from "zod/v4";
 import { CacheManager, cacheManager } from "../server/cacheManager.js";
@@ -107,7 +107,7 @@ export async function handleCreateTransaction(
 			};
 		}
 		// Prepare transaction data
-		const transactionData: SaveTransaction = {
+		const transactionData: NewTransaction = {
 			account_id: params.account_id,
 			amount: params.amount, // Already validated as integer milliunits
 			date: params.date,
@@ -900,7 +900,7 @@ export async function handleUpdateTransaction(
 		);
 
 		// Prepare transaction update data - only include fields that are provided
-		const transactionData: SaveTransaction = {};
+		const transactionData: ExistingTransaction = {};
 
 		// Only include fields that are provided in the update
 		if (params.account_id !== undefined) {
@@ -1324,9 +1324,9 @@ export async function handleCreateTransactions(
 				};
 			}
 
-			const saveTransactions: SaveTransaction[] = transactions.map(
+			const saveTransactions: NewTransaction[] = transactions.map(
 				(transaction) => {
-					const payload: SaveTransaction = {
+					const payload: NewTransaction = {
 						account_id: transaction.account_id,
 						amount: transaction.amount,
 						date: transaction.date,

@@ -241,8 +241,8 @@ export class DeltaFetcher {
 			async (lastKnowledge?: number) => {
 				const response =
 					lastKnowledge !== undefined
-						? await this.ynabAPI.months.getBudgetMonths(budgetId, lastKnowledge)
-						: await this.ynabAPI.months.getBudgetMonths(budgetId);
+						? await this.ynabAPI.months.getPlanMonths(budgetId, lastKnowledge)
+						: await this.ynabAPI.months.getPlanMonths(budgetId);
 				return {
 					data: response.data.months,
 					serverKnowledge: response.data.server_knowledge ?? 0,
@@ -255,20 +255,20 @@ export class DeltaFetcher {
 
 	async fetchBudgets(
 		options?: DeltaFetchOptions,
-	): Promise<DeltaFetchResult<ynab.BudgetSummary>> {
+	): Promise<DeltaFetchResult<ynab.PlanSummary>> {
 		const cacheKey = CacheManager.generateKey("budgets", "list");
 		const result = await this.deltaCache.fetchWithDelta<
-			ynab.BudgetSummary & { deleted?: boolean }
+			ynab.PlanSummary & { deleted?: boolean }
 		>(
 			cacheKey,
 			"global",
 			async () => {
-				const response = await this.ynabAPI.budgets.getBudgets();
+				const response = await this.ynabAPI.plans.getPlans();
 				const serverKnowledge =
 					(response.data as { server_knowledge?: number }).server_knowledge ??
 					0;
 				return {
-					data: response.data.budgets,
+					data: response.data.plans,
 					serverKnowledge,
 				};
 			},
@@ -281,7 +281,7 @@ export class DeltaFetcher {
 		);
 		return {
 			...result,
-			data: result.data as ynab.BudgetSummary[],
+			data: result.data as ynab.PlanSummary[],
 		};
 	}
 

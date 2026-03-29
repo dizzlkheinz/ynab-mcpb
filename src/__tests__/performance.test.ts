@@ -58,9 +58,9 @@ Full response: ${JSON.stringify(parsed, null, 2)}`,
 // Mock the YNAB SDK for performance tests
 vi.mock("ynab", () => {
 	const mockAPI = {
-		budgets: {
-			getBudgets: vi.fn(),
-			getBudgetById: vi.fn(),
+		plans: {
+			getPlans: vi.fn(),
+			getPlanById: vi.fn(),
 		},
 		accounts: {
 			getAccounts: vi.fn(),
@@ -425,9 +425,9 @@ describe("YNAB MCP Server - Performance Tests", () => {
 	describe("Response Time Performance", () => {
 		it("should respond to budget listing within acceptable time", async () => {
 			// Mock quick response
-			mockYnabAPI.budgets.getBudgets.mockResolvedValue({
+			mockYnabAPI.plans.getPlans.mockResolvedValue({
 				data: {
-					budgets: Array.from({ length: 5 }, (_, i) => ({
+					plans: Array.from({ length: 5 }, (_, i) => ({
 						id: `budget-${i}`,
 						name: `Budget ${i}`,
 						last_modified_on: "2024-01-01T00:00:00Z",
@@ -498,8 +498,8 @@ describe("YNAB MCP Server - Performance Tests", () => {
 
 		it("should handle concurrent requests efficiently", async () => {
 			// Mock responses for concurrent requests
-			mockYnabAPI.budgets.getBudgets.mockResolvedValue({
-				data: { budgets: [{ id: "budget-1", name: "Test Budget" }] },
+			mockYnabAPI.plans.getPlans.mockResolvedValue({
+				data: { plans: [{ id: "budget-1", name: "Test Budget" }] },
 			});
 
 			mockYnabAPI.accounts.getAccounts.mockResolvedValue({
@@ -610,7 +610,7 @@ describe("YNAB MCP Server - Performance Tests", () => {
 		it("should handle errors quickly without blocking", async () => {
 			// Mock API errors
 			const apiError = new Error("API Error");
-			mockYnabAPI.budgets.getBudgets.mockRejectedValue(apiError);
+			mockYnabAPI.plans.getPlans.mockRejectedValue(apiError);
 			mockYnabAPI.accounts.getAccounts.mockRejectedValue(apiError);
 
 			const startTime = Date.now();
@@ -639,7 +639,7 @@ describe("YNAB MCP Server - Performance Tests", () => {
 			let callCount = 0;
 
 			// Mock rate limiting on first few calls, then success
-			mockYnabAPI.budgets.getBudgets.mockImplementation(() => {
+			mockYnabAPI.plans.getPlans.mockImplementation(() => {
 				callCount++;
 				if (callCount <= 2) {
 					const rateLimitError = new Error("Rate Limited");
@@ -647,7 +647,7 @@ describe("YNAB MCP Server - Performance Tests", () => {
 					return Promise.reject(rateLimitError);
 				}
 				return Promise.resolve({
-					data: { budgets: [{ id: "budget-1", name: "Test Budget" }] },
+					data: { plans: [{ id: "budget-1", name: "Test Budget" }] },
 				});
 			});
 
@@ -732,8 +732,8 @@ describe("YNAB MCP Server - Performance Tests", () => {
 
 		it("should maintain performance under mixed workload", async () => {
 			// Mock various endpoints
-			mockYnabAPI.budgets.getBudgets.mockResolvedValue({
-				data: { budgets: [{ id: "budget-1", name: "Test Budget" }] },
+			mockYnabAPI.plans.getPlans.mockResolvedValue({
+				data: { plans: [{ id: "budget-1", name: "Test Budget" }] },
 			});
 
 			mockYnabAPI.accounts.getAccounts.mockResolvedValue({

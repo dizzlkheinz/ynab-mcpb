@@ -28,7 +28,7 @@ describe("DeltaFetcher", () => {
 			scheduledTransactions: { getScheduledTransactions: vi.fn() },
 			payees: { getPayees: vi.fn() },
 			months: { getBudgetMonths: vi.fn() },
-			budgets: { getBudgets: vi.fn() },
+			plans: { getPlans: vi.fn() },
 		} as unknown as ynab.API;
 
 		(mockYnabAPI.accounts.getAccounts as unknown as vi.Mock).mockResolvedValue({
@@ -63,7 +63,7 @@ describe("DeltaFetcher", () => {
 		).mockResolvedValue({
 			data: { months: [], server_knowledge: 0 },
 		});
-		(mockYnabAPI.budgets.getBudgets as unknown as vi.Mock).mockResolvedValue({
+		(mockYnabAPI.plans.getPlans as unknown as vi.Mock).mockResolvedValue({
 			data: { budgets: [], server_knowledge: 0 },
 		});
 	});
@@ -265,7 +265,7 @@ describe("DeltaFetcher", () => {
 		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mock
 			.calls[0][2];
 		await fetcherFn();
-		expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledWith();
+		expect(mockYnabAPI.plans.getPlans).toHaveBeenCalledWith();
 	});
 
 	it("fetchAccountsFull bypasses cache and filters deleted accounts", async () => {

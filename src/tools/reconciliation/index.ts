@@ -238,11 +238,9 @@ export async function handleReconcileAccount(
 				? -Math.abs(params.statement_balance)
 				: params.statement_balance;
 
-			const budgetResponse = await ynabAPI.budgets.getBudgetById(
-				params.budget_id,
-			);
+			const budgetResponse = await ynabAPI.plans.getPlanById(params.budget_id);
 			const currencyCode =
-				budgetResponse.data.budget?.currency_format?.iso_code ?? "USD";
+				budgetResponse.data.plan?.currency_format?.iso_code ?? "USD";
 
 			const narrativeNotes: string[] = [];
 

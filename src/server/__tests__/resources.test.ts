@@ -11,8 +11,8 @@ import { type ResourceDependencies, ResourceManager } from "../resources.js";
 
 // Mock YNAB API
 const mockYnabAPI = {
-	budgets: {
-		getBudgets: vi.fn(),
+	plans: {
+		getPlans: vi.fn(),
 	},
 	user: {
 		getUser: vi.fn(),
@@ -124,13 +124,13 @@ describe("resources module", () => {
 						},
 					];
 
-					mockYnabAPI.budgets.getBudgets = vi.fn().mockResolvedValue({
-						data: { budgets: mockBudgets },
+					mockYnabAPI.plans.getPlans = vi.fn().mockResolvedValue({
+						data: { plans: mockBudgets },
 					});
 
 					const result = await resourceManager.readResource("ynab://budgets");
 
-					expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledOnce();
+					expect(mockYnabAPI.plans.getPlans).toHaveBeenCalledOnce();
 					expect(mockResponseFormatter.format).toHaveBeenCalledWith({
 						budgets: mockBudgets.map((budget) => ({
 							id: budget.id,
@@ -164,7 +164,7 @@ describe("resources module", () => {
 
 				it("should handle YNAB API errors", async () => {
 					const error = new Error("API Error");
-					mockYnabAPI.budgets.getBudgets = vi.fn().mockRejectedValue(error);
+					mockYnabAPI.plans.getPlans = vi.fn().mockRejectedValue(error);
 
 					await expect(
 						resourceManager.readResource("ynab://budgets"),
@@ -236,9 +236,9 @@ describe("resources module", () => {
 		describe("dependency injection", () => {
 			it("should use injected YNAB API", async () => {
 				const customYnabAPI = {
-					budgets: {
-						getBudgets: vi.fn().mockResolvedValue({
-							data: { budgets: [] },
+					plans: {
+						getPlans: vi.fn().mockResolvedValue({
+							data: { plans: [] },
 						}),
 					},
 					user: {
@@ -255,8 +255,8 @@ describe("resources module", () => {
 				const customResourceManager = new ResourceManager(customDependencies);
 				await customResourceManager.readResource("ynab://budgets");
 
-				expect(customYnabAPI.budgets.getBudgets).toHaveBeenCalledOnce();
-				expect(mockYnabAPI.budgets.getBudgets).not.toHaveBeenCalled();
+				expect(customYnabAPI.plans.getPlans).toHaveBeenCalledOnce();
+				expect(mockYnabAPI.plans.getPlans).not.toHaveBeenCalled();
 			});
 
 			it("should use injected response formatter", async () => {
@@ -270,8 +270,8 @@ describe("resources module", () => {
 					cacheManager: mockCacheManager,
 				};
 
-				mockYnabAPI.budgets.getBudgets = vi.fn().mockResolvedValue({
-					data: { budgets: [] },
+				mockYnabAPI.plans.getPlans = vi.fn().mockResolvedValue({
+					data: { plans: [] },
 				});
 
 				const customResourceManager = new ResourceManager(customDependencies);
@@ -286,8 +286,8 @@ describe("resources module", () => {
 
 		describe("edge cases", () => {
 			it("should handle empty budgets list", async () => {
-				mockYnabAPI.budgets.getBudgets = vi.fn().mockResolvedValue({
-					data: { budgets: [] },
+				mockYnabAPI.plans.getPlans = vi.fn().mockResolvedValue({
+					data: { plans: [] },
 				});
 
 				const result = await resourceManager.readResource("ynab://budgets");

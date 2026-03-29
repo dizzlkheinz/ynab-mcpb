@@ -5,9 +5,9 @@ import { ResourceManager } from "../resources.js";
 
 // Mock YNAB API
 const mockYnabAPI = {
-	budgets: {
-		getBudgets: vi.fn(),
-		getBudgetById: vi.fn(),
+	plans: {
+		getPlans: vi.fn(),
+		getPlanById: vi.fn(),
 	},
 	accounts: {
 		getAccounts: vi.fn(),
@@ -60,14 +60,14 @@ describe("ResourceManager Templates", () => {
 		const budgetId = "test-budget-id";
 		const mockBudget = { id: budgetId, name: "Test Budget" };
 
-		(mockYnabAPI.budgets.getBudgetById as any).mockResolvedValue({
-			data: { budget: mockBudget },
+		(mockYnabAPI.plans.getPlanById as any).mockResolvedValue({
+			data: { plan: mockBudget },
 		});
 
 		const uri = `ynab://budgets/${budgetId}`;
 		const result = await resourceManager.readResource(uri);
 
-		expect(mockYnabAPI.budgets.getBudgetById).toHaveBeenCalledWith(budgetId);
+		expect(mockYnabAPI.plans.getPlanById).toHaveBeenCalledWith(budgetId);
 		expect(result.contents).toHaveLength(1);
 		expect(result.contents[0].uri).toBe(uri);
 		expect(JSON.parse(result.contents[0].text)).toEqual(mockBudget);
@@ -119,16 +119,16 @@ describe("ResourceManager Templates", () => {
 	it("should prefer static resources over templates when both match (though unlikely with current design)", async () => {
 		// Assuming 'ynab://budgets' is a static resource
 		const mockBudgetsList = [{ id: "b1", name: "B1" }];
-		(mockYnabAPI.budgets.getBudgets as any).mockResolvedValue({
-			data: { budgets: mockBudgetsList },
+		(mockYnabAPI.plans.getPlans as any).mockResolvedValue({
+			data: { plans: mockBudgetsList },
 		});
 
 		const uri = "ynab://budgets";
 		const result = await resourceManager.readResource(uri);
 
 		// Should call getBudgets (static), not getBudgetById (template)
-		expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalled();
-		expect(mockYnabAPI.budgets.getBudgetById).not.toHaveBeenCalled();
+		expect(mockYnabAPI.plans.getPlans).toHaveBeenCalled();
+		expect(mockYnabAPI.plans.getPlanById).not.toHaveBeenCalled();
 		expect(JSON.parse(result.contents[0].text)).toEqual({
 			budgets: expect.any(Array),
 		});
@@ -137,7 +137,7 @@ describe("ResourceManager Templates", () => {
 	// Error handling tests
 	describe("Error Handling", () => {
 		it("should handle API errors gracefully for template resources", async () => {
-			(mockYnabAPI.budgets.getBudgetById as any).mockRejectedValue(
+			(mockYnabAPI.plans.getPlanById as any).mockRejectedValue(
 				new Error("Budget not found"),
 			);
 

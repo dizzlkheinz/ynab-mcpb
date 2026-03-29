@@ -118,8 +118,8 @@ export async function handleGetBudget(
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
-			const response = await ynabAPI.budgets.getBudgetById(params.budget_id);
-			const budget = response.data.budget;
+			const response = await ynabAPI.plans.getPlanById(params.budget_id);
+			const budget = response.data.plan;
 
 			const dataObject = {
 				budget: {

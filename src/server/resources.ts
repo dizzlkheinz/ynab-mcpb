@@ -96,8 +96,8 @@ const defaultResourceHandlers: Record<string, ResourceHandler> = {
 			ttl: CACHE_TTLS.BUDGETS,
 			loader: async () => {
 				try {
-					const response = await ynabAPI.budgets.getBudgets();
-					const budgets = response.data.budgets.map((budget) => ({
+					const response = await ynabAPI.plans.getPlans();
+					const budgets = response.data.plans.map((budget) => ({
 						id: budget.id,
 						name: budget.name,
 						last_modified_on: budget.last_modified_on,
@@ -203,12 +203,12 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				ttl: CACHE_TTLS.BUDGETS,
 				loader: async () => {
 					try {
-						const response = await ynabAPI.budgets.getBudgetById(budget_id);
+						const response = await ynabAPI.plans.getPlanById(budget_id);
 						return [
 							{
 								uri,
 								mimeType: "application/json",
-								text: responseFormatter.format(response.data.budget),
+								text: responseFormatter.format(response.data.plan),
 							},
 						];
 					} catch (error) {
@@ -358,7 +358,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
 					try {
-						const response = await ynabAPI.months.getBudgetMonths(budget_id);
+						const response = await ynabAPI.months.getPlanMonths(budget_id);
 						return [
 							{
 								uri,
@@ -413,7 +413,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
 					try {
-						const response = await ynabAPI.months.getBudgetMonth(
+						const response = await ynabAPI.months.getPlanMonth(
 							budget_id,
 							month,
 						);

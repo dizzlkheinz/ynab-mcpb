@@ -82,7 +82,7 @@ export async function handleGetMonth(
 			const month = await cacheManager.wrap<ynab.MonthDetail>(cacheKey, {
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
-					const response = await ynabAPI.months.getBudgetMonth(
+					const response = await ynabAPI.months.getPlanMonth(
 						params.budget_id,
 						params.month,
 					);

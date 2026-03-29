@@ -33,8 +33,8 @@ vi.mock("../../server/cacheManager.js", () => ({
 // Mock the YNAB API
 const mockYnabAPI = {
 	months: {
-		getBudgetMonth: vi.fn(),
-		getBudgetMonths: vi.fn(),
+		getPlanMonth: vi.fn(),
+		getPlanMonths: vi.fn(),
 	},
 } as unknown as ynab.API;
 
@@ -80,7 +80,7 @@ describe("Month Tools", () => {
 				categories: [],
 			};
 
-			(mockYnabAPI.months.getBudgetMonth as any).mockResolvedValue({
+			(mockYnabAPI.months.getPlanMonth as any).mockResolvedValue({
 				data: { month: mockMonth },
 			});
 
@@ -92,7 +92,7 @@ describe("Month Tools", () => {
 
 			// Verify the mock cache was called (and bypassed to call the loader)
 			expect(cacheManager.wrap).toHaveBeenCalled();
-			expect(mockYnabAPI.months.getBudgetMonth).toHaveBeenCalledTimes(1);
+			expect(mockYnabAPI.months.getPlanMonth).toHaveBeenCalledTimes(1);
 
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.cached).toBe(false);
@@ -188,7 +188,7 @@ describe("Month Tools", () => {
 				],
 			};
 
-			(mockYnabAPI.months.getBudgetMonth as any).mockResolvedValue({
+			(mockYnabAPI.months.getPlanMonth as any).mockResolvedValue({
 				data: { month: mockMonth },
 			});
 
@@ -214,7 +214,7 @@ describe("Month Tools", () => {
 		});
 
 		it("should handle 401 authentication errors", async () => {
-			(mockYnabAPI.months.getBudgetMonth as any).mockRejectedValue(
+			(mockYnabAPI.months.getPlanMonth as any).mockRejectedValue(
 				new Error("401 Unauthorized"),
 			);
 
@@ -232,7 +232,7 @@ describe("Month Tools", () => {
 		});
 
 		it("should handle 403 forbidden errors", async () => {
-			(mockYnabAPI.months.getBudgetMonth as any).mockRejectedValue(
+			(mockYnabAPI.months.getPlanMonth as any).mockRejectedValue(
 				new Error("403 Forbidden"),
 			);
 
@@ -250,7 +250,7 @@ describe("Month Tools", () => {
 		});
 
 		it("should handle 404 not found errors", async () => {
-			(mockYnabAPI.months.getBudgetMonth as any).mockRejectedValue(
+			(mockYnabAPI.months.getPlanMonth as any).mockRejectedValue(
 				new Error("404 Not Found"),
 			);
 
@@ -266,7 +266,7 @@ describe("Month Tools", () => {
 		});
 
 		it("should handle 429 rate limit errors", async () => {
-			(mockYnabAPI.months.getBudgetMonth as any).mockRejectedValue(
+			(mockYnabAPI.months.getPlanMonth as any).mockRejectedValue(
 				new Error("429 Too Many Requests"),
 			);
 
@@ -284,7 +284,7 @@ describe("Month Tools", () => {
 		});
 
 		it("should handle 500 server errors", async () => {
-			(mockYnabAPI.months.getBudgetMonth as any).mockRejectedValue(
+			(mockYnabAPI.months.getPlanMonth as any).mockRejectedValue(
 				new Error("500 Internal Server Error"),
 			);
 
@@ -302,7 +302,7 @@ describe("Month Tools", () => {
 		});
 
 		it("should handle generic errors", async () => {
-			(mockYnabAPI.months.getBudgetMonth as any).mockRejectedValue(
+			(mockYnabAPI.months.getPlanMonth as any).mockRejectedValue(
 				new Error("Network error"),
 			);
 
@@ -497,7 +497,7 @@ describe("Month Tools", () => {
 		});
 
 		it("should handle generic errors", async () => {
-			(mockYnabAPI.months.getBudgetMonths as any).mockRejectedValue(
+			(mockYnabAPI.months.getPlanMonths as any).mockRejectedValue(
 				new Error("Network error"),
 			);
 

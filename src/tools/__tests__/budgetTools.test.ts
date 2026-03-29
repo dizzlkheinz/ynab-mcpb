@@ -31,9 +31,9 @@ vi.mock("../../server/cacheManager.js", () => ({
 
 // Mock the YNAB API
 const mockYnabAPI = {
-	budgets: {
-		getBudgets: vi.fn(),
-		getBudgetById: vi.fn(),
+	plans: {
+		getPlans: vi.fn(),
+		getPlanById: vi.fn(),
 	},
 } as unknown as ynab.API;
 
@@ -143,8 +143,8 @@ describe("Budget Tools", () => {
 				currency_format: { iso_code: "USD", example_format: "$123.45" },
 			};
 
-			(mockYnabAPI.budgets.getBudgetById as any).mockResolvedValue({
-				data: { budget: mockBudget },
+			(mockYnabAPI.plans.getPlanById as any).mockResolvedValue({
+				data: { plan: mockBudget },
 			});
 
 			const result = await handleGetBudget(mockYnabAPI, {
@@ -154,7 +154,7 @@ describe("Budget Tools", () => {
 
 			// handleGetBudget should not use cache (direct API call)
 			expect(cacheManager.wrap).not.toHaveBeenCalled();
-			expect(mockYnabAPI.budgets.getBudgetById).toHaveBeenCalledTimes(1);
+			expect(mockYnabAPI.plans.getPlanById).toHaveBeenCalledTimes(1);
 
 			// Verify result structure
 			expect(result.content).toHaveLength(1);
@@ -213,8 +213,8 @@ describe("Budget Tools", () => {
 				],
 			};
 
-			(mockYnabAPI.budgets.getBudgetById as any).mockResolvedValue({
-				data: { budget: mockBudget },
+			(mockYnabAPI.plans.getPlanById as any).mockResolvedValue({
+				data: { plan: mockBudget },
 			});
 
 			const result = await handleGetBudget(mockYnabAPI, {
@@ -254,8 +254,8 @@ describe("Budget Tools", () => {
 				months: [],
 			};
 
-			(mockYnabAPI.budgets.getBudgetById as any).mockResolvedValue({
-				data: { budget: mockBudget },
+			(mockYnabAPI.plans.getPlanById as any).mockResolvedValue({
+				data: { plan: mockBudget },
 			});
 
 			const result = await handleGetBudget(mockYnabAPI, {
@@ -383,8 +383,8 @@ describe("Budget Tools", () => {
 				],
 			};
 
-			(mockYnabAPI.budgets.getBudgetById as any).mockResolvedValue({
-				data: { budget: mockBudget },
+			(mockYnabAPI.plans.getPlanById as any).mockResolvedValue({
+				data: { plan: mockBudget },
 			});
 
 			const result = await handleGetBudget(mockYnabAPI, {
@@ -411,7 +411,7 @@ describe("Budget Tools", () => {
 		});
 
 		it("should handle 404 not found errors", async () => {
-			(mockYnabAPI.budgets.getBudgetById as any).mockRejectedValue(
+			(mockYnabAPI.plans.getPlanById as any).mockRejectedValue(
 				new Error("404 Not Found"),
 			);
 
@@ -426,7 +426,7 @@ describe("Budget Tools", () => {
 		});
 
 		it("should handle authentication errors", async () => {
-			(mockYnabAPI.budgets.getBudgetById as any).mockRejectedValue(
+			(mockYnabAPI.plans.getPlanById as any).mockRejectedValue(
 				new Error("401 Unauthorized"),
 			);
 

@@ -77,11 +77,9 @@ describe("CompletionsManager", () => {
 
 	beforeEach(() => {
 		mockYnabAPI = {
-			budgets: {
-				getBudgets: vi
-					.fn()
-					.mockResolvedValue({ data: { budgets: mockBudgets } }),
-			} as unknown as ynab.BudgetsApi,
+			plans: {
+				getPlans: vi.fn().mockResolvedValue({ data: { plans: mockBudgets } }),
+			} as unknown as ynab.PlansApi,
 			accounts: {
 				getAccounts: vi
 					.fn()
@@ -272,11 +270,9 @@ describe("CompletionsManager", () => {
 				name: `Budget ${i}`,
 			}));
 
-			mockYnabAPI.budgets = {
-				getBudgets: vi
-					.fn()
-					.mockResolvedValue({ data: { budgets: manyBudgets } }),
-			} as unknown as ynab.BudgetsApi;
+			mockYnabAPI.plans = {
+				getPlans: vi.fn().mockResolvedValue({ data: { plans: manyBudgets } }),
+			} as unknown as ynab.PlansApi;
 
 			manager = new CompletionsManager(
 				mockYnabAPI as ynab.API,
