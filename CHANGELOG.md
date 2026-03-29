@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-03-29
+
+### Changed
+
+- **YNAB SDK** - Upgraded from v2.10.0 to v4.0.0; migrated all API calls from `budgets` to `plans` namespace (`getPlans`, `getPlanById`, `getPlanMonths`, `getPlanMonth`), response data fields (`data.plans`, `data.plan`), type renames (`PlanSummary`, `NewTransaction`, `ExistingTransaction`)
+- **Biome** - Updated schema version to 2.4.9; resolved all 4 `useOptionalChain` lint warnings across source and scripts
+
 ## [0.24.2] - 2026-03-29
 
 ### Changed
