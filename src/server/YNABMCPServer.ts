@@ -471,18 +471,20 @@ Errors:
 					// Silently handle cache warming errors to not affect main operation
 				});
 
+				const setDefaultData = {
+					success: true,
+					message: `Default budget set to: ${budget_id}`,
+					default_budget_id: budget_id,
+					cache_warm_started: true,
+				};
 				return {
 					content: [
 						{
 							type: "text",
-							text: responseFormatter.format({
-								success: true,
-								message: `Default budget set to: ${budget_id}`,
-								default_budget_id: budget_id,
-								cache_warm_started: true,
-							}),
+							text: responseFormatter.format(setDefaultData),
 						},
 					],
+					structuredContent: setDefaultData,
 				};
 			},
 			metadata: {
@@ -535,6 +537,7 @@ Returns: default_budget_id (null if not set), has_default.`,
 										: responseFormatter.format(dataObjectGDB),
 							},
 						],
+						structuredContent: dataObjectGDB,
 					};
 				} catch (error) {
 					return this.errorHandler.createValidationError(
@@ -592,10 +595,26 @@ Returns: diagnostics object with requested sections.`,
 										text: formatDiagnosticInfo(diagData),
 									},
 								],
+								structuredContent: diagData,
 							};
 						} catch {
 							// Fall through to return original
 						}
+					}
+				}
+				// For JSON format path: add structuredContent from parsed text
+				const jsonTextContent = diagnosticsResult.content.find(
+					(c) => c.type === "text",
+				);
+				if (jsonTextContent && "text" in jsonTextContent) {
+					try {
+						const diagData = JSON.parse(jsonTextContent.text) as Record<
+							string,
+							unknown
+						>;
+						return { ...diagnosticsResult, structuredContent: diagData };
+					} catch {
+						// Fall through to return original without structuredContent
 					}
 				}
 				return diagnosticsResult;
@@ -621,10 +640,12 @@ Use when: you need fresh data after external YNAB changes, or to free memory.`,
 			outputSchema: ClearCacheOutputSchema,
 			handler: async () => {
 				cacheManager.clear();
+				const clearCacheData = { success: true };
 				return {
 					content: [
-						{ type: "text", text: responseFormatter.format({ success: true }) },
+						{ type: "text", text: responseFormatter.format(clearCacheData) },
 					],
+					structuredContent: clearCacheData,
 				};
 			},
 			metadata: {

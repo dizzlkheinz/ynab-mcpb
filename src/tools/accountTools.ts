@@ -159,6 +159,7 @@ export async function handleListAccounts(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:list_accounts",
@@ -228,6 +229,7 @@ export async function handleGetAccount(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:get_account",
@@ -265,22 +267,24 @@ export async function handleCreateAccount(
 	return await withToolErrorHandling(
 		async () => {
 			if (params.dry_run) {
+				const dryRunData = {
+					dry_run: true as const,
+					action: "ynab_create_account" as const,
+					request: {
+						budget_id: params.budget_id,
+						name: params.name,
+						type: params.type,
+						balance: params.balance ?? 0,
+					},
+				};
 				return {
 					content: [
 						{
 							type: "text",
-							text: responseFormatter.format({
-								dry_run: true,
-								action: "ynab_create_account",
-								request: {
-									budget_id: params.budget_id,
-									name: params.name,
-									type: params.type,
-									balance: params.balance ?? 0,
-								},
-							}),
+							text: responseFormatter.format(dryRunData),
 						},
 					],
+					structuredContent: dryRunData,
 				};
 			}
 			const accountData: ynab.SaveAccount = {
@@ -305,30 +309,30 @@ export async function handleCreateAccount(
 
 			deltaCache.invalidate(params.budget_id, CacheKeys.ACCOUNTS);
 
+			const createdAccountData = {
+				account: {
+					id: account.id,
+					name: account.name,
+					type: account.type,
+					on_budget: account.on_budget,
+					closed: account.closed,
+					note: account.note,
+					balance: milliunitsToAmount(account.balance),
+					cleared_balance: milliunitsToAmount(account.cleared_balance),
+					uncleared_balance: milliunitsToAmount(account.uncleared_balance),
+					transfer_payee_id: account.transfer_payee_id,
+					direct_import_linked: account.direct_import_linked,
+					direct_import_in_error: account.direct_import_in_error,
+				},
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							account: {
-								id: account.id,
-								name: account.name,
-								type: account.type,
-								on_budget: account.on_budget,
-								closed: account.closed,
-								note: account.note,
-								balance: milliunitsToAmount(account.balance),
-								cleared_balance: milliunitsToAmount(account.cleared_balance),
-								uncleared_balance: milliunitsToAmount(
-									account.uncleared_balance,
-								),
-								transfer_payee_id: account.transfer_payee_id,
-								direct_import_linked: account.direct_import_linked,
-								direct_import_in_error: account.direct_import_in_error,
-							},
-						}),
+						text: responseFormatter.format(createdAccountData),
 					},
 				],
+				structuredContent: createdAccountData,
 			};
 		},
 		"ynab:create_account",

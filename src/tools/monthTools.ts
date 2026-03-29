@@ -139,6 +139,7 @@ export async function handleGetMonth(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:get_month",
@@ -217,6 +218,7 @@ export async function handleListMonths(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:list_months",

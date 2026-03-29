@@ -247,35 +247,37 @@ export async function handleExportTransactions(
 			const previewCount = Math.min(10, transactions.length);
 			const preview = transactions.slice(0, previewCount);
 
+			const exportResult = {
+				message: `Successfully exported ${transactions.length} transactions${params.minimal !== false ? " (minimal fields)" : " (full fields)"}`,
+				filename: filename,
+				full_path: fullPath,
+				export_directory: exportDir,
+				export_mode: params.minimal !== false ? "minimal" : "full",
+				minimal_fields:
+					params.minimal !== false
+						? "id, date, amount, payee_name, cleared"
+						: null,
+				filename_explanation:
+					"Filename format: ynab_{filters}_{count}items_{timestamp}.json - identifies what data was exported, when, and how many transactions",
+				preview_count: previewCount,
+				total_count: transactions.length,
+				preview_transactions: preview.map((transaction) => ({
+					id: transaction.id,
+					date: transaction.date,
+					amount: transaction.amount,
+					memo: transaction.memo,
+					payee_name: transaction.payee_name,
+					category_name: transaction.category_name,
+				})),
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							message: `Successfully exported ${transactions.length} transactions${params.minimal !== false ? " (minimal fields)" : " (full fields)"}`,
-							filename: filename,
-							full_path: fullPath,
-							export_directory: exportDir,
-							export_mode: params.minimal !== false ? "minimal" : "full",
-							minimal_fields:
-								params.minimal !== false
-									? "id, date, amount, payee_name, cleared"
-									: null,
-							filename_explanation:
-								"Filename format: ynab_{filters}_{count}items_{timestamp}.json - identifies what data was exported, when, and how many transactions",
-							preview_count: previewCount,
-							total_count: transactions.length,
-							preview_transactions: preview.map((transaction) => ({
-								id: transaction.id,
-								date: transaction.date,
-								amount: transaction.amount,
-								memo: transaction.memo,
-								payee_name: transaction.payee_name,
-								category_name: transaction.category_name,
-							})),
-						}),
+						text: responseFormatter.format(exportResult),
 					},
 				],
+				structuredContent: exportResult,
 			};
 		},
 		"ynab:export_transactions",

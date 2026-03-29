@@ -91,17 +91,19 @@ export async function handleCreateTransaction(
 	);
 	try {
 		if (params.dry_run) {
+			const dryRunData = {
+				dry_run: true as const,
+				action: "ynab_create_transaction" as const,
+				request: params as Record<string, unknown>,
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							dry_run: true,
-							action: "ynab_create_transaction",
-							request: params,
-						}),
+						text: responseFormatter.format(dryRunData),
 					},
 				],
+				structuredContent: dryRunData,
 			};
 		}
 		// Prepare transaction data
@@ -183,50 +185,49 @@ export async function handleCreateTransaction(
 		);
 		const account = accountResponse.data.account;
 
+		const createdTxData = {
+			transaction: {
+				id: transaction.id,
+				date: transaction.date,
+				amount: milliunitsToAmount(transaction.amount),
+				memo: transaction.memo,
+				cleared: transaction.cleared,
+				approved: transaction.approved,
+				flag_color: transaction.flag_color,
+				account_id: transaction.account_id,
+				payee_id: transaction.payee_id,
+				category_id: transaction.category_id,
+				transfer_account_id: transaction.transfer_account_id,
+				transfer_transaction_id: transaction.transfer_transaction_id,
+				matched_transaction_id: transaction.matched_transaction_id,
+				import_id: transaction.import_id,
+				deleted: transaction.deleted,
+				// New fields for account balance
+				account_balance: account.balance,
+				account_cleared_balance: account.cleared_balance,
+				subtransactions: transaction.subtransactions?.map((subtransaction) => ({
+					id: subtransaction.id,
+					transaction_id: subtransaction.transaction_id,
+					amount: milliunitsToAmount(subtransaction.amount),
+					memo: subtransaction.memo,
+					payee_id: subtransaction.payee_id,
+					payee_name: subtransaction.payee_name,
+					category_id: subtransaction.category_id,
+					category_name: subtransaction.category_name,
+					transfer_account_id: subtransaction.transfer_account_id,
+					transfer_transaction_id: subtransaction.transfer_transaction_id,
+					deleted: subtransaction.deleted,
+				})),
+			},
+		};
 		return {
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format({
-						transaction: {
-							id: transaction.id,
-							date: transaction.date,
-							amount: milliunitsToAmount(transaction.amount),
-							memo: transaction.memo,
-							cleared: transaction.cleared,
-							approved: transaction.approved,
-							flag_color: transaction.flag_color,
-							account_id: transaction.account_id,
-							payee_id: transaction.payee_id,
-							category_id: transaction.category_id,
-							transfer_account_id: transaction.transfer_account_id,
-							transfer_transaction_id: transaction.transfer_transaction_id,
-							matched_transaction_id: transaction.matched_transaction_id,
-							import_id: transaction.import_id,
-							deleted: transaction.deleted,
-							// New fields for account balance
-							account_balance: account.balance,
-							account_cleared_balance: account.cleared_balance,
-							subtransactions: transaction.subtransactions?.map(
-								(subtransaction) => ({
-									id: subtransaction.id,
-									transaction_id: subtransaction.transaction_id,
-									amount: milliunitsToAmount(subtransaction.amount),
-									memo: subtransaction.memo,
-									payee_id: subtransaction.payee_id,
-									payee_name: subtransaction.payee_name,
-									category_id: subtransaction.category_id,
-									category_name: subtransaction.category_name,
-									transfer_account_id: subtransaction.transfer_account_id,
-									transfer_transaction_id:
-										subtransaction.transfer_transaction_id,
-									deleted: subtransaction.deleted,
-								}),
-							),
-						},
-					}),
+					text: responseFormatter.format(createdTxData),
 				},
 			],
+			structuredContent: createdTxData,
 		};
 	} catch (error) {
 		return handleTransactionError(error, "Failed to create transaction");
@@ -767,29 +768,31 @@ export async function handleCreateReceiptSplitTransaction(
 	};
 
 	if (params.dry_run) {
+		const receiptDryRunData = {
+			dry_run: true as const,
+			action: "ynab_create_receipt_split_transaction" as const,
+			transaction_preview: {
+				account_id: params.account_id,
+				payee_name: params.payee_name,
+				date,
+				amount: milliunitsToAmount(totalMilliunits),
+				cleared: params.cleared ?? "uncleared",
+			},
+			receipt_summary: receiptSummary,
+			subtransactions: subtransactions.map((subtransaction) => ({
+				amount: milliunitsToAmount(-subtransaction.amount),
+				category_id: subtransaction.category_id,
+				memo: subtransaction.memo,
+			})),
+		};
 		return {
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format({
-						dry_run: true,
-						action: "ynab_create_receipt_split_transaction",
-						transaction_preview: {
-							account_id: params.account_id,
-							payee_name: params.payee_name,
-							date,
-							amount: milliunitsToAmount(totalMilliunits),
-							cleared: params.cleared ?? "uncleared",
-						},
-						receipt_summary: receiptSummary,
-						subtransactions: subtransactions.map((subtransaction) => ({
-							amount: milliunitsToAmount(-subtransaction.amount),
-							category_id: subtransaction.category_id,
-							memo: subtransaction.memo,
-						})),
-					}),
+					text: responseFormatter.format(receiptDryRunData),
 				},
 			],
+			structuredContent: receiptDryRunData,
 		};
 	}
 
@@ -825,6 +828,15 @@ export async function handleCreateReceiptSplitTransaction(
 		const parsed = JSON.parse(firstContent.text) as Record<string, unknown>;
 		parsed["receipt_summary"] = receiptSummary;
 		firstContent.text = responseFormatter.format(parsed);
+		// Also update structuredContent with receipt_summary
+		const updatedStructured = {
+			...(baseResult.structuredContent as Record<string, unknown>),
+			receipt_summary: receiptSummary,
+		};
+		return {
+			...baseResult,
+			structuredContent: updatedStructured,
+		};
 	} catch {
 		// If parsing fails, return the original result without augmentation.
 	}
@@ -860,17 +872,19 @@ export async function handleUpdateTransaction(
 	);
 	try {
 		if (params.dry_run) {
+			const updateDryRunData = {
+				dry_run: true as const,
+				action: "ynab_update_transaction" as const,
+				request: params as Record<string, unknown>,
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							dry_run: true,
-							action: "ynab_update_transaction",
-							request: params,
-						}),
+						text: responseFormatter.format(updateDryRunData),
 					},
 				],
+				structuredContent: updateDryRunData,
 			};
 		}
 
@@ -1004,33 +1018,35 @@ export async function handleUpdateTransaction(
 		);
 		const account = accountResponse.data.account;
 
+		const updatedTxData = {
+			transaction: {
+				id: transaction.id,
+				date: transaction.date,
+				amount: milliunitsToAmount(transaction.amount),
+				memo: transaction.memo,
+				cleared: transaction.cleared,
+				approved: transaction.approved,
+				flag_color: transaction.flag_color,
+				account_id: transaction.account_id,
+				payee_id: transaction.payee_id,
+				category_id: transaction.category_id,
+				transfer_account_id: transaction.transfer_account_id,
+				transfer_transaction_id: transaction.transfer_transaction_id,
+				matched_transaction_id: transaction.matched_transaction_id,
+				import_id: transaction.import_id,
+				deleted: transaction.deleted,
+			},
+			updated_balance: account.balance,
+			updated_cleared_balance: account.cleared_balance,
+		};
 		return {
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format({
-						transaction: {
-							id: transaction.id,
-							date: transaction.date,
-							amount: milliunitsToAmount(transaction.amount),
-							memo: transaction.memo,
-							cleared: transaction.cleared,
-							approved: transaction.approved,
-							flag_color: transaction.flag_color,
-							account_id: transaction.account_id,
-							payee_id: transaction.payee_id,
-							category_id: transaction.category_id,
-							transfer_account_id: transaction.transfer_account_id,
-							transfer_transaction_id: transaction.transfer_transaction_id,
-							matched_transaction_id: transaction.matched_transaction_id,
-							import_id: transaction.import_id,
-							deleted: transaction.deleted,
-						},
-						updated_balance: account.balance,
-						updated_cleared_balance: account.cleared_balance,
-					}),
+					text: responseFormatter.format(updatedTxData),
 				},
 			],
+			structuredContent: updatedTxData,
 		};
 	} catch (error) {
 		return handleTransactionError(error, "Failed to update transaction");
@@ -1065,17 +1081,19 @@ export async function handleDeleteTransaction(
 	);
 	try {
 		if (params.dry_run) {
+			const deleteDryRunData = {
+				dry_run: true as const,
+				action: "ynab_delete_transaction" as const,
+				request: params as Record<string, unknown>,
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							dry_run: true,
-							action: "ynab_delete_transaction",
-							request: params,
-						}),
+						text: responseFormatter.format(deleteDryRunData),
 					},
 				],
+				structuredContent: deleteDryRunData,
 			};
 		}
 		const response = await ynabAPI.transactions.deleteTransaction(
@@ -1124,21 +1142,23 @@ export async function handleDeleteTransaction(
 		);
 		const account = accountResponse.data.account;
 
+		const deletedTxData = {
+			message: "Transaction deleted successfully",
+			transaction: {
+				id: transaction.id,
+				deleted: transaction.deleted,
+			},
+			updated_balance: account.balance,
+			updated_cleared_balance: account.cleared_balance,
+		};
 		return {
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format({
-						message: "Transaction deleted successfully",
-						transaction: {
-							id: transaction.id,
-							deleted: transaction.deleted,
-						},
-						updated_balance: account.balance,
-						updated_cleared_balance: account.cleared_balance,
-					}),
+					text: responseFormatter.format(deletedTxData),
 				},
 			],
+			structuredContent: deletedTxData,
 		};
 	} catch (error) {
 		return handleTransactionError(error, "Failed to delete transaction");
@@ -1279,26 +1299,28 @@ export async function handleCreateTransactions(
 						import_id: transaction.import_id,
 					}));
 
+				const bulkCreateDryRunData = {
+					dry_run: true as const,
+					action: "ynab_create_transactions" as const,
+					validation: "passed" as const,
+					summary: {
+						total_transactions: transactions.length,
+						total_amount: milliunitsToAmount(totalAmount),
+						accounts_affected: accountsAffected,
+						date_range: dateRange,
+						categories_affected: categoriesAffected,
+					},
+					transactions_preview: transactionsPreview,
+					note: "Dry run complete. No transactions created. No caches invalidated. No server_knowledge updated.",
+				};
 				return {
 					content: [
 						{
 							type: "text",
-							text: responseFormatter.format({
-								dry_run: true,
-								action: "ynab_create_transactions",
-								validation: "passed",
-								summary: {
-									total_transactions: transactions.length,
-									total_amount: milliunitsToAmount(totalAmount),
-									accounts_affected: accountsAffected,
-									date_range: dateRange,
-									categories_affected: categoriesAffected,
-								},
-								transactions_preview: transactionsPreview,
-								note: "Dry run complete. No transactions created. No caches invalidated. No server_knowledge updated.",
-							}),
+							text: responseFormatter.format(bulkCreateDryRunData),
 						},
 					],
+					structuredContent: bulkCreateDryRunData,
 				};
 			}
 
@@ -1397,6 +1419,10 @@ export async function handleCreateTransactions(
 						text: responseFormatter.format(finalizedResponse),
 					},
 				],
+				structuredContent: finalizedResponse as unknown as Record<
+					string,
+					unknown
+				>,
 			};
 		},
 		"ynab:create_transactions",
@@ -1781,6 +1807,7 @@ export async function handleUpdateTransactions(
 							text: responseFormatter.format(response),
 						},
 					],
+					structuredContent: response,
 				};
 			}
 
@@ -2004,6 +2031,10 @@ export async function handleUpdateTransactions(
 						text: responseFormatter.format(finalizedResponse),
 					},
 				],
+				structuredContent: finalizedResponse as unknown as Record<
+					string,
+					unknown
+				>,
 			};
 		},
 		"ynab:update_transactions",

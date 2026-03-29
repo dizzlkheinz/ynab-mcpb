@@ -121,6 +121,7 @@ export async function handleListPayees(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:list_payees",
@@ -182,6 +183,7 @@ export async function handleGetPayee(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:get_payee",

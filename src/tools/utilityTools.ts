@@ -56,6 +56,7 @@ export async function handleGetUser(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:get_user",

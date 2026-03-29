@@ -98,6 +98,7 @@ export async function handleListBudgets(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:list_budgets",
@@ -150,6 +151,7 @@ export async function handleGetBudget(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:get_budget",

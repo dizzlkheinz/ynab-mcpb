@@ -159,17 +159,19 @@ export function buildComparisonResult(
 	const formattedUnmatchedBank = formatUnmatchedBank(unmatched_bank, payees);
 	const formattedUnmatchedYnab = formatUnmatchedYNAB(unmatched_ynab);
 
+	const comparisonData = {
+		summary,
+		matches: formattedMatches,
+		missing_in_ynab: formattedUnmatchedBank,
+		missing_in_bank: formattedUnmatchedYnab,
+	};
 	return {
 		content: [
 			{
 				type: "text",
-				text: responseFormatter.format({
-					summary,
-					matches: formattedMatches,
-					missing_in_ynab: formattedUnmatchedBank,
-					missing_in_bank: formattedUnmatchedYnab,
-				}),
+				text: responseFormatter.format(comparisonData),
 			},
 		],
+		structuredContent: comparisonData,
 	};
 }

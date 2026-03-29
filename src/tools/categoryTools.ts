@@ -191,6 +191,7 @@ export async function handleListCategories(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:list_categories",
@@ -262,6 +263,7 @@ export async function handleGetCategory(
 								: responseFormatter.format(dataObject),
 					},
 				],
+				structuredContent: dataObject,
 			};
 		},
 		"ynab:get_category",
@@ -300,22 +302,24 @@ export async function handleUpdateCategory(
 		if (params.dry_run) {
 			const currentDate = new Date();
 			const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-01`;
+			const dryRunData = {
+				dry_run: true as const,
+				action: "ynab_update_category" as const,
+				request: {
+					budget_id: params.budget_id,
+					category_id: params.category_id,
+					budgeted: milliunitsToAmount(params.budgeted),
+					month: currentMonth,
+				},
+			};
 			return {
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format({
-							dry_run: true,
-							action: "ynab_update_category",
-							request: {
-								budget_id: params.budget_id,
-								category_id: params.category_id,
-								budgeted: milliunitsToAmount(params.budgeted),
-								month: currentMonth,
-							},
-						}),
+						text: responseFormatter.format(dryRunData),
 					},
 				],
+				structuredContent: dryRunData,
 			};
 		}
 		// Get current month in YNAB format (YYYY-MM-01)
@@ -369,31 +373,33 @@ export async function handleUpdateCategory(
 			knowledgeStore.update(monthsListCacheKey, serverKnowledge);
 		}
 
+		const updatedCategoryData = {
+			category: {
+				id: category.id,
+				category_group_id: category.category_group_id,
+				name: category.name,
+				hidden: category.hidden,
+				original_category_group_id: category.original_category_group_id,
+				note: category.note,
+				budgeted: milliunitsToAmount(category.budgeted),
+				activity: milliunitsToAmount(category.activity),
+				balance: milliunitsToAmount(category.balance),
+				goal_type: category.goal_type,
+				goal_creation_month: category.goal_creation_month,
+				...convertGoalFields(category),
+				goal_target_month: category.goal_target_month,
+				goal_percentage_complete: category.goal_percentage_complete,
+			},
+			updated_month: currentMonth,
+		};
 		return {
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format({
-						category: {
-							id: category.id,
-							category_group_id: category.category_group_id,
-							name: category.name,
-							hidden: category.hidden,
-							original_category_group_id: category.original_category_group_id,
-							note: category.note,
-							budgeted: milliunitsToAmount(category.budgeted),
-							activity: milliunitsToAmount(category.activity),
-							balance: milliunitsToAmount(category.balance),
-							goal_type: category.goal_type,
-							goal_creation_month: category.goal_creation_month,
-							...convertGoalFields(category),
-							goal_target_month: category.goal_target_month,
-							goal_percentage_complete: category.goal_percentage_complete,
-						},
-						updated_month: currentMonth,
-					}),
+					text: responseFormatter.format(updatedCategoryData),
 				},
 			],
+			structuredContent: updatedCategoryData,
 		};
 	} catch (error) {
 		return handleCategoryError(error, "Failed to update category");

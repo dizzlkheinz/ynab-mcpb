@@ -13,11 +13,11 @@ import type { ProgressCallback } from "../../server/toolRegistry.js";
 import { withToolErrorHandling } from "../../types/index.js";
 import type { ToolFactory } from "../../types/toolRegistration.js";
 import { createAdapters, createBudgetResolver } from "../adapters.js";
-import { resolveCsvPathCandidates } from "../csvFilePath.js";
 import {
 	CompareTransactionsSchema,
 	handleCompareTransactions,
 } from "../compareTransactions/index.js";
+import { resolveCsvPathCandidates } from "../csvFilePath.js";
 import type { DeltaFetcher } from "../deltaFetcher.js";
 import { resolveDeltaFetcherArgs } from "../deltaSupport.js";
 import {
@@ -355,10 +355,7 @@ export async function handleReconcileAccount(
 				);
 			}
 
-			if (
-				clampedCsv.windowApplied &&
-				rawCsvResult.transactions.length === 0
-			) {
+			if (clampedCsv.windowApplied && rawCsvResult.transactions.length === 0) {
 				throw new Error(
 					`No CSV transactions remain after applying statement window ${formatStatementWindow(clampedCsv.windowApplied)}.`,
 				);
@@ -548,6 +545,7 @@ export async function handleReconcileAccount(
 						text: responseFormatter.format(responseData),
 					},
 				],
+				structuredContent: responseData,
 			};
 		},
 		"ynab:reconcile_account",

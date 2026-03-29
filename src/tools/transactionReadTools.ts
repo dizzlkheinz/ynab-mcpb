@@ -166,6 +166,7 @@ export async function handleListTransactions(
 									: responseFormatter.format(previewData),
 						},
 					],
+					structuredContent: previewData,
 				};
 			}
 
@@ -208,6 +209,7 @@ export async function handleListTransactions(
 								: responseFormatter.format(normalData),
 					},
 				],
+				structuredContent: normalData,
 			};
 		},
 		"ynab:list_transactions",
@@ -302,6 +304,7 @@ export async function handleGetTransaction(
 							: responseFormatter.format(txData),
 				},
 			],
+			structuredContent: txData,
 		};
 	} catch (error) {
 		return handleTransactionError(error, "Failed to get transaction");

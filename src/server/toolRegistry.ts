@@ -475,6 +475,39 @@ export class ToolRegistry {
 			return output;
 		}
 
+		// If structuredContent is already set by the handler, validate it directly
+		if (output.structuredContent !== undefined) {
+			const result = validator.safeParse(output.structuredContent);
+			if (!result.success) {
+				const validationError = fromZodError(result.error);
+				const validationErrors = validationError.message;
+				return this.deps.errorHandler.createValidationError(
+					`Output validation failed for ${toolName}`,
+					`Handler output does not match declared output schema: ${validationErrors}`,
+					[
+						"Check that the handler returns data matching the output schema",
+						"Review the tool definition output schema",
+					],
+				);
+			}
+			if (
+				typeof result.data !== "object" ||
+				result.data === null ||
+				Array.isArray(result.data)
+			) {
+				return this.deps.errorHandler.createValidationError(
+					`Output validation failed for ${toolName}`,
+					"Handler output schema must resolve to a JSON object for structuredContent",
+					[
+						"Ensure outputSchema root type is object",
+						"Return a JSON object from the tool handler",
+					],
+				);
+			}
+			// structuredContent already present and valid — return as-is
+			return output;
+		}
+
 		// Extract the actual data from the CallToolResult
 		// CallToolResult is { content: Array<{ type: string, text: string, ... }> }
 		// We need to parse the text content and validate it

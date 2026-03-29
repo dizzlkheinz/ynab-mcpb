@@ -546,7 +546,7 @@ describe("formatter", () => {
 				{ start: "", end: "" },
 			);
 
-			expect(result).toEqual({
+			expect(result).toMatchObject({
 				content: [
 					{
 						type: "text",
@@ -554,6 +554,7 @@ describe("formatter", () => {
 					},
 				],
 			});
+			expect(result.structuredContent).toBeDefined();
 		});
 	});
 });
