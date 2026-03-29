@@ -231,21 +231,19 @@ describeIntegration("Reconciliation Executor - Bulk Create Integration", () => {
 		60000,
 	);
 
-	it(
-		"skips work when a rate limit error is detected",
-		{ meta: { tier: "domain", domain: "reconciliation" } },
-		async () => {
-			const fakeContext = { skip: vi.fn() };
-			const rateLimitError = Object.assign(new Error("429 Too Many Requests"), {
-				status: 429,
-			});
-			const result = await skipOnRateLimit(async () => {
-				throw rateLimitError;
-			}, fakeContext);
-			expect(result).toBeUndefined();
-			expect(fakeContext.skip).toHaveBeenCalled();
-		},
-	);
+	it("skips work when a rate limit error is detected", {
+		meta: { tier: "domain", domain: "reconciliation" },
+	}, async () => {
+		const fakeContext = { skip: vi.fn() };
+		const rateLimitError = Object.assign(new Error("429 Too Many Requests"), {
+			status: 429,
+		});
+		const result = await skipOnRateLimit(async () => {
+			throw rateLimitError;
+		}, fakeContext);
+		expect(result).toBeUndefined();
+		expect(fakeContext.skip).toHaveBeenCalled();
+	});
 
 	function trackCreatedTransactions(
 		result: Awaited<ReturnType<typeof executeReconciliation>>,

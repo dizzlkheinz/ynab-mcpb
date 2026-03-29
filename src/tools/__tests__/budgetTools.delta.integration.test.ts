@@ -57,43 +57,33 @@ describeIntegration("Delta-backed budget tool handler", () => {
 		expect(payload.cache_info).toMatch(/cache/i);
 	};
 
-	it(
-		"serves cached budget summaries on the second invocation",
-		{ meta: { tier: "domain", domain: "delta" } },
-		async (ctx) => {
-			await skipOnRateLimit(async () => {
-				const params = { response_format: "json" as const };
-				const firstCall = await handleListBudgets(
-					ynabAPI,
-					deltaFetcher,
-					params,
-				);
-				const firstPayload = parseResponse(firstCall);
+	it("serves cached budget summaries on the second invocation", {
+		meta: { tier: "domain", domain: "delta" },
+	}, async (ctx) => {
+		await skipOnRateLimit(async () => {
+			const params = { response_format: "json" as const };
+			const firstCall = await handleListBudgets(ynabAPI, deltaFetcher, params);
+			const firstPayload = parseResponse(firstCall);
 
-				// If response contains an error, throw it so skipOnRateLimit can catch it
-				if (firstPayload.error) {
-					throw new Error(JSON.stringify(firstPayload.error));
-				}
+			// If response contains an error, throw it so skipOnRateLimit can catch it
+			if (firstPayload.error) {
+				throw new Error(JSON.stringify(firstPayload.error));
+			}
 
-				expect(firstPayload.cached).toBe(false);
+			expect(firstPayload.cached).toBe(false);
 
-				const secondCall = await handleListBudgets(
-					ynabAPI,
-					deltaFetcher,
-					params,
-				);
-				const secondPayload = parseResponse(secondCall);
+			const secondCall = await handleListBudgets(ynabAPI, deltaFetcher, params);
+			const secondPayload = parseResponse(secondCall);
 
-				// If response contains an error, throw it so skipOnRateLimit can catch it
-				if (secondPayload.error) {
-					throw new Error(JSON.stringify(secondPayload.error));
-				}
+			// If response contains an error, throw it so skipOnRateLimit can catch it
+			if (secondPayload.error) {
+				throw new Error(JSON.stringify(secondPayload.error));
+			}
 
-				expectCacheHit(secondPayload);
+			expectCacheHit(secondPayload);
 
-				// Verify cached response contains the same budget data as initial fetch
-				expect(secondPayload.budgets).toEqual(firstPayload.budgets);
-			}, ctx);
-		},
-	);
+			// Verify cached response contains the same budget data as initial fetch
+			expect(secondPayload.budgets).toEqual(firstPayload.budgets);
+		}, ctx);
+	});
 });

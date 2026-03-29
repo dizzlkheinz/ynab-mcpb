@@ -42,13 +42,13 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
 // ============================================================================
 
 export {
-	handleListTransactions,
-	handleGetTransaction,
-	handleCreateTransaction,
 	handleCreateReceiptSplitTransaction,
-	handleUpdateTransaction,
-	handleDeleteTransaction,
+	handleCreateTransaction,
 	handleCreateTransactions,
+	handleDeleteTransaction,
+	handleGetTransaction,
+	handleListTransactions,
+	handleUpdateTransaction,
 	handleUpdateTransactions,
 };
 

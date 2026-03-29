@@ -22,117 +22,109 @@ describeIntegration("Account Tools Integration", () => {
 		testBudgetId = budgetsResponse.data.budgets[0].id;
 	});
 
-	it(
-		"should successfully list accounts from real API",
-		{ meta: { tier: "core", domain: "accounts" } },
-		async () => {
-			const result = await handleListAccounts(ynabAPI, {
-				budget_id: testBudgetId,
-				response_format: "json",
-			});
+	it("should successfully list accounts from real API", {
+		meta: { tier: "core", domain: "accounts" },
+	}, async () => {
+		const result = await handleListAccounts(ynabAPI, {
+			budget_id: testBudgetId,
+			response_format: "json",
+		});
 
-			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+		expect(result.content).toHaveLength(1);
+		expect(result.content[0].type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
-			expect(parsedContent.accounts).toBeDefined();
-			expect(Array.isArray(parsedContent.accounts)).toBe(true);
+		const parsedContent = JSON.parse(result.content[0].text);
+		expect(parsedContent.accounts).toBeDefined();
+		expect(Array.isArray(parsedContent.accounts)).toBe(true);
 
+		console.warn(
+			`✅ Successfully listed ${parsedContent.accounts.length} accounts`,
+		);
+
+		// Verify account structure
+		if (parsedContent.accounts.length > 0) {
+			const account = parsedContent.accounts[0];
+			expect(account).toHaveProperty("id");
+			expect(account).toHaveProperty("name");
+			expect(account).toHaveProperty("type");
+			expect(account).toHaveProperty("balance");
+		}
+	});
+
+	it("should successfully get account details from real API", {
+		meta: { tier: "domain", domain: "accounts" },
+	}, async () => {
+		// First get the list of accounts to get a valid account ID
+		const listResult = await handleListAccounts(ynabAPI, {
+			budget_id: testBudgetId,
+			response_format: "json",
+		});
+		const parsedListContent = JSON.parse(listResult.content[0].text);
+
+		if (parsedListContent.accounts.length === 0) {
 			console.warn(
-				`✅ Successfully listed ${parsedContent.accounts.length} accounts`,
+				"⚠️ No accounts found in test budget, skipping account detail test",
 			);
+			return;
+		}
 
-			// Verify account structure
-			if (parsedContent.accounts.length > 0) {
-				const account = parsedContent.accounts[0];
-				expect(account).toHaveProperty("id");
-				expect(account).toHaveProperty("name");
-				expect(account).toHaveProperty("type");
-				expect(account).toHaveProperty("balance");
-			}
-		},
-	);
+		const testAccountId = parsedListContent.accounts[0].id;
 
-	it(
-		"should successfully get account details from real API",
-		{ meta: { tier: "domain", domain: "accounts" } },
-		async () => {
-			// First get the list of accounts to get a valid account ID
-			const listResult = await handleListAccounts(ynabAPI, {
-				budget_id: testBudgetId,
-				response_format: "json",
-			});
-			const parsedListContent = JSON.parse(listResult.content[0].text);
+		const result = await handleGetAccount(ynabAPI, {
+			budget_id: testBudgetId,
+			account_id: testAccountId,
+			response_format: "json",
+		});
 
-			if (parsedListContent.accounts.length === 0) {
-				console.warn(
-					"⚠️ No accounts found in test budget, skipping account detail test",
-				);
-				return;
-			}
+		expect(result.content).toHaveLength(1);
+		expect(result.content[0].type).toBe("text");
 
-			const testAccountId = parsedListContent.accounts[0].id;
+		const parsedContent = JSON.parse(result.content[0].text);
+		expect(parsedContent.account).toBeDefined();
+		expect(parsedContent.account.id).toBe(testAccountId);
+		expect(parsedContent.account).toHaveProperty("name");
+		expect(parsedContent.account).toHaveProperty("type");
+		expect(parsedContent.account).toHaveProperty("balance");
 
-			const result = await handleGetAccount(ynabAPI, {
-				budget_id: testBudgetId,
-				account_id: testAccountId,
-				response_format: "json",
-			});
+		console.warn(
+			`✅ Successfully retrieved account: ${parsedContent.account.name}`,
+		);
+	});
 
-			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+	it("should handle invalid budget ID gracefully", {
+		meta: { tier: "domain", domain: "accounts" },
+	}, async () => {
+		const result = await handleListAccounts(ynabAPI, {
+			budget_id: "invalid-budget-id",
+		});
 
-			const parsedContent = JSON.parse(result.content[0].text);
-			expect(parsedContent.account).toBeDefined();
-			expect(parsedContent.account.id).toBe(testAccountId);
-			expect(parsedContent.account).toHaveProperty("name");
-			expect(parsedContent.account).toHaveProperty("type");
-			expect(parsedContent.account).toHaveProperty("balance");
+		expect(result.content).toHaveLength(1);
+		const parsedContent = JSON.parse(result.content[0].text);
+		expect(parsedContent.error).toBeDefined();
+		expect(parsedContent.error.message).toContain("Failed to list accounts");
 
-			console.warn(
-				`✅ Successfully retrieved account: ${parsedContent.account.name}`,
-			);
-		},
-	);
+		console.warn(
+			"✅ Correctly handled invalid budget ID:",
+			parsedContent.error.message,
+		);
+	});
 
-	it(
-		"should handle invalid budget ID gracefully",
-		{ meta: { tier: "domain", domain: "accounts" } },
-		async () => {
-			const result = await handleListAccounts(ynabAPI, {
-				budget_id: "invalid-budget-id",
-			});
+	it("should handle invalid account ID gracefully", {
+		meta: { tier: "domain", domain: "accounts" },
+	}, async () => {
+		const result = await handleGetAccount(ynabAPI, {
+			budget_id: testBudgetId,
+			account_id: "invalid-account-id",
+		});
 
-			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
-			expect(parsedContent.error).toBeDefined();
-			expect(parsedContent.error.message).toContain("Failed to list accounts");
+		expect(result.content).toHaveLength(1);
+		const parsedContent = JSON.parse(result.content[0].text);
+		expect(parsedContent.error).toBeDefined();
+		expect(parsedContent.error.message).toContain("Failed to get account");
 
-			console.warn(
-				"✅ Correctly handled invalid budget ID:",
-				parsedContent.error.message,
-			);
-		},
-	);
-
-	it(
-		"should handle invalid account ID gracefully",
-		{ meta: { tier: "domain", domain: "accounts" } },
-		async () => {
-			const result = await handleGetAccount(ynabAPI, {
-				budget_id: testBudgetId,
-				account_id: "invalid-account-id",
-			});
-
-			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
-			expect(parsedContent.error).toBeDefined();
-			expect(parsedContent.error.message).toContain("Failed to get account");
-
-			console.warn(
-				"✅ Correctly handled invalid account ID:",
-				parsedContent.error.message,
-			);
-		},
-	);
+		console.warn(
+			"✅ Correctly handled invalid account ID:",
+			parsedContent.error.message,
+		);
+	});
 });
