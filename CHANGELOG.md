@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-03-29
+
+### Changed
+
+- **Dependencies** - Updated `@modelcontextprotocol/sdk` to 1.28.0; updated dev dependencies (Biome 2.4.9, Vitest 4.1.2, csv-parse 6.2.1, esbuild 0.27.4, @types/node 25.5.0)
+
 ## [0.24.1] - 2026-03-29
 
 ### Fixed

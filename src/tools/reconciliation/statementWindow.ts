@@ -15,7 +15,9 @@ export interface ClampStatementWindowResult {
  * Normalize user-provided statement dates to YYYY-MM-DD.
  * Returns undefined for empty or invalid values.
  */
-export function normalizeStatementDate(value: string | undefined): string | undefined {
+export function normalizeStatementDate(
+	value: string | undefined,
+): string | undefined {
 	if (!value) {
 		return undefined;
 	}
