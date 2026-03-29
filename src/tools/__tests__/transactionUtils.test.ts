@@ -445,6 +445,41 @@ describe("transactionUtils", () => {
 			expect(results[0].correlation_key).toMatch(/^hash:[a-f0-9]{16}$/);
 		});
 
+		it("should correlate by hash when YNAB response includes payee_id but request only had payee_name", () => {
+			// Real YNAB API always returns payee_id on the response even when the request
+			// only supplied payee_name.  The secondary hash index (payee_id stripped) must
+			// ensure the request hash (computed from payee_name) still finds the response.
+			const requests: BulkTransactionInput[] = [
+				{
+					account_id: "acc-1",
+					date: "2024-03-15",
+					amount: 5000,
+					payee_name: "Test Payee",
+				},
+			];
+			const responseData: SaveTransactionsResponseData = {
+				transactions: [
+					{
+						id: "txn-1",
+						account_id: "acc-1",
+						date: "2024-03-15",
+						amount: 5000,
+						payee_id: "payee-uuid-123",
+						payee_name: "Test Payee",
+					} as ynab.TransactionDetail,
+				],
+				duplicate_import_ids: [],
+				server_knowledge: 100,
+			};
+			const duplicates = new Set<string>();
+
+			const results = correlateResults(requests, responseData, duplicates);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].status).toBe("created");
+			expect(results[0].transaction_id).toBe("txn-1");
+		});
+
 		it("should mark duplicates based on duplicateImportIds", () => {
 			const requests: BulkTransactionInput[] = [
 				{

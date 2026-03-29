@@ -312,6 +312,18 @@ export function correlateResults(
 		const key = generateCorrelationKey(transaction);
 		if (key.startsWith("hash:")) {
 			register(createdByHash, key, transaction.id);
+			// YNAB populates payee_id on responses even when the request only sent payee_name.
+			// Register a secondary hash using payee_name only so requests that omitted payee_id
+			// (e.g. reconciliation bulk creates) can still find their created transaction.
+			if (transaction.payee_id) {
+				const nameOnlyKey = generateCorrelationKey({
+					...transaction,
+					payee_id: undefined,
+				});
+				if (nameOnlyKey !== key) {
+					register(createdByHash, nameOnlyKey, transaction.id);
+				}
+			}
 		} else {
 			register(createdByImportId, key, transaction.id);
 		}
