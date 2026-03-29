@@ -475,42 +475,9 @@ export class ToolRegistry {
 			return output;
 		}
 
-		// If structuredContent is already set by the handler, validate it directly
-		if (output.structuredContent !== undefined) {
-			const result = validator.safeParse(output.structuredContent);
-			if (!result.success) {
-				const validationError = fromZodError(result.error);
-				const validationErrors = validationError.message;
-				return this.deps.errorHandler.createValidationError(
-					`Output validation failed for ${toolName}`,
-					`Handler output does not match declared output schema: ${validationErrors}`,
-					[
-						"Check that the handler returns data matching the output schema",
-						"Review the tool definition output schema",
-					],
-				);
-			}
-			if (
-				typeof result.data !== "object" ||
-				result.data === null ||
-				Array.isArray(result.data)
-			) {
-				return this.deps.errorHandler.createValidationError(
-					`Output validation failed for ${toolName}`,
-					"Handler output schema must resolve to a JSON object for structuredContent",
-					[
-						"Ensure outputSchema root type is object",
-						"Return a JSON object from the tool handler",
-					],
-				);
-			}
-			// structuredContent already present and valid — return as-is
-			return output;
-		}
-
-		// Extract the actual data from the CallToolResult
-		// CallToolResult is { content: Array<{ type: string, text: string, ... }> }
-		// We need to parse the text content and validate it
+		// Validate content items regardless of whether structuredContent is present.
+		// This must run before the structuredContent fast-path so that malformed
+		// content is caught centrally rather than surfacing as an MCP SDK error later.
 		if (!output.content || output.content.length === 0) {
 			return this.deps.errorHandler.createValidationError(
 				`Output validation failed for ${toolName}`,
@@ -564,11 +531,47 @@ export class ToolRegistry {
 			throw new Error("Unexpected: firstContent is not text after validation");
 		}
 
+		// Fast-path: handler already provided structuredContent — validate it and
+		// replace with result.data so Zod's schema stripping is always authoritative.
+		// This must come after content validation so malformed content is still caught.
+		if (output.structuredContent !== undefined) {
+			const scResult = validator.safeParse(output.structuredContent);
+			if (!scResult.success) {
+				const validationError = fromZodError(scResult.error);
+				return this.deps.errorHandler.createValidationError(
+					`Output validation failed for ${toolName}`,
+					`Handler output does not match declared output schema: ${validationError.message}`,
+					[
+						"Check that the handler returns data matching the output schema",
+						"Review the tool definition output schema",
+					],
+				);
+			}
+			if (
+				typeof scResult.data !== "object" ||
+				scResult.data === null ||
+				Array.isArray(scResult.data)
+			) {
+				return this.deps.errorHandler.createValidationError(
+					`Output validation failed for ${toolName}`,
+					"Handler output schema must resolve to a JSON object for structuredContent",
+					[
+						"Ensure outputSchema root type is object",
+						"Return a JSON object from the tool handler",
+					],
+				);
+			}
+			return {
+				...output,
+				structuredContent: scResult.data as Record<string, unknown>,
+			};
+		}
+
 		let parsedOutput: unknown;
 		try {
 			parsedOutput = JSON.parse(firstContent.text);
 		} catch {
-			// Non-JSON response (e.g. markdown) — pass through without structuredContent
+			// Non-JSON response (e.g. markdown) and no structuredContent — pass through.
 			return output;
 		}
 
