@@ -318,7 +318,7 @@ export function correlateResults(
 			if (transaction.payee_id) {
 				const nameOnlyKey = generateCorrelationKey({
 					...transaction,
-					payee_id: undefined,
+					payee_id: null,
 				});
 				if (nameOnlyKey !== key) {
 					register(createdByHash, nameOnlyKey, transaction.id);
