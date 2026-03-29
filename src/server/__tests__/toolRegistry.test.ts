@@ -694,6 +694,118 @@ describe("ToolRegistry", () => {
 			expect(result.structuredContent).toBeUndefined();
 		});
 
+		it("uses handler-supplied structuredContent and applies Zod stripping", async () => {
+			// Regression test for ee5ad6b / abc7a27:
+			// When a handler returns structuredContent alongside markdown text the
+			// registry must (a) accept it without erroring, (b) replace it with
+			// result.data so that Zod's schema stripping is authoritative.
+			const outputSchema = z.object({
+				id: z.string(),
+				value: z.number(),
+			});
+
+			const handlerData = {
+				id: "abc",
+				value: 7,
+				extra_field_not_in_schema: "should be stripped",
+			};
+
+			const handler = vi.fn(async () => ({
+				content: [{ type: "text" as const, text: "## Markdown" }],
+				structuredContent: handlerData as Record<string, unknown>,
+			}));
+
+			registry.register({
+				name: "sc_fast_path_tool",
+				description: "Returns markdown + structuredContent",
+				inputSchema: z.object({ id: z.string() }),
+				outputSchema,
+				handler,
+			});
+
+			const result = await registry.executeTool({
+				name: "sc_fast_path_tool",
+				accessToken: "token",
+				arguments: { id: "test" },
+			});
+
+			expect(result.isError).toBeFalsy();
+			// Text content is preserved unchanged
+			expect(result.content[0]?.text).toBe("## Markdown");
+			// structuredContent is the Zod-parsed result — extra field stripped
+			expect(result.structuredContent).toEqual({ id: "abc", value: 7 });
+			expect(
+				(result.structuredContent as Record<string, unknown>)
+					?.extra_field_not_in_schema,
+			).toBeUndefined();
+		});
+
+		it("rejects handler-supplied structuredContent that fails schema validation", async () => {
+			const outputSchema = z.object({
+				id: z.string(),
+				value: z.number(),
+			});
+
+			// value is a string, not a number — schema validation should fail
+			const handler = vi.fn(async () => ({
+				content: [{ type: "text" as const, text: "## Markdown" }],
+				structuredContent: { id: "abc", value: "not-a-number" } as Record<
+					string,
+					unknown
+				>,
+			}));
+
+			registry.register({
+				name: "sc_invalid_tool",
+				description: "Returns invalid structuredContent",
+				inputSchema: z.object({ id: z.string() }),
+				outputSchema,
+				handler,
+			});
+
+			const result = await registry.executeTool({
+				name: "sc_invalid_tool",
+				accessToken: "token",
+				arguments: { id: "test" },
+			});
+
+			expect(
+				dependencies.errorHandler.createValidationError,
+			).toHaveBeenCalled();
+			expect(result.content[0]?.text).toContain("Output validation failed");
+		});
+
+		it("validates content array even when structuredContent is present", async () => {
+			// Regression: content validation must run before the structuredContent
+			// fast-path so that a malformed content array is still caught centrally.
+			const outputSchema = z.object({ id: z.string() });
+
+			const handler = vi.fn(async () => ({
+				// Non-text content type — should be rejected by content validation
+				content: [{ type: "image" as unknown as "text", text: "data" }],
+				structuredContent: { id: "abc" } as Record<string, unknown>,
+			}));
+
+			registry.register({
+				name: "sc_bad_content_tool",
+				description: "Has valid structuredContent but malformed content",
+				inputSchema: z.object({ id: z.string() }),
+				outputSchema,
+				handler,
+			});
+
+			const result = await registry.executeTool({
+				name: "sc_bad_content_tool",
+				accessToken: "token",
+				arguments: { id: "test" },
+			});
+
+			expect(
+				dependencies.errorHandler.createValidationError,
+			).toHaveBeenCalled();
+			expect(result.content[0]?.text).toContain("Output validation failed");
+		});
+
 		it("rejects handler output with empty content", async () => {
 			const outputSchema = z.object({
 				success: z.boolean(),
