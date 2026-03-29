@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-03-29
+
+### Fixed
+
+- **Reconciliation Bulk Creates** - Correlation now succeeds when YNAB populates `payee_id` on returned transactions; previously every bulk-created transaction landed in the `correlation_failed` bucket, reporting 0 transactions created
+- **MCP SDK 1.27+ Compatibility** - All 28 tool handlers now return `structuredContent` alongside text content, resolving the `RuntimeError: Tool has an output schema but did not return structured content` thrown by SDK clients
+- **Output Schema Stripping** - Zod schema stripping is now applied to handler-supplied `structuredContent`; previously the raw handler object was returned, leaking fields not declared in the output schema (e.g. `security` in diagnostic info)
+- **Content Validation Ordering** - Content array validation now runs unconditionally before the `structuredContent` fast-path, so malformed content is caught centrally even when `structuredContent` is present
+
+### Changed
+
+- **CI** - GitHub Actions runners now opt into Node.js 24 via `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`, ahead of the June 2026 forced migration
+
 ## [0.24.0] - 2026-02-22
 
 ### Changed
