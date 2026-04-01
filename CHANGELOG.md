@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-03-31
+
+### Added
+
+- **`cleared` filter on `ynab_list_transactions`** - New optional `cleared` parameter (`"cleared"` | `"uncleared"` | `"reconciled"`) filters transactions before pagination; applied in-memory with no API changes required
+- **`max_suggestions_in_output` on `ynab_reconcile_account`** - Controls how many unmatched items and suggestions appear in the human narrative (default: 10, previously hardcoded at 5)
+- **`structured_content` filter on `ynab_reconcile_account`** - New `"full"` | `"unmatched_only"` option (default `"full"`); `"unmatched_only"` limits the structured payload to `unmatched_bank`, `unmatched_ynab`, and `suggestions` to avoid exceeding MCP tool result size limits
+
+### Fixed
+
+- **memo crash in `ynab_compare_transactions`** - Output schemas for `MissingInBankItemSchema`, `YNABTransactionComparisonSchema`, and `ExportedTransactionFullSchema` changed `memo` from `z.string().nullable()` to `z.string().nullish()`, preventing validation errors when YNAB returns `memo: undefined`
+- **`csv_data` validation error message** - Replaced cryptic refine error with an actionable message explaining both input options and suggesting `ynab_list_transactions` with the new `cleared` filter as an alternative for balance-only workflows
+
+### Changed
+
+- **Reconciliation typed interfaces exported** - `StructuredReconciliationPayload`, `DualChannelPayload`, and related view interfaces are now exported from `outputBuilder.ts`, replacing an unsafe `as` cast in the structured content filter
+- **Reconciliation output schema strictness** - All `Filtered*` schemas and `StructuredReconciliationUnmatchedOnlySchema` in `reconciliationOutputs.ts` now use `.strict()`, consistent with the project-wide convention
+
 ## [0.25.0] - 2026-03-29
 
 ### Changed
