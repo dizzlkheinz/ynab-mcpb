@@ -118,6 +118,13 @@ export async function handleListTransactions(
 				usedDelta = result.usedDelta;
 			}
 
+			// Apply cleared filter before pagination to avoid client-side post-filtering.
+			if (params.cleared) {
+				transactions = transactions.filter(
+					(transaction) => transaction.cleared === params.cleared,
+				);
+			}
+
 			// Apply pagination before size check
 			const limit = params.limit ?? 50;
 			const offset = params.offset ?? 0;
@@ -331,6 +338,7 @@ Args:
   - category_id (string, optional): Filter by category.
   - since_date (string, optional): ISO date (YYYY-MM-DD) to filter transactions on or after.
   - type (string, optional): "uncategorized" or "unapproved".
+  - cleared (string, optional): "cleared", "uncleared", or "reconciled".
   - limit (int, optional): Max results per page. Default: 50.
   - offset (int, optional): Zero-based offset for pagination. Default: 0.
   - response_format (string, optional): "json" or "markdown" (default: "markdown").

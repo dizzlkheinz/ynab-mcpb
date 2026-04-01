@@ -44,6 +44,14 @@ describe("Transaction Schemas", () => {
 			expect(result.type).toBe("unapproved");
 		});
 
+		it("should validate cleared status filter", () => {
+			const result = ListTransactionsSchema.parse({
+				budget_id: "budget-1",
+				cleared: "reconciled",
+			});
+			expect(result.cleared).toBe("reconciled");
+		});
+
 		it("should reject empty budget_id", () => {
 			expect(() => ListTransactionsSchema.parse({ budget_id: "" })).toThrow(
 				"Budget ID is required",

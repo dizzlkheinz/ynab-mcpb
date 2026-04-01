@@ -1,4 +1,8 @@
-import { toMoneyValue, toMoneyValueFromDecimal } from "../../utils/money.js";
+import {
+	toMoneyValue,
+	toMoneyValueFromDecimal,
+	type MoneyValue,
+} from "../../utils/money.js";
 import type {
 	AccountSnapshot,
 	LegacyReconciliationResult,
@@ -9,6 +13,7 @@ import {
 } from "./reportFormatter.js";
 import type {
 	BankTransaction,
+	MatchConfidence,
 	ReconciliationAnalysis,
 	ReconciliationInsight,
 	TransactionMatch,
@@ -26,11 +31,76 @@ interface AdapterOptions {
 	csvFormat?: CsvFormatPayload;
 	auditMetadata?: Record<string, unknown>;
 	notes?: string[];
+	maxSuggestionsInOutput?: number | undefined;
 }
 
-interface DualChannelPayload {
+export interface StructuredBankTransactionView {
+	[key: string]: unknown;
+	id: string;
+	date: string;
+	amount: number;
+	payee: string;
+	memo?: string | undefined;
+	sourceRow: number;
+	raw: {
+		date: string;
+		amount: string;
+		description: string;
+	};
+	warnings?: string[] | undefined;
+	amount_money: MoneyValue;
+}
+
+export interface StructuredYNABTransactionView {
+	[key: string]: unknown;
+	id: string;
+	date: string;
+	amount: number;
+	payee: string | null;
+	memo: string | null;
+	categoryName: string | null;
+	cleared: "cleared" | "uncleared" | "reconciled";
+	approved: boolean;
+	amount_money: MoneyValue;
+}
+
+interface StructuredMatchCandidateView {
+	[key: string]: unknown;
+	ynab_transaction: StructuredYNABTransactionView;
+	confidence: number;
+	match_reason: string;
+	explanation: string;
+}
+
+export interface StructuredTransactionMatchView {
+	[key: string]: unknown;
+	bank_transaction: StructuredBankTransactionView;
+	ynab_transaction?: StructuredYNABTransactionView | undefined;
+	candidates?: StructuredMatchCandidateView[] | undefined;
+	confidence: MatchConfidence;
+	confidence_score: number;
+	match_reason: string;
+	top_confidence?: number | undefined;
+	action_hint?: string | undefined;
+	recommendation?: string | undefined;
+}
+
+export interface StructuredReconciliationPayload {
+	matches: {
+		auto: StructuredTransactionMatchView[];
+		suggested: StructuredTransactionMatchView[];
+	};
+	unmatched: {
+		bank: StructuredBankTransactionView[];
+		ynab: StructuredYNABTransactionView[];
+		ynab_outside_date_range: StructuredYNABTransactionView[];
+	};
+	[key: string]: unknown;
+}
+
+export interface DualChannelPayload {
 	human: string;
-	structured: Record<string, unknown>;
+	structured: StructuredReconciliationPayload;
 }
 
 interface CsvFormatPayload {
@@ -295,7 +365,7 @@ const buildHumanNarrative = (
 		accountId: options.accountId,
 		currencyCode: options.currencyCode,
 		includeDetailedMatches: false,
-		maxUnmatchedToShow: 5,
+		maxUnmatchedToShow: options.maxSuggestionsInOutput ?? 10,
 		maxInsightsToShow: 3,
 		notes: options.notes,
 	};
@@ -313,7 +383,7 @@ export const buildReconciliationPayload = (
 		? convertExecution(execution, currency)
 		: undefined;
 
-	const structured: Record<string, unknown> = {
+	const structured: StructuredReconciliationPayload = {
 		version: OUTPUT_VERSION,
 		schema_url: SCHEMA_URL,
 		generated_at: new Date().toISOString(),

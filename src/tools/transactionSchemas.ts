@@ -25,6 +25,7 @@ export const ListTransactionsSchema = z
 			.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in ISO format (YYYY-MM-DD)")
 			.optional(),
 		type: z.enum(["uncategorized", "unapproved"]).optional(),
+		cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional(),
 		limit: z.number().int().positive().optional(),
 		offset: z.number().int().min(0).optional(),
 		response_format: z

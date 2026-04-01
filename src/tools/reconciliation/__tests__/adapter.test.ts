@@ -257,4 +257,46 @@ describe("buildReconciliationPayload", () => {
 		).toBe("-CA$22.22");
 		expect(payload.human).toContain("Changes applied to YNAB");
 	});
+
+	it("limits human output entries when maxSuggestionsInOutput is provided", () => {
+		const analysis = buildAnalysis();
+		analysis.unmatched_bank = [
+			{
+				id: "bank-3",
+				date: "2025-10-25",
+				amount: 22220,
+				payee: "First Missing Transaction",
+				sourceRow: 7,
+				raw: {
+					date: "2025-10-25",
+					amount: "22.22",
+					description: "First Missing Transaction",
+				},
+			},
+			{
+				id: "bank-4",
+				date: "2025-10-26",
+				amount: 33330,
+				payee: "Second Missing Transaction",
+				sourceRow: 8,
+				raw: {
+					date: "2025-10-26",
+					amount: "33.33",
+					description: "Second Missing Transaction",
+				},
+			},
+		];
+		analysis.summary.unmatched_bank = analysis.unmatched_bank.length;
+		analysis.suggested_matches = [];
+		analysis.summary.suggested_matches = 0;
+
+		const payload = buildReconciliationPayload(analysis, {
+			accountName: "K TD FCT VISA",
+			maxSuggestionsInOutput: 1,
+		});
+
+		expect(payload.human).toContain("First Missing Transaction");
+		expect(payload.human).not.toContain("Second Missing Transaction");
+		expect(payload.human).toContain("... and 1 more");
+	});
 });

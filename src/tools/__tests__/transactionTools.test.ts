@@ -126,6 +126,7 @@ const { cacheManager, CacheManager } = await import(
 	"../../server/cacheManager.js"
 );
 const { globalRequestLogger } = await import("../../server/requestLogger.js");
+const { resolveDeltaFetcherArgs } = await import("../deltaSupport.js");
 
 describe("transactionTools", () => {
 	beforeEach(() => {
@@ -385,6 +386,50 @@ describe("transactionTools", () => {
 				mockYnabAPI.transactions.getTransactionsByCategory,
 			).toHaveBeenCalledWith("budget-123", "category-789", undefined);
 			expect(result.content[0].text).toContain("transaction-123");
+		});
+
+		it("should filter fetched transactions by cleared status before pagination", async () => {
+			const mockResponse = {
+				data: {
+					transactions: [
+						mockTransaction,
+						{
+							...mockTransaction,
+							id: "transaction-456",
+							cleared: "uncleared" as ynab.ClearedEnum,
+						},
+					],
+				},
+			};
+
+			(mockYnabAPI.transactions.getTransactions as any).mockResolvedValue(
+				mockResponse,
+			);
+
+			const result = await handleListTransactions(mockYnabAPI, {
+				budget_id: "budget-123",
+				cleared: "uncleared" as const,
+				response_format: "json" as const,
+			});
+			const deltaFetcherResult = vi
+				.mocked(resolveDeltaFetcherArgs)
+				.mock.results.at(-1)!.value;
+
+			expect(vi.mocked(resolveDeltaFetcherArgs)).toHaveBeenCalled();
+			expect(
+				deltaFetcherResult.deltaFetcher.fetchTransactions,
+			).toHaveBeenCalledWith("budget-123", undefined, undefined);
+			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
+				"budget-123",
+				undefined,
+				undefined,
+				undefined,
+			);
+			const parsedContent = JSON.parse(result.content[0].text);
+			expect(parsedContent.total_count).toBe(1);
+			expect(parsedContent.transactions).toHaveLength(1);
+			expect(parsedContent.transactions[0].id).toBe("transaction-456");
+			expect(parsedContent.transactions[0].cleared).toBe("uncleared");
 		});
 
 		it("should include since_date parameter when provided", async () => {

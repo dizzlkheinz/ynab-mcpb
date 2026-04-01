@@ -160,7 +160,7 @@ export const MissingInBankItemSchema = z.object({
 			"Amount must be a decimal string with exactly 2 decimal places",
 		),
 	payee_name: z.string().nullable(),
-	memo: z.string().nullable(),
+	memo: z.string().nullish(),
 	cleared: z.string(),
 });
 
@@ -251,7 +251,7 @@ export const YNABTransactionComparisonSchema = z.object({
 	date: ISODateStringSchema,
 	amount: z.number(),
 	payee_name: z.string().nullable(),
-	memo: z.string().nullable(),
+	memo: z.string().nullish(),
 	cleared: z.string(),
 	account_name: z.string().optional(),
 	category_name: z.string().optional(),
@@ -382,7 +382,7 @@ export const ExportedTransactionFullSchema = z.object({
 	id: z.string(),
 	date: z.string(),
 	amount: z.number(), // Raw YNAB milliunits
-	memo: z.string().nullable(),
+	memo: z.string().nullish(),
 	cleared: z.string(),
 	approved: z.boolean(),
 	flag_color: z.string().nullable(),

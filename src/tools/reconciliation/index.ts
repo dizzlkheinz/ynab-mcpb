@@ -37,7 +37,10 @@ import {
 	type LegacyReconciliationResult,
 } from "./executor.js";
 import type { MatchingConfig } from "./matcher.js";
-import { buildReconciliationPayload } from "./outputBuilder.js";
+import {
+	buildReconciliationPayload,
+	type DualChannelPayload,
+} from "./outputBuilder.js";
 import { detectSignInversion } from "./signDetector.js";
 import {
 	clampCSVToStatementWindow,
@@ -142,10 +145,19 @@ export const ReconcileAccountSchema = z
 		dry_run: z.boolean().optional().default(true),
 		// Response options
 		include_structured_data: z.boolean().optional().default(false),
+		structured_content: z
+			.enum(["full", "unmatched_only"])
+			.optional()
+			.default("full"),
+		max_suggestions_in_output: z.number().int().min(1).optional(),
 		force_full_refresh: z.boolean().optional().default(true),
 	})
 	.refine((data) => data.csv_file_path || data.csv_data, {
-		message: "Either csv_file_path or csv_data must be provided",
+		message:
+			"csv_data or csv_file_path is required. " +
+			"Provide the CSV content as a string (csv_data) or a file path (csv_file_path). " +
+			"For balance-only verification without transaction matching, this tool does not yet " +
+			"support that mode — use ynab_list_transactions with a cleared filter instead.",
 		path: ["csv_data"],
 	});
 
@@ -511,6 +523,7 @@ export async function handleReconcileAccount(
 				accountId: params.account_id,
 				currencyCode,
 				auditMetadata,
+				maxSuggestionsInOutput: params.max_suggestions_in_output,
 			};
 			if (csvFormatForPayload !== undefined) {
 				adapterOptions.csvFormat = csvFormatForPayload;
@@ -519,7 +532,7 @@ export async function handleReconcileAccount(
 				adapterOptions.notes = narrativeNotes;
 			}
 
-			const payload = buildReconciliationPayload(
+			const payload: DualChannelPayload = buildReconciliationPayload(
 				analysis,
 				adapterOptions,
 				executionData,
@@ -533,7 +546,18 @@ export async function handleReconcileAccount(
 
 			// Only include structured data if requested (can be very large)
 			if (params.include_structured_data) {
-				responseData["structured"] = payload.structured;
+				if (params.structured_content === "unmatched_only") {
+					// Keep this field mapping aligned with StructuredReconciliationUnmatchedOnlySchema
+					// in src/tools/schemas/outputs/reconciliationOutputs.ts.
+					const filteredStructured = {
+						unmatched_bank: payload.structured.unmatched.bank,
+						unmatched_ynab: payload.structured.unmatched.ynab,
+						suggestions: payload.structured.matches.suggested,
+					};
+					responseData["structured"] = filteredStructured;
+				} else {
+					responseData["structured"] = payload.structured;
+				}
 			}
 
 			return {
@@ -597,6 +621,8 @@ Args:
   - auto_create_transactions (boolean, optional): Auto-create missing transactions. Default: false.
   - auto_update_cleared_status (boolean, optional): Auto-mark matched transactions as cleared. Default: false.
   - include_structured_data (boolean, optional): Include full JSON output alongside narrative. Default: false.
+  - structured_content (string, optional): "full" or "unmatched_only". Default: "full".
+  - max_suggestions_in_output (number, optional): Limit unmatched items and suggestions shown in the human report.
 
 Returns: human-readable reconciliation narrative; optionally structured JSON data.
 

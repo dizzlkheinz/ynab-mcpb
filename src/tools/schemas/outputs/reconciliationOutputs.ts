@@ -759,22 +759,123 @@ const StructuredReconciliationDataBaseSchema = z.object({
 	audit: AuditMetadataSchema.optional(),
 });
 
+const FilteredMoneyValueSchema = z
+	.object({
+		value_milliunits: z.number(),
+		value: z.number(),
+		value_display: z.string(),
+		currency: z.string(),
+		direction: z.enum(["credit", "debit", "balanced"]),
+	})
+	.strict();
+
+const FilteredBankTransactionSchema = z
+	.object({
+		id: z.string(),
+		date: IsoDateWithCalendarValidationSchema,
+		amount: z.number(),
+		payee: z.string(),
+		memo: z.string().optional(),
+		sourceRow: z.number().int(),
+		raw: z
+			.object({
+				date: z.string(),
+				amount: z.string(),
+				description: z.string(),
+			})
+			.strict(),
+		warnings: z.array(z.string()).optional(),
+		amount_money: FilteredMoneyValueSchema,
+	})
+	.strict();
+
+const FilteredYNABTransactionSchema = z
+	.object({
+		id: z.string(),
+		date: IsoDateWithCalendarValidationSchema,
+		amount: z.number(),
+		payee: z.string().nullable(),
+		categoryName: z.string().nullable(),
+		cleared: z.enum(["cleared", "uncleared", "reconciled"]),
+		approved: z.boolean(),
+		memo: z.string().nullable().optional(),
+		amount_money: FilteredMoneyValueSchema,
+	})
+	.strict();
+
+const FilteredMatchCandidateSchema = z
+	.object({
+		ynab_transaction: FilteredYNABTransactionSchema,
+		confidence: z.number().min(0).max(100),
+		match_reason: z.string(),
+		explanation: z.string(),
+	})
+	.strict();
+
+const FilteredSuggestedMatchSchema = z
+	.object({
+		bank_transaction: FilteredBankTransactionSchema,
+		ynab_transaction: FilteredYNABTransactionSchema.optional(),
+		candidates: z.array(FilteredMatchCandidateSchema).optional(),
+		confidence: z.enum(["high", "medium", "low", "none"]),
+		confidence_score: z.number().min(0).max(100),
+		match_reason: z.string(),
+		top_confidence: z.number().optional(),
+		action_hint: z.string().optional(),
+		recommendation: z.string().optional(),
+	})
+	.strict()
+	.refine(
+		(data) =>
+			data.confidence === deriveConfidenceFromScore(data.confidence_score),
+		{
+			message:
+				"Confidence mismatch: confidence enum does not match confidence_score",
+			path: ["confidence"],
+		},
+	);
+
+export const StructuredReconciliationUnmatchedOnlySchema = z
+	.object({
+		unmatched_bank: z.array(FilteredBankTransactionSchema),
+		unmatched_ynab: z.array(FilteredYNABTransactionSchema),
+		suggestions: z.array(FilteredSuggestedMatchSchema),
+	})
+	.strict();
+
+export type StructuredReconciliationUnmatchedOnly = z.infer<
+	typeof StructuredReconciliationUnmatchedOnlySchema
+>;
+
 export const ReconcileAccountOutputSchema = z
 	.union([
 		// Human + structured data (when include_structured_data=true) - check this FIRST
-		z.object({
-			human: z.string(),
-			structured: StructuredReconciliationDataBaseSchema,
-		}),
+		z
+			.object({
+				human: z.string(),
+				structured: z.union([
+					StructuredReconciliationDataBaseSchema,
+					StructuredReconciliationUnmatchedOnlySchema,
+				]),
+			})
+			.strict(),
 		// Human narrative only (default mode) - check this SECOND
-		z.object({
-			human: z.string(),
-		}),
+		z
+			.object({
+				human: z.string(),
+			})
+			.strict(),
 	])
 	.refine(
 		(data) => {
 			// Only validate if this is the structured variant (has 'structured' property)
-			if ("structured" in data && data.structured) {
+			if (
+				"structured" in data &&
+				data.structured &&
+				"balance" in data.structured &&
+				typeof data.structured.balance === "object" &&
+				data.structured.balance !== null
+			) {
 				const discrepancyAmount = data.structured.balance.discrepancy.amount;
 				const direction = data.structured.balance.discrepancy_direction;
 

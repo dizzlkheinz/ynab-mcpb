@@ -12,11 +12,13 @@ import { describe, expect, it } from "vitest";
 import {
 	CompareTransactionsOutputSchema,
 	DateRangeSchema,
+	ExportedTransactionFullSchema,
 	ExportTransactionsOutputSchema,
 	ISODateStringSchema,
 	MatchItemSchema,
 	MissingInBankItemSchema,
 	MissingInYNABItemSchema,
+	YNABTransactionComparisonSchema,
 } from "../comparisonOutputs.js";
 
 describe("ISODateStringSchema", () => {
@@ -250,6 +252,19 @@ describe("MissingInBankItemSchema", () => {
 			expect(result.data.payee_name).toBeNull();
 			expect(result.data.memo).toBeNull();
 		}
+	});
+
+	it("should validate missing in bank item with undefined memo", () => {
+		const validItem = {
+			id: "txn-101",
+			date: "2025-10-24",
+			amount: "-30.50",
+			payee_name: "Coffee Shop",
+			cleared: "uncleared",
+		};
+
+		const result = MissingInBankItemSchema.safeParse(validItem);
+		expect(result.success).toBe(true);
 	});
 
 	it("should fail validation when missing required fields", () => {
@@ -530,5 +545,42 @@ describe("ExportTransactionsOutputSchema", () => {
 
 		const result = ExportTransactionsOutputSchema.safeParse(invalidOutput);
 		expect(result.success).toBe(false);
+	});
+});
+
+describe("memo nullish compatibility", () => {
+	it("accepts undefined memo in YNABTransactionComparisonSchema", () => {
+		const result = YNABTransactionComparisonSchema.safeParse({
+			id: "txn-1",
+			date: "2025-10-15",
+			amount: -25500,
+			payee_name: "Coffee Shop",
+			cleared: "uncleared",
+		});
+
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts undefined memo in ExportedTransactionFullSchema", () => {
+		const result = ExportedTransactionFullSchema.safeParse({
+			id: "txn-2",
+			date: "2025-10-16",
+			amount: -25500,
+			cleared: "cleared",
+			approved: true,
+			flag_color: null,
+			account_id: "account-1",
+			payee_id: null,
+			category_id: null,
+			transfer_account_id: null,
+			transfer_transaction_id: null,
+			matched_transaction_id: null,
+			import_id: null,
+			deleted: false,
+			payee_name: "Coffee Shop",
+			category_name: "Dining",
+		});
+
+		expect(result.success).toBe(true);
 	});
 });
