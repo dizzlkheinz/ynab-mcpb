@@ -495,6 +495,36 @@ export const ExecutionActionRecordSchema = z.discriminatedUnion("type", [
 		reason: z.string(),
 		bulk_chunk_index: z.number(),
 	}),
+	// Bulk update chunk failure
+	z.object({
+		type: z.literal("batch_update_failed"),
+		transaction: z.null(),
+		reason: z.string(),
+	}),
+	// Bulk reconcile chunk failure
+	z.object({
+		type: z.literal("batch_reconcile_failed"),
+		transaction: z.null(),
+		reason: z.string(),
+	}),
+	// All matched transactions marked reconciled
+	z.object({
+		type: z.literal("reconciliation_complete"),
+		transaction: z.null(),
+		reason: z.string(),
+	}),
+	// Diagnostic: STEP 3 entry metadata
+	z.object({
+		type: z.literal("diagnostic_step3_entry"),
+		transaction: z.null(),
+		reason: z.string(),
+	}),
+	// Diagnostic: unmatched YNAB transaction details
+	z.object({
+		type: z.literal("diagnostic_unmatched_ynab"),
+		transaction: z.record(z.string(), z.unknown()),
+		reason: z.string(),
+	}),
 ]);
 
 export type ExecutionActionRecord = z.infer<typeof ExecutionActionRecordSchema>;

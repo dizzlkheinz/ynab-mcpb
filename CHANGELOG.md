@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.3] - 2026-04-01
+
+### Fixed
+
+- **Reconciliation execution action schema** - Added 5 missing `type` values to `ExecutionActionRecordSchema`'s discriminated union (`batch_update_failed`, `batch_reconcile_failed`, `reconciliation_complete`, `diagnostic_step3_entry`, `diagnostic_unmatched_ynab`); these were emitted by the executor but not declared in the schema, causing `include_structured_data: true` output validation to fail whenever execution ran
+
 ## [0.26.2] - 2026-04-01
 
 ### Fixed
