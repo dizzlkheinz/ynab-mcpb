@@ -68,7 +68,10 @@ describe("reconciliationOutputs", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("rejects filtered suggested matches when confidence and score disagree", () => {
+		it("accepts high confidence with sub-90 score (two-pass exact-date auto-match)", () => {
+			// The two-pass matcher promotes a score-65+ match to "high" confidence when
+			// the bank transaction has an exact date match and is the sole candidate.
+			// confidence is the semantic auto-match classification, not a derivative of score.
 			const result = ReconcileAccountOutputSchema.safeParse({
 				human: "Reconciliation complete",
 				structured: {
@@ -86,12 +89,7 @@ describe("reconciliationOutputs", () => {
 				},
 			});
 
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(JSON.stringify(result.error.issues)).toContain(
-					"Confidence mismatch",
-				);
-			}
+			expect(result.success).toBe(true);
 		});
 	});
 

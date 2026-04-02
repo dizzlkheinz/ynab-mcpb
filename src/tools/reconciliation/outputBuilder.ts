@@ -416,9 +416,26 @@ export const buildReconciliationPayload = (
 		},
 	};
 
-	// Include recommendations if available
+	// Include recommendations if available, enriching bank_transaction with amount_money
 	if (analysis.recommendations && analysis.recommendations.length > 0) {
-		structured["recommendations"] = analysis.recommendations;
+		structured["recommendations"] = analysis.recommendations.map((rec) => {
+			if (
+				rec.action_type === "review_duplicate" &&
+				rec.parameters.bank_transaction
+			) {
+				return {
+					...rec,
+					parameters: {
+						...rec.parameters,
+						bank_transaction: toBankTransactionView(
+							rec.parameters.bank_transaction,
+							currency,
+						),
+					},
+				};
+			}
+			return rec;
+		});
 	}
 
 	if (options.csvFormat) {

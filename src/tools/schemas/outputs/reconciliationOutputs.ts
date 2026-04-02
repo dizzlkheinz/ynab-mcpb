@@ -180,84 +180,28 @@ export const MatchCandidateSchema = z.object({
 export type MatchCandidate = z.infer<typeof MatchCandidateSchema>;
 
 /**
- * Derives the confidence enum value from a numeric confidence score.
- * Used to enforce consistency between confidence and confidence_score fields.
- *
- * @param score - Numeric confidence score (0-100)
- * @returns Corresponding confidence level enum value
- *
- * @remarks
- * Export this function to use in application logic when constructing
- * TransactionMatch objects to ensure consistency between the two fields.
- *
- * Thresholds:
- * - 'high': score >= 90
- * - 'medium': score >= 60
- * - 'low': score >= 1
- * - 'none': score === 0
- *
- * @example
- * ```typescript
- * const confidenceScore = 85;
- * const transactionMatch = {
- *   // ... other fields
- *   confidence: deriveConfidenceFromScore(confidenceScore),
- *   confidence_score: confidenceScore,
- * };
- * ```
- */
-export function deriveConfidenceFromScore(
-	score: number,
-): "high" | "medium" | "low" | "none" {
-	if (score >= 90) return "high";
-	if (score >= 60) return "medium";
-	if (score >= 1) return "low";
-	return "none";
-}
-
-/**
  * Transaction match result with confidence and candidates.
  * Links a bank transaction to a YNAB transaction or suggests candidates.
  *
  * @see src/tools/reconciliation/types.ts - TransactionMatch interface
  *
  * @remarks
- * This schema contains both `confidence` (enum) and `confidence_score` (0-100)
- * for backwards compatibility. A validation rule enforces consistency between
- * the two fields by deriving the expected enum value from the numeric score
- * and rejecting mismatches.
- *
- * Confidence thresholds:
- * - 'high': confidence_score >= 90
- * - 'medium': confidence_score >= 60
- * - 'low': confidence_score >= 1
- * - 'none': confidence_score === 0
+ * `confidence` is the semantic auto-match classification ("high" = auto-matched,
+ * "medium"/"low" = suggested). It is NOT a strict function of `confidence_score`
+ * because the two-pass exact-date logic can promote a lower-scored match to "high"
+ * when it is the only candidate for that date.
  */
-export const TransactionMatchSchema = z
-	.object({
-		bank_transaction: BankTransactionSchema,
-		ynab_transaction: YNABTransactionSimpleSchema.optional(),
-		candidates: z.array(MatchCandidateSchema).optional(),
-		confidence: z.enum(["high", "medium", "low", "none"]),
-		confidence_score: z.number().min(0).max(100),
-		match_reason: z.string(),
-		top_confidence: z.number().optional(),
-		action_hint: z.string().optional(),
-		recommendation: z.string().optional(),
-	})
-	.refine(
-		(data) => {
-			const expectedConfidence = deriveConfidenceFromScore(
-				data.confidence_score,
-			);
-			return data.confidence === expectedConfidence;
-		},
-		{
-			message:
-				"Confidence mismatch: confidence enum does not match confidence_score",
-			path: ["confidence"],
-		},
-	);
+export const TransactionMatchSchema = z.object({
+	bank_transaction: BankTransactionSchema,
+	ynab_transaction: YNABTransactionSimpleSchema.optional(),
+	candidates: z.array(MatchCandidateSchema).optional(),
+	confidence: z.enum(["high", "medium", "low", "none"]),
+	confidence_score: z.number().min(0).max(100),
+	match_reason: z.string(),
+	top_confidence: z.number().optional(),
+	action_hint: z.string().optional(),
+	recommendation: z.string().optional(),
+});
 
 export type TransactionMatch = z.infer<typeof TransactionMatchSchema>;
 
@@ -400,7 +344,15 @@ export const ActionableRecommendationSchema = z.discriminatedUnion(
 			metadata: z.record(z.string(), z.unknown()).optional(),
 			parameters: z.object({
 				issue_type: z.string(),
-				related_transactions: z.array(z.string()),
+				related_transactions: z
+					.array(
+						z.object({
+							source: z.enum(["bank", "ynab"]),
+							id: z.string(),
+							description: z.string(),
+						}),
+					)
+					.optional(),
 			}),
 		}),
 	],

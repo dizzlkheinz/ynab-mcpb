@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integration, enabling AI assistants to interact with YNAB budgets, accounts, transactions, and categories. The codebase uses TypeScript with a modular, service-oriented architecture.
 
-**Current Version:** 0.26.1
+**Current Version:** 0.26.2
 
 ## Essential Commands
 

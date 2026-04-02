@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.2] - 2026-04-01
+
+### Fixed
+
+- **Reconciliation structured output** - Removed overly strict `confidence`/`confidence_score` consistency refine from `TransactionMatchSchema`; the two-pass exact-date auto-match correctly promotes a lower-scored match to `"high"` confidence, which the old refine falsely rejected
+- **Reconciliation `review_duplicate` recommendations** - `parameters.bank_transaction` is now enriched with `amount_money` via the adapter before serialization; previously the raw internal type was passed through without the required field
+- **Reconciliation `manual_review` recommendations** - `parameters.related_transactions` schema corrected from `z.array(z.string())` to `z.array(z.object({ source, id, description })).optional()`, matching the shape the recommendation engine actually produces
+
 ## [0.26.1] - 2026-04-01
 
 ### Fixed
