@@ -62,41 +62,6 @@ export {
 export type * from "./types.js";
 
 /**
- * Helper function to determine audit data source based on fetch result
- */
-function getAuditDataSource(
-	transactionsResult: { usedDelta?: boolean; wasCached?: boolean },
-	forceFullRefresh: boolean,
-): string {
-	if (forceFullRefresh) {
-		return "full_api_fetch_no_delta";
-	}
-	if (transactionsResult.usedDelta) {
-		return "delta_fetch_with_merge";
-	}
-	if (transactionsResult.wasCached) {
-		return "delta_fetch_cache_hit";
-	}
-	return "delta_fetch_full_refresh";
-}
-
-/**
- * Helper function to determine data freshness based on fetch result
- */
-function getDataFreshness(
-	transactionsResult: { wasCached?: boolean },
-	forceFullRefresh: boolean,
-): string {
-	if (forceFullRefresh) {
-		return "guaranteed_fresh";
-	}
-	if (transactionsResult.wasCached) {
-		return "cache_validated_via_server_knowledge";
-	}
-	return "fresh_via_delta_fetch";
-}
-
-/**
  * Schema for reconcile_account tool
  */
 export const ReconcileAccountSchema = z
@@ -126,31 +91,28 @@ export const ReconcileAccountSchema = z
 		statement_balance: z.number({
 			message: "Statement balance is required and must be a number",
 		}),
-		statement_start_date: z.string().optional(),
 		statement_end_date: z.string().optional(),
-		statement_date: z.string().optional(),
-		expected_bank_balance: z.number().optional(),
-		as_of_timezone: z.string().optional(),
 
 		// Matching configuration (optional)
 		date_tolerance_days: z.number().min(0).max(7).optional().default(7),
-		auto_match_threshold: z.number().min(0).max(100).optional().default(85),
-		suggestion_threshold: z.number().min(0).max(100).optional().default(60),
+		match_strictness: z
+			.enum(["loose", "normal", "strict"])
+			.optional()
+			.default("normal"),
 
 		auto_create_transactions: z.boolean().optional().default(false),
 		auto_update_cleared_status: z.boolean().optional().default(false),
 		auto_unclear_missing: z.boolean().optional().default(true),
 		auto_adjust_dates: z.boolean().optional().default(false),
-		invert_bank_amounts: z.boolean().optional(),
 		dry_run: z.boolean().optional().default(true),
-		// Response options
-		include_structured_data: z.boolean().optional().default(false),
-		structured_content: z
-			.enum(["full", "unmatched_only"])
+		// Sign convention override for bank CSV amounts
+		sign_convention: z
+			.enum(["auto", "invert", "as_is"])
 			.optional()
-			.default("full"),
+			.default("auto"),
+
+		// Response options
 		max_suggestions_in_output: z.number().int().min(1).optional().default(20),
-		force_full_refresh: z.boolean().optional().default(true),
 	})
 	.refine((data) => data.csv_file_path || data.csv_data, {
 		message:
@@ -192,9 +154,18 @@ export async function handleReconcileAccount(
 		deltaFetcherOrParams,
 		maybeParams,
 	);
-	const forceFullRefresh = params.force_full_refresh ?? true;
 	return await withToolErrorHandling(
 		async () => {
+			// Derive matching thresholds from match_strictness
+			const STRICTNESS_THRESHOLDS = {
+				loose: { autoMatch: 70, suggested: 55 },
+				normal: { autoMatch: 85, suggested: 60 },
+				strict: { autoMatch: 93, suggested: 75 },
+			} as const;
+			const strictness = params.match_strictness ?? "normal";
+			const { autoMatch: autoMatchThreshold, suggested: suggestionThreshold } =
+				STRICTNESS_THRESHOLDS[strictness];
+
 			// Build matching configuration from parameters (V2 Format)
 			const config: MatchingConfig = {
 				weights: {
@@ -202,16 +173,16 @@ export async function handleReconcileAccount(
 					payee: 0.35,
 				},
 				dateToleranceDays: params.date_tolerance_days ?? 7,
-				autoMatchThreshold: params.auto_match_threshold ?? 85,
-				suggestedMatchThreshold: params.suggestion_threshold ?? 60,
+				autoMatchThreshold,
+				suggestedMatchThreshold: suggestionThreshold,
 				minimumCandidateScore: 40,
 				exactDateBonus: 5,
 				exactPayeeBonus: 10,
 			};
 
-			const accountResult = forceFullRefresh
-				? await deltaFetcher.fetchAccountsFull(params.budget_id)
-				: await deltaFetcher.fetchAccounts(params.budget_id);
+			const accountResult = await deltaFetcher.fetchAccountsFull(
+				params.budget_id,
+			);
 			const accountData = accountResult.data.find(
 				(account) => account.id === params.account_id,
 			);
@@ -236,14 +207,8 @@ export async function handleReconcileAccount(
 				accountType === "otherDebt" ||
 				accountType === "otherLiability";
 
-			// Determine whether to invert bank amounts
-			// If invert_bank_amounts is explicitly set, use that value
-			// Otherwise, default to true for liability accounts (legacy behavior)
-			// Note: Some banks (e.g., Wealthsimple) show charges as negative already, matching YNAB
-			const shouldInvertBankAmounts =
-				params.invert_bank_amounts !== undefined
-					? params.invert_bank_amounts
-					: accountIsLiability;
+			// Default inversion assumption: liability accounts typically show charges as positive
+			const shouldInvertBankAmounts = accountIsLiability;
 
 			// Negate statement balance for liability accounts
 			const adjustedStatementBalance = accountIsLiability
@@ -341,16 +306,10 @@ export async function handleReconcileAccount(
 				throw new Error(`Failed to parse CSV data: ${message}`);
 			}
 
-			const statementWindowStart = normalizeStatementDate(
-				params.statement_start_date,
-			);
 			const statementWindowEnd = normalizeStatementDate(
-				params.statement_end_date ?? params.statement_date,
+				params.statement_end_date,
 			);
 			const statementWindowBounds = {
-				...(statementWindowStart !== undefined && {
-					startDate: statementWindowStart,
-				}),
 				...(statementWindowEnd !== undefined && {
 					endDate: statementWindowEnd,
 				}),
@@ -371,17 +330,23 @@ export async function handleReconcileAccount(
 				);
 			}
 
+			const effectiveStatementEndDate =
+				statementWindowEnd ??
+				inferLatestTransactionDate(rawCsvResult.transactions);
+			if (
+				statementWindowEnd === undefined &&
+				effectiveStatementEndDate !== undefined
+			) {
+				narrativeNotes.push(
+					`Auto-detected statement_end_date=${effectiveStatementEndDate} from the latest CSV transaction for balance verification.`,
+				);
+			}
+
 			// Fetch YNAB transactions for the account using inferred date window
 			let sinceDate: Date;
-			let dateWindowSource:
-				| "statement_start_date"
-				| "csv_min_date_with_buffer"
-				| "fallback_90_days";
+			let dateWindowSource: "csv_min_date_with_buffer" | "fallback_90_days";
 
-			if (params.statement_start_date) {
-				sinceDate = new Date(params.statement_start_date);
-				dateWindowSource = "statement_start_date";
-			} else if (rawCsvResult.transactions.length > 0) {
+			if (rawCsvResult.transactions.length > 0) {
 				sinceDate = inferSinceDateFromTransactions(rawCsvResult.transactions);
 				dateWindowSource = "csv_min_date_with_buffer";
 			} else {
@@ -393,43 +358,49 @@ export async function handleReconcileAccount(
 			}
 
 			const sinceDateString = sinceDate.toISOString().split("T")[0];
-			const transactionsResult = forceFullRefresh
-				? await deltaFetcher.fetchTransactionsByAccountFull(
-						params.budget_id,
-						params.account_id,
-						sinceDateString,
-					)
-				: await deltaFetcher.fetchTransactionsByAccount(
-						params.budget_id,
-						params.account_id,
-						sinceDateString,
-					);
+			const transactionsResult =
+				await deltaFetcher.fetchTransactionsByAccountFull(
+					params.budget_id,
+					params.account_id,
+					sinceDateString,
+				);
 
 			const ynabTransactions = transactionsResult.data;
 			const normalizedYNAB = normalizeYNABTransactions(ynabTransactions);
 
-			// Smart sign detection: If invert_bank_amounts not explicitly set, auto-detect
-			let finalInvertAmounts = shouldInvertBankAmounts;
-			if (
-				params.invert_bank_amounts === undefined &&
-				rawCsvResult.transactions.length > 0 &&
-				normalizedYNAB.length > 0
-			) {
-				const needsInversion = detectSignInversion(
-					rawCsvResult.transactions,
-					normalizedYNAB,
+			// Determine sign inversion: explicit override or auto-detect
+			const signConvention = params.sign_convention ?? "auto";
+			let finalInvertAmounts: boolean;
+			if (signConvention === "invert") {
+				finalInvertAmounts = true;
+				narrativeNotes.push(
+					"Using explicit sign_convention=invert; bank amounts will be negated.",
 				);
+			} else if (signConvention === "as_is") {
+				finalInvertAmounts = false;
+				narrativeNotes.push(
+					"Using explicit sign_convention=as_is; bank amounts used as-is.",
+				);
+			} else {
+				// Auto-detect sign convention; fall back to account-type default
+				finalInvertAmounts = shouldInvertBankAmounts;
+				if (rawCsvResult.transactions.length > 0 && normalizedYNAB.length > 0) {
+					const needsInversion = detectSignInversion(
+						rawCsvResult.transactions,
+						normalizedYNAB,
+					);
 
-				if (needsInversion !== null) {
-					if (needsInversion !== finalInvertAmounts) {
-						narrativeNotes.push(
-							needsInversion
-								? "Detected bank CSV amounts opposite YNAB; inverting bank amounts for matching."
-								: "Detected bank CSV amounts already align with YNAB; using CSV amounts as-is.",
-						);
+					if (needsInversion !== null) {
+						if (needsInversion !== finalInvertAmounts) {
+							narrativeNotes.push(
+								needsInversion
+									? "Detected bank CSV amounts opposite YNAB; inverting bank amounts for matching."
+									: "Detected bank CSV amounts already align with YNAB; using CSV amounts as-is.",
+							);
+						}
+
+						finalInvertAmounts = needsInversion;
 					}
-
-					finalInvertAmounts = needsInversion;
 				}
 			}
 
@@ -445,8 +416,8 @@ export async function handleReconcileAccount(
 				: rawCsvResult;
 
 			const auditMetadata = {
-				data_freshness: getDataFreshness(transactionsResult, forceFullRefresh),
-				data_source: getAuditDataSource(transactionsResult, forceFullRefresh),
+				data_freshness: "guaranteed_fresh",
+				data_source: "full_api_fetch_no_delta",
 				server_knowledge: transactionsResult.serverKnowledge,
 				fetched_at: new Date().toISOString(),
 				accounts_count: accountResult.data.length,
@@ -494,8 +465,18 @@ export async function handleReconcileAccount(
 				initialAccount,
 			);
 
+			const effectiveParams =
+				effectiveStatementEndDate !== params.statement_end_date
+					? {
+							...params,
+							statement_end_date: effectiveStatementEndDate,
+						}
+					: params;
+
 			let executionData: LegacyReconciliationResult | undefined;
-			const wantsBalanceVerification = Boolean(params.statement_date);
+			const wantsBalanceVerification = Boolean(
+				effectiveParams.statement_end_date,
+			);
 			const shouldExecute =
 				params.auto_create_transactions ||
 				params.auto_update_cleared_status ||
@@ -507,7 +488,7 @@ export async function handleReconcileAccount(
 				executionData = await executeReconciliation({
 					ynabAPI,
 					analysis,
-					params,
+					params: effectiveParams,
 					budgetId: params.budget_id,
 					accountId: params.account_id,
 					initialAccount,
@@ -540,26 +521,48 @@ export async function handleReconcileAccount(
 			);
 
 			// Build response payload matching ReconcileAccountOutputSchema
-			// Schema expects: { human: string } OR { human: string, structured: object }
-			const responseData: Record<string, unknown> = {
-				human: payload.human,
-			};
+			// Always includes unmatched_only structured data for agent consumption.
+			// Include execution summary when reconciliation actions were performed.
+			let executionSummary:
+				| {
+						transactions_created: number;
+						transactions_updated: number;
+						dates_adjusted: number;
+						dry_run: boolean;
+						balance_status: "balanced" | "unbalanced" | "not_verified";
+						recommendations: string[];
+				  }
+				| undefined;
+			if (executionData) {
+				const balanceRecon = executionData.balance_reconciliation;
+				const balanceStatus: "balanced" | "unbalanced" | "not_verified" =
+					!wantsBalanceVerification
+						? "not_verified"
+						: balanceRecon?.status === "balanced"
+							? "balanced"
+							: "unbalanced";
 
-			// Only include structured data if requested (can be very large)
-			if (params.include_structured_data) {
-				if (params.structured_content === "unmatched_only") {
-					// Keep this field mapping aligned with StructuredReconciliationUnmatchedOnlySchema
-					// in src/tools/schemas/outputs/reconciliationOutputs.ts.
-					const filteredStructured = {
-						unmatched_bank: payload.structured.unmatched.bank,
-						unmatched_ynab: payload.structured.unmatched.ynab,
-						suggestions: payload.structured.matches.suggested,
-					};
-					responseData["structured"] = filteredStructured;
-				} else {
-					responseData["structured"] = payload.structured;
-				}
+				executionSummary = {
+					transactions_created: executionData.summary.transactions_created,
+					transactions_updated: executionData.summary.transactions_updated,
+					dates_adjusted: executionData.summary.dates_adjusted,
+					dry_run: executionData.summary.dry_run,
+					balance_status: balanceStatus,
+					recommendations: executionData.recommendations,
+				};
 			}
+			const structured = {
+				unmatched_bank: payload.structured.unmatched.bank,
+				unmatched_ynab: payload.structured.unmatched.ynab,
+				suggestions: payload.structured.matches.suggested,
+				...(executionSummary !== undefined && {
+					execution_summary: executionSummary,
+				}),
+			};
+			const responseData = {
+				human: payload.human,
+				structured,
+			};
 
 			return {
 				content: [
@@ -619,17 +622,15 @@ Args:
   - csv_file_path or csv_data (string, required): Bank export file path or inline CSV text.
   - statement_balance (number, required): Ending balance from the bank statement (dollars).
       For credit cards and other liability accounts, pass a negative value (e.g. -6143.27 means you owe $6,143.27).
+  - statement_end_date (string, optional): Statement closing date (YYYY-MM-DD). Filters CSV and triggers balance verification. Auto-detected from CSV if omitted.
+  - match_strictness (string, optional): Matching sensitivity — "loose" (more matches), "normal" (default), or "strict" (fewer false positives).
+  - sign_convention (string, optional): How to treat CSV amount signs — "auto" (default, detects from data), "invert" (negate all amounts), "as_is" (use amounts unchanged). Useful when auto-detection fails for liability accounts.
   - dry_run (boolean, optional): Preview actions without executing. Default: true.
   - auto_create_transactions (boolean, optional): Auto-create missing transactions. Default: false.
   - auto_update_cleared_status (boolean, optional): Auto-mark matched transactions as cleared. Default: false.
-  - auto_match_threshold (number, optional): Score 0–100 required for automatic matching. Default: 85.
-      Lower to 70–75 to match more transactions automatically; raise to 90+ for stricter matching.
-  - include_structured_data (boolean, optional): Include full JSON output alongside narrative. Default: false.
-  - structured_content (string, optional): "full" or "unmatched_only". Default: "full".
-  - max_suggestions_in_output (number, optional): Limit unmatched items and suggestions shown in the human report.
-      Default: 20.
+  - max_suggestions_in_output (number, optional): Limit unmatched items and suggestions shown in the human report. Default: 20.
 
-Returns: human-readable reconciliation narrative; optionally structured JSON data.
+Returns: human-readable reconciliation narrative + structured JSON (unmatched_bank, unmatched_ynab, suggestions, execution_summary when actions are performed).
 
 Examples:
   - Preview reconciliation: set dry_run=true (default)
@@ -672,6 +673,20 @@ function mapCsvDateFormatToHint(
 	}
 
 	return undefined;
+}
+
+function inferLatestTransactionDate(
+	transactions: Array<{ date: string }>,
+): string | undefined {
+	let latestDate: string | undefined;
+
+	for (const transaction of transactions) {
+		if (latestDate === undefined || transaction.date > latestDate) {
+			latestDate = transaction.date;
+		}
+	}
+
+	return latestDate;
 }
 
 function mapCsvFormatForPayload(

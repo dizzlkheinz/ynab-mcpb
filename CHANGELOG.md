@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.4] - 2026-04-02
+
+### Fixed
+
+- **Reconciliation parameter simplification** — Reduced `ynab_reconcile_account` from ~22 parameters to ~15, removing redundant/unused parameters (`statement_date`, `statement_start_date`, `as_of_timezone`, `expected_bank_balance`, `force_full_refresh`, `include_structured_data`, `structured_content`, `invert_bank_amounts`) and collapsing `auto_match_threshold`/`suggestion_threshold` into a single `match_strictness` enum (`"loose"` | `"normal"` | `"strict"`)
+- **Missing test migration** — Updated `performance.test.ts` to use new parameter names (`statement_end_date`, `match_strictness`) instead of removed parameters
+
+### Added
+
+- **`sign_convention` parameter** — New optional parameter on `ynab_reconcile_account` (`"auto"` | `"invert"` | `"as_is"`, default `"auto"`) providing an explicit override when auto-detection fails for liability accounts with unusual CSV sign conventions
+- **`execution_summary` in structured output** — Reconciliation structured output now includes an optional `execution_summary` field with `transactions_created`, `transactions_updated`, `dates_adjusted`, `dry_run`, `balance_status`, and `recommendations` when actions are performed, enabling programmatic consumption of execution results
+- **Auto-inferred `statement_end_date`** — When `statement_end_date` is omitted, the reconciliation handler infers it from the latest CSV transaction date and uses it for balance verification, aligning behavior with the documented tool description
+
 ## [0.26.3] - 2026-04-01
 
 ### Fixed

@@ -130,17 +130,10 @@ function resolveStatementWindow(
 	params: ReconcileAccountRequest,
 	analysisDateRange?: string | undefined,
 ): StatementWindow | undefined {
-	const start = parseISODate(params.statement_start_date);
-	const end =
-		parseISODate(params.statement_end_date ?? params.statement_date) ??
-		// If only start provided, end stays undefined
-		undefined;
+	const end = parseISODate(params.statement_end_date);
 
-	if (start || end) {
-		const window: StatementWindow = {};
-		if (start) window.start = start;
-		if (end) window.end = end;
-		return window;
+	if (end) {
+		return { end };
 	}
 
 	if (analysisDateRange?.includes(" to ")) {
@@ -941,12 +934,12 @@ export async function executeReconciliation(
 
 	// STEP 5: Balance reconciliation snapshot (only once per execution)
 	let balance_reconciliation: ExecutionResult["balance_reconciliation"];
-	if (params.statement_balance !== undefined && params.statement_date) {
+	if (params.statement_balance !== undefined && params.statement_end_date) {
 		balance_reconciliation = await buildBalanceReconciliation({
 			ynabAPI,
 			budgetId,
 			accountId,
-			statementDate: params.statement_date,
+			statementDate: params.statement_end_date,
 			statementBalanceMilli: statementTargetMilli,
 			analysis,
 		});

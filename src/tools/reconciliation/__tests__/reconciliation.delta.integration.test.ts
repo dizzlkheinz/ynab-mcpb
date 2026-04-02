@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
 	afterEach,
 	beforeAll,
@@ -34,50 +33,6 @@ describeIntegration("Reconciliation delta isolation", () => {
 	let deltaFetcher: DeltaFetcher;
 	let previousNodeEnv: string | undefined;
 	let setupRateLimited = false;
-	const parseStructuredPayload = (result: CallToolResult) => {
-		if (result.isError) {
-			const errorContent = result.content?.find(
-				(entry) => entry.type === "text",
-			);
-			throw new Error(
-				errorContent && errorContent.type === "text"
-					? errorContent.text
-					: "Unexpected reconciliation error response",
-			);
-		}
-
-		// Find the last text entry that contains valid JSON with an "audit" key
-		const textEntries =
-			result.content?.filter((entry) => entry.type === "text") ?? [];
-		for (let i = textEntries.length - 1; i >= 0; i--) {
-			const entry = textEntries[i];
-			if (entry.type === "text") {
-				try {
-					const parsed = JSON.parse(entry.text);
-					if (parsed && typeof parsed === "object") {
-						// Check if audit is at top level (old format)
-						if ("audit" in parsed) {
-							return parsed;
-						}
-						// Check if audit is nested under structured (current format: { human, structured: { audit, ... } })
-						const structured = (parsed as any).structured;
-						if (
-							structured &&
-							typeof structured === "object" &&
-							"audit" in structured
-						) {
-							return structured;
-						}
-					}
-				} catch {
-					// Not valid JSON, continue searching
-				}
-			}
-		}
-		throw new Error(
-			'Expected structured reconciliation payload with "audit" key to be present',
-		);
-	};
 
 	beforeAll(async () => {
 		try {
@@ -161,7 +116,6 @@ describeIntegration("Reconciliation delta isolation", () => {
 				account_id: testAccountId,
 				csv_data: csvData,
 				statement_balance: 0,
-				include_structured_data: true,
 			};
 
 			const accountsFullSpy = vi.spyOn(deltaFetcher, "fetchAccountsFull");
@@ -171,11 +125,7 @@ describeIntegration("Reconciliation delta isolation", () => {
 			);
 			const txDeltaSpy = vi.spyOn(deltaFetcher, "fetchTransactionsByAccount");
 
-			const result = await handleReconcileAccount(
-				ynabAPI,
-				deltaFetcher,
-				params,
-			);
+			await handleReconcileAccount(ynabAPI, deltaFetcher, params);
 
 			expect(accountsFullSpy).toHaveBeenCalledWith(testBudgetId);
 			expect(txFullSpy).toHaveBeenCalledWith(
@@ -184,65 +134,6 @@ describeIntegration("Reconciliation delta isolation", () => {
 				expect.any(String),
 			);
 			expect(txDeltaSpy).not.toHaveBeenCalled();
-
-			const structuredPayload = parseStructuredPayload(result);
-			expect(structuredPayload.audit).toMatchObject({
-				data_freshness: "guaranteed_fresh",
-				data_source: "full_api_fetch_no_delta",
-			});
-			expect(structuredPayload.audit).toHaveProperty("server_knowledge");
-			expect(structuredPayload.audit).toHaveProperty("transactions_count");
-		});
-	});
-
-	it("can opt into delta-backed fetches when force_full_refresh is false", {
-		meta: { tier: "domain", domain: "delta" },
-	}, async (ctx) => {
-		await withRateLimitSkip(ctx, async () => {
-			const csvData = ["Date,Amount,Description", "2024-01-01,10,Coffee"].join(
-				"\n",
-			);
-			const params = {
-				budget_id: testBudgetId,
-				account_id: testAccountId,
-				csv_data: csvData,
-				statement_balance: 0,
-				include_structured_data: true,
-				force_full_refresh: false,
-			};
-
-			const accountsFullSpy = vi.spyOn(deltaFetcher, "fetchAccountsFull");
-			const txFullSpy = vi.spyOn(
-				deltaFetcher,
-				"fetchTransactionsByAccountFull",
-			);
-			const accountsDeltaSpy = vi.spyOn(deltaFetcher, "fetchAccounts");
-			const txDeltaSpy = vi.spyOn(deltaFetcher, "fetchTransactionsByAccount");
-
-			const result = await handleReconcileAccount(
-				ynabAPI,
-				deltaFetcher,
-				params,
-			);
-
-			expect(accountsFullSpy).not.toHaveBeenCalled();
-			expect(txFullSpy).not.toHaveBeenCalled();
-			expect(accountsDeltaSpy).toHaveBeenCalledWith(testBudgetId);
-			expect(txDeltaSpy).toHaveBeenCalledWith(
-				testBudgetId,
-				testAccountId,
-				expect.any(String),
-			);
-
-			const structuredPayload = parseStructuredPayload(result);
-			expect(structuredPayload.audit).toMatchObject({
-				data_source: expect.stringMatching(/^delta_fetch_/),
-			});
-			expect(structuredPayload.audit.cache_status).toMatchObject({
-				accounts_cached: expect.any(Boolean),
-				transactions_cached: expect.any(Boolean),
-				delta_merge_applied: expect.any(Boolean),
-			});
 		});
 	});
 });

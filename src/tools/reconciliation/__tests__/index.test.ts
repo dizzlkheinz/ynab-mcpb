@@ -4,7 +4,7 @@ import { DeltaFetcher } from "../../deltaFetcher.js";
 import { handleReconcileAccount, ReconcileAccountSchema } from "../index.js";
 
 describe("ReconcileAccountSchema", () => {
-	it("parses new response options and defaults structured_content to full", () => {
+	it("parses params and respects max_suggestions_in_output", () => {
 		const result = ReconcileAccountSchema.parse({
 			budget_id: "budget-1",
 			account_id: "account-1",
@@ -13,7 +13,6 @@ describe("ReconcileAccountSchema", () => {
 			max_suggestions_in_output: 3,
 		});
 
-		expect(result.structured_content).toBe("full");
 		expect(result.max_suggestions_in_output).toBe(3);
 	});
 
@@ -48,7 +47,7 @@ describe("ReconcileAccountSchema", () => {
 });
 
 describe("handleReconcileAccount", () => {
-	it('returns filtered structured content for "unmatched_only"', async () => {
+	it("always returns unmatched_only structured content", async () => {
 		const ynabAPI = {
 			accounts: {
 				getAccounts: async () => ({
@@ -96,10 +95,7 @@ describe("handleReconcileAccount", () => {
 			account_id: "account-1",
 			csv_data: "Date,Description,Amount\n2025-01-01,Coffee,-10.00",
 			statement_balance: -10,
-			include_structured_data: true,
-			structured_content: "unmatched_only",
 			auto_unclear_missing: false,
-			force_full_refresh: true,
 		});
 
 		const structured = (result.structuredContent as Record<string, unknown>)
@@ -115,5 +111,13 @@ describe("handleReconcileAccount", () => {
 		expect(Array.isArray(structured["unmatched_bank"])).toBe(true);
 		expect(Array.isArray(structured["unmatched_ynab"])).toBe(true);
 		expect(Array.isArray(structured["suggestions"])).toBe(true);
+		expect(structured).toHaveProperty("execution_summary");
+		expect(
+			(
+				structured["execution_summary"] as {
+					balance_status?: string;
+				}
+			).balance_status,
+		).toBe("unbalanced");
 	});
 });

@@ -723,41 +723,25 @@ export const CsvFormatMetadataSchema = z.object({
 
 export type CsvFormatMetadata = z.infer<typeof CsvFormatMetadataSchema>;
 
-// Define the structured data schema without refinement first
-const StructuredReconciliationDataBaseSchema = z.object({
-	version: z.string(),
-	schema_url: z.string(),
-	generated_at: z.string(),
-	account: z.object({
-		id: z.string().optional(),
-		name: z.string().optional(),
-	}),
-	summary: ReconciliationSummarySchema,
-	balance: BalanceInfoSchema.extend({
-		discrepancy_direction: z.enum(["balanced", "ynab_higher", "bank_higher"]),
-	}),
-	insights: z.array(ReconciliationInsightSchema),
-	next_steps: z.array(z.string()),
-	matches: z.object({
-		auto: z.array(TransactionMatchSchema),
-		suggested: z.array(TransactionMatchSchema),
-	}),
-	unmatched: z.object({
-		bank: z.array(BankTransactionSchema),
-		ynab: z.array(YNABTransactionSimpleSchema),
-		ynab_outside_date_range: z.array(YNABTransactionSimpleSchema).optional(),
-	}),
-	recommendations: z.array(ActionableRecommendationSchema).optional(),
-	csv_format: CsvFormatMetadataSchema.optional(),
-	execution: ExecutionResultSchema.optional(),
-	audit: AuditMetadataSchema.optional(),
+export const ExecutionSummaryOutputSchema = z.object({
+	transactions_created: z.number().int(),
+	transactions_updated: z.number().int(),
+	dates_adjusted: z.number().int(),
+	dry_run: z.boolean(),
+	balance_status: z.enum(["balanced", "unbalanced", "not_verified"]).optional(),
+	recommendations: z.array(z.string()).optional(),
 });
+
+export type ExecutionSummaryOutput = z.infer<
+	typeof ExecutionSummaryOutputSchema
+>;
 
 export const StructuredReconciliationUnmatchedOnlySchema = z
 	.object({
 		unmatched_bank: z.array(BankTransactionSchema),
 		unmatched_ynab: z.array(YNABTransactionSimpleSchema),
 		suggestions: z.array(TransactionMatchSchema),
+		execution_summary: ExecutionSummaryOutputSchema.optional(),
 	})
 	.strict();
 
@@ -766,62 +750,11 @@ export type StructuredReconciliationUnmatchedOnly = z.infer<
 >;
 
 export const ReconcileAccountOutputSchema = z
-	.union([
-		// Human + structured data (when include_structured_data=true) - check this FIRST
-		z
-			.object({
-				human: z.string(),
-				structured: z.union([
-					StructuredReconciliationDataBaseSchema,
-					StructuredReconciliationUnmatchedOnlySchema,
-				]),
-			})
-			.strict(),
-		// Human narrative only (default mode) - check this SECOND
-		z
-			.object({
-				human: z.string(),
-			})
-			.strict(),
-	])
-	.refine(
-		(data) => {
-			// Only validate if this is the structured variant (has 'structured' property)
-			if (
-				"structured" in data &&
-				data.structured &&
-				"balance" in data.structured &&
-				typeof data.structured.balance === "object" &&
-				data.structured.balance !== null
-			) {
-				const discrepancyAmount = data.structured.balance.discrepancy.value;
-				const direction = data.structured.balance.discrepancy_direction;
-
-				// If absolute discrepancy < 0.01, direction must be 'balanced'
-				if (Math.abs(discrepancyAmount) < 0.01) {
-					return direction === "balanced";
-				}
-
-				// If discrepancy > 0, direction must be 'ynab_higher'
-				if (discrepancyAmount > 0) {
-					return direction === "ynab_higher";
-				}
-
-				// If discrepancy < 0, direction must be 'bank_higher'
-				if (discrepancyAmount < 0) {
-					return direction === "bank_higher";
-				}
-			}
-
-			// Human-only variant always passes validation
-			return true;
-		},
-		{
-			message:
-				"Discrepancy direction mismatch: direction must match the numeric discrepancy amount",
-			path: ["balance", "discrepancy_direction"],
-		},
-	);
+	.object({
+		human: z.string(),
+		structured: StructuredReconciliationUnmatchedOnlySchema,
+	})
+	.strict();
 
 export type ReconcileAccountOutput = z.infer<
 	typeof ReconcileAccountOutputSchema

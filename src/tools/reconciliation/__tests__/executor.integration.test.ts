@@ -376,16 +376,14 @@ function buildIntegrationParams(
 		account_id: accountId,
 		csv_data: "Date,Description,Amount",
 		statement_balance: statementBalance,
-		statement_date: new Date().toISOString().slice(0, 10),
+		statement_end_date: new Date().toISOString().slice(0, 10),
 		date_tolerance_days: 1,
-		auto_match_threshold: 90,
-		suggestion_threshold: 60,
+		match_strictness: "strict" as const,
 		auto_create_transactions: true,
 		auto_update_cleared_status: false,
 		auto_unclear_missing: false,
 		auto_adjust_dates: false,
 		dry_run: false,
-		include_structured_data: false,
 		...overrides,
 	};
 }
