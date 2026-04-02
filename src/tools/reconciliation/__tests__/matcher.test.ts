@@ -21,6 +21,7 @@ describe("matcher", () => {
 			minimumCandidateScore: 40,
 			exactDateBonus: 5,
 			exactPayeeBonus: 10,
+			exactDateAutoMatchThreshold: 65,
 		};
 	});
 
@@ -32,7 +33,12 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -45230, // milliunits (-45.23)
 					payee: "Shell Gas Station",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: {
+						date: "2025-10-15",
+						amount: "-45.23",
+						description: "Shell Gas Station",
+					},
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -60,7 +66,12 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -100000, // milliunits (-100.00)
 					payee: "NETFLIX.COM",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: {
+						date: "2025-10-15",
+						amount: "-100.00",
+						description: "NETFLIX.COM",
+					},
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -87,7 +98,12 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -50000, // milliunits (-50.00)
 					payee: "Restaurant",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: {
+						date: "2025-10-15",
+						amount: "-50.00",
+						description: "Restaurant",
+					},
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -114,7 +130,12 @@ describe("matcher", () => {
 					date: "2025-10-20",
 					amount: -127430, // milliunits (-127.43)
 					payee: "AMAZON.COM",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: {
+						date: "2025-10-20",
+						amount: "-127.43",
+						description: "AMAZON.COM",
+					},
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -139,13 +160,97 @@ describe("matcher", () => {
 		});
 
 		describe("medium confidence matches (60-89%)", () => {
+			it("should auto-match an exact-date unique candidate even with a weak payee match", () => {
+				const bankTxn: BankTransaction = {
+					id: "b1",
+					date: "2025-10-15",
+					amount: -61500,
+					payee: "CARD 8472 AUTH 5521",
+					sourceRow: 2,
+					raw: {
+						date: "2025-10-15",
+						amount: "-61.50",
+						description: "CARD 8472 AUTH 5521",
+					},
+				};
+
+				const ynabTxns: YNABTransaction[] = [
+					{
+						id: "y1",
+						date: "2025-10-15",
+						amount: -61500,
+						payee: "Amazon",
+						categoryName: "Shopping",
+						cleared: "uncleared",
+						approved: true,
+					},
+				];
+
+				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+
+				expect(match.confidenceScore).toBeGreaterThanOrEqual(65);
+				expect(match.confidenceScore).toBeLessThan(config.autoMatchThreshold);
+				expect(match.candidates).toHaveLength(1);
+				expect(match.bestMatch?.scores.date).toBe(100);
+				expect(match.confidence).toBe("high");
+			});
+
+			it("should keep exact-date matches at medium confidence when multiple candidates exist", () => {
+				const bankTxn: BankTransaction = {
+					id: "b1",
+					date: "2025-10-15",
+					amount: -61500,
+					payee: "CARD 8472 AUTH 5521",
+					sourceRow: 2,
+					raw: {
+						date: "2025-10-15",
+						amount: "-61.50",
+						description: "CARD 8472 AUTH 5521",
+					},
+				};
+
+				const ynabTxns: YNABTransaction[] = [
+					{
+						id: "y1",
+						date: "2025-10-15",
+						amount: -61500,
+						payee: "Amazon",
+						categoryName: "Shopping",
+						cleared: "uncleared",
+						approved: true,
+					},
+					{
+						id: "y2",
+						date: "2025-10-15",
+						amount: -61500,
+						payee: "Coffee Shop",
+						categoryName: "Shopping",
+						cleared: "cleared",
+						approved: true,
+					},
+				];
+
+				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+
+				expect(match.confidenceScore).toBeGreaterThanOrEqual(65);
+				expect(match.confidenceScore).toBeLessThan(config.autoMatchThreshold);
+				expect(match.candidates?.length).toBeGreaterThan(1);
+				expect(match.bestMatch?.scores.date).toBe(100);
+				expect(match.confidence).toBe("medium");
+			});
+
 			it("should provide multiple candidates for medium confidence", () => {
 				const bankTxn: BankTransaction = {
 					id: "b1",
 					date: "2025-10-15",
 					amount: -50000,
 					payee: "Restaurant",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: {
+						date: "2025-10-15",
+						amount: "-50.00",
+						description: "Restaurant",
+					},
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -184,7 +289,8 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -45230,
 					payee: "Shell",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "-45.23", description: "Shell" },
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -212,7 +318,8 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: 50000, // Positive (refund) in milliunits
 					payee: "Amazon",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "50.00", description: "Amazon" },
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -241,7 +348,12 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -50000,
 					payee: "Coffee Shop",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: {
+						date: "2025-10-15",
+						amount: "-50.00",
+						description: "Coffee Shop",
+					},
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -277,7 +389,8 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -50000,
 					payee: "Store",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -315,7 +428,8 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -45230,
 					payee: "Shell",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "-45.23", description: "Shell" },
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -342,7 +456,8 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -45000,
 					payee: "Shell",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "-45.00", description: "Shell" },
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -370,7 +485,8 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -50000,
 					payee: "Store",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
 				};
 
 				const ynabTxns: YNABTransaction[] = [
@@ -402,14 +518,20 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -45230,
 					payee: "Shell",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "-45.23", description: "Shell" },
 				},
 				{
 					id: "b2",
 					date: "2025-10-16",
 					amount: -100000,
 					payee: "Netflix",
-					original_csv_row: 3,
+					sourceRow: 3,
+					raw: {
+						date: "2025-10-16",
+						amount: "-100.00",
+						description: "Netflix",
+					},
 				},
 			];
 
@@ -448,14 +570,16 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -50000,
 					payee: "Store",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
 				},
 				{
 					id: "b2",
 					date: "2025-10-15",
 					amount: -50000,
 					payee: "Store",
-					original_csv_row: 3,
+					sourceRow: 3,
+					raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
 				},
 			];
 
@@ -490,14 +614,20 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -45230,
 					payee: "Shell",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "-45.23", description: "Shell" },
 				},
 				{
 					id: "b2",
 					date: "2025-10-16",
 					amount: -15990,
 					payee: "NewStore",
-					original_csv_row: 3,
+					sourceRow: 3,
+					raw: {
+						date: "2025-10-16",
+						amount: "-15.99",
+						description: "NewStore",
+					},
 				},
 			];
 
@@ -533,6 +663,7 @@ describe("matcher", () => {
 				minimumCandidateScore: 40,
 				exactDateBonus: 5,
 				exactPayeeBonus: 10,
+				exactDateAutoMatchThreshold: 65,
 			};
 
 			const bankTxns: BankTransaction[] = [
@@ -541,7 +672,8 @@ describe("matcher", () => {
 					date: "2025-10-15",
 					amount: -50000,
 					payee: "Store",
-					original_csv_row: 2,
+					sourceRow: 2,
+					raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
 				},
 			];
 
@@ -568,9 +700,10 @@ describe("matcher", () => {
 			const bankTxn: BankTransaction = {
 				id: "b1",
 				date: "2025-10-15",
-				amount: -50.0,
+				amount: -50000,
 				payee: "Store",
-				original_csv_row: 2,
+				sourceRow: 2,
+				raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
 			};
 
 			const match = findBestMatch(bankTxn, [], new Set(), config);
@@ -585,7 +718,8 @@ describe("matcher", () => {
 				date: "2025-10-15",
 				amount: -50000,
 				payee: "Store",
-				original_csv_row: 2,
+				sourceRow: 2,
+				raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
 			};
 
 			const ynabTxns: YNABTransaction[] = [
@@ -612,7 +746,12 @@ describe("matcher", () => {
 				date: "2025-10-15",
 				amount: -10, // 1 cent in milliunits
 				payee: "Micro Transaction",
-				original_csv_row: 2,
+				sourceRow: 2,
+				raw: {
+					date: "2025-10-15",
+					amount: "-0.01",
+					description: "Micro Transaction",
+				},
 			};
 
 			const ynabTxns: YNABTransaction[] = [
@@ -637,7 +776,12 @@ describe("matcher", () => {
 				date: "2025-10-15",
 				amount: -10000000, // $10,000 in milliunits
 				payee: "Large Purchase",
-				original_csv_row: 2,
+				sourceRow: 2,
+				raw: {
+					date: "2025-10-15",
+					amount: "-10000.00",
+					description: "Large Purchase",
+				},
 			};
 
 			const ynabTxns: YNABTransaction[] = [

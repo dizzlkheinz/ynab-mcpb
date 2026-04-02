@@ -13,6 +13,18 @@ import {
  * - If amount <= -0.01: direction must be 'bank_higher'
  */
 describe("ReconcileAccountOutputSchema - discrepancy_direction validation", () => {
+	const makeMoneyValue = (dollarAmount: number) => ({
+		value_milliunits: Math.round(dollarAmount * 1000),
+		value: dollarAmount,
+		value_display: `$${Math.abs(dollarAmount).toFixed(2)}`,
+		currency: "USD",
+		direction: (dollarAmount > 0
+			? "credit"
+			: dollarAmount < 0
+				? "debit"
+				: "balanced") as "credit" | "debit" | "balanced",
+	});
+
 	const createMinimalStructuredOutput = (
 		discrepancyAmount: number,
 		direction: "balanced" | "ynab_higher" | "bank_higher",
@@ -34,45 +46,17 @@ describe("ReconcileAccountOutputSchema - discrepancy_direction validation", () =
 				suggested_matches: 0,
 				unmatched_bank: 0,
 				unmatched_ynab: 0,
-				current_cleared_balance: {
-					amount: 1000,
-					currency: "USD",
-					formatted: "$1,000.00",
-				},
-				target_statement_balance: {
-					amount: 1000 + discrepancyAmount,
-					currency: "USD",
-					formatted: `$${(1000 + discrepancyAmount).toFixed(2)}`,
-				},
-				discrepancy: {
-					amount: discrepancyAmount,
-					currency: "USD",
-					formatted: `$${discrepancyAmount.toFixed(2)}`,
-				},
+				current_cleared_balance: makeMoneyValue(1000),
+				target_statement_balance: makeMoneyValue(1000 + discrepancyAmount),
+				discrepancy: makeMoneyValue(discrepancyAmount),
 				discrepancy_explanation: "Test",
 			},
 			balance: {
-				current_cleared: {
-					amount: 1000,
-					currency: "USD",
-					formatted: "$1,000.00",
-				},
-				current_uncleared: { amount: 0, currency: "USD", formatted: "$0.00" },
-				current_total: {
-					amount: 1000,
-					currency: "USD",
-					formatted: "$1,000.00",
-				},
-				target_statement: {
-					amount: 1000 + discrepancyAmount,
-					currency: "USD",
-					formatted: `$${(1000 + discrepancyAmount).toFixed(2)}`,
-				},
-				discrepancy: {
-					amount: discrepancyAmount,
-					currency: "USD",
-					formatted: `$${discrepancyAmount.toFixed(2)}`,
-				},
+				current_cleared: makeMoneyValue(1000),
+				current_uncleared: makeMoneyValue(0),
+				current_total: makeMoneyValue(1000),
+				target_statement: makeMoneyValue(1000 + discrepancyAmount),
+				discrepancy: makeMoneyValue(discrepancyAmount),
 				on_track: Math.abs(discrepancyAmount) < 0.01,
 				discrepancy_direction: direction,
 			},
@@ -255,50 +239,73 @@ describe("ReconcileAccountOutputSchema - discrepancy_direction validation", () =
 	});
 
 	describe("MoneyValueSchema - non-finite value validation", () => {
-		it("should reject NaN amount", () => {
+		it("should reject NaN value", () => {
 			const invalid = {
-				amount: Number.NaN,
+				value_milliunits: 0,
+				value: Number.NaN,
+				value_display: "$NaN",
 				currency: "USD",
-				formatted: "$NaN",
+				direction: "balanced",
 			};
 			const result = MoneyValueSchema.safeParse(invalid);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["amount"]);
+				expect(result.error.issues[0]?.path).toEqual(["value"]);
 			}
 		});
 
-		it("should reject positive Infinity amount", () => {
+		it("should reject positive Infinity value", () => {
 			const invalid = {
-				amount: Number.POSITIVE_INFINITY,
+				value_milliunits: 0,
+				value: Number.POSITIVE_INFINITY,
+				value_display: "$Infinity",
 				currency: "USD",
-				formatted: "$Infinity",
+				direction: "credit",
 			};
 			const result = MoneyValueSchema.safeParse(invalid);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["amount"]);
+				expect(result.error.issues[0]?.path).toEqual(["value"]);
 			}
 		});
 
-		it("should reject negative Infinity amount", () => {
+		it("should reject negative Infinity value", () => {
 			const invalid = {
-				amount: Number.NEGATIVE_INFINITY,
+				value_milliunits: 0,
+				value: Number.NEGATIVE_INFINITY,
+				value_display: "-$Infinity",
 				currency: "USD",
-				formatted: "-$Infinity",
+				direction: "debit",
 			};
 			const result = MoneyValueSchema.safeParse(invalid);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["amount"]);
+				expect(result.error.issues[0]?.path).toEqual(["value"]);
+			}
+		});
+
+		it("should reject non-integer value_milliunits", () => {
+			const invalid = {
+				value_milliunits: 25.5,
+				value: 0.0255,
+				value_display: "$0.03",
+				currency: "USD",
+				direction: "credit",
+			};
+			const result = MoneyValueSchema.safeParse(invalid);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual(["value_milliunits"]);
 			}
 		});
 
 		it("should accept finite positive amounts", () => {
 			const valid = {
-				amount: 25.5,
+				value_milliunits: 25500,
+				value: 25.5,
+				value_display: "$25.50",
 				currency: "USD",
-				formatted: "$25.50",
+				direction: "credit",
 			};
 			const result = MoneyValueSchema.safeParse(valid);
 			expect(result.success).toBe(true);
@@ -306,9 +313,11 @@ describe("ReconcileAccountOutputSchema - discrepancy_direction validation", () =
 
 		it("should accept finite negative amounts", () => {
 			const valid = {
-				amount: -25.5,
+				value_milliunits: -25500,
+				value: -25.5,
+				value_display: "-$25.50",
 				currency: "USD",
-				formatted: "-$25.50",
+				direction: "debit",
 			};
 			const result = MoneyValueSchema.safeParse(valid);
 			expect(result.success).toBe(true);
@@ -316,9 +325,11 @@ describe("ReconcileAccountOutputSchema - discrepancy_direction validation", () =
 
 		it("should accept zero", () => {
 			const valid = {
-				amount: 0,
+				value_milliunits: 0,
+				value: 0,
+				value_display: "$0.00",
 				currency: "USD",
-				formatted: "$0.00",
+				direction: "balanced",
 			};
 			const result = MoneyValueSchema.safeParse(valid);
 			expect(result.success).toBe(true);

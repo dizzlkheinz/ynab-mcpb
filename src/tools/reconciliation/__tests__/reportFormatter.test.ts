@@ -411,7 +411,7 @@ describe("reportFormatter", () => {
 			expect(report).toContain("Transactions created:  2");
 			expect(report).toContain("Transactions updated:  3");
 			expect(report).toContain("Date adjustments:      1");
-			expect(report).toContain("Changes applied to YNAB");
+			expect(report).toContain("change(s) applied to YNAB");
 		});
 
 		it("should show dry run notice when dry run enabled", () => {

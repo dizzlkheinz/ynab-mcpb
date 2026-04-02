@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-04-01
+
+### Fixed
+
+- **Reconciliation output schema** - Corrected `MoneyValueSchema`, `BankTransactionSchema`, and `YNABTransactionSimpleSchema` to match actual runtime data shapes (`value_milliunits`/`value`/`value_display`/`direction`, `sourceRow`, `categoryName`), resolving `include_structured_data: true` output schema validation failures
+- **CSV payee detection** - Expanded description column candidates to include `"Details"`, `"Transaction Details"`, `"Memo"`, `"Narration"`, and `"Reference"`, resolving payees showing as "Unknown" for banks that use non-standard column names
+- **Reconciliation auto-match rate** - Two-pass matching: when a bank transaction has exactly one candidate with an exact date match, auto-match threshold lowers to 65 (from 85), significantly improving match rates when bank payee strings are opaque (e.g. `"CARD 8472 AUTH 5521"`)
+- **Execution summary shown on 0 changes** - "N change(s) applied to YNAB" message now only appears when `N > 0`; zero-change runs show "No changes were needed" instead
+
+### Changed
+
+- **Liability-aware discrepancy wording** - Credit card and other liability accounts now show "YNAB under-cleared / over-cleared" instead of the asset-oriented "YNAB shows MORE/LESS than statement"
+- **`max_suggestions_in_output` default raised to 20** - Previously defaulted to 10; now documented in the tool description alongside `auto_match_threshold`
+- **Tool description for `ynab_reconcile_account`** - Documents statement balance sign convention for liability accounts, `auto_match_threshold` parameter, and `max_suggestions_in_output` default
+
 ## [0.26.0] - 2026-03-31
 
 ### Added

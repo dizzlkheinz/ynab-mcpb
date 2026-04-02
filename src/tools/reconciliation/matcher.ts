@@ -14,6 +14,10 @@ import type { MatchingConfig } from "./types.js";
 
 export type { MatchingConfig };
 
+type NormalizedMatchingConfig = MatchingConfig & {
+	exactDateAutoMatchThreshold: number;
+};
+
 export interface MatchCandidate {
 	ynabTransaction: NormalizedYNABTransaction;
 	scores: {
@@ -33,7 +37,7 @@ export interface MatchResult {
 	confidenceScore: number;
 }
 
-export const DEFAULT_CONFIG: MatchingConfig = {
+export const DEFAULT_CONFIG: NormalizedMatchingConfig = {
 	weights: {
 		date: 0.15,
 		payee: 0.35,
@@ -44,9 +48,12 @@ export const DEFAULT_CONFIG: MatchingConfig = {
 	minimumCandidateScore: 40,
 	exactDateBonus: 5,
 	exactPayeeBonus: 10,
+	exactDateAutoMatchThreshold: 65,
 };
 
-export function normalizeConfig(config?: MatchingConfig): MatchingConfig {
+export function normalizeConfig(
+	config?: MatchingConfig,
+): NormalizedMatchingConfig {
 	if (!config) {
 		return { ...DEFAULT_CONFIG };
 	}
@@ -63,6 +70,9 @@ export function normalizeConfig(config?: MatchingConfig): MatchingConfig {
 			config.minimumCandidateScore ?? DEFAULT_CONFIG.minimumCandidateScore,
 		exactDateBonus: config.exactDateBonus ?? DEFAULT_CONFIG.exactDateBonus,
 		exactPayeeBonus: config.exactPayeeBonus ?? DEFAULT_CONFIG.exactPayeeBonus,
+		exactDateAutoMatchThreshold:
+			config.exactDateAutoMatchThreshold ??
+			DEFAULT_CONFIG.exactDateAutoMatchThreshold,
 	};
 }
 
@@ -80,7 +90,14 @@ function matchSingle(
 	const confidenceScore = bestMatch?.scores.combined ?? 0;
 
 	let confidence: MatchResult["confidence"];
-	if (confidenceScore >= config.autoMatchThreshold) {
+	const isExactDateUnique =
+		(bestMatch?.scores.date ?? 0) === 100 && candidates.length === 1;
+	const effectiveThreshold =
+		isExactDateUnique && confidenceScore >= config.exactDateAutoMatchThreshold
+			? config.exactDateAutoMatchThreshold
+			: config.autoMatchThreshold;
+
+	if (confidenceScore >= effectiveThreshold) {
 		confidence = "high";
 		if (bestMatch) usedIds.add(bestMatch.ynabTransaction.id);
 	} else if (confidenceScore >= config.suggestedMatchThreshold) {

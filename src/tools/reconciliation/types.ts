@@ -172,6 +172,8 @@ export interface MatchingConfig {
 	// Bonuses for perfect matches
 	exactDateBonus: number; // Default: 5
 	exactPayeeBonus: number; // Default: 10
+	/** Lower threshold used when date is exact and only one candidate exists. Default: 65 */
+	exactDateAutoMatchThreshold?: number;
 }
 
 /**

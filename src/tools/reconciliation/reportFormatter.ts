@@ -22,6 +22,7 @@ const SECTION_DIVIDER = "-".repeat(60);
 export interface ReportFormatterOptions {
 	accountName?: string | undefined;
 	accountId?: string | undefined;
+	accountIsLiability?: boolean | undefined;
 	currencyCode?: string | undefined;
 	includeDetailedMatches?: boolean | undefined;
 	maxUnmatchedToShow?: number | undefined;
@@ -49,7 +50,9 @@ export function formatHumanReadableReport(
 	}
 
 	// Balance check section
-	sections.push(formatBalanceSection(analysis.balance_info, analysis.summary));
+	sections.push(
+		formatBalanceSection(analysis.balance_info, analysis.summary, options),
+	);
 
 	// Transaction analysis section
 	sections.push(formatTransactionAnalysisSection(analysis, options));
@@ -102,6 +105,7 @@ function formatNotesSection(notes: string[]): string {
 function formatBalanceSection(
 	balanceInfo: BalanceInfo,
 	summary: ReconciliationAnalysis["summary"],
+	options: ReportFormatterOptions,
 ): string {
 	const lines: string[] = [];
 	lines.push("Balance Check");
@@ -122,10 +126,18 @@ function formatBalanceSection(
 		lines.push("Balances match perfectly.");
 	} else {
 		const direction = discrepancyMilli > 0 ? "ynab_higher" : "bank_higher";
-		const directionLabel =
-			direction === "ynab_higher"
-				? "YNAB shows MORE than statement"
-				: "Statement shows MORE than YNAB";
+		let directionLabel: string;
+		if (options.accountIsLiability) {
+			directionLabel =
+				direction === "ynab_higher"
+					? "YNAB under-cleared (balance less negative than statement target)"
+					: "YNAB over-cleared (balance more negative than statement target)";
+		} else {
+			directionLabel =
+				direction === "ynab_higher"
+					? "YNAB shows MORE than statement"
+					: "Statement shows MORE than YNAB";
+		}
 
 		lines.push(`Discrepancy: ${balanceInfo.discrepancy.value_display}`);
 		lines.push(`Direction: ${directionLabel}`);
@@ -378,7 +390,7 @@ function formatExecutionSection(execution: LegacyReconciliationResult): string {
 		lines.push("NOTE: Dry run only - no YNAB changes were applied.");
 	} else if (totalChanges > 0) {
 		lines.push(
-			"Changes applied to YNAB. Review structured output for action details.",
+			`${totalChanges} change(s) applied to YNAB. Review structured output for action details.`,
 		);
 	} else {
 		lines.push(

@@ -255,7 +255,7 @@ describe("buildReconciliationPayload", () => {
 			structured.execution.balance_reconciliation?.precision_calculations
 				?.discrepancy.value_display,
 		).toBe("-CA$22.22");
-		expect(payload.human).toContain("Changes applied to YNAB");
+		expect(payload.human).toContain("change(s) applied to YNAB");
 	});
 
 	it("limits human output entries when maxSuggestionsInOutput is provided", () => {

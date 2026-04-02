@@ -327,9 +327,14 @@ export function parseCSV(
 		? [options.columns.description]
 		: (preset?.descriptionColumn ?? [
 				"Description",
+				"Details",
+				"Transaction Details",
 				"Payee",
 				"Merchant",
 				"Name",
+				"Memo",
+				"Narration",
+				"Reference",
 			]);
 
 	const dateCol = findColumn(columns, dateCandidates, !hasHeader);

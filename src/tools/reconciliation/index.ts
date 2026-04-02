@@ -149,7 +149,7 @@ export const ReconcileAccountSchema = z
 			.enum(["full", "unmatched_only"])
 			.optional()
 			.default("full"),
-		max_suggestions_in_output: z.number().int().min(1).optional(),
+		max_suggestions_in_output: z.number().int().min(1).optional().default(20),
 		force_full_refresh: z.boolean().optional().default(true),
 	})
 	.refine((data) => data.csv_file_path || data.csv_data, {
@@ -521,6 +521,7 @@ export async function handleReconcileAccount(
 			const adapterOptions: Parameters<typeof buildReconciliationPayload>[1] = {
 				accountName,
 				accountId: params.account_id,
+				accountIsLiability,
 				currencyCode,
 				auditMetadata,
 				maxSuggestionsInOutput: params.max_suggestions_in_output,
@@ -617,12 +618,16 @@ Args:
   - account_id (string, required): Account UUID to reconcile.
   - csv_file_path or csv_data (string, required): Bank export file path or inline CSV text.
   - statement_balance (number, required): Ending balance from the bank statement (dollars).
+      For credit cards and other liability accounts, pass a negative value (e.g. -6143.27 means you owe $6,143.27).
   - dry_run (boolean, optional): Preview actions without executing. Default: true.
   - auto_create_transactions (boolean, optional): Auto-create missing transactions. Default: false.
   - auto_update_cleared_status (boolean, optional): Auto-mark matched transactions as cleared. Default: false.
+  - auto_match_threshold (number, optional): Score 0–100 required for automatic matching. Default: 85.
+      Lower to 70–75 to match more transactions automatically; raise to 90+ for stricter matching.
   - include_structured_data (boolean, optional): Include full JSON output alongside narrative. Default: false.
   - structured_content (string, optional): "full" or "unmatched_only". Default: "full".
   - max_suggestions_in_output (number, optional): Limit unmatched items and suggestions shown in the human report.
+      Default: 20.
 
 Returns: human-readable reconciliation narrative; optionally structured JSON data.
 

@@ -1,7 +1,7 @@
 import {
+	type MoneyValue,
 	toMoneyValue,
 	toMoneyValueFromDecimal,
-	type MoneyValue,
 } from "../../utils/money.js";
 import type {
 	AccountSnapshot,
@@ -27,6 +27,7 @@ const SCHEMA_URL =
 interface AdapterOptions {
 	accountName?: string;
 	accountId?: string;
+	accountIsLiability?: boolean;
 	currencyCode?: string;
 	csvFormat?: CsvFormatPayload;
 	auditMetadata?: Record<string, unknown>;
@@ -363,9 +364,10 @@ const buildHumanNarrative = (
 	const formatterOptions: ReportFormatterOptions = {
 		accountName: options.accountName,
 		accountId: options.accountId,
+		accountIsLiability: options.accountIsLiability,
 		currencyCode: options.currencyCode,
 		includeDetailedMatches: false,
-		maxUnmatchedToShow: options.maxSuggestionsInOutput ?? 10,
+		maxUnmatchedToShow: options.maxSuggestionsInOutput,
 		maxInsightsToShow: 3,
 		notes: options.notes,
 	};

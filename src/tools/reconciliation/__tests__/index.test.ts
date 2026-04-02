@@ -17,6 +17,17 @@ describe("ReconcileAccountSchema", () => {
 		expect(result.max_suggestions_in_output).toBe(3);
 	});
 
+	it("defaults max_suggestions_in_output to 20 when omitted", () => {
+		const result = ReconcileAccountSchema.parse({
+			budget_id: "budget-1",
+			account_id: "account-1",
+			csv_data: "Date,Description,Amount\n2025-01-01,Coffee,-10.00",
+			statement_balance: -10,
+		});
+
+		expect(result.max_suggestions_in_output).toBe(20);
+	});
+
 	it("returns the improved CSV requirement message when no CSV input is provided", () => {
 		const result = ReconcileAccountSchema.safeParse({
 			budget_id: "budget-1",
