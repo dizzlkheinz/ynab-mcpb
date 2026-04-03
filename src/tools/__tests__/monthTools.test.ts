@@ -531,12 +531,12 @@ describe("Month Tools", () => {
 			).toThrow();
 		});
 
-		it("should reject missing budget_id", () => {
-			expect(() =>
-				GetMonthSchema.parse({
-					month: "2024-01-01",
-				}),
-			).toThrow();
+		it("should allow missing budget_id for default resolution", () => {
+			const result = GetMonthSchema.parse({
+				month: "2024-01-01",
+			});
+			expect(result.budget_id).toBeUndefined();
+			expect(result.month).toBe("2024-01-01");
 		});
 
 		it("should reject invalid month format", () => {
@@ -576,8 +576,9 @@ describe("Month Tools", () => {
 			expect(() => ListMonthsSchema.parse({ budget_id: "" })).toThrow();
 		});
 
-		it("should reject missing budget_id", () => {
-			expect(() => ListMonthsSchema.parse({})).toThrow();
+		it("should allow missing budget_id for default resolution", () => {
+			const result = ListMonthsSchema.parse({});
+			expect(result.budget_id).toBeUndefined();
 		});
 
 		it("should reject non-string budget_id", () => {

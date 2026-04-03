@@ -17,7 +17,11 @@ import type { ToolRegistry } from "../server/toolRegistry.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolContext } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/amountUtils.js";
-import { createAdapters, createBudgetResolver } from "./adapters.js";
+import {
+	createAdapters,
+	createBudgetResolver,
+	requireResolvedBudgetId,
+} from "./adapters.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
 import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
 import {
@@ -72,6 +76,7 @@ export async function handleListTransactions(
 	);
 	return await withToolErrorHandling(
 		async () => {
+			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Always use cache
 			let transactions: (ynab.TransactionDetail | ynab.HybridTransaction)[];
 			let cacheHit = false;
@@ -80,20 +85,18 @@ export async function handleListTransactions(
 			if (params.account_id) {
 				// Validate that the account exists before fetching transactions
 				// YNAB API returns empty array for invalid account IDs instead of an error
-				const accountsResult = await deltaFetcher.fetchAccounts(
-					params.budget_id,
-				);
+				const accountsResult = await deltaFetcher.fetchAccounts(budgetId);
 				const accountExists = accountsResult.data.some(
 					(account) => account.id === params.account_id,
 				);
 				if (!accountExists) {
 					throw new Error(
-						`Account ${params.account_id} not found in budget ${params.budget_id}`,
+						`Account ${params.account_id} not found in budget ${budgetId}`,
 					);
 				}
 
 				const result = await deltaFetcher.fetchTransactionsByAccount(
-					params.budget_id,
+					budgetId,
 					params.account_id,
 					params.since_date,
 				);
@@ -102,14 +105,14 @@ export async function handleListTransactions(
 				usedDelta = result.usedDelta;
 			} else if (params.category_id) {
 				const response = await ynabAPI.transactions.getTransactionsByCategory(
-					params.budget_id,
+					budgetId,
 					params.category_id,
 					params.since_date,
 				);
 				transactions = response.data.transactions;
 			} else {
 				const result = await deltaFetcher.fetchTransactions(
-					params.budget_id,
+					budgetId,
 					params.since_date,
 					params.type as ynab.GetTransactionsTypeEnum | undefined,
 				);
@@ -235,6 +238,7 @@ export async function handleGetTransaction(
 	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
+		const budgetId = requireResolvedBudgetId(params.budget_id);
 		const useCache = process.env["NODE_ENV"] !== "test";
 
 		let transaction: ynab.TransactionDetail;
@@ -245,7 +249,7 @@ export async function handleGetTransaction(
 			const cacheKey = CacheManager.generateKey(
 				"transaction",
 				"get",
-				params.budget_id,
+				budgetId,
 				params.transaction_id,
 			);
 			cacheHit = cacheManager.has(cacheKey);
@@ -253,7 +257,7 @@ export async function handleGetTransaction(
 				ttl: CACHE_TTLS.TRANSACTIONS,
 				loader: async () => {
 					const response = await ynabAPI.transactions.getTransactionById(
-						params.budget_id,
+						budgetId,
 						params.transaction_id,
 					);
 					return ensureTransaction(
@@ -265,7 +269,7 @@ export async function handleGetTransaction(
 		} else {
 			// Bypass cache in test environment
 			const response = await ynabAPI.transactions.getTransactionById(
-				params.budget_id,
+				budgetId,
 				params.transaction_id,
 			);
 			transaction = ensureTransaction(

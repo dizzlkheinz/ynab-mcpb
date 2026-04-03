@@ -261,5 +261,44 @@ describe("Tool Registration", () => {
 				).toBeDefined();
 			}
 		});
+
+		it("resolver-backed tools do not require budget_id in tools/list schemas", () => {
+			const server = new YNABMCPServer(false);
+			const tools = server.getToolRegistry().listTools();
+			const resolverBackedTools = [
+				"ynab_list_accounts",
+				"ynab_get_account",
+				"ynab_create_account",
+				"ynab_list_transactions",
+				"ynab_export_transactions",
+				"ynab_get_transaction",
+				"ynab_create_transaction",
+				"ynab_create_transactions",
+				"ynab_create_receipt_split_transaction",
+				"ynab_update_transaction",
+				"ynab_update_transactions",
+				"ynab_delete_transaction",
+				"ynab_list_categories",
+				"ynab_get_category",
+				"ynab_update_category",
+				"ynab_list_payees",
+				"ynab_get_payee",
+				"ynab_get_month",
+				"ynab_list_months",
+				"ynab_compare_transactions",
+				"ynab_reconcile_account",
+			] as const;
+
+			for (const toolName of resolverBackedTools) {
+				const tool = tools.find((candidate) => candidate.name === toolName);
+				expect(tool, `${toolName} should be registered`).toBeDefined();
+				const required =
+					(tool?.inputSchema.required as string[] | undefined) ?? [];
+				expect(
+					required,
+					`${toolName} should not require budget_id in tools/list`,
+				).not.toContain("budget_id");
+			}
+		});
 	});
 });

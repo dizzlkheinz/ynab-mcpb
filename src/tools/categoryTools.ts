@@ -19,7 +19,11 @@ import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/amountUtils.js";
-import { createAdapters, createBudgetResolver } from "./adapters.js";
+import {
+	createAdapters,
+	createBudgetResolver,
+	requireResolvedBudgetId,
+} from "./adapters.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
 import {
 	resolveDeltaFetcherArgs,
@@ -37,7 +41,7 @@ import { ToolAnnotationPresets } from "./toolCategories.js";
  */
 export const ListCategoriesSchema = z
 	.object({
-		budget_id: z.string().min(1, "Budget ID is required"),
+		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		limit: z.number().int().positive().optional(),
 		offset: z.number().int().min(0).optional(),
 		response_format: z
@@ -54,7 +58,7 @@ export type ListCategoriesParams = z.infer<typeof ListCategoriesSchema>;
  */
 export const GetCategorySchema = z
 	.object({
-		budget_id: z.string().min(1, "Budget ID is required"),
+		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		category_id: z.string().min(1, "Category ID is required"),
 		response_format: z
 			.enum(["json", "markdown"])
@@ -70,7 +74,7 @@ export type GetCategoryParams = z.infer<typeof GetCategorySchema>;
  */
 export const UpdateCategorySchema = z
 	.object({
-		budget_id: z.string().min(1, "Budget ID is required"),
+		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		category_id: z.string().min(1, "Category ID is required"),
 		budgeted: z
 			.number()
@@ -132,7 +136,8 @@ export async function handleListCategories(
 	);
 	return await withToolErrorHandling(
 		async () => {
-			const result = await deltaFetcher.fetchCategories(params.budget_id);
+			const budgetId = requireResolvedBudgetId(params.budget_id);
+			const result = await deltaFetcher.fetchCategories(budgetId);
 			const categoryGroups = result.data;
 			const wasCached = result.wasCached;
 
@@ -212,11 +217,12 @@ export async function handleGetCategory(
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
+			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Use enhanced CacheManager wrap method
 			const cacheKey = CacheManager.generateKey(
 				CacheKeys.CATEGORIES,
 				"get",
-				params.budget_id,
+				budgetId,
 				params.category_id,
 			);
 			const wasCached = cacheManager.has(cacheKey);
@@ -224,7 +230,7 @@ export async function handleGetCategory(
 				ttl: CACHE_TTLS.CATEGORIES,
 				loader: async () => {
 					const response = await ynabAPI.categories.getCategoryById(
-						params.budget_id,
+						budgetId,
 						params.category_id,
 					);
 					return response.data.category;
@@ -326,9 +332,10 @@ export async function handleUpdateCategory(
 		// Get current month in YNAB format (YYYY-MM-01)
 		const currentDate = new Date();
 		const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-01`;
+		const budgetId = requireResolvedBudgetId(params.budget_id);
 
 		const response = await ynabAPI.categories.updateMonthCategory(
-			params.budget_id,
+			budgetId,
 			currentMonth,
 			params.category_id,
 			{ category: { budgeted: params.budgeted } },
@@ -340,12 +347,12 @@ export async function handleUpdateCategory(
 		const categoriesListCacheKey = CacheManager.generateKey(
 			CacheKeys.CATEGORIES,
 			"list",
-			params.budget_id,
+			budgetId,
 		);
 		const specificCategoryCacheKey = CacheManager.generateKey(
 			CacheKeys.CATEGORIES,
 			"get",
-			params.budget_id,
+			budgetId,
 			params.category_id,
 		);
 		cacheManager.delete(categoriesListCacheKey);
@@ -355,24 +362,24 @@ export async function handleUpdateCategory(
 		const monthsListCacheKey = CacheManager.generateKey(
 			CacheKeys.MONTHS,
 			"list",
-			params.budget_id,
+			budgetId,
 		);
 		const currentMonthCacheKey = CacheManager.generateKey(
 			CacheKeys.MONTHS,
 			"get",
-			params.budget_id,
+			budgetId,
 			currentMonth,
 		);
 		cacheManager.delete(monthsListCacheKey);
 		cacheManager.delete(currentMonthCacheKey);
-		invalidateBudgetResourceCaches(params.budget_id, {
+		invalidateBudgetResourceCaches(budgetId, {
 			invalidateCategoriesList: true,
 			invalidateMonthsList: true,
 			monthKeys: [currentMonth],
 		});
 
-		deltaCache.invalidate(params.budget_id, CacheKeys.CATEGORIES);
-		deltaCache.invalidate(params.budget_id, CacheKeys.MONTHS);
+		deltaCache.invalidate(budgetId, CacheKeys.CATEGORIES);
+		deltaCache.invalidate(budgetId, CacheKeys.MONTHS);
 		const serverKnowledge = response.data.server_knowledge;
 		if (typeof serverKnowledge === "number") {
 			knowledgeStore.update(categoriesListCacheKey, serverKnowledge);

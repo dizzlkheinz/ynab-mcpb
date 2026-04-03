@@ -15,7 +15,11 @@ import {
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
-import { createAdapters, createBudgetResolver } from "./adapters.js";
+import {
+	createAdapters,
+	createBudgetResolver,
+	requireResolvedBudgetId,
+} from "./adapters.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
 import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
 import {
@@ -29,7 +33,7 @@ import { ToolAnnotationPresets } from "./toolCategories.js";
  */
 export const ListPayeesSchema = z
 	.object({
-		budget_id: z.string().min(1, "Budget ID is required"),
+		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		limit: z.number().int().positive().optional(),
 		offset: z.number().int().min(0).optional(),
 		response_format: z
@@ -46,7 +50,7 @@ export type ListPayeesParams = z.infer<typeof ListPayeesSchema>;
  */
 export const GetPayeeSchema = z
 	.object({
-		budget_id: z.string().min(1, "Budget ID is required"),
+		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		payee_id: z.string().min(1, "Payee ID is required"),
 		response_format: z
 			.enum(["json", "markdown"])
@@ -83,7 +87,8 @@ export async function handleListPayees(
 	);
 	return await withToolErrorHandling(
 		async () => {
-			const result = await deltaFetcher.fetchPayees(params.budget_id);
+			const budgetId = requireResolvedBudgetId(params.budget_id);
+			const result = await deltaFetcher.fetchPayees(budgetId);
 			const allPayees = result.data;
 			const wasCached = result.wasCached;
 
@@ -141,11 +146,12 @@ export async function handleGetPayee(
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
+			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Use enhanced CacheManager wrap method
 			const cacheKey = CacheManager.generateKey(
 				CacheKeys.PAYEES,
 				"get",
-				params.budget_id,
+				budgetId,
 				params.payee_id,
 			);
 			const wasCached = cacheManager.has(cacheKey);
@@ -153,7 +159,7 @@ export async function handleGetPayee(
 				ttl: CACHE_TTLS.PAYEES,
 				loader: async () => {
 					const response = await ynabAPI.payees.getPayeeById(
-						params.budget_id,
+						budgetId,
 						params.payee_id,
 					);
 					return response.data.payee;

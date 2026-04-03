@@ -596,8 +596,9 @@ describe("Category Tools", () => {
 				expect(() => ListCategoriesSchema.parse({ budget_id: "" })).toThrow();
 			});
 
-			it("should reject missing budget_id", () => {
-				expect(() => ListCategoriesSchema.parse({})).toThrow();
+			it("should allow missing budget_id for default resolution", () => {
+				const result = ListCategoriesSchema.parse({});
+				expect(result.budget_id).toBeUndefined();
 			});
 		});
 
@@ -625,6 +626,14 @@ describe("Category Tools", () => {
 					GetCategorySchema.parse({ budget_id: "budget-1" }),
 				).toThrow();
 			});
+
+			it("should allow missing budget_id for default resolution", () => {
+				const result = GetCategorySchema.parse({
+					category_id: "category-1",
+				});
+				expect(result.budget_id).toBeUndefined();
+				expect(result.category_id).toBe("category-1");
+			});
 		});
 
 		describe("UpdateCategorySchema", () => {
@@ -647,6 +656,15 @@ describe("Category Tools", () => {
 						budgeted: 50.5,
 					}),
 				).toThrow();
+			});
+
+			it("should allow missing budget_id for default resolution", () => {
+				const result = UpdateCategorySchema.parse({
+					category_id: "category-1",
+					budgeted: 50000,
+				});
+				expect(result.budget_id).toBeUndefined();
+				expect(result.category_id).toBe("category-1");
 			});
 
 			it("should reject missing budgeted amount", () => {

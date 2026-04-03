@@ -8,13 +8,14 @@ import { z } from "zod/v4";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
+import { requireResolvedBudgetId } from "./adapters.js";
 
 /**
  * Schema for ynab:export_transactions tool parameters
  */
 export const ExportTransactionsSchema = z
 	.object({
-		budget_id: z.string().min(1, "Budget ID is required"),
+		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		account_id: z.string().optional(),
 		category_id: z.string().optional(),
 		since_date: z
@@ -160,24 +161,25 @@ export async function handleExportTransactions(
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
+			const budgetId = requireResolvedBudgetId(params.budget_id);
 			let response: ynab.TransactionsResponse | ynab.HybridTransactionsResponse;
 
 			// Use conditional API calls based on filter parameters
 			if (params.account_id) {
 				response = await ynabAPI.transactions.getTransactionsByAccount(
-					params.budget_id,
+					budgetId,
 					params.account_id,
 					params.since_date,
 				);
 			} else if (params.category_id) {
 				response = await ynabAPI.transactions.getTransactionsByCategory(
-					params.budget_id,
+					budgetId,
 					params.category_id,
 					params.since_date,
 				);
 			} else {
 				response = await ynabAPI.transactions.getTransactions(
-					params.budget_id,
+					budgetId,
 					params.since_date,
 					params.type,
 				);
@@ -197,7 +199,7 @@ export async function handleExportTransactions(
 					total_transactions: transactions.length,
 					minimal: params.minimal !== false, // Default true, only false if explicitly set
 					filters: {
-						budget_id: params.budget_id,
+						budget_id: budgetId,
 						account_id: params.account_id || null,
 						category_id: params.category_id || null,
 						since_date: params.since_date || null,

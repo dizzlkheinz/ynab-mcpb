@@ -150,3 +150,18 @@ export function createBudgetResolver(
 		};
 	};
 }
+
+/**
+ * Narrows a resolver-backed budget_id after ToolRegistry default argument
+ * resolution. If this throws, the handler was called without the registry
+ * applying its default budget resolution.
+ */
+export function requireResolvedBudgetId(budgetId: string | undefined): string {
+	if (!budgetId) {
+		throw new Error(
+			"Budget ID is required. Pass budget_id explicitly or configure a default budget.",
+		);
+	}
+
+	return budgetId;
+}

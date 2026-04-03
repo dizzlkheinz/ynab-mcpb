@@ -16,7 +16,11 @@ import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/amountUtils.js";
-import { createAdapters, createBudgetResolver } from "./adapters.js";
+import {
+	createAdapters,
+	createBudgetResolver,
+	requireResolvedBudgetId,
+} from "./adapters.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
 import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
 import {
@@ -30,7 +34,7 @@ import { ToolAnnotationPresets } from "./toolCategories.js";
  */
 export const GetMonthSchema = z
 	.object({
-		budget_id: z.string().min(1, "Budget ID is required"),
+		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		month: z
 			.string()
 			.regex(/^\d{4}-\d{2}-\d{2}$/, "Month must be in YYYY-MM-DD format"),
@@ -48,7 +52,7 @@ export type GetMonthParams = z.infer<typeof GetMonthSchema>;
  */
 export const ListMonthsSchema = z
 	.object({
-		budget_id: z.string().min(1, "Budget ID is required"),
+		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		limit: z.number().int().positive().optional(),
 		offset: z.number().int().min(0).optional(),
 		response_format: z
@@ -71,11 +75,12 @@ export async function handleGetMonth(
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
+			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Always use cache
 			const cacheKey = CacheManager.generateKey(
 				CacheKeys.MONTHS,
 				"get",
-				params.budget_id,
+				budgetId,
 				params.month,
 			);
 			const wasCached = cacheManager.has(cacheKey);
@@ -83,7 +88,7 @@ export async function handleGetMonth(
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
 					const response = await ynabAPI.months.getPlanMonth(
-						params.budget_id,
+						budgetId,
 						params.month,
 					);
 					return response.data.month;
@@ -174,8 +179,9 @@ export async function handleListMonths(
 	);
 	return await withToolErrorHandling(
 		async () => {
+			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Always use cache
-			const result = await deltaFetcher.fetchMonths(params.budget_id);
+			const result = await deltaFetcher.fetchMonths(budgetId);
 			const allMonths = result.data;
 			const wasCached = result.wasCached;
 			const usedDelta = result.usedDelta;

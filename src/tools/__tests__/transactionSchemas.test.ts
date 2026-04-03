@@ -58,8 +58,9 @@ describe("Transaction Schemas", () => {
 			);
 		});
 
-		it("should reject missing budget_id", () => {
-			expect(() => ListTransactionsSchema.parse({})).toThrow();
+		it("should allow missing budget_id for default resolution", () => {
+			const result = ListTransactionsSchema.parse({});
+			expect(result.budget_id).toBeUndefined();
 		});
 
 		it("should reject invalid date format (missing dashes)", () => {
@@ -142,6 +143,14 @@ describe("Transaction Schemas", () => {
 				}),
 			).toThrow();
 		});
+
+		it("should allow missing budget_id for default resolution", () => {
+			const result = GetTransactionSchema.parse({
+				transaction_id: "transaction-1",
+			});
+			expect(result.budget_id).toBeUndefined();
+			expect(result.transaction_id).toBe("transaction-1");
+		});
 	});
 
 	describe("CreateTransactionSchema", () => {
@@ -220,6 +229,13 @@ describe("Transaction Schemas", () => {
 				amount: 0,
 			});
 			expect(result.amount).toBe(0);
+		});
+
+		it("should allow missing budget_id for default resolution", () => {
+			const { budget_id: _budgetId, ...withoutBudgetId } = validBase;
+			const result = CreateTransactionSchema.parse(withoutBudgetId);
+			expect(result.budget_id).toBeUndefined();
+			expect(result.account_id).toBe("account-1");
 		});
 
 		it("should reject non-integer amount", () => {
@@ -483,6 +499,14 @@ describe("Transaction Schemas", () => {
 				}),
 			).toThrow("Budget ID is required");
 		});
+
+		it("should allow missing budget_id for default resolution", () => {
+			const result = CreateTransactionsSchema.parse({
+				transactions: [validTransaction],
+			});
+			expect(result.budget_id).toBeUndefined();
+			expect(result.transactions).toHaveLength(1);
+		});
 	});
 
 	describe("CreateReceiptSplitTransactionSchema", () => {
@@ -519,6 +543,13 @@ describe("Transaction Schemas", () => {
 			expect(result.receipt_tax).toBe(2.5);
 			expect(result.receipt_total).toBe(27.5);
 			expect(result.categories).toHaveLength(3);
+		});
+
+		it("should allow missing budget_id for default resolution", () => {
+			const { budget_id: _budgetId, ...withoutBudgetId } = validReceipt;
+			const result = CreateReceiptSplitTransactionSchema.parse(withoutBudgetId);
+			expect(result.budget_id).toBeUndefined();
+			expect(result.account_id).toBe("account-1");
 		});
 
 		it("should validate with all optional fields", () => {
@@ -866,6 +897,15 @@ describe("Transaction Schemas", () => {
 			expect(result.dry_run).toBe(true);
 		});
 
+		it("should allow missing budget_id for default resolution", () => {
+			const result = UpdateTransactionSchema.parse({
+				transaction_id: "trans-1",
+				memo: "Updated memo",
+			});
+			expect(result.budget_id).toBeUndefined();
+			expect(result.transaction_id).toBe("trans-1");
+		});
+
 		it("should reject non-integer amount", () => {
 			expect(() =>
 				UpdateTransactionSchema.parse({
@@ -928,6 +968,14 @@ describe("Transaction Schemas", () => {
 				],
 			});
 			expect(result.transactions).toHaveLength(3);
+		});
+
+		it("should allow missing budget_id for default resolution", () => {
+			const result = UpdateTransactionsSchema.parse({
+				transactions: [validUpdate],
+			});
+			expect(result.budget_id).toBeUndefined();
+			expect(result.transactions).toHaveLength(1);
 		});
 
 		it("should validate with all updatable fields", () => {
@@ -1062,6 +1110,14 @@ describe("Transaction Schemas", () => {
 			expect(result.dry_run).toBe(true);
 		});
 
+		it("should allow missing budget_id for default resolution", () => {
+			const result = DeleteTransactionSchema.parse({
+				transaction_id: "trans-1",
+			});
+			expect(result.budget_id).toBeUndefined();
+			expect(result.transaction_id).toBe("trans-1");
+		});
+
 		it("should reject empty budget_id", () => {
 			expect(() =>
 				DeleteTransactionSchema.parse({
@@ -1083,9 +1139,6 @@ describe("Transaction Schemas", () => {
 		it("should reject missing fields", () => {
 			expect(() =>
 				DeleteTransactionSchema.parse({ budget_id: "budget-1" }),
-			).toThrow();
-			expect(() =>
-				DeleteTransactionSchema.parse({ transaction_id: "trans-1" }),
 			).toThrow();
 		});
 

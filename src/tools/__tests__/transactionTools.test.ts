@@ -149,16 +149,15 @@ describe("transactionTools", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("should require budget_id", () => {
-			const invalidParams = {
+		it("should allow missing budget_id for default resolution", () => {
+			const paramsWithoutBudget = {
 				account_id: "account-456",
 			};
 
-			const result = ListTransactionsSchema.safeParse(invalidParams);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.error.issues[0].code).toBe("invalid_type");
-				expect(result.error.issues[0].path).toEqual(["budget_id"]);
+			const result = ListTransactionsSchema.safeParse(paramsWithoutBudget);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.budget_id).toBeUndefined();
 			}
 		});
 
@@ -607,16 +606,15 @@ describe("transactionTools", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("should require budget_id", () => {
-			const invalidParams = {
+		it("should allow missing budget_id for default resolution", () => {
+			const paramsWithoutBudget = {
 				transaction_id: "transaction-456",
 			};
 
-			const result = GetTransactionSchema.safeParse(invalidParams);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.error.issues[0].code).toBe("invalid_type");
-				expect(result.error.issues[0].path).toEqual(["budget_id"]);
+			const result = GetTransactionSchema.safeParse(paramsWithoutBudget);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.budget_id).toBeUndefined();
 			}
 		});
 
@@ -785,15 +783,18 @@ describe("transactionTools", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("should require budget_id", () => {
-			const invalidParams = {
+		it("should allow missing budget_id for default resolution", () => {
+			const paramsWithoutBudget = {
 				account_id: "account-456",
 				amount: -50000,
 				date: "2024-01-01",
 			};
 
-			const result = CreateTransactionSchema.safeParse(invalidParams);
-			expect(result.success).toBe(false);
+			const result = CreateTransactionSchema.safeParse(paramsWithoutBudget);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.budget_id).toBeUndefined();
+			}
 		});
 
 		it("should require account_id", () => {
@@ -2515,14 +2516,17 @@ describe("transactionTools", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("should require budget_id", () => {
-			const invalidParams = {
+		it("should allow missing budget_id for default resolution", () => {
+			const paramsWithoutBudget = {
 				transaction_id: "transaction-456",
 				amount: -60000,
 			};
 
-			const result = UpdateTransactionSchema.safeParse(invalidParams);
-			expect(result.success).toBe(false);
+			const result = UpdateTransactionSchema.safeParse(paramsWithoutBudget);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.budget_id).toBeUndefined();
+			}
 		});
 
 		it("should require transaction_id", () => {
@@ -2886,16 +2890,15 @@ describe("transactionTools", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("should require budget_id", () => {
-			const invalidParams = {
+		it("should allow missing budget_id for default resolution", () => {
+			const paramsWithoutBudget = {
 				transaction_id: "transaction-456",
 			};
 
-			const result = DeleteTransactionSchema.safeParse(invalidParams);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.error.issues[0].code).toBe("invalid_type");
-				expect(result.error.issues[0].path).toEqual(["budget_id"]);
+			const result = DeleteTransactionSchema.safeParse(paramsWithoutBudget);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.budget_id).toBeUndefined();
 			}
 		});
 

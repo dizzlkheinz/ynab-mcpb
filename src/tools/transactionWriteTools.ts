@@ -17,7 +17,11 @@ import {
 	amountToMilliunits,
 	milliunitsToAmount,
 } from "../utils/amountUtils.js";
-import { createAdapters, createBudgetResolver } from "./adapters.js";
+import {
+	createAdapters,
+	createBudgetResolver,
+	requireResolvedBudgetId,
+} from "./adapters.js";
 import { resolveDeltaWriteArgs } from "./deltaSupport.js";
 import {
 	CreateReceiptSplitTransactionOutputSchema,
@@ -106,6 +110,7 @@ export async function handleCreateTransaction(
 				structuredContent: dryRunData,
 			};
 		}
+		const budgetId = requireResolvedBudgetId(params.budget_id);
 		// Prepare transaction data
 		const transactionData: NewTransaction = {
 			account_id: params.account_id,
@@ -149,12 +154,9 @@ export async function handleCreateTransaction(
 			transactionData.subtransactions = subtransactions;
 		}
 
-		const response = await ynabAPI.transactions.createTransaction(
-			params.budget_id,
-			{
-				transaction: transactionData,
-			},
-		);
+		const response = await ynabAPI.transactions.createTransaction(budgetId, {
+			transaction: transactionData,
+		});
 
 		const transaction = ensureTransaction(
 			response.data.transaction,
@@ -167,7 +169,7 @@ export async function handleCreateTransaction(
 		invalidateTransactionCaches(
 			deltaCache,
 			knowledgeStore,
-			params.budget_id,
+			budgetId,
 			response.data.server_knowledge,
 			affectedAccountIds,
 			affectedMonths,
@@ -180,7 +182,7 @@ export async function handleCreateTransaction(
 
 		// Get the updated account balance
 		const accountResponse = await ynabAPI.accounts.getAccountById(
-			params.budget_id,
+			budgetId,
 			transaction.account_id,
 		);
 		const account = accountResponse.data.account;
@@ -797,7 +799,7 @@ export async function handleCreateReceiptSplitTransaction(
 	}
 
 	const createTransactionParams: CreateTransactionParams = {
-		budget_id: params.budget_id,
+		budget_id: requireResolvedBudgetId(params.budget_id),
 		account_id: params.account_id,
 		amount: -totalMilliunits,
 		date,
@@ -887,11 +889,12 @@ export async function handleUpdateTransaction(
 				structuredContent: updateDryRunData,
 			};
 		}
+		const budgetId = requireResolvedBudgetId(params.budget_id);
 
 		// Get the original transaction before updating to capture the original account_id
 		const originalTransactionResponse =
 			await ynabAPI.transactions.getTransactionById(
-				params.budget_id,
+				budgetId,
 				params.transaction_id,
 			);
 		const originalTransaction = ensureTransaction(
@@ -936,7 +939,7 @@ export async function handleUpdateTransaction(
 		}
 
 		const response = await ynabAPI.transactions.updateTransaction(
-			params.budget_id,
+			budgetId,
 			params.transaction_id,
 			{
 				transaction: transactionData,
@@ -951,7 +954,7 @@ export async function handleUpdateTransaction(
 		const specificTransactionCacheKey = CacheManager.generateKey(
 			"transaction",
 			"get",
-			params.budget_id,
+			budgetId,
 			params.transaction_id,
 		);
 		cacheManager.delete(specificTransactionCacheKey);
@@ -995,7 +998,7 @@ export async function handleUpdateTransaction(
 		invalidateTransactionCaches(
 			deltaCache,
 			knowledgeStore,
-			params.budget_id,
+			budgetId,
 			response.data.server_knowledge,
 			affectedAccountIds,
 			affectedMonths,
@@ -1013,7 +1016,7 @@ export async function handleUpdateTransaction(
 
 		// Get the updated account balance
 		const accountResponse = await ynabAPI.accounts.getAccountById(
-			params.budget_id,
+			budgetId,
 			transaction.account_id,
 		);
 		const account = accountResponse.data.account;
@@ -1096,8 +1099,9 @@ export async function handleDeleteTransaction(
 				structuredContent: deleteDryRunData,
 			};
 		}
+		const budgetId = requireResolvedBudgetId(params.budget_id);
 		const response = await ynabAPI.transactions.deleteTransaction(
-			params.budget_id,
+			budgetId,
 			params.transaction_id,
 		);
 
@@ -1109,7 +1113,7 @@ export async function handleDeleteTransaction(
 		const specificTransactionCacheKey = CacheManager.generateKey(
 			"transaction",
 			"get",
-			params.budget_id,
+			budgetId,
 			params.transaction_id,
 		);
 		cacheManager.delete(specificTransactionCacheKey);
@@ -1124,7 +1128,7 @@ export async function handleDeleteTransaction(
 		invalidateTransactionCaches(
 			deltaCache,
 			knowledgeStore,
-			params.budget_id,
+			budgetId,
 			response.data.server_knowledge,
 			affectedAccountIds,
 			affectedMonths,
@@ -1137,7 +1141,7 @@ export async function handleDeleteTransaction(
 
 		// Get the updated account balance
 		const accountResponse = await ynabAPI.accounts.getAccountById(
-			params.budget_id,
+			budgetId,
 			transaction.account_id,
 		);
 		const account = accountResponse.data.account;
@@ -1323,6 +1327,7 @@ export async function handleCreateTransactions(
 					structuredContent: bulkCreateDryRunData,
 				};
 			}
+			const budgetId = requireResolvedBudgetId(budget_id);
 
 			const saveTransactions: NewTransaction[] = transactions.map(
 				(transaction) => {
@@ -1352,12 +1357,9 @@ export async function handleCreateTransactions(
 				},
 			);
 
-			const response = await ynabAPI.transactions.createTransactions(
-				budget_id,
-				{
-					transactions: saveTransactions,
-				},
-			);
+			const response = await ynabAPI.transactions.createTransactions(budgetId, {
+				transactions: saveTransactions,
+			});
 
 			const responseData = response.data;
 			const duplicateImportIds = new Set(
@@ -1399,7 +1401,7 @@ export async function handleCreateTransactions(
 			invalidateTransactionCaches(
 				deltaCache,
 				knowledgeStore,
-				budget_id,
+				budgetId,
 				responseData.server_knowledge,
 				accountIds,
 				affectedMonths,
@@ -1642,9 +1644,10 @@ export async function handleUpdateTransactions(
 				const previewTransactionIds = previewTransactions.map(
 					(transaction) => transaction.id,
 				);
+				const budgetId = requireResolvedBudgetId(budget_id);
 				// Resolve metadata once and reuse any transaction details for preview rendering
 				const { metadata, unresolvedIds, previewDetails } =
-					await resolveMetadata(ynabAPI, budget_id, transactions, {
+					await resolveMetadata(ynabAPI, budgetId, transactions, {
 						previewTransactionIds,
 					});
 
@@ -1810,11 +1813,12 @@ export async function handleUpdateTransactions(
 					structuredContent: response,
 				};
 			}
+			const budgetId = requireResolvedBudgetId(budget_id);
 
 			// Resolve metadata for cache invalidation before making updates
 			const { metadata, unresolvedIds } = await resolveMetadata(
 				ynabAPI,
-				budget_id,
+				budgetId,
 				transactions,
 			);
 
@@ -1900,12 +1904,9 @@ export async function handleUpdateTransactions(
 				});
 
 			// Execute bulk update
-			const response = await ynabAPI.transactions.updateTransactions(
-				budget_id,
-				{
-					transactions: updateTransactions,
-				},
-			);
+			const response = await ynabAPI.transactions.updateTransactions(budgetId, {
+				transactions: updateTransactions,
+			});
 
 			const responseData = response.data;
 			const updatedTransactions = responseData.transactions ?? [];
@@ -1954,7 +1955,7 @@ export async function handleUpdateTransactions(
 					CacheManager.generateKey(
 						"transaction",
 						"get",
-						budget_id,
+						budgetId,
 						transaction.id,
 					),
 				);
@@ -2010,7 +2011,7 @@ export async function handleUpdateTransactions(
 			invalidateTransactionCaches(
 				deltaCache,
 				knowledgeStore,
-				budget_id,
+				budgetId,
 				responseData.server_knowledge,
 				affectedAccountIds,
 				affectedMonthKeys,

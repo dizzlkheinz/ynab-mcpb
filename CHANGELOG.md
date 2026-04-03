@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.6] - 2026-04-03
+
+### Changed
+
+- **`budget_id` now optional on all tool schemas** — All 28 tool input schemas now declare `budget_id` as optional, relying on the registry's `defaultArgumentResolver` to inject the default budget ID when omitted. Handlers use `requireResolvedBudgetId()` to narrow the type at runtime, providing a clear error if no default budget is configured.
+- **New `requireResolvedBudgetId()` adapter** — Centralizes the budget ID narrowing pattern in `adapters.ts`, replacing ad-hoc checks across all tool handlers
+
 ## [0.26.5] - 2026-04-03
 
 ### Fixed

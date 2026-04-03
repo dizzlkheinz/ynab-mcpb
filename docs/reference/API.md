@@ -295,7 +295,7 @@ Gets detailed information for a specific budget.
 Lists all accounts for a specific budget.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 
 **Example Request:**
 ```json
@@ -324,7 +324,7 @@ Lists all accounts for a specific budget.
 Gets detailed information for a specific account.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `account_id` (string, required): The ID of the account
 
 **Example Request:**
@@ -343,7 +343,7 @@ Gets detailed information for a specific account.
 Creates a new account in the specified budget.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `name` (string, required): The name of the new account
 - `type` (string, required): The account type. Valid values:
   - `checking` - Checking account
@@ -388,7 +388,7 @@ Creates a new account in the specified budget.
 Lists transactions for a budget with optional filtering.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `account_id` (string, optional): Filter by account ID
 - `category_id` (string, optional): Filter by category ID
 - `since_date` (string, optional): Only return transactions on or after this date (YYYY-MM-DD)
@@ -423,7 +423,7 @@ Lists transactions for a budget with optional filtering.
 Exports all transactions to a JSON file with descriptive filename and platform-specific default paths. This tool bypasses MCP response size limits by saving data to a file instead of returning it in the response.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `account_id` (string, optional): Filter by account ID
 - `category_id` (string, optional): Filter by category ID
 - `since_date` (string, optional): Only export transactions on or after this date (YYYY-MM-DD)
@@ -471,7 +471,7 @@ The exported JSON file contains:
 Compares bank transactions from CSV files with YNAB transactions to identify missing entries in either direction. This tool helps with bank statement reconciliation by finding transactions that exist in your bank statement but not in YNAB (need to import) or vice versa (double-check for duplicates).
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget to compare against
+- `budget_id` (string, optional): The ID of the budget to compare against. Omit to use the default budget
 - `account_id` (string, required): The ID of the account to compare transactions for
 - `csv_file_path` (string, optional): Path to CSV file containing bank transactions
 - `csv_data` (string, optional): CSV data as string (alternative to csv_file_path)
@@ -575,7 +575,8 @@ Compares bank transactions from CSV files with YNAB transactions to identify mis
 Performs comprehensive account reconciliation with bank statement data. The tool returns **two content entries**: a human-readable narrative for assistants and a structured JSON payload (`version: "2.0"`) that encodes MoneyValue objects, insights, and optional execution results.
 
 **Parameters (selected):**
-- `budget_id` / `account_id` (string, required)
+- `budget_id` (string, optional): Budget UUID. Omit to use the default budget
+- `account_id` (string, required)
 - `csv_file_path` or `csv_data` (one required)
 - `statement_balance` (number, required) – ending cleared balance from the statement in dollars
 - `statement_start_date`, `statement_end_date`, `statement_date` (string, optional)
@@ -880,7 +881,7 @@ For large discrepancies with many recommendations:
 Gets detailed information for a specific transaction.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `transaction_id` (string, required): The ID of the transaction
 
 **Example Request:**
@@ -899,7 +900,7 @@ Gets detailed information for a specific transaction.
 Creates a new transaction in the specified budget and account.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `account_id` (string, required): The ID of the account
 - `amount` (number, required): Transaction amount in integer milliunits (negative for outflows)
 - `date` (string, required): Transaction date in ISO format (YYYY-MM-DD)
@@ -956,7 +957,7 @@ When `subtransactions` are supplied, their `amount` values must sum to the paren
 Creates a split transaction from categorized receipt data and allocates taxes proportionally across the selected categories. Use this helper after the user has confirmed the receipt breakdown and category assignments.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `account_id` (string, required): The ID of the account
 - `payee_name` (string, required): Payee to assign to the transaction (e.g., the store name)
 - `date` (string, optional): Transaction date in ISO format (defaults to today when omitted)
@@ -1056,7 +1057,7 @@ Creates a split transaction from categorized receipt data and allocates taxes pr
 Updates an existing transaction.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `transaction_id` (string, required): The ID of the transaction to update
 - `account_id` (string, optional): Update the account ID
 - `amount` (number, optional): Update the amount in integer milliunits
@@ -1089,7 +1090,7 @@ Updates an existing transaction.
 Deletes a transaction from the specified budget.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `transaction_id` (string, required): The ID of the transaction to delete
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
 
@@ -1111,7 +1112,7 @@ Deletes a transaction from the specified budget.
 Lists all categories for a specific budget.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 
 **Example Request:**
 ```json
@@ -1140,7 +1141,7 @@ Lists all categories for a specific budget.
 Gets detailed information for a specific category.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `category_id` (string, required): The ID of the category
 
 ### update_category
@@ -1148,7 +1149,7 @@ Gets detailed information for a specific category.
 Updates the budgeted amount for a category in the current month.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `category_id` (string, required): The ID of the category
 - `budgeted` (number, required): The budgeted amount in integer milliunits
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
@@ -1172,7 +1173,7 @@ Updates the budgeted amount for a category in the current month.
 Lists all payees for a specific budget.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 
 **Example Request:**
 ```json
@@ -1189,7 +1190,7 @@ Lists all payees for a specific budget.
 Gets detailed information for a specific payee.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `payee_id` (string, required): The ID of the payee
 
 ## Monthly Data Tools
@@ -1199,7 +1200,7 @@ Gets detailed information for a specific payee.
 Gets budget data for a specific month.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `month` (string, required): The month in ISO format (YYYY-MM-DD, typically first day of month)
 
 **Example Request:**
@@ -1218,7 +1219,7 @@ Gets budget data for a specific month.
 Lists all months summary data for a budget.
 
 **Parameters:**
-- `budget_id` (string, required): The ID of the budget
+- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 
 ## Utility Tools
 

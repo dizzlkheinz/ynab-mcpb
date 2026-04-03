@@ -614,8 +614,9 @@ describe("Account Tools", () => {
 				expect(() => ListAccountsSchema.parse({ budget_id: "" })).toThrow();
 			});
 
-			it("should reject missing budget_id", () => {
-				expect(() => ListAccountsSchema.parse({})).toThrow();
+			it("should allow missing budget_id for default resolution", () => {
+				const result = ListAccountsSchema.parse({});
+				expect(result.budget_id).toBeUndefined();
 			});
 		});
 
@@ -643,6 +644,14 @@ describe("Account Tools", () => {
 					}),
 				).toThrow();
 			});
+
+			it("should allow missing budget_id for default resolution", () => {
+				const result = GetAccountSchema.parse({
+					account_id: "account-1",
+				});
+				expect(result.budget_id).toBeUndefined();
+				expect(result.account_id).toBe("account-1");
+			});
 		});
 
 		describe("CreateAccountSchema", () => {
@@ -666,6 +675,15 @@ describe("Account Tools", () => {
 					type: "savings",
 				});
 				expect(result.balance).toBeUndefined();
+			});
+
+			it("should allow missing budget_id for default resolution", () => {
+				const result = CreateAccountSchema.parse({
+					name: "New Account",
+					type: "checking",
+				});
+				expect(result.budget_id).toBeUndefined();
+				expect(result.name).toBe("New Account");
 			});
 
 			it("should validate all supported account types", () => {

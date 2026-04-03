@@ -12,7 +12,11 @@ import { responseFormatter } from "../../server/responseFormatter.js";
 import type { ProgressCallback } from "../../server/toolRegistry.js";
 import { withToolErrorHandling } from "../../types/index.js";
 import type { ToolFactory } from "../../types/toolRegistration.js";
-import { createAdapters, createBudgetResolver } from "../adapters.js";
+import {
+	createAdapters,
+	createBudgetResolver,
+	requireResolvedBudgetId,
+} from "../adapters.js";
 import {
 	CompareTransactionsSchema,
 	handleCompareTransactions,
@@ -66,7 +70,7 @@ export type * from "./types.js";
  */
 export const ReconcileAccountSchema = z
 	.object({
-		budget_id: z.string().min(1, "Budget ID is required"),
+		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		account_id: z.string().min(1, "Account ID is required"),
 
 		// CSV input (one required)
@@ -156,6 +160,7 @@ export async function handleReconcileAccount(
 	);
 	return await withToolErrorHandling(
 		async () => {
+			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Derive matching thresholds from match_strictness
 			const STRICTNESS_THRESHOLDS = {
 				loose: { autoMatch: 70, suggested: 55 },
@@ -180,15 +185,13 @@ export async function handleReconcileAccount(
 				exactPayeeBonus: 10,
 			};
 
-			const accountResult = await deltaFetcher.fetchAccountsFull(
-				params.budget_id,
-			);
+			const accountResult = await deltaFetcher.fetchAccountsFull(budgetId);
 			const accountData = accountResult.data.find(
 				(account) => account.id === params.account_id,
 			);
 			if (!accountData) {
 				throw new Error(
-					`Account ${params.account_id} not found in budget ${params.budget_id}`,
+					`Account ${params.account_id} not found in budget ${budgetId}`,
 				);
 			}
 			const accountName = accountData.name;
@@ -215,7 +218,7 @@ export async function handleReconcileAccount(
 				? -Math.abs(params.statement_balance)
 				: params.statement_balance;
 
-			const budgetResponse = await ynabAPI.plans.getPlanById(params.budget_id);
+			const budgetResponse = await ynabAPI.plans.getPlanById(budgetId);
 			const currencyCode =
 				budgetResponse.data.plan?.currency_format?.iso_code ?? "USD";
 
@@ -360,7 +363,7 @@ export async function handleReconcileAccount(
 			const sinceDateString = sinceDate.toISOString().split("T")[0];
 			const transactionsResult =
 				await deltaFetcher.fetchTransactionsByAccountFull(
-					params.budget_id,
+					budgetId,
 					params.account_id,
 					sinceDateString,
 				);
@@ -459,7 +462,7 @@ export async function handleReconcileAccount(
 				config,
 				currencyCode,
 				params.account_id,
-				params.budget_id,
+				budgetId,
 				finalInvertAmounts, // Use smart-detected value
 				csvOptions,
 				initialAccount,
@@ -489,7 +492,7 @@ export async function handleReconcileAccount(
 					ynabAPI,
 					analysis,
 					params: effectiveParams,
-					budgetId: params.budget_id,
+					budgetId,
 					accountId: params.account_id,
 					initialAccount,
 					currencyCode,
