@@ -13,6 +13,7 @@ import {
 	formatCategoriesList,
 	formatCategoryDetail,
 } from "../server/markdownFormatter.js";
+import { invalidateBudgetResourceCaches } from "../server/resourceCacheInvalidation.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
@@ -364,6 +365,11 @@ export async function handleUpdateCategory(
 		);
 		cacheManager.delete(monthsListCacheKey);
 		cacheManager.delete(currentMonthCacheKey);
+		invalidateBudgetResourceCaches(params.budget_id, {
+			invalidateCategoriesList: true,
+			invalidateMonthsList: true,
+			monthKeys: [currentMonth],
+		});
 
 		deltaCache.invalidate(params.budget_id, CacheKeys.CATEGORIES);
 		deltaCache.invalidate(params.budget_id, CacheKeys.MONTHS);

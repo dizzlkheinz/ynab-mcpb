@@ -1725,7 +1725,7 @@ export const ReconcileAccountSchema = z.object({
   // Automation Toggles
   auto_create_transactions: z.boolean().default(false),
   auto_update_cleared_status: z.boolean().default(false),
-  auto_unclear_missing: z.boolean().default(true),
+  auto_unclear_missing: z.boolean().default(false),
   auto_adjust_dates: z.boolean().default(false),
   invert_bank_amounts: z.boolean().optional(),
   dry_run: z.boolean().default(true),

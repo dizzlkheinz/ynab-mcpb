@@ -3449,12 +3449,8 @@ describe("transactionTools", () => {
 				);
 
 				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
+					(...parts: (string | number | boolean | undefined)[]) =>
+						parts.filter((part) => part !== undefined).join(":"),
 				);
 
 				const response = await parseResponse(
@@ -3721,7 +3717,7 @@ describe("transactionTools", () => {
 		});
 
 		describe("cache invalidation", () => {
-			it("invalidates transaction, account, and month caches for affected resources", async () => {
+			it("invalidates transaction, account, month, and resource caches for affected resources", async () => {
 				const batch = [
 					buildTransaction({ account_id: "account-A", date: "2024-03-15" }),
 					buildTransaction({ account_id: "account-B", date: "2024-04-01" }),
@@ -3730,12 +3726,8 @@ describe("transactionTools", () => {
 					buildApiTransaction({ ...txn, id: `cache-${index + 1}` }),
 				);
 				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
+					(...parts: (string | number | boolean | undefined)[]) =>
+						parts.filter((part) => part !== undefined).join(":"),
 				);
 				(mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
 					buildApiResponse(apiTransactions),
@@ -3752,11 +3744,19 @@ describe("transactionTools", () => {
 				);
 				expect(deleteCalls).toEqual(
 					expect.arrayContaining([
-						"transactions:list:budget-123:all",
+						"transactions:list:budget-123",
 						"account:get:budget-123:account-A",
 						"account:get:budget-123:account-B",
 						"month:get:budget-123:2024-03-01",
 						"month:get:budget-123:2024-04-01",
+						"resources:budgets:list",
+						"resources:budgets:get:budget-123",
+						"resources:accounts:list:budget-123",
+						"resources:accounts:get:budget-123:account-A",
+						"resources:accounts:get:budget-123:account-B",
+						"resources:months:list:budget-123",
+						"resources:months:get:budget-123:2024-03-01",
+						"resources:months:get:budget-123:2024-04-01",
 					]),
 				);
 			});
@@ -3776,12 +3776,8 @@ describe("transactionTools", () => {
 					buildApiTransaction({ ...txn, id: `repeat-cache-${index + 1}` }),
 				);
 				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
+					(...parts: (string | number | boolean | undefined)[]) =>
+						parts.filter((part) => part !== undefined).join(":"),
 				);
 				(mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
 					buildApiResponse(apiTransactions),
@@ -3801,10 +3797,21 @@ describe("transactionTools", () => {
 					true,
 				);
 				expect(uniqueKeys.has("month:get:budget-123:2024-05-01")).toBe(true);
+				expect(
+					uniqueKeys.has("resources:accounts:get:budget-123:repeat-account"),
+				).toBe(true);
+				expect(
+					uniqueKeys.has("resources:months:get:budget-123:2024-05-01"),
+				).toBe(true);
 				// The implementation naturally deduplicates via Set, so we should only see one delete call per key
 				expect(
 					deleteCalls.filter(
 						(key) => key === "account:get:budget-123:repeat-account",
+					).length,
+				).toBeGreaterThanOrEqual(1);
+				expect(
+					deleteCalls.filter(
+						(key) => key === "resources:accounts:get:budget-123:repeat-account",
 					).length,
 				).toBeGreaterThanOrEqual(1);
 			});

@@ -505,7 +505,7 @@ describe("Account Tools", () => {
 			expect(parsedContent.error.message).toBe("Failed to create account");
 		});
 
-		it("should invalidate account list cache on successful account creation", async () => {
+		it("should invalidate account and resource caches on successful account creation", async () => {
 			const mockAccount = {
 				id: "account-1",
 				name: "New Account",
@@ -539,6 +539,18 @@ describe("Account Tools", () => {
 			);
 			expect(cacheManager.delete).toHaveBeenCalledWith(
 				"accounts:list:budget-1",
+			);
+			expect(cacheManager.delete).toHaveBeenCalledWith(
+				"resources:budgets:list",
+			);
+			expect(cacheManager.delete).toHaveBeenCalledWith(
+				"resources:budgets:get:budget-1",
+			);
+			expect(cacheManager.delete).toHaveBeenCalledWith(
+				"resources:accounts:list:budget-1",
+			);
+			expect(cacheManager.delete).toHaveBeenCalledWith(
+				"resources:accounts:get:budget-1:account-1",
 			);
 
 			expect(result.content).toHaveLength(1);

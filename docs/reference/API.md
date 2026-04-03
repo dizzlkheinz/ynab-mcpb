@@ -42,7 +42,7 @@ YNAB_ACCESS_TOKEN=your_personal_access_token_here
 
 ### Monetary Amounts
 
-**📢 New in v0.7.0**: All monetary amounts are automatically converted to standard dollar format for human readability.
+**📢 New in v0.7.0**: Monetary values in responses are automatically converted to standard dollar format for human readability.
 
 The server automatically converts YNAB's internal milliunits to dollars in all responses:
 - Account balances: `-1924.37` (instead of `-1924370` milliunits)
@@ -50,10 +50,10 @@ The server automatically converts YNAB's internal milliunits to dollars in all r
 - Budget amounts: `150.00` (instead of `150000` milliunits)
 
 **Input formats**:
-- When creating transactions, amounts should be provided in dollars (e.g., `50.25`)
-- The server automatically converts to YNAB's internal milliunit format
+- Some user-facing helpers accept decimal dollars, such as `create_account.balance`, `create_receipt_split_transaction` receipt amounts, and `reconcile_account.statement_balance`
+- Direct mutation APIs such as `create_transaction.amount`, `create_transaction.subtransactions[].amount`, `update_transaction.amount`, and `update_category.budgeted` require **integer milliunits** (for example, `$50.25` = `50250`)
 
-**Note**: YNAB's internal representation uses milliunits (1/1000th of currency unit), but this is now transparent to users - all inputs and outputs use standard dollar amounts
+**Note**: YNAB's internal representation uses milliunits (1/1000th of a currency unit). Responses are rendered in dollars, but write-tool inputs must follow the per-tool contract below.
 
 ### Dates
 
@@ -583,7 +583,7 @@ Performs comprehensive account reconciliation with bank statement data. The tool
 - Execution controls (optional):
   - `auto_create_transactions` (default `false`)
   - `auto_update_cleared_status` (default `false`)
-  - `auto_unclear_missing` (default `true`)
+  - `auto_unclear_missing` (default `false`)
   - `auto_adjust_dates` (default `false`)
   - `dry_run` (default `true`)
 - Other legacy options remain accepted for compatibility (`expected_bank_balance`, `require_exact_match`, etc.).
@@ -699,17 +699,16 @@ The `reconcile_account_v2` tool now includes an optional `recommendations` array
 
 Recommendations include complete parameters for YNAB MCP tool calls:
 
-**CRITICAL**: Recommendation `parameters.amount` values are in **milliunits** (YNAB's internal format where 1 dollar = 1000 milliunits). These values are intended for reconciliation execution; convert to dollars before calling `create_transaction`. `estimated_impact.value` remains in decimal dollars for human readability.
+**CRITICAL**: Recommendation `parameters.amount` values are already in **milliunits** (YNAB's internal format where 1 dollar = 1000 milliunits). Pass them through directly when calling `create_transaction`. `estimated_impact.value` remains in decimal dollars for human readability.
 
 ```typescript
 // For create_transaction recommendations:
-// Note: Recommendation amounts are already in milliunits; convert to dollars before tool calls
+// Note: Recommendation amounts are already in milliunits
 const rec = recommendations.find(r => r.action_type === 'create_transaction');
 if (rec) {
   await create_transaction({
     budget_id: 'your-budget-id',
-    ...rec.parameters,
-    amount: rec.parameters.amount / 1000 // Convert milliunits to dollars
+    ...rec.parameters
   });
 }
 
@@ -902,7 +901,7 @@ Creates a new transaction in the specified budget and account.
 **Parameters:**
 - `budget_id` (string, required): The ID of the budget
 - `account_id` (string, required): The ID of the account
-- `amount` (number, required): Transaction amount in dollars (negative for outflows)
+- `amount` (number, required): Transaction amount in integer milliunits (negative for outflows)
 - `date` (string, required): Transaction date in ISO format (YYYY-MM-DD)
 - `payee_name` (string, optional): The payee name
 - `payee_id` (string, optional): The payee ID
@@ -912,9 +911,9 @@ Creates a new transaction in the specified budget and account.
 - `approved` (boolean, optional): Whether the transaction is approved
 - `flag_color` (string, optional): Transaction flag color (`red`, `orange`, `yellow`, `green`, `blue`, `purple`)
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
-- `subtransactions` (array, optional): Split line items; each entry accepts `amount` (dollars), plus optional `memo`, `category_id`, `payee_id`, and `payee_name`
+- `subtransactions` (array, optional): Split line items; each entry accepts `amount` (integer milliunits), plus optional `memo`, `category_id`, `payee_id`, and `payee_name`
 
-When `subtransactions` are supplied, their `amount` values must sum to the parent `amount`, matching YNAB API requirements.
+When `subtransactions` are supplied, their `amount` values must sum to the parent `amount` in milliunits, matching YNAB API requirements.
 
 **Example Request:**
 ```json
@@ -923,7 +922,7 @@ When `subtransactions` are supplied, their `amount` values must sum to the paren
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "account_id": "87654321-4321-4321-4321-210987654321",
-    "amount": -5.0,
+    "amount": -5000,
     "date": "2024-01-15",
     "payee_name": "Coffee Shop",
     "category_id": "category-id",
@@ -941,12 +940,12 @@ When `subtransactions` are supplied, their `amount` values must sum to the paren
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "account_id": "87654321-4321-4321-4321-210987654321",
-    "amount": -125.0,
+    "amount": -125000,
     "date": "2024-02-01",
     "memo": "Rent and utilities",
     "subtransactions": [
-      { "amount": -100.0, "category_id": "rent-category", "memo": "Rent" },
-      { "amount": -25.0, "category_id": "utilities-category", "memo": "Utilities" }
+      { "amount": -100000, "category_id": "rent-category", "memo": "Rent" },
+      { "amount": -25000, "category_id": "utilities-category", "memo": "Utilities" }
     ]
   }
 }
@@ -1060,7 +1059,7 @@ Updates an existing transaction.
 - `budget_id` (string, required): The ID of the budget
 - `transaction_id` (string, required): The ID of the transaction to update
 - `account_id` (string, optional): Update the account ID
-- `amount` (number, optional): Update the amount in dollars
+- `amount` (number, optional): Update the amount in integer milliunits
 - `date` (string, optional): Update the date (YYYY-MM-DD)
 - `payee_name` (string, optional): Update the payee name
 - `payee_id` (string, optional): Update the payee ID
@@ -1078,7 +1077,7 @@ Updates an existing transaction.
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "transaction_id": "transaction-id",
-    "amount": -6.0,
+    "amount": -6000,
     "memo": "Updated memo",
     "flag_color": "red"
   }
@@ -1151,7 +1150,7 @@ Updates the budgeted amount for a category in the current month.
 **Parameters:**
 - `budget_id` (string, required): The ID of the budget
 - `category_id` (string, required): The ID of the category
-- `budgeted` (number, required): The budgeted amount in dollars
+- `budgeted` (number, required): The budgeted amount in integer milliunits
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
 
 **Example Request:**
@@ -1161,7 +1160,7 @@ Updates the budgeted amount for a category in the current month.
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "category_id": "category-id",
-    "budgeted": 50.0
+    "budgeted": 50000
   }
 }
 ```
@@ -1480,9 +1479,9 @@ if (!dateRegex.test(date)) {
   throw new Error('Date must be in YYYY-MM-DD format');
 }
 
-// Validate amount is in dollars
-if (!Number.isFinite(amount)) {
-  throw new Error('Amount must be a number in dollars');
+// Validate a create_transaction amount is in integer milliunits
+if (!Number.isInteger(amount)) {
+  throw new Error('Amount must be an integer in milliunits');
 }
 ```
 
@@ -1506,18 +1505,18 @@ const recentTransactions = await mcpClient.callTool('list_transactions', {
 
 ### 4. Amount Handling
 
-All amounts are automatically handled in dollars:
+Responses are returned in dollars, but some write-tool inputs must be sent in milliunits:
 
 ```javascript
 // All returned amounts are in dollars - no conversion needed
 const accounts = await mcpClient.callTool('list_accounts', { budget_id: budgetId });
 console.log(`Balance: $${accounts.accounts[0].balance}`); // Balance: $1234.56
 
-// When creating transactions, provide amounts in dollars
+// When creating transactions, provide amounts in integer milliunits
 await mcpClient.callTool('create_transaction', {
   budget_id: budgetId,
   account_id: accountId,
-  amount: -50.25,  // Negative for outflows
+  amount: -50250,  // Negative for outflows
   date: '2024-01-15',
   payee_name: 'Coffee Shop'
 });

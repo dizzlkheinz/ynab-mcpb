@@ -5,6 +5,7 @@ import type { SaveTransactionsResponseData } from "ynab/dist/models/SaveTransact
 import { CacheManager, cacheManager } from "../server/cacheManager.js";
 import type { DeltaCache } from "../server/deltaCache.js";
 import { globalRequestLogger } from "../server/requestLogger.js";
+import { invalidateBudgetResourceCaches } from "../server/resourceCacheInvalidation.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { ValidationError } from "../types/index.js";
@@ -176,6 +177,13 @@ export function invalidateTransactionCaches(
 			);
 		}
 	}
+	invalidateBudgetResourceCaches(budgetId, {
+		accountIds: affectedAccountIds,
+		invalidateAccountsList,
+		invalidateCategoriesList: shouldInvalidateCategories,
+		invalidateMonthsList: shouldInvalidateMonths,
+		...(shouldInvalidateMonths ? { monthKeys: affectedMonths } : {}),
+	});
 
 	if (serverKnowledge !== undefined) {
 		const transactionCacheKey = CacheManager.generateKey(

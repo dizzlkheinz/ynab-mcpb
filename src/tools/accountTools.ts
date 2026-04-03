@@ -13,6 +13,7 @@ import {
 	formatAccountDetail,
 	formatAccountsList,
 } from "../server/markdownFormatter.js";
+import { invalidateBudgetResourceCaches } from "../server/resourceCacheInvalidation.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
@@ -306,6 +307,10 @@ export async function handleCreateAccount(
 				params.budget_id,
 			);
 			cacheManager.delete(accountsListCacheKey);
+			invalidateBudgetResourceCaches(params.budget_id, {
+				invalidateAccountsList: true,
+				accountIds: [account.id],
+			});
 
 			deltaCache.invalidate(params.budget_id, CacheKeys.ACCOUNTS);
 

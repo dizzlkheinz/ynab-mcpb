@@ -102,7 +102,7 @@ export const ReconcileAccountSchema = z
 
 		auto_create_transactions: z.boolean().optional().default(false),
 		auto_update_cleared_status: z.boolean().optional().default(false),
-		auto_unclear_missing: z.boolean().optional().default(true),
+		auto_unclear_missing: z.boolean().optional().default(false),
 		auto_adjust_dates: z.boolean().optional().default(false),
 		dry_run: z.boolean().optional().default(true),
 		// Sign convention override for bank CSV amounts
@@ -628,13 +628,14 @@ Args:
   - dry_run (boolean, optional): Preview actions without executing. Default: true.
   - auto_create_transactions (boolean, optional): Auto-create missing transactions. Default: false.
   - auto_update_cleared_status (boolean, optional): Auto-mark matched transactions as cleared. Default: false.
+  - auto_unclear_missing (boolean, optional): Auto-mark statement-missing cleared transactions as uncleared when reconciliation remains unbalanced. Default: false.
   - max_suggestions_in_output (number, optional): Limit unmatched items and suggestions shown in the human report. Default: 20.
 
 Returns: human-readable reconciliation narrative + structured JSON (unmatched_bank, unmatched_ynab, suggestions, execution_summary when actions are performed).
 
 Examples:
   - Preview reconciliation: set dry_run=true (default)
-  - Execute: set dry_run=false, auto_update_cleared_status=true`,
+  - Execute: set dry_run=false and explicitly enable the write flags you want, e.g. auto_update_cleared_status=true`,
 		inputSchema: ReconcileAccountSchema,
 		outputSchema: ReconcileAccountOutputSchema,
 		handler: adaptWithDeltaAndProgress(handleReconcileAccount),

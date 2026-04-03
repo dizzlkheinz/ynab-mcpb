@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.5] - 2026-04-03
+
+### Fixed
+
+- **Resource cache invalidation on writes** — Write operations (`create_account`, `update_category`, `create_transaction`, `update_transaction`, `delete_transaction`, bulk creates/updates) now invalidate MCP resource caches (budgets, accounts, categories, months) in addition to tool-level caches, preventing stale resource reads after mutations
+- **`auto_unclear_missing` default changed to `false`** — Previously defaulted to `true`, which could unexpectedly unclear cleared transactions during reconciliation; now requires explicit opt-in like all other write flags
+
+### Changed
+
+- **Reconciliation tool description** — Documents `auto_unclear_missing` parameter and clarifies the execute example to say "explicitly enable the write flags you want"
+
 ## [0.26.4] - 2026-04-02
 
 ### Fixed

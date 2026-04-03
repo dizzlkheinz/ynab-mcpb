@@ -67,21 +67,8 @@ describe("Category Tools", () => {
 		);
 		(cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValue(false);
 		(CacheManager.generateKey as any).mockImplementation(
-			(prefix: string, type: string, budgetId: string, id?: string) => {
-				if (prefix === CacheKeys.CATEGORIES && type === "list") {
-					return `categories:list:${budgetId}`;
-				}
-				if (prefix === CacheKeys.CATEGORIES && type === "get" && id) {
-					return `categories:get:${budgetId}:${id}`;
-				}
-				if (prefix === CacheKeys.MONTHS && type === "list") {
-					return `months:list:${budgetId}`;
-				}
-				if (prefix === CacheKeys.MONTHS && type === "get" && id) {
-					return `months:get:${budgetId}:${id}`;
-				}
-				return `${prefix}:${type}:${budgetId}:${id || ""}`;
-			},
+			(...parts: (string | number | boolean | undefined)[]) =>
+				parts.filter((part) => part !== undefined).join(":"),
 		);
 	});
 
@@ -466,7 +453,7 @@ describe("Category Tools", () => {
 			);
 		});
 
-		it("should invalidate category caches on successful category update", async () => {
+		it("should invalidate category and resource caches on successful category update", async () => {
 			const mockUpdatedCategory = {
 				id: "category-1",
 				category_group_id: "group-1",
@@ -529,6 +516,21 @@ describe("Category Tools", () => {
 			expect(cacheManager.delete).toHaveBeenCalledWith("months:list:budget-1");
 			expect(cacheManager.delete).toHaveBeenCalledWith(
 				`months:get:budget-1:${currentMonth}`,
+			);
+			expect(cacheManager.delete).toHaveBeenCalledWith(
+				"resources:budgets:list",
+			);
+			expect(cacheManager.delete).toHaveBeenCalledWith(
+				"resources:budgets:get:budget-1",
+			);
+			expect(cacheManager.delete).toHaveBeenCalledWith(
+				"resources:categories:list:budget-1",
+			);
+			expect(cacheManager.delete).toHaveBeenCalledWith(
+				"resources:months:list:budget-1",
+			);
+			expect(cacheManager.delete).toHaveBeenCalledWith(
+				`resources:months:get:budget-1:${currentMonth}`,
 			);
 		});
 
