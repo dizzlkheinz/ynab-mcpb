@@ -2069,7 +2069,12 @@ Args:
   - memo (string, optional): Memo text.
   - cleared (string, optional): "cleared", "uncleared", or "reconciled". Default: "uncleared".
   - approved (boolean, optional): Mark as approved. Default: false.
+  - flag_color (string, optional): Transaction flag color ("red", "orange", "yellow", "green", "blue", "purple").
   - dry_run (boolean, optional): Preview without saving. Default: false.
+  - subtransactions (array, optional): Manual split lines. Each entry accepts "amount" (integer milliunits), plus optional "memo", "category_id", "payee_id", and "payee_name".
+
+Use "subtransactions" for manual split transactions. Use "ynab_create_receipt_split_transaction" when you have itemized receipt data and want proportional tax allocation handled for you.
+Advanced: "import_id" is supported, but it is intentionally not part of normal guidance. Usually omit it if you want the transaction to remain eligible for later bank-import matching.
 
 Returns: created transaction with account_balance.
 
@@ -2101,7 +2106,7 @@ Returns: summary (created, duplicates, failed), results[], transactions[].
 
 Examples:
   - Dry run first: set dry_run=true to validate before committing
-  - Avoid duplicate import: set import_id on each transaction`,
+  - If you explicitly want YNAB-side duplicate import detection, set import_id on each transaction`,
 		inputSchema: CreateTransactionsSchema,
 		outputSchema: CreateTransactionsOutputSchema,
 		handler: adaptWrite(handleCreateTransactions),
@@ -2122,12 +2127,19 @@ Examples:
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
   - account_id (string, required): Account UUID.
-  - payee_name (string, optional): Store/payee name.
+  - payee_name (string, required): Store/payee name.
   - receipt_total (number, required): Total amount in dollars (positive).
   - receipt_tax (number, required): Tax amount in dollars (0 if none).
   - categories (array, required): Category groups with items. Each item needs name, amount.
   - date (string, optional): ISO date. Default: today.
+  - memo (string, optional): Memo applied to the parent transaction.
+  - receipt_subtotal (number, optional): Pre-tax subtotal for validation.
+  - cleared (string, optional): "cleared", "uncleared", or "reconciled". Default: "uncleared".
+  - approved (boolean, optional): Mark as approved. Default: false.
+  - flag_color (string, optional): Transaction flag color ("red", "orange", "yellow", "green", "blue", "purple").
   - dry_run (boolean, optional): Preview subtransactions without saving. Default: false.
+
+Use this helper when you have receipt line items and want tax allocated across categories automatically. For generic manual split transactions without receipt/tax logic, use "ynab_create_transaction" with "subtransactions".
 
 Returns: transaction with subtransactions and receipt_summary.`,
 		inputSchema: CreateReceiptSplitTransactionSchema,

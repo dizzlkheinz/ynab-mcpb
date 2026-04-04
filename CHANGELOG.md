@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.7] - 2026-04-03
+
+### Changed
+
+- **Improved `ynab_create_transaction` tool description** — Documents `flag_color`, `subtransactions`, and `import_id` parameters; clarifies when to use subtransactions vs `create_receipt_split_transaction`
+- **Improved `ynab_create_transactions` tool description** — Clarifies `import_id` guidance for YNAB-side duplicate detection
+- **Improved `ynab_create_receipt_split_transaction` tool description** — Documents `memo`, `receipt_subtotal`, `cleared`, `approved`, `flag_color` parameters; adds cross-reference to `create_transaction` for generic splits
+- **API reference documentation** — Adds subtransaction and `import_id` guidance to `create_transaction`; cross-references `create_receipt_split_transaction` for receipt workflows
+
 ## [0.26.6] - 2026-04-03
 
 ### Changed

@@ -915,6 +915,8 @@ Creates a new transaction in the specified budget and account.
 - `subtransactions` (array, optional): Split line items; each entry accepts `amount` (integer milliunits), plus optional `memo`, `category_id`, `payee_id`, and `payee_name`
 
 When `subtransactions` are supplied, their `amount` values must sum to the parent `amount` in milliunits, matching YNAB API requirements.
+Use `subtransactions` for manual split transactions. Use `create_receipt_split_transaction` when you have itemized receipt data and want proportional tax allocation handled automatically.
+Advanced: `import_id` is supported, but it is intentionally not part of normal guidance. Usually omit it if you want the transaction to remain eligible for later bank-import matching.
 
 **Example Request:**
 ```json
@@ -954,7 +956,7 @@ When `subtransactions` are supplied, their `amount` values must sum to the paren
 
 ### create_receipt_split_transaction
 
-Creates a split transaction from categorized receipt data and allocates taxes proportionally across the selected categories. Use this helper after the user has confirmed the receipt breakdown and category assignments.
+Creates a split transaction from categorized receipt data and allocates taxes proportionally across the selected categories. Use this helper after the user has confirmed the receipt breakdown and category assignments. For generic manual splits without receipt-tax logic, use `create_transaction` with `subtransactions`.
 
 **Parameters:**
 - `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
