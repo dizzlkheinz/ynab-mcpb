@@ -13,6 +13,12 @@ import {
 	type ResourceContents,
 } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
+import {
+	getBudgetByIdCompat,
+	getMonthCompat,
+	listBudgetsCompat,
+	listMonthsCompat,
+} from "../utils/ynabApiCompat.js";
 import { CACHE_TTLS, CacheManager } from "./cacheManager.js";
 
 /**
@@ -96,8 +102,8 @@ const defaultResourceHandlers: Record<string, ResourceHandler> = {
 			ttl: CACHE_TTLS.BUDGETS,
 			loader: async () => {
 				try {
-					const response = await ynabAPI.plans.getPlans();
-					const budgets = response.data.plans.map((budget) => ({
+					const response = await listBudgetsCompat(ynabAPI);
+					const budgets = response.budgets.map((budget) => ({
 						id: budget.id,
 						name: budget.name,
 						last_modified_on: budget.last_modified_on,
@@ -203,12 +209,12 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				ttl: CACHE_TTLS.BUDGETS,
 				loader: async () => {
 					try {
-						const response = await ynabAPI.plans.getPlanById(budget_id);
+						const budget = await getBudgetByIdCompat(ynabAPI, budget_id);
 						return [
 							{
 								uri,
 								mimeType: "application/json",
-								text: responseFormatter.format(response.data.plan),
+								text: responseFormatter.format(budget),
 							},
 						];
 					} catch (error) {
@@ -358,13 +364,13 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
 					try {
-						const response = await ynabAPI.months.getPlanMonths(budget_id);
+						const response = await listMonthsCompat(ynabAPI, budget_id);
 						return [
 							{
 								uri,
 								mimeType: "application/json",
 								text: responseFormatter.format({
-									months: response.data.months,
+									months: response.months,
 								}),
 							},
 						];
@@ -413,15 +419,12 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
 					try {
-						const response = await ynabAPI.months.getPlanMonth(
-							budget_id,
-							month,
-						);
+						const monthDetail = await getMonthCompat(ynabAPI, budget_id, month);
 						return [
 							{
 								uri,
 								mimeType: "application/json",
-								text: responseFormatter.format(response.data.month),
+								text: responseFormatter.format(monthDetail),
 							},
 						];
 					} catch (error) {

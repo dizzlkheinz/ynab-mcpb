@@ -9,6 +9,7 @@ import {
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
+import { getBudgetByIdCompat } from "../utils/ynabApiCompat.js";
 import { createAdapters } from "./adapters.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
 import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
@@ -118,8 +119,7 @@ export async function handleGetBudget(
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
-			const response = await ynabAPI.plans.getPlanById(params.budget_id);
-			const budget = response.data.plan;
+			const budget = await getBudgetByIdCompat(ynabAPI, params.budget_id);
 
 			const dataObject = {
 				budget: {
@@ -132,7 +132,8 @@ export async function handleGetBudget(
 					currency_format: budget.currency_format ?? undefined,
 					// Return counts instead of full arrays to avoid massive responses
 					accounts_count: budget.accounts?.length ?? 0,
-					categories_count: budget.categories?.length ?? 0,
+					categories_count:
+						budget.category_groups?.length ?? budget.categories?.length ?? 0,
 					payees_count: budget.payees?.length ?? 0,
 					months_count: budget.months?.length ?? 0,
 					// Include helpful message

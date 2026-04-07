@@ -41,6 +41,7 @@ import {
 	ConfigurationError,
 	ValidationError as ConfigValidationError,
 } from "../utils/errors.js";
+import { getBudgetByIdCompat } from "../utils/ynabApiCompat.js";
 import { CacheManager, cacheManager } from "./cacheManager.js";
 import { CompletionsManager } from "./completions.js";
 import { type AppConfig, loadConfig } from "./config.js";
@@ -463,7 +464,7 @@ Errors:
 			outputSchema: SetDefaultBudgetOutputSchema,
 			handler: async ({ input }) => {
 				const { budget_id } = input;
-				await this.ynabAPI.plans.getPlanById(budget_id);
+				await getBudgetByIdCompat(this.ynabAPI, budget_id);
 				this.setDefaultBudget(budget_id);
 
 				// Cache warming for frequently accessed data (fire-and-forget)

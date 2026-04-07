@@ -16,6 +16,7 @@ import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/amountUtils.js";
+import { getMonthCompat } from "../utils/ynabApiCompat.js";
 import {
 	createAdapters,
 	createBudgetResolver,
@@ -86,13 +87,7 @@ export async function handleGetMonth(
 			const wasCached = cacheManager.has(cacheKey);
 			const month = await cacheManager.wrap<ynab.MonthDetail>(cacheKey, {
 				ttl: CACHE_TTLS.MONTHS,
-				loader: async () => {
-					const response = await ynabAPI.months.getPlanMonth(
-						budgetId,
-						params.month,
-					);
-					return response.data.month;
-				},
+				loader: async () => getMonthCompat(ynabAPI, budgetId, params.month),
 			});
 
 			const fmt = params.response_format ?? "markdown";

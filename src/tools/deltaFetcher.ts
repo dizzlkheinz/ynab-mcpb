@@ -7,6 +7,7 @@ import {
 	mergeMonths,
 	mergeTransactions,
 } from "../server/deltaCache.merge.js";
+import { listBudgetsCompat, listMonthsCompat } from "../utils/ynabApiCompat.js";
 
 export interface DeltaFetchOptions {
 	forceFullRefresh?: boolean;
@@ -239,13 +240,14 @@ export class DeltaFetcher {
 			cacheKey,
 			budgetId,
 			async (lastKnowledge?: number) => {
-				const response =
-					lastKnowledge !== undefined
-						? await this.ynabAPI.months.getPlanMonths(budgetId, lastKnowledge)
-						: await this.ynabAPI.months.getPlanMonths(budgetId);
+				const response = await listMonthsCompat(
+					this.ynabAPI,
+					budgetId,
+					lastKnowledge,
+				);
 				return {
-					data: response.data.months,
-					serverKnowledge: response.data.server_knowledge ?? 0,
+					data: response.months,
+					serverKnowledge: response.serverKnowledge,
 				};
 			},
 			mergeMonths,
@@ -263,13 +265,10 @@ export class DeltaFetcher {
 			cacheKey,
 			"global",
 			async () => {
-				const response = await this.ynabAPI.plans.getPlans();
-				const serverKnowledge =
-					(response.data as { server_knowledge?: number }).server_knowledge ??
-					0;
+				const response = await listBudgetsCompat(this.ynabAPI);
 				return {
-					data: response.data.plans,
-					serverKnowledge,
+					data: response.budgets,
+					serverKnowledge: response.serverKnowledge,
 				};
 			},
 			mergeFlatEntities,

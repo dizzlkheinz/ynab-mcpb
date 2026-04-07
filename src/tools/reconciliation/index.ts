@@ -12,6 +12,7 @@ import { responseFormatter } from "../../server/responseFormatter.js";
 import type { ProgressCallback } from "../../server/toolRegistry.js";
 import { withToolErrorHandling } from "../../types/index.js";
 import type { ToolFactory } from "../../types/toolRegistration.js";
+import { getBudgetByIdCompat } from "../../utils/ynabApiCompat.js";
 import {
 	createAdapters,
 	createBudgetResolver,
@@ -218,9 +219,10 @@ export async function handleReconcileAccount(
 				? -Math.abs(params.statement_balance)
 				: params.statement_balance;
 
-			const budgetResponse = await ynabAPI.plans.getPlanById(budgetId);
+			const budget = await getBudgetByIdCompat(ynabAPI, budgetId);
 			const currencyCode =
-				budgetResponse.data.plan?.currency_format?.iso_code ?? "USD";
+				(budget.currency_format as { iso_code?: string } | undefined)
+					?.iso_code ?? "USD";
 
 			const narrativeNotes: string[] = [];
 
