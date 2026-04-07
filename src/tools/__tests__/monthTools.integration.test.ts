@@ -1,5 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import {
+	listBudgetsCompat,
+	listMonthsCompat,
+} from "../../utils/ynabApiCompat.js";
 import { handleGetMonth, handleListMonths } from "../monthTools.js";
 
 /**
@@ -20,18 +24,18 @@ describeIntegration("Month Tools Integration", () => {
 		ynabAPI = new ynab.API(accessToken);
 
 		// Get a test budget ID
-		const budgetsResponse = await ynabAPI.budgets.getBudgets();
-		if (budgetsResponse.data.budgets.length === 0) {
+		const budgetsResponse = await listBudgetsCompat(ynabAPI);
+		if (budgetsResponse.budgets.length === 0) {
 			throw new Error("No budgets found for testing");
 		}
-		testBudgetId = budgetsResponse.data.budgets[0].id;
+		testBudgetId = budgetsResponse.budgets[0].id;
 
 		// Get a test month from the existing months in the budget
-		const monthsResponse = await ynabAPI.months.getBudgetMonths(testBudgetId);
-		if (monthsResponse.data.months.length === 0) {
+		const monthsResponse = await listMonthsCompat(ynabAPI, testBudgetId);
+		if (monthsResponse.months.length === 0) {
 			throw new Error("No months found for testing");
 		}
-		testMonth = monthsResponse.data.months[0].month;
+		testMonth = monthsResponse.months[0].month;
 	});
 
 	describe("handleListMonths", () => {

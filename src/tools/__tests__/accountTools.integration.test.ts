@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { handleGetAccount, handleListAccounts } from "../accountTools.js";
 
 const isSkip = ["true", "1", "yes", "y", "on"].includes(
@@ -18,8 +19,8 @@ describeIntegration("Account Tools Integration", () => {
 		ynabAPI = new ynab.API(accessToken);
 
 		// Get the first budget for testing
-		const budgetsResponse = await ynabAPI.budgets.getBudgets();
-		testBudgetId = budgetsResponse.data.budgets[0].id;
+		const budgetsResponse = await listBudgetsCompat(ynabAPI);
+		testBudgetId = budgetsResponse.budgets[0].id;
 	});
 
 	it("should successfully list accounts from real API", {

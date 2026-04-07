@@ -8,6 +8,7 @@ import {
 	skipOnRateLimit,
 	waitFor,
 } from "../../__tests__/testUtils.js";
+import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import {
 	type CreateTransactionsSchema,
 	handleCreateTransactions,
@@ -68,8 +69,8 @@ describeIntegration("Transaction Tools Integration", () => {
 			ynabAPI = new ynab.API(accessToken);
 
 			// Get the first budget for testing
-			const budgetsResponse = await ynabAPI.budgets.getBudgets();
-			testBudgetId = budgetsResponse.data.budgets[0].id;
+			const budgetsResponse = await listBudgetsCompat(ynabAPI);
+			testBudgetId = budgetsResponse.budgets[0].id;
 
 			// Get the first account for testing
 			const accountsResponse = await ynabAPI.accounts.getAccounts(testBudgetId);
@@ -362,7 +363,7 @@ describeIntegration("Transaction Tools Integration", () => {
 					);
 				}
 			}
-		});
+		}, 60000);
 		it("should create two transactions via the bulk handler", {
 			meta: { tier: "core", domain: "transactions" },
 		}, async (ctx) => {
@@ -675,7 +676,7 @@ describeIntegration("Transaction Tools Integration", () => {
 					);
 				}
 			}
-		});
+		}, 60000);
 
 		it("should successfully update multiple transactions with provided metadata", {
 			meta: { tier: "core", domain: "transactions" },

@@ -12,6 +12,7 @@ import {
 	getTestConfig,
 	skipOnRateLimit,
 } from "../../../__tests__/testUtils.js";
+import { listBudgetsCompat } from "../../../utils/ynabApiCompat.js";
 import { type AccountSnapshot, executeReconciliation } from "../executor.js";
 import type { ReconcileAccountRequest } from "../index.js";
 import type { ReconciliationAnalysis } from "../types.js";
@@ -273,8 +274,8 @@ describeIntegration("Reconciliation Executor - Bulk Create Integration", () => {
 });
 
 async function resolveDefaultBudgetId(api: ynab.API): Promise<string> {
-	const budgets = await api.budgets.getBudgets();
-	const budget = budgets.data.budgets[0];
+	const budgets = await listBudgetsCompat(api);
+	const budget = budgets.budgets[0];
 	if (!budget) {
 		throw new Error("No budgets available for integration testing");
 	}

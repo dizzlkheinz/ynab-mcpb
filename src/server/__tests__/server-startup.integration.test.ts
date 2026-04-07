@@ -195,7 +195,12 @@ describeIntegration("Server Startup and Transport Integration", () => {
 
 			// The tools are registered in the constructor, so if the server initializes
 			// successfully, the tools should be registered
-			expect(server.getYNABAPI().budgets).toBeDefined();
+			expect(
+				server
+					.getToolRegistry()
+					.listTools()
+					.some((tool) => tool.name === "ynab_list_budgets"),
+			).toBe(true);
 		});
 
 		it("should register account management tools", {

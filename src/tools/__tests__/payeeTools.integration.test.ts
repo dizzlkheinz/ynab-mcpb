@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { handleGetPayee, handleListPayees } from "../payeeTools.js";
 
 /**
@@ -18,8 +19,8 @@ describeIntegration("Payee Tools Integration", () => {
 	beforeAll(async () => {
 		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
 		ynabAPI = new ynab.API(accessToken);
-		const budgetsResponse = await ynabAPI.budgets.getBudgets();
-		testBudgetId = budgetsResponse.data.budgets[0].id;
+		const budgetsResponse = await listBudgetsCompat(ynabAPI);
+		testBudgetId = budgetsResponse.budgets[0].id;
 	});
 
 	describe("handleListPayees", () => {

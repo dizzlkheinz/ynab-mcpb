@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import {
 	handleGetCategory,
 	handleListCategories,
@@ -25,8 +26,8 @@ describeIntegration("Category Tools Integration", () => {
 		ynabAPI = new ynab.API(accessToken);
 
 		// Get first budget ID for testing
-		const budgetsResponse = await ynabAPI.budgets.getBudgets();
-		testBudgetId = budgetsResponse.data.budgets[0].id;
+		const budgetsResponse = await listBudgetsCompat(ynabAPI);
+		testBudgetId = budgetsResponse.budgets[0].id;
 	});
 
 	describe("handleListCategories", () => {

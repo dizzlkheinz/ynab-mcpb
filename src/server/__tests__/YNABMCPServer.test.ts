@@ -11,6 +11,7 @@ import {
 
 import { cacheManager } from "../../server/cacheManager.js";
 import { AuthenticationError, ValidationError } from "../../types/index.js";
+import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { createErrorHandler } from "../errorHandler.js";
 import type { ToolRegistry } from "../toolRegistry.js";
 import { YNABMCPServer } from "../YNABMCPServer.js";
@@ -182,14 +183,14 @@ describe("YNABMCPServer", () => {
 
 		it("should successfully get budgets", async () => {
 			const ynabAPI = server.getYNABAPI();
-			const budgetsResponse = await ynabAPI.budgets.getBudgets();
+			const budgetsResponse = await listBudgetsCompat(ynabAPI);
 
-			expect(budgetsResponse.data.budgets).toBeDefined();
-			expect(Array.isArray(budgetsResponse.data.budgets)).toBe(true);
-			expect(budgetsResponse.data.budgets.length).toBeGreaterThan(0);
+			expect(budgetsResponse.budgets).toBeDefined();
+			expect(Array.isArray(budgetsResponse.budgets)).toBe(true);
+			expect(budgetsResponse.budgets.length).toBeGreaterThan(0);
 
-			console.warn(`✅ Found ${budgetsResponse.data.budgets.length} budget(s)`);
-			budgetsResponse.data.budgets.forEach((budget) => {
+			console.warn(`✅ Found ${budgetsResponse.budgets.length} budget(s)`);
+			budgetsResponse.budgets.forEach((budget) => {
 				console.warn(`   - ${budget.name} (${budget.id})`);
 			});
 		});

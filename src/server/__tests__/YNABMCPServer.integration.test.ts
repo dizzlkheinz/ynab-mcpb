@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { skipOnRateLimit } from "../../__tests__/testUtils.js";
 import { cacheManager } from "../../server/cacheManager.js";
 import { ValidationError } from "../../types/index.js";
+import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import type { ToolRegistry } from "../toolRegistry.js";
 import { YNABMCPServer } from "../YNABMCPServer.js";
 
@@ -127,16 +128,14 @@ describeIntegration("YNABMCPServer", () => {
 		}, async (ctx) => {
 			await skipOnRateLimit(async () => {
 				const ynabAPI = server.getYNABAPI();
-				const budgetsResponse = await ynabAPI.budgets.getBudgets();
+				const budgetsResponse = await listBudgetsCompat(ynabAPI);
 
-				expect(budgetsResponse.data.budgets).toBeDefined();
-				expect(Array.isArray(budgetsResponse.data.budgets)).toBe(true);
-				expect(budgetsResponse.data.budgets.length).toBeGreaterThan(0);
+				expect(budgetsResponse.budgets).toBeDefined();
+				expect(Array.isArray(budgetsResponse.budgets)).toBe(true);
+				expect(budgetsResponse.budgets.length).toBeGreaterThan(0);
 
-				console.warn(
-					`✅ Found ${budgetsResponse.data.budgets.length} budget(s)`,
-				);
-				budgetsResponse.data.budgets.forEach((budget) => {
+				console.warn(`✅ Found ${budgetsResponse.budgets.length} budget(s)`);
+				budgetsResponse.budgets.forEach((budget) => {
 					console.warn(`   - ${budget.name} (${budget.id})`);
 				});
 			}, ctx);

@@ -3,6 +3,7 @@ import * as ynab from "ynab";
 import { CacheManager } from "../../server/cacheManager.js";
 import { DeltaCache } from "../../server/deltaCache.js";
 import { ServerKnowledgeStore } from "../../server/serverKnowledgeStore.js";
+import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { DeltaFetcher } from "../deltaFetcher.js";
 
 const shouldSkip = ["true", "1", "yes", "y", "on"].includes(
@@ -21,8 +22,8 @@ describeIntegration("Delta fetcher scheduled transactions integration", () => {
 	beforeAll(async () => {
 		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
 		ynabAPI = new ynab.API(accessToken);
-		const budgetsResponse = await ynabAPI.budgets.getBudgets();
-		const budget = budgetsResponse.data.budgets[0];
+		const budgetsResponse = await listBudgetsCompat(ynabAPI);
+		const budget = budgetsResponse.budgets[0];
 		if (!budget) {
 			throw new Error("No budgets available for delta integration tests.");
 		}
