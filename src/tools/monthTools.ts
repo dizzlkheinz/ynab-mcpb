@@ -114,13 +114,25 @@ export async function handleGetMonth(
 						balance: milliunitsToAmount(category.balance),
 						goal_type: category.goal_type,
 						goal_creation_month: category.goal_creation_month,
-						goal_target: category.goal_target,
+						goal_target:
+							category.goal_target != null
+								? milliunitsToAmount(category.goal_target)
+								: undefined,
 						goal_target_month: category.goal_target_month,
 						goal_percentage_complete: category.goal_percentage_complete,
 						goal_months_to_budget: category.goal_months_to_budget,
-						goal_under_funded: category.goal_under_funded,
-						goal_overall_funded: category.goal_overall_funded,
-						goal_overall_left: category.goal_overall_left,
+						goal_under_funded:
+							category.goal_under_funded != null
+								? milliunitsToAmount(category.goal_under_funded)
+								: undefined,
+						goal_overall_funded:
+							category.goal_overall_funded != null
+								? milliunitsToAmount(category.goal_overall_funded)
+								: undefined,
+						goal_overall_left:
+							category.goal_overall_left != null
+								? milliunitsToAmount(category.goal_overall_left)
+								: undefined,
 						deleted: category.deleted,
 					})),
 				},
@@ -181,11 +193,12 @@ export async function handleListMonths(
 			const wasCached = result.wasCached;
 			const usedDelta = result.usedDelta;
 
-			// Apply pagination
+			// Apply pagination (newest-first)
 			const limit = params.limit ?? 50;
 			const offset = params.offset ?? 0;
-			const months = allMonths.slice(offset, offset + limit);
-			const hasMore = offset + limit < allMonths.length;
+			const sortedMonths = [...allMonths].reverse();
+			const months = sortedMonths.slice(offset, offset + limit);
+			const hasMore = offset + limit < sortedMonths.length;
 
 			const fmt = params.response_format ?? "markdown";
 			const dataObject = {

@@ -440,17 +440,8 @@ describe("Month Tools", () => {
 				"Fresh data retrieved from YNAB API",
 			);
 			expect(parsedContent.months).toHaveLength(2);
+			// Newest-first order: February before January
 			expect(parsedContent.months[0]).toEqual({
-				month: "2024-01-01",
-				note: "January budget",
-				income: 500,
-				budgeted: 450,
-				activity: -400,
-				to_be_budgeted: 50,
-				age_of_money: 30,
-				deleted: false,
-			});
-			expect(parsedContent.months[1]).toEqual({
 				month: "2024-02-01",
 				note: "February budget",
 				income: 520,
@@ -458,6 +449,16 @@ describe("Month Tools", () => {
 				activity: -420,
 				to_be_budgeted: 50,
 				age_of_money: 32,
+				deleted: false,
+			});
+			expect(parsedContent.months[1]).toEqual({
+				month: "2024-01-01",
+				note: "January budget",
+				income: 500,
+				budgeted: 450,
+				activity: -400,
+				to_be_budgeted: 50,
+				age_of_money: 30,
 				deleted: false,
 			});
 		});

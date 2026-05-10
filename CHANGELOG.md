@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.8] - 2026-05-10
+
+### Fixed
+
+- **`ynab_get_month` goal amounts now in dollars** — Category goal fields (`goal_target`, `goal_under_funded`, `goal_overall_funded`, `goal_overall_left`) inside `get_month` responses were being returned in raw milliunits; now consistently converted to dollars to match `list_categories` and `get_category`
+- **YNAB API compatibility** — Restored compatibility with current YNAB API response shapes for budgets, months, and completions; extracted `ynabApiCompat.ts` adapter layer to handle field differences without touching tool handlers
+
+### Changed
+
+- **`ynab_list_months` returns newest-first** — Month list is now ordered most-recent first (was oldest-first, matching raw YNAB API order), making the default page 1 show the current and recent months
+- **TypeScript upgraded to v6** — Bumped `typescript` from `^5.9.3` to `^6.0.3` and `esbuild` from `^0.27.3` to `^0.28.0`; switched `moduleResolution` to `"bundler"` for TypeScript 6 compatibility
+- **`ynab_create_account`** — Removed `lineOfCredit` account type (no longer present in YNAB API's `SaveAccountType`)
+
 ## [0.26.7] - 2026-04-03
 
 ### Changed
