@@ -81,7 +81,6 @@ export const CreateAccountSchema = z
 			"savings",
 			"creditCard",
 			"cash",
-			"lineOfCredit",
 			"otherAsset",
 			"otherLiability",
 		]),
@@ -296,7 +295,7 @@ export async function handleCreateAccount(
 			}
 			const accountData: ynab.SaveAccount = {
 				name: params.name,
-				type: params.type as ynab.Account["type"],
+				type: params.type as ynab.SaveAccountType,
 				balance: params.balance ? params.balance * 1000 : 0, // Convert to milliunits
 			};
 

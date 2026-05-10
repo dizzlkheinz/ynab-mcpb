@@ -692,7 +692,6 @@ describe("Account Tools", () => {
 					"savings",
 					"creditCard",
 					"cash",
-					"lineOfCredit",
 					"otherAsset",
 					"otherLiability",
 				];
