@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.9] - 2026-05-10
+
+### Fixed
+
+- **`ynab_export_transactions` amounts in decimal units** — Exported transaction `amount` fields were raw YNAB milliunits; now converted to decimal currency units (e.g. `-25500` → `-25.5`) for user-facing readability in both minimal and full export modes
+- **`ynab_export_transactions` path traversal guard** — Added filename sanitization (`sanitizeExportFilename`) and a path-traversal check (`buildExportFilePath`) to reject filenames with path separators, absolute paths, or control characters that could escape the export directory
+- **Reconciliation statement balance sign** — `ynab_reconcile_account` no longer forces the statement balance negative for liability accounts; the caller-provided sign is preserved, allowing credit-balance statements (positive) to be reconciled correctly
+- **Reconciliation currency decimal digits** — Balance verification amounts (`bank_statement_balance`, `ynab_calculated_balance`, `discrepancy`) now respect the budget's `currency_format.decimal_digits` field instead of always dividing by 1000, fixing display for currencies with non-standard decimal places
+- **Reconciliation: only reconcile transactions cleared this run** — The bulk-reconcile step previously marked all already-cleared matched transactions as reconciled, including ones cleared before this session; it now only marks transactions that were explicitly cleared during the current reconciliation run
+- **Reconciliation likely-cause detection** — Tightened "round amount" heuristic from `abs % 1000 === 0 || abs % 500 === 0` to `abs % 500 === 0`, reducing false positives for non-round discrepancies
+
 ## [0.26.8] - 2026-05-10
 
 ### Fixed
