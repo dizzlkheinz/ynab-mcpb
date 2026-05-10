@@ -18,7 +18,10 @@ import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
-import { milliunitsToAmount } from "../utils/amountUtils.js";
+import {
+	amountToMilliunits,
+	milliunitsToAmount,
+} from "../utils/amountUtils.js";
 import {
 	createAdapters,
 	createBudgetResolver,
@@ -81,6 +84,7 @@ export const CreateAccountSchema = z
 			"savings",
 			"creditCard",
 			"cash",
+			"lineOfCredit",
 			"otherAsset",
 			"otherLiability",
 		]),
@@ -296,7 +300,8 @@ export async function handleCreateAccount(
 			const accountData: ynab.SaveAccount = {
 				name: params.name,
 				type: params.type as ynab.SaveAccountType,
-				balance: params.balance ? params.balance * 1000 : 0, // Convert to milliunits
+				balance:
+					params.balance !== undefined ? amountToMilliunits(params.balance) : 0,
 			};
 
 			const budgetId = requireResolvedBudgetId(params.budget_id);

@@ -351,6 +351,20 @@ describe("reconciliationOutputs", () => {
 			});
 		});
 
+		describe("batch_unclear_failed type", () => {
+			it("should validate bulk unclear chunk failures", () => {
+				const valid = {
+					type: "batch_unclear_failed",
+					transaction: null,
+					reason:
+						"Failed to unclear chunk 1/1 (2 transaction(s)): Too many requests (HTTP 429)",
+				};
+
+				const result = ExecutionActionRecordSchema.safeParse(valid);
+				expect(result.success).toBe(true);
+			});
+		});
+
 		describe("discriminated union behavior", () => {
 			it("should reject unknown action types", () => {
 				const invalid = {

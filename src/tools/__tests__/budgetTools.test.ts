@@ -5,6 +5,7 @@ import {
 	handleGetBudget,
 	handleListBudgets,
 } from "../budgetTools.js";
+import { setSharedDeltaSupport } from "../deltaSupport.js";
 import {
 	createDeltaFetcherMock,
 	createRejectingDeltaFetcherMock,
@@ -43,6 +44,7 @@ const { cacheManager } = await import("../../server/cacheManager.js");
 describe("Budget Tools", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		setSharedDeltaSupport();
 		// Reset NODE_ENV to test to ensure cache bypassing in tests
 		process.env.NODE_ENV = "test";
 	});
@@ -112,6 +114,31 @@ describe("Budget Tools", () => {
 			expect(parsedContent.cache_info).toBe(
 				"Fresh data retrieved from YNAB API",
 			);
+		});
+
+		it("respects response_format with the legacy two-argument signature", async () => {
+			const mockBudgets = [
+				{
+					id: "budget-1",
+					name: "My Budget",
+					last_modified_on: "2024-01-01T00:00:00Z",
+					first_month: "2024-01-01",
+					last_month: "2024-12-01",
+					date_format: { format: "MM/DD/YYYY" },
+					currency_format: { iso_code: "USD", example_format: "$123.45" },
+				},
+			];
+			const { fetcher } = createDeltaFetcherMock("fetchBudgets", {
+				data: mockBudgets,
+			});
+			setSharedDeltaSupport({ deltaFetcher: fetcher });
+
+			const result = await handleListBudgets(mockYnabAPI, {
+				response_format: "json",
+			});
+
+			expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+			expect(JSON.parse(result.content[0].text).budgets).toHaveLength(1);
 		});
 
 		it("should handle errors reported by the delta fetcher", async () => {

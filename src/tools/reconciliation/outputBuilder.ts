@@ -120,6 +120,7 @@ interface LegacyPrecisionCalculations {
 	ynab_calculated_balance_milliunits: number;
 	discrepancy_milliunits: number;
 	discrepancy_dollars: number;
+	currency_decimal_digits?: number;
 }
 
 interface LegacyLikelyCause {
@@ -245,21 +246,31 @@ const convertAccountSnapshot = (
 const convertPrecisionCalculations = (
 	precision: LegacyPrecisionCalculations,
 	currency: string,
-) => ({
-	bank_statement_balance: toMoneyValue(
-		precision.bank_statement_balance_milliunits,
-		currency,
-	),
-	ynab_calculated_balance: toMoneyValue(
-		precision.ynab_calculated_balance_milliunits,
-		currency,
-	),
-	discrepancy: toMoneyValue(precision.discrepancy_milliunits, currency),
-	discrepancy_decimal: toMoneyValueFromDecimal(
-		precision.discrepancy_dollars,
-		currency,
-	),
-});
+) => {
+	const decimalDigits = precision.currency_decimal_digits ?? 2;
+	return {
+		bank_statement_balance: toMoneyValue(
+			precision.bank_statement_balance_milliunits,
+			currency,
+			decimalDigits,
+		),
+		ynab_calculated_balance: toMoneyValue(
+			precision.ynab_calculated_balance_milliunits,
+			currency,
+			decimalDigits,
+		),
+		discrepancy: toMoneyValue(
+			precision.discrepancy_milliunits,
+			currency,
+			decimalDigits,
+		),
+		discrepancy_decimal: toMoneyValueFromDecimal(
+			precision.discrepancy_dollars,
+			currency,
+			decimalDigits,
+		),
+	};
+};
 
 const convertLikelyCausesLegacy = (
 	analysis: NonNullable<LegacyBalanceReconciliation["discrepancy_analysis"]>,

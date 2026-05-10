@@ -198,8 +198,6 @@ export async function handleReconcileAccount(
 			const accountName = accountData.name;
 			const accountType = accountData.type;
 
-			// For liability accounts (credit cards, loans, debts), statement balance should be negative
-			// A positive balance on a credit card statement means you OWE that amount
 			const accountIsLiability =
 				accountType === "creditCard" ||
 				accountType === "lineOfCredit" ||
@@ -214,15 +212,16 @@ export async function handleReconcileAccount(
 			// Default inversion assumption: liability accounts typically show charges as positive
 			const shouldInvertBankAmounts = accountIsLiability;
 
-			// Negate statement balance for liability accounts
-			const adjustedStatementBalance = accountIsLiability
-				? -Math.abs(params.statement_balance)
-				: params.statement_balance;
+			// Preserve the caller-provided statement balance sign. Liability accounts
+			// usually use negative balances in YNAB, but credit-balance statements can be positive.
+			const adjustedStatementBalance = params.statement_balance;
 
 			const budget = await getBudgetByIdCompat(ynabAPI, budgetId);
-			const currencyCode =
-				(budget.currency_format as { iso_code?: string } | undefined)
-					?.iso_code ?? "USD";
+			const currencyFormat = budget.currency_format as
+				| { iso_code?: string; decimal_digits?: number }
+				| undefined;
+			const currencyCode = currencyFormat?.iso_code ?? "USD";
+			const decimalDigits = currencyFormat?.decimal_digits ?? 2;
 
 			const narrativeNotes: string[] = [];
 
@@ -498,6 +497,7 @@ export async function handleReconcileAccount(
 					accountId: params.account_id,
 					initialAccount,
 					currencyCode,
+					decimalDigits,
 					...(sendProgress !== undefined && { sendProgress }),
 				});
 			}

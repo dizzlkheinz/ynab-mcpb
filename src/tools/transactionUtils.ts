@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import type { SaveTransactionsResponseData } from "ynab/dist/models/SaveTransactionsResponseData.js";
+import { CacheKeys } from "../server/cacheKeys.js";
 import { CacheManager, cacheManager } from "../server/cacheManager.js";
 import type { DeltaCache } from "../server/deltaCache.js";
 import { globalRequestLogger } from "../server/requestLogger.js";
@@ -144,11 +145,13 @@ export function invalidateTransactionCaches(
 
 	const invalidateAccountsList = options.accountTotalsChanged ?? true;
 	if (invalidateAccountsList) {
-		cacheManager.delete(CacheManager.generateKey("accounts", "list", budgetId));
+		cacheManager.delete(
+			CacheManager.generateKey(CacheKeys.ACCOUNTS, "list", budgetId),
+		);
 	}
 	for (const accountId of affectedAccountIds) {
 		cacheManager.delete(
-			CacheManager.generateKey("account", "get", budgetId, accountId),
+			CacheManager.generateKey(CacheKeys.ACCOUNTS, "get", budgetId, accountId),
 		);
 	}
 

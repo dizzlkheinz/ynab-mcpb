@@ -1599,8 +1599,12 @@ describe("transactionTools", () => {
 			expect(mockYnabAPI.transactions.createTransaction).not.toHaveBeenCalled();
 			const parsed = JSON.parse(result.content[0].text);
 			expect(parsed.dry_run).toBe(true);
+			expect(parsed.transaction_preview.amount).toBe(-55);
 			expect(parsed.receipt_summary.total).toBe(55);
 			expect(parsed.subtransactions).toHaveLength(5);
+			expect(parsed.subtransactions.every((item: any) => item.amount < 0)).toBe(
+				true,
+			);
 		});
 
 		it("should create a split transaction and attach receipt summary", async () => {
@@ -1696,16 +1700,16 @@ describe("transactionTools", () => {
 					const parsed = JSON.parse(result.content[0].text);
 
 					expect(parsed.subtransactions).toHaveLength(4);
-					// Each item should be separate (dry_run returns dollars)
+					// Each item should be separate and use live YNAB outflow signs
 					expect(parsed.subtransactions[0].memo).toBe("Milk");
-					expect(parsed.subtransactions[0].amount).toBe(4.99);
+					expect(parsed.subtransactions[0].amount).toBe(-4.99);
 					expect(parsed.subtransactions[1].memo).toBe("Bread");
-					expect(parsed.subtransactions[1].amount).toBe(3.49);
+					expect(parsed.subtransactions[1].amount).toBe(-3.49);
 					expect(parsed.subtransactions[2].memo).toBe("Eggs");
-					expect(parsed.subtransactions[2].amount).toBe(5.99);
+					expect(parsed.subtransactions[2].amount).toBe(-5.99);
 					// Tax separate
 					expect(parsed.subtransactions[3].memo).toBe("Tax - Groceries");
-					expect(parsed.subtransactions[3].amount).toBe(1.16);
+					expect(parsed.subtransactions[3].amount).toBe(-1.16);
 				});
 			});
 
@@ -1753,13 +1757,13 @@ describe("transactionTools", () => {
 					// Should have 4 subtransactions: 3 collapsed batches + 1 tax
 					expect(parsed.subtransactions).toHaveLength(4);
 
-					// First batch: 5 items (dry_run returns dollars)
+					// First batch: 5 items
 					expect(parsed.subtransactions[0].memo).toContain("Milk");
 					expect(parsed.subtransactions[0].memo).toContain("Bread");
 					expect(parsed.subtransactions[0].memo).toContain("Eggs");
 					expect(parsed.subtransactions[0].memo).toContain("Cheese");
 					expect(parsed.subtransactions[0].memo).toContain("Butter");
-					expect(parsed.subtransactions[0].amount).toBe(28.45); // 4.99 + 3.49 + 5.99 + 10.99 + 2.99
+					expect(parsed.subtransactions[0].amount).toBe(-28.45); // 4.99 + 3.49 + 5.99 + 10.99 + 2.99
 
 					// Second batch: next 5 items
 					expect(parsed.subtransactions[1].memo).toContain("Yogurt");
@@ -1767,16 +1771,16 @@ describe("transactionTools", () => {
 					expect(parsed.subtransactions[1].memo).toContain("Bananas");
 					expect(parsed.subtransactions[1].memo).toContain("OJ");
 					expect(parsed.subtransactions[1].memo).toContain("Cereal");
-					expect(parsed.subtransactions[1].amount).toBe(19.46); // 6.47 + 4.00 + 2.01 + 3.00 + 3.98
+					expect(parsed.subtransactions[1].amount).toBe(-19.46); // 6.47 + 4.00 + 2.01 + 3.00 + 3.98
 
 					// Third batch: remaining 2 items
 					expect(parsed.subtransactions[2].memo).toContain("Rice");
 					expect(parsed.subtransactions[2].memo).toContain("Pasta");
-					expect(parsed.subtransactions[2].amount).toBe(8.02); // 5.00 + 3.02
+					expect(parsed.subtransactions[2].amount).toBe(-8.02); // 5.00 + 3.02
 
 					// Tax separate
 					expect(parsed.subtransactions[3].memo).toBe("Tax - Groceries");
-					expect(parsed.subtransactions[3].amount).toBe(4.15);
+					expect(parsed.subtransactions[3].amount).toBe(-4.15);
 				});
 			});
 
@@ -1827,9 +1831,9 @@ describe("transactionTools", () => {
 					// Should have: 1 big ticket + 2 collapsed grocery batches + 2 tax subtransactions
 					expect(parsed.subtransactions).toHaveLength(5);
 
-					// Big ticket item first (dry_run returns dollars)
+					// Big ticket item first
 					expect(parsed.subtransactions[0].memo).toBe("TV");
-					expect(parsed.subtransactions[0].amount).toBe(500);
+					expect(parsed.subtransactions[0].amount).toBe(-500);
 					expect(parsed.subtransactions[0].category_id).toBe(
 						"category-electronics",
 					);
@@ -1840,7 +1844,7 @@ describe("transactionTools", () => {
 					expect(parsed.subtransactions[1].category_id).toBe(
 						"category-groceries",
 					);
-					expect(parsed.subtransactions[1].amount).toBe(28.45); // 4.99+3.49+5.99+10.99+2.99
+					expect(parsed.subtransactions[1].amount).toBe(-28.45); // 4.99+3.49+5.99+10.99+2.99
 
 					// Collapsed grocery batch 2: remaining 3 items
 					expect(parsed.subtransactions[2].memo).toContain("Yogurt");
@@ -1849,7 +1853,7 @@ describe("transactionTools", () => {
 					expect(parsed.subtransactions[2].category_id).toBe(
 						"category-groceries",
 					);
-					expect(parsed.subtransactions[2].amount).toBe(12.48); // 6.47+4.0+2.01
+					expect(parsed.subtransactions[2].amount).toBe(-12.48); // 6.47+4.0+2.01
 
 					// Tax for electronics (proportional)
 					expect(parsed.subtransactions[3].memo).toBe("Tax - Electronics");
@@ -1910,11 +1914,11 @@ describe("transactionTools", () => {
 					// Should have: 1 return + 2 collapsed grocery batches + 1 tax (groceries only)
 					expect(parsed.subtransactions).toHaveLength(4);
 
-					// Return first (dry_run returns dollars, negative for return)
+					// Return first (positive subtransaction offsets the purchase)
 					expect(parsed.subtransactions[0].memo).toBe(
 						"RETURN: Broken headphones",
 					);
-					expect(parsed.subtransactions[0].amount).toBe(-29.99);
+					expect(parsed.subtransactions[0].amount).toBe(29.99);
 					expect(parsed.subtransactions[0].category_id).toBe(
 						"category-electronics",
 					);
@@ -1936,7 +1940,7 @@ describe("transactionTools", () => {
 					expect(parsed.subtransactions[3].category_id).toBe(
 						"category-groceries",
 					);
-					expect(parsed.subtransactions[3].amount).toBe(2.79);
+					expect(parsed.subtransactions[3].amount).toBe(-2.79);
 				});
 			});
 
@@ -1983,9 +1987,9 @@ describe("transactionTools", () => {
 					// Should have: 1 discount + 2 collapsed batches + 1 tax
 					expect(parsed.subtransactions).toHaveLength(4);
 
-					// Discount first (negative amount, dry_run returns dollars)
+					// Discount first (positive subtransaction offsets the purchase)
 					expect(parsed.subtransactions[0].memo).toBe("Member discount");
-					expect(parsed.subtransactions[0].amount).toBe(-5); // negative
+					expect(parsed.subtransactions[0].amount).toBe(5);
 					expect(parsed.subtransactions[0].category_id).toBe(
 						"category-groceries",
 					);
@@ -1993,16 +1997,16 @@ describe("transactionTools", () => {
 					// Collapsed batch 1 (5 items)
 					expect(parsed.subtransactions[1].memo).toContain("Milk");
 					expect(parsed.subtransactions[1].memo).toContain("Butter");
-					expect(parsed.subtransactions[1].amount).toBe(28.45); // 4.99+3.49+5.99+10.99+2.99
+					expect(parsed.subtransactions[1].amount).toBe(-28.45); // 4.99+3.49+5.99+10.99+2.99
 
 					// Collapsed batch 2 (4 items)
 					expect(parsed.subtransactions[2].memo).toContain("Yogurt");
 					expect(parsed.subtransactions[2].memo).toContain("OJ");
-					expect(parsed.subtransactions[2].amount).toBe(15.48); // 6.47+4.0+2.01+3.0
+					expect(parsed.subtransactions[2].amount).toBe(-15.48); // 6.47+4.0+2.01+3.0
 
 					// Tax only on positive items (not reduced by discount)
 					expect(parsed.subtransactions[3].memo).toBe("Tax - Groceries");
-					expect(parsed.subtransactions[3].amount).toBe(3.19);
+					expect(parsed.subtransactions[3].amount).toBe(-3.19);
 				});
 			});
 
@@ -2052,7 +2056,7 @@ describe("transactionTools", () => {
 
 					// Widgets collapsed (single entry with quantity shown)
 					expect(parsed.subtransactions[0].memo).toContain("Widget");
-					expect(parsed.subtransactions[0].amount).toBe(90); // dry_run returns dollars
+					expect(parsed.subtransactions[0].amount).toBe(-90);
 					expect(parsed.subtransactions[0].category_id).toBe(
 						"category-electronics",
 					);
@@ -2060,7 +2064,7 @@ describe("transactionTools", () => {
 					// Groceries collapsed
 					expect(parsed.subtransactions[1].memo).toContain("Milk");
 					expect(parsed.subtransactions[1].memo).toContain("Cheese");
-					expect(parsed.subtransactions[1].amount).toBe(45); // dry_run returns dollars
+					expect(parsed.subtransactions[1].amount).toBe(-45);
 					expect(parsed.subtransactions[1].category_id).toBe(
 						"category-groceries",
 					);
@@ -2108,18 +2112,18 @@ describe("transactionTools", () => {
 					// Should have: 1 return + 1 tax refund
 					expect(parsed.subtransactions).toHaveLength(2);
 
-					// Return (negative amount, dry_run returns dollars)
+					// Return (positive subtransaction offsets the purchase)
 					expect(parsed.subtransactions[0].memo).toBe(
 						"RETURN: Defective laptop",
 					);
-					expect(parsed.subtransactions[0].amount).toBe(-100); // negative, in dollars
+					expect(parsed.subtransactions[0].amount).toBe(100);
 					expect(parsed.subtransactions[0].category_id).toBe(
 						"category-electronics",
 					);
 
-					// Tax refund (negative amount, dry_run returns dollars)
+					// Tax refund (positive subtransaction offsets the purchase)
 					expect(parsed.subtransactions[1].memo).toBe("Tax refund");
-					expect(parsed.subtransactions[1].amount).toBe(-8); // negative, in dollars
+					expect(parsed.subtransactions[1].amount).toBe(8);
 					expect(parsed.subtransactions[1].category_id).toBe(
 						"category-electronics",
 					);
@@ -2384,12 +2388,12 @@ describe("transactionTools", () => {
 
 					// First should be the big ticket item (not collapsed)
 					expect(parsed.subtransactions[0].memo).toBe("Expensive Gadget");
-					expect(parsed.subtransactions[0].amount).toBe(75); // dry_run returns dollars
+					expect(parsed.subtransactions[0].amount).toBe(-75);
 
 					// Remaining 5 items should collapse
 					const collapsedSub = parsed.subtransactions[1];
 					expect(collapsedSub.memo).toContain("Cheap Item");
-					expect(collapsedSub.amount).toBe(25); // dry_run returns dollars
+					expect(collapsedSub.amount).toBe(-25);
 				});
 
 				it("should truncate single very long item name in itemized mode", async () => {
@@ -3748,8 +3752,8 @@ describe("transactionTools", () => {
 				expect(deleteCalls).toEqual(
 					expect.arrayContaining([
 						"transactions:list:budget-123",
-						"account:get:budget-123:account-A",
-						"account:get:budget-123:account-B",
+						"accounts:get:budget-123:account-A",
+						"accounts:get:budget-123:account-B",
 						"month:get:budget-123:2024-03-01",
 						"month:get:budget-123:2024-04-01",
 						"resources:budgets:list",
@@ -3796,7 +3800,7 @@ describe("transactionTools", () => {
 					(call) => call[0],
 				);
 				const uniqueKeys = new Set(deleteCalls);
-				expect(uniqueKeys.has("account:get:budget-123:repeat-account")).toBe(
+				expect(uniqueKeys.has("accounts:get:budget-123:repeat-account")).toBe(
 					true,
 				);
 				expect(uniqueKeys.has("month:get:budget-123:2024-05-01")).toBe(true);
@@ -3809,7 +3813,7 @@ describe("transactionTools", () => {
 				// The implementation naturally deduplicates via Set, so we should only see one delete call per key
 				expect(
 					deleteCalls.filter(
-						(key) => key === "account:get:budget-123:repeat-account",
+						(key) => key === "accounts:get:budget-123:repeat-account",
 					).length,
 				).toBeGreaterThanOrEqual(1);
 				expect(
@@ -4467,7 +4471,7 @@ describe("transactionTools", () => {
 				);
 				expect(deleteCalls).toEqual(
 					expect.arrayContaining([
-						"account:get:budget-123:account-old",
+						"accounts:get:budget-123:account-old",
 						"month:get:budget-123:2024-01-01",
 					]),
 				);
@@ -4518,7 +4522,7 @@ describe("transactionTools", () => {
 				);
 				expect(deleteCalls).toEqual(
 					expect.arrayContaining([
-						"account:get:budget-123:account-cached",
+						"accounts:get:budget-123:account-cached",
 						"month:get:budget-123:2024-02-01",
 					]),
 				);
@@ -4577,7 +4581,7 @@ describe("transactionTools", () => {
 				);
 				expect(deleteCalls).toEqual(
 					expect.arrayContaining([
-						"account:get:budget-123:account-fetched",
+						"accounts:get:budget-123:account-fetched",
 						"month:get:budget-123:2024-03-01",
 					]),
 				);
@@ -4993,7 +4997,7 @@ describe("transactionTools", () => {
 				expect(deleteCalls).toEqual(
 					expect.arrayContaining([
 						"transactions:list:budget-123:all",
-						"account:get:budget-123:account-old",
+						"accounts:get:budget-123:account-old",
 						"month:get:budget-123:2024-01-01", // Month from original_date
 					]),
 				);

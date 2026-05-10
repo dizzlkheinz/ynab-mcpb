@@ -3,6 +3,7 @@ import type * as ynab from "ynab";
 import {
 	type CompareTransactionsParams,
 	CompareTransactionsSchema,
+	formatDateOnly,
 	handleCompareTransactions,
 } from "../../compareTransactions/index.js";
 
@@ -75,12 +76,28 @@ describe("compareTransactions index (main handler)", () => {
 			expect(parsed.date_tolerance_days).toBe(5);
 			expect(parsed.auto_detect_format).toBe(false);
 		});
+
+		test("formatDateOnly does not depend on UTC serialization", () => {
+			const toISOString = vi
+				.spyOn(Date.prototype, "toISOString")
+				.mockImplementation(() => {
+					throw new Error(
+						"toISOString should not be used for date-only output",
+					);
+				});
+
+			try {
+				expect(formatDateOnly(new Date(2024, 0, 1))).toBe("2024-01-01");
+			} finally {
+				toISOString.mockRestore();
+			}
+		});
 	});
 
 	describe("handleCompareTransactions orchestration", () => {
 		const mockBankTransactions = [
 			{
-				date: new Date("2024-01-01"),
+				date: new Date(2024, 0, 1),
 				amount: 100000,
 				description: "Test Transaction",
 				raw_amount: "100.00",
@@ -92,7 +109,7 @@ describe("compareTransactions index (main handler)", () => {
 		const mockYnabTransactions = [
 			{
 				id: "ynab-1",
-				date: new Date("2024-01-01"),
+				date: new Date(2024, 0, 1),
 				amount: 100000,
 				payee_name: "Test Payee",
 				memo: null,
@@ -277,6 +294,36 @@ describe("compareTransactions index (main handler)", () => {
 				"account-456",
 				expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), // Any valid ISO date format
 			);
+		});
+
+		test("uses local date-only formatting for the YNAB sinceDate", async () => {
+			mockParseBankCSV.mockReturnValue([
+				{
+					...mockBankTransactions[0],
+					date: new Date(2024, 0, 1),
+				},
+			]);
+			const toISOString = vi
+				.spyOn(Date.prototype, "toISOString")
+				.mockImplementation(() => {
+					throw new Error("toISOString should not be used for sinceDate");
+				});
+			const params: CompareTransactionsParams = {
+				budget_id: "budget-123",
+				account_id: "account-456",
+				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
+				date_tolerance_days: 0,
+			};
+
+			try {
+				await handleCompareTransactions(mockYnabAPI, params);
+			} finally {
+				toISOString.mockRestore();
+			}
+
+			expect(
+				mockYnabAPI.transactions.getTransactionsByAccount,
+			).toHaveBeenCalledWith("budget-123", "account-456", "2024-01-01");
 		});
 
 		test("should pass filtered transactions to matcher", async () => {

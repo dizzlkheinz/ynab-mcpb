@@ -106,11 +106,11 @@ export class RateLimiter {
 	 */
 	markExhausted(identifier: string): void {
 		const now = Date.now();
-		const windowStart = now - this.config.windowMs;
-		// Fill window with maxRequests timestamps to force isLimited = true
+		// Fill the current window with maxRequests fresh timestamps to force
+		// isLimited = true even if the next check happens a few ms later.
 		const timestamps = Array.from(
 			{ length: this.config.maxRequests },
-			(_, i) => windowStart + i,
+			() => now,
 		);
 		this.requests.set(identifier, timestamps);
 		if (this.config.enableLogging) {

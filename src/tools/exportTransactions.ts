@@ -1,13 +1,14 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve, sep } from "node:path";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { format } from "date-fns";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import { withToolErrorHandling } from "../types/index.js";
+import { ValidationError, withToolErrorHandling } from "../types/index.js";
+import { milliunitsToAmount } from "../utils/amountUtils.js";
 import { requireResolvedBudgetId } from "./adapters.js";
 
 /**
@@ -30,6 +31,56 @@ export const ExportTransactionsSchema = z
 
 export type ExportTransactionsParams = z.infer<typeof ExportTransactionsSchema>;
 
+const INVALID_FILENAME_CHARS = /[<>:"/\\|?*]/;
+
+function hasInvalidFilenameChars(filename: string): boolean {
+	return (
+		INVALID_FILENAME_CHARS.test(filename) ||
+		Array.from(filename).some((char) => char.charCodeAt(0) < 32)
+	);
+}
+
+function ensureJsonExtension(filename: string): string {
+	return filename.endsWith(".json") ? filename : `${filename}.json`;
+}
+
+function sanitizeExportFilename(filename: string): string {
+	const trimmed = filename.trim();
+	if (!trimmed) {
+		throw new ValidationError("Filename cannot be empty");
+	}
+	if (isAbsolute(trimmed) || trimmed.includes("/") || trimmed.includes("\\")) {
+		throw new ValidationError("Filename must be a file name, not a path");
+	}
+	const withExtension = ensureJsonExtension(trimmed);
+	if (hasInvalidFilenameChars(withExtension)) {
+		throw new ValidationError("Filename contains invalid characters");
+	}
+	return withExtension;
+}
+
+function buildExportFilePath(exportDir: string, filename: string): string {
+	const resolvedDir = resolve(exportDir);
+	const resolvedFile = resolve(resolvedDir, filename);
+	const directoryPrefix = resolvedDir.endsWith(sep)
+		? resolvedDir
+		: `${resolvedDir}${sep}`;
+	const comparisonFile =
+		process.platform === "win32" ? resolvedFile.toLowerCase() : resolvedFile;
+	const comparisonPrefix =
+		process.platform === "win32"
+			? directoryPrefix.toLowerCase()
+			: directoryPrefix;
+
+	if (!comparisonFile.startsWith(comparisonPrefix)) {
+		throw new ValidationError(
+			"Resolved export path escapes the export directory",
+		);
+	}
+
+	return resolvedFile;
+}
+
 /**
  * Generate a descriptive filename for transaction export
  */
@@ -38,9 +89,7 @@ function generateExportFilename(
 	transactionCount: number,
 ): string {
 	if (params.filename) {
-		return params.filename.endsWith(".json")
-			? params.filename
-			: `${params.filename}.json`;
+		return sanitizeExportFilename(params.filename);
 	}
 
 	const timestamp = format(new Date(), "yyyy-MM-dd_HH-mm-ss");
@@ -190,7 +239,7 @@ export async function handleExportTransactions(
 			// Get export directory and generate full path
 			const exportDir = getExportPath();
 			const filename = generateExportFilename(params, transactions.length);
-			const fullPath = join(exportDir, filename);
+			const fullPath = buildExportFilePath(exportDir, filename);
 
 			// Prepare transaction data for export
 			const exportData = {
@@ -213,7 +262,7 @@ export async function handleExportTransactions(
 						return {
 							id: transaction.id,
 							date: transaction.date,
-							amount: transaction.amount,
+							amount: milliunitsToAmount(transaction.amount),
 							payee_name: transaction.payee_name,
 							cleared: transaction.cleared,
 						};
@@ -222,7 +271,7 @@ export async function handleExportTransactions(
 					return {
 						id: transaction.id,
 						date: transaction.date,
-						amount: transaction.amount,
+						amount: milliunitsToAmount(transaction.amount),
 						memo: transaction.memo,
 						cleared: transaction.cleared,
 						approved: transaction.approved,
@@ -266,7 +315,7 @@ export async function handleExportTransactions(
 				preview_transactions: preview.map((transaction) => ({
 					id: transaction.id,
 					date: transaction.date,
-					amount: transaction.amount,
+					amount: milliunitsToAmount(transaction.amount),
 					memo: transaction.memo,
 					payee_name: transaction.payee_name,
 					category_name: transaction.category_name,

@@ -135,7 +135,7 @@ describe("exportTransactions", () => {
 			expect(firstTransaction).toEqual({
 				id: "txn-1",
 				date: "2024-01-01",
-				amount: 1000,
+				amount: 1,
 				payee_name: "Test Payee 1",
 				cleared: "cleared",
 			});
@@ -186,6 +186,7 @@ describe("exportTransactions", () => {
 				"payee_name",
 				"category_name",
 			]);
+			expect(firstTransaction.amount).toBe(1);
 
 			// Verify response message indicates full export
 			const responseText = result.content[0].text;
@@ -193,6 +194,20 @@ describe("exportTransactions", () => {
 			const responseJson = JSON.parse(responseText);
 			expect(responseJson.export_mode).toBe("full");
 			expect(responseJson.minimal_fields).toBeNull();
+			expect(responseJson.preview_transactions[0].amount).toBe(1);
+		});
+
+		it("should reject custom filenames that try to escape the export directory", async () => {
+			const result = await handleExportTransactions(mockYnabAPI, {
+				budget_id: "test-budget",
+				filename: "..\\outside",
+			});
+
+			expect(writeFileSync).not.toHaveBeenCalled();
+			const responseJson = JSON.parse(result.content[0].text);
+			expect(responseJson.error.message).toContain(
+				"Filename must be a file name",
+			);
 		});
 
 		it('should include "minimal" in filename by default', async () => {

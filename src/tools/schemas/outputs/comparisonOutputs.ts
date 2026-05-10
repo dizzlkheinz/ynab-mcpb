@@ -360,20 +360,19 @@ export type ExportInfo = z.infer<typeof ExportInfoSchema>;
  * The actual JSON file does not include an export_mode field on each transaction.
  *
  * @remarks
- * IMPORTANT: `amount` is the raw YNAB amount in **milliunits** (not dollar amounts).
- * These values come directly from the YNAB API and represent 1/1000th of the currency unit.
- * For example, $25.50 is represented as 25500 milliunits.
+ * IMPORTANT: `amount` is exported in decimal currency units for user-facing
+ * readability. For example, -25500 YNAB milliunits is exported as -25.5.
  *
  * Minimal mode includes: id, date, amount, payee_name, cleared
  * Full mode includes: all transaction fields
  *
  * @see src/tools/exportTransactions.ts:198-232 - Transaction export logic
- * @see src/tools/exportTransactions.ts:204 - Amount field directly from transaction.amount (milliunits)
+ * @see src/tools/exportTransactions.ts:204 - Amount field converted from transaction.amount
  */
 export const ExportedTransactionMinimalSchema = z.object({
 	id: z.string(),
 	date: z.string(),
-	amount: z.number(), // Raw YNAB milliunits
+	amount: z.number(), // Decimal currency units
 	payee_name: z.string().nullable(),
 	cleared: z.string(),
 });
@@ -381,7 +380,7 @@ export const ExportedTransactionMinimalSchema = z.object({
 export const ExportedTransactionFullSchema = z.object({
 	id: z.string(),
 	date: z.string(),
-	amount: z.number(), // Raw YNAB milliunits
+	amount: z.number(), // Decimal currency units
 	memo: z.string().nullish(),
 	cleared: z.string(),
 	approved: z.boolean(),
@@ -433,7 +432,7 @@ export type ExportedTransaction = z.infer<typeof ExportedTransactionSchema>;
  *     }
  *   },
  *   transactions: [
- *     { id: "txn-1", date: "2025-11-15", amount: -25500, payee_name: "Grocery Store", cleared: "cleared" }, // amount is milliunits
+ *     { id: "txn-1", date: "2025-11-15", amount: -25.5, payee_name: "Grocery Store", cleared: "cleared" },
  *     ...
  *   ]
  * }
@@ -451,7 +450,7 @@ export type ExportedTransaction = z.infer<typeof ExportedTransactionSchema>;
  *     {
  *       id: "txn-1",
  *       date: "2025-11-15",
- *       amount: -25500, // Raw milliunits: -$25.50
+ *       amount: -25.5,
  *       memo: "Weekly groceries",
  *       cleared: "cleared",
  *       approved: true,
@@ -575,7 +574,7 @@ export type CompareTransactionsOutput = z.infer<
  *   preview_count: 10,
  *   total_count: 150,
  *   preview_transactions: [
- *     { id: "txn-1", date: "2025-11-15", amount: -25500, memo: "Groceries", payee_name: "Grocery Store", category_name: "Food" }
+ *     { id: "txn-1", date: "2025-11-15", amount: -25.5, memo: "Groceries", payee_name: "Grocery Store", category_name: "Food" }
  *   ]
  * }
  *
@@ -592,7 +591,7 @@ export type CompareTransactionsOutput = z.infer<
  *   preview_count: 10,
  *   total_count: 150,
  *   preview_transactions: [
- *     { id: "txn-2", date: "2025-11-16", amount: -15000, memo: "Coffee", payee_name: "Cafe", category_name: "Dining" }
+ *     { id: "txn-2", date: "2025-11-16", amount: -15, memo: "Coffee", payee_name: "Cafe", category_name: "Dining" }
  *   ]
  * }
  */
@@ -610,7 +609,7 @@ export const ExportTransactionsOutputSchema = z.object({
 		z.object({
 			id: z.string(),
 			date: z.string(),
-			amount: z.number(), // Raw YNAB milliunits
+			amount: z.number(), // Decimal currency units
 			memo: z.string().nullable().optional(),
 			payee_name: z.string().nullable().optional(),
 			category_name: z.string().nullable().optional(),

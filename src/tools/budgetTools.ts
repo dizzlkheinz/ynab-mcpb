@@ -58,7 +58,7 @@ export async function handleListBudgets(
 	maybeParams?: Record<string, unknown>,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaFetcher } = resolveDeltaFetcherArgs(
+	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
 		ynabAPI,
 		(deltaFetcherOrParams ?? {}) as DeltaFetcher | Record<string, unknown>,
 		maybeParams,
@@ -85,10 +85,7 @@ export async function handleListBudgets(
 					? `Data retrieved from cache for improved performance${result.usedDelta ? " (delta merge applied)" : ""}`
 					: "Fresh data retrieved from YNAB API",
 			};
-			const fmt =
-				((maybeParams as Record<string, unknown>)?.["response_format"] as
-					| string
-					| undefined) ?? "markdown";
+			const fmt = params["response_format"] ?? "markdown";
 			return {
 				content: [
 					{

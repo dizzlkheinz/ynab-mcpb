@@ -1,1 +1,1 @@
-C:/Users/ksutk/projects/ynab-mcpb/CLAUDE.MD
+CLAUDE.MD

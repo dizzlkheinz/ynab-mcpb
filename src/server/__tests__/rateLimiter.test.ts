@@ -18,6 +18,7 @@ describe("RateLimiter", () => {
 	});
 
 	afterEach(() => {
+		vi.useRealTimers();
 		vi.restoreAllMocks();
 	});
 
@@ -126,6 +127,20 @@ describe("RateLimiter", () => {
 
 			expect(status1.remaining).toBe(status2.remaining);
 			expect(status1.isLimited).toBe(status2.isLimited);
+		});
+	});
+
+	describe("markExhausted", () => {
+		it("should mark the identifier limited on the next check", () => {
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date("2026-05-10T12:00:00Z"));
+
+			rateLimiter.markExhausted(testIdentifier);
+			vi.advanceTimersByTime(10);
+
+			const status = rateLimiter.getStatus(testIdentifier);
+			expect(status.isLimited).toBe(true);
+			expect(status.remaining).toBe(0);
 		});
 	});
 

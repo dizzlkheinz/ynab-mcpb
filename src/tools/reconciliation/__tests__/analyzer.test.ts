@@ -183,6 +183,59 @@ describe("analyzer", () => {
 			expect(result.suggested_matches[0].confidence).toBe("medium");
 		});
 
+		it("keeps a bank transaction unmatched when its medium YNAB candidate is claimed by a high-confidence match", () => {
+			vi.mocked(csvParser.parseCSV).mockReturnValue({
+				transactions: [
+					{
+						id: "b-medium",
+						date: "2025-10-14",
+						amount: -50000,
+						payee: "Unrelated Store",
+						memo: "",
+						sourceRow: 1,
+						raw: {} as any,
+					},
+					{
+						id: "b-high",
+						date: "2025-10-15",
+						amount: -50000,
+						payee: "Exact Payee",
+						memo: "",
+						sourceRow: 2,
+						raw: {} as any,
+					},
+				],
+				meta: {
+					detectedDelimiter: ",",
+					detectedColumns: [],
+					totalRows: 2,
+					validRows: 2,
+					skippedRows: 0,
+				},
+				errors: [],
+				warnings: [],
+			});
+
+			const ynabTxns: YNABAPITransaction[] = [
+				{
+					id: "y1",
+					date: "2025-10-15",
+					amount: -50000,
+					payee_name: "Exact Payee",
+					category_name: "Shopping",
+					cleared: "uncleared" as const,
+					approved: true,
+				} as YNABAPITransaction,
+			];
+
+			const result = analyzeReconciliation("csv", undefined, ynabTxns, -50.0);
+
+			expect(result.auto_matches).toHaveLength(1);
+			expect(result.auto_matches[0].bankTransaction.id).toBe("b-high");
+			expect(result.suggested_matches).toHaveLength(0);
+			expect(result.unmatched_bank.map((txn) => txn.id)).toContain("b-medium");
+		});
+
 		it("should identify unmatched bank transactions", () => {
 			vi.mocked(csvParser.parseCSV).mockReturnValue({
 				transactions: [

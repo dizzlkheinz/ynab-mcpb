@@ -489,6 +489,45 @@ describe("Account Tools", () => {
 			);
 		});
 
+		it("should round fractional-cent balance conversion to milliunits", async () => {
+			const mockAccount = {
+				id: "account-1",
+				name: "New Account",
+				type: "checking",
+				on_budget: true,
+				closed: false,
+				note: null,
+				balance: 1235,
+				cleared_balance: 1235,
+				uncleared_balance: 0,
+				transfer_payee_id: "payee-1",
+				direct_import_linked: false,
+				direct_import_in_error: false,
+			};
+
+			(mockYnabAPI.accounts.createAccount as any).mockResolvedValue({
+				data: { account: mockAccount },
+			});
+
+			await handleCreateAccount(mockYnabAPI, {
+				budget_id: "budget-1",
+				name: "New Account",
+				type: "checking",
+				balance: 1.2345,
+			});
+
+			expect(mockYnabAPI.accounts.createAccount).toHaveBeenCalledWith(
+				"budget-1",
+				{
+					account: {
+						name: "New Account",
+						type: "checking",
+						balance: 1235,
+					},
+				},
+			);
+		});
+
 		it("should handle creation errors", async () => {
 			(mockYnabAPI.accounts.createAccount as any).mockRejectedValue(
 				new Error("400 Bad Request"),
@@ -692,6 +731,7 @@ describe("Account Tools", () => {
 					"savings",
 					"creditCard",
 					"cash",
+					"lineOfCredit",
 					"otherAsset",
 					"otherLiability",
 				];

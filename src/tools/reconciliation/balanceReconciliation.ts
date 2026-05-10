@@ -1,5 +1,5 @@
 import type * as ynab from "ynab";
-import { addMilli, toMilli } from "../../utils/money.js";
+import { addMilli, fromMilli, toMilli } from "../../utils/money.js";
 import type { ReconciliationAnalysis } from "./types.js";
 
 export async function buildBalanceReconciliation(args: {
@@ -8,10 +8,17 @@ export async function buildBalanceReconciliation(args: {
 	accountId: string;
 	statementDate: string;
 	statementBalanceMilli: number;
+	decimalDigits?: number;
 	analysis: ReconciliationAnalysis;
 }) {
-	const { ynabAPI, budgetId, accountId, statementDate, statementBalanceMilli } =
-		args;
+	const {
+		ynabAPI,
+		budgetId,
+		accountId,
+		statementDate,
+		statementBalanceMilli,
+		decimalDigits = 2,
+	} = args;
 	const ynabMilli = await clearedBalanceAsOf(
 		ynabAPI,
 		budgetId,
@@ -27,7 +34,8 @@ export async function buildBalanceReconciliation(args: {
 		bank_statement_balance_milliunits: bankMilli,
 		ynab_calculated_balance_milliunits: ynabMilli,
 		discrepancy_milliunits: discrepancy,
-		discrepancy_dollars: discrepancy / 1000,
+		discrepancy_dollars: fromMilli(discrepancy, decimalDigits),
+		currency_decimal_digits: decimalDigits,
 	};
 
 	const discrepancy_analysis =
@@ -92,7 +100,7 @@ export function buildLikelyCauses(discrepancyMilli: number) {
 	}[];
 
 	const abs = Math.abs(discrepancyMilli);
-	if (abs % 1000 === 0 || abs % 500 === 0) {
+	if (abs % 500 === 0) {
 		causes.push({
 			cause_type: "bank_fee",
 			description: "Round amount suggests a bank fee or interest adjustment.",

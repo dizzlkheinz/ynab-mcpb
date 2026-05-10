@@ -501,6 +501,12 @@ export const ExecutionActionRecordSchema = z.discriminatedUnion("type", [
 		transaction: z.null(),
 		reason: z.string(),
 	}),
+	// Bulk unclear chunk failure
+	z.object({
+		type: z.literal("batch_unclear_failed"),
+		transaction: z.null(),
+		reason: z.string(),
+	}),
 	// Bulk reconcile chunk failure
 	z.object({
 		type: z.literal("batch_reconcile_failed"),

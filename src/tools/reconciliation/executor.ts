@@ -53,6 +53,7 @@ export interface ExecutionOptions {
 	accountId: string;
 	initialAccount: AccountSnapshot;
 	currencyCode: string;
+	decimalDigits?: number;
 	/**
 	 * Optional progress callback for emitting MCP progress notifications.
 	 * When provided, progress updates are sent during bulk operations.
@@ -176,6 +177,7 @@ export async function executeReconciliation(
 		accountId,
 		initialAccount,
 		currencyCode,
+		decimalDigits,
 		sendProgress,
 	} = options;
 	const actions_taken: ExecutionActionRecord[] = [];
@@ -266,6 +268,12 @@ export async function executeReconciliation(
 	const orderedAutoMatches = sortMatchesByBankDateDescending(
 		analysis.auto_matches,
 	);
+	const reconcilableMatchedTransactionIds = new Set<string>();
+	for (const match of orderedAutoMatches) {
+		if (match.ynabTransaction?.cleared === "cleared") {
+			reconcilableMatchedTransactionIds.add(match.ynabTransaction.id);
+		}
+	}
 	const statementWindow = resolveStatementWindow(
 		params,
 		analysis.summary.statement_date_range,
@@ -690,6 +698,9 @@ export async function executeReconciliation(
 						const flags = match
 							? computeUpdateFlags(match, params)
 							: { needsClearedUpdate: false, needsDateUpdate: false };
+						if (match && flags.needsClearedUpdate) {
+							reconcilableMatchedTransactionIds.add(updatedTransaction.id);
+						}
 						actions_taken.push({
 							type: "update_transaction",
 							transaction: updatedTransaction as unknown as Record<
@@ -859,6 +870,9 @@ export async function executeReconciliation(
 			if (!match.ynabTransaction) continue;
 			// Only reconcile transactions that are not already reconciled
 			if (match.ynabTransaction.cleared === "reconciled") continue;
+			if (!reconcilableMatchedTransactionIds.has(match.ynabTransaction.id)) {
+				continue;
+			}
 
 			transactionsToReconcile.push({
 				id: match.ynabTransaction.id,
@@ -941,6 +955,7 @@ export async function executeReconciliation(
 			accountId,
 			statementDate: params.statement_end_date,
 			statementBalanceMilli: statementTargetMilli,
+			...(decimalDigits !== undefined && { decimalDigits }),
 			analysis,
 		});
 	}

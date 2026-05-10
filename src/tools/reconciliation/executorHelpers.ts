@@ -57,7 +57,7 @@ export function computeUpdateFlags(
 		return { needsClearedUpdate: false, needsDateUpdate: false };
 	}
 	const needsClearedUpdate = Boolean(
-		params.auto_update_cleared_status && ynabTxn.cleared !== "cleared",
+		params.auto_update_cleared_status && ynabTxn.cleared === "uncleared",
 	);
 	const needsDateUpdate = Boolean(
 		params.auto_adjust_dates && ynabTxn.date !== bankTxn.date,

@@ -484,6 +484,143 @@ describe("executeReconciliation (ordered halting)", () => {
 		expect(result.summary.transactions_updated).toBe(1);
 		expect(result.summary.dates_adjusted).toBe(0);
 	});
+
+	it("only reconciles matched transactions that were actually cleared before halting", async () => {
+		const analysis: ReconciliationAnalysis = {
+			success: true,
+			phase: "analysis",
+			summary: {
+				statement_date_range: "2025-09-01 to 2025-10-31",
+				bank_transactions_count: 2,
+				ynab_transactions_count: 2,
+				auto_matched: 2,
+				suggested_matches: 0,
+				unmatched_bank: 0,
+				unmatched_ynab: 0,
+				current_cleared_balance: toMoneyValue(90000, "USD"),
+				target_statement_balance: toMoneyValue(100000, "USD"),
+				discrepancy: toMoneyValue(-10000, "USD"),
+				discrepancy_explanation: "Awaiting cleared transactions",
+			},
+			auto_matches: [
+				{
+					bankTransaction: {
+						id: "bank-older",
+						date: "2025-09-15",
+						amount: 5000,
+						payee: "Older",
+						sourceRow: 2,
+						raw: { date: "2025-09-15", amount: "5.00", description: "Older" },
+					},
+					ynabTransaction: {
+						id: "ynab-older",
+						date: "2025-09-14",
+						amount: 5000,
+						payee: "Older",
+						categoryName: null,
+						cleared: "uncleared",
+						approved: true,
+						memo: null,
+					},
+					candidates: [],
+					confidence: "high",
+					confidenceScore: 95,
+					matchReason: "Exact match",
+				},
+				{
+					bankTransaction: {
+						id: "bank-newer",
+						date: "2025-10-25",
+						amount: 10000,
+						payee: "Newer",
+						sourceRow: 1,
+						raw: { date: "2025-10-25", amount: "10.00", description: "Newer" },
+					},
+					ynabTransaction: {
+						id: "ynab-newer",
+						date: "2025-10-24",
+						amount: 10000,
+						payee: "Newer",
+						categoryName: null,
+						cleared: "uncleared",
+						approved: true,
+						memo: null,
+					},
+					candidates: [],
+					confidence: "high",
+					confidenceScore: 99,
+					matchReason: "Exact match",
+				},
+			],
+			suggested_matches: [],
+			unmatched_bank: [],
+			unmatched_ynab: [],
+			balance_info: {
+				current_cleared: toMoneyValue(90000, "USD"),
+				current_uncleared: toMoneyValue(0, "USD"),
+				current_total: toMoneyValue(90000, "USD"),
+				target_statement: toMoneyValue(100000, "USD"),
+				discrepancy: toMoneyValue(-10000, "USD"),
+				on_track: false,
+			},
+			next_steps: [],
+			insights: [],
+		};
+
+		const params = {
+			budget_id: "budget-ordered",
+			account_id: "account-ordered",
+			csv_data: "Date,Description,Amount",
+			statement_balance: 100,
+			date_tolerance_days: 2,
+			match_strictness: "strict" as const,
+			auto_create_transactions: false,
+			auto_update_cleared_status: true,
+			auto_unclear_missing: false,
+			auto_adjust_dates: false,
+			dry_run: false,
+		} satisfies any;
+
+		const initialAccount: AccountSnapshot = {
+			balance: 90000,
+			cleared_balance: 90000,
+			uncleared_balance: 0,
+		};
+		const { api, mocks } = createMockYnabAPI(initialAccount);
+		mocks.updateTransactions.mockImplementation(
+			async (_budgetId, body: any) => ({
+				data: {
+					transactions: (body.transactions ?? []).map((txn: any) => ({
+						id: txn.id,
+						amount: txn.id === "ynab-newer" ? 10000 : 5000,
+						date: txn.id === "ynab-newer" ? "2025-10-25" : "2025-09-15",
+						cleared: txn.cleared,
+						approved: true,
+					})),
+				},
+			}),
+		);
+
+		await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: "budget-ordered",
+			accountId: "account-ordered",
+			initialAccount,
+			currencyCode: "USD",
+		});
+
+		expect(mocks.updateTransactions).toHaveBeenCalledTimes(2);
+		const clearPayload = mocks.updateTransactions.mock.calls[0]?.[1];
+		const reconcilePayload = mocks.updateTransactions.mock.calls[1]?.[1];
+		expect(clearPayload?.transactions).toEqual([
+			{ id: "ynab-newer", cleared: "cleared" },
+		]);
+		expect(reconcilePayload?.transactions).toEqual([
+			{ id: "ynab-newer", cleared: "reconciled" },
+		]);
+	});
 });
 
 describe("executeReconciliation - bulk create mode", () => {

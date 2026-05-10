@@ -563,8 +563,12 @@ export function analyzeReconciliation(
 			(!m.ynabTransaction || !autoMatchedYnabIds.has(m.ynabTransaction.id)),
 	);
 
+	const matchedOrSuggestedBankIds = new Set<string>();
+	for (const match of [...autoMatches, ...suggestedMatches]) {
+		matchedOrSuggestedBankIds.add(match.bankTransaction.id);
+	}
 	const unmatchedBankMatches = matches.filter(
-		(m) => m.confidence === "low" || m.confidence === "none",
+		(m) => !matchedOrSuggestedBankIds.has(m.bankTransaction.id),
 	);
 	const unmatchedBank = unmatchedBankMatches.map((m) => m.bankTransaction);
 
