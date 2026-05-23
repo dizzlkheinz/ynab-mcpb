@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.10] - 2026-05-22
+
+### Changed
+
+- **Dependencies** - Updated all packages to latest versions within semver ranges
+  - `@types/node` 25.6.2 → 25.9.1
+  - `@vitest/coverage-v8` 4.1.5 → 4.1.7
+  - `@vitest/ui` 4.1.5 → 4.1.7
+  - `date-fns` 4.1.0 → 4.3.0
+  - `tsx` 4.21.0 → 4.22.3
+  - `vitest` 4.1.5 → 4.1.7
+
 ## [0.26.9] - 2026-05-10
 
 ### Fixed
