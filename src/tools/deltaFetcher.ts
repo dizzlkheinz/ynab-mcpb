@@ -91,6 +91,7 @@ export class DeltaFetcher {
 				const response = await this.ynabAPI.transactions.getTransactions(
 					budgetId,
 					sinceDate,
+					undefined,
 					type,
 					lastKnowledge,
 				);
@@ -127,6 +128,7 @@ export class DeltaFetcher {
 						budgetId,
 						accountId,
 						sinceDate,
+						undefined,
 						undefined,
 						lastKnowledge,
 					);

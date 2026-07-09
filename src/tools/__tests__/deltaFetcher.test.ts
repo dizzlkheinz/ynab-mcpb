@@ -147,6 +147,7 @@ describe("DeltaFetcher", () => {
 		expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
 			"budget-3",
 			"2024-01-01",
+			undefined,
 			"uncategorized",
 			undefined,
 		);
@@ -177,7 +178,14 @@ describe("DeltaFetcher", () => {
 		await fetcherFn(5);
 		expect(
 			mockYnabAPI.transactions.getTransactionsByAccount,
-		).toHaveBeenCalledWith("budget-4", "acct-1", "2024-02-02", undefined, 5);
+		).toHaveBeenCalledWith(
+			"budget-4",
+			"acct-1",
+			"2024-02-02",
+			undefined,
+			undefined,
+			5,
+		);
 	});
 
 	it("fetchScheduledTransactions wires cache key and merge strategy", async () => {
