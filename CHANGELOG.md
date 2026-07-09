@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.11] - 2026-07-09
+
+### Changed
+
+- **Dependencies** - Updated all direct dependencies to their latest releases, including major upgrades for `csv-parse` 7, TypeScript 7, and Node.js types 26
+- **Tooling** - Updated Biome, Vitest, esbuild, and tsx, and synchronized the Biome configuration schema with Biome 2.5.3
+
 ## [0.26.10] - 2026-05-22
 
 ### Changed
