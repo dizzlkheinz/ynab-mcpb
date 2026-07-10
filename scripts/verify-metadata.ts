@@ -15,6 +15,7 @@ interface ManifestJson {
 
 interface ServerJson {
 	name: string;
+	description: string;
 	version: string;
 	packages: Array<{ identifier: string; version: string }>;
 }
@@ -99,6 +100,10 @@ assert(
 assert(
 	serverJson.packages[0]?.identifier === packageJson.name,
 	"server.json package identifier must match package.json name",
+);
+assert(
+	serverJson.description.length <= 100,
+	`server.json description exceeds the MCP Registry 100-character limit (${serverJson.description.length})`,
 );
 assertSameSet(
 	"Manifest and runtime tools",

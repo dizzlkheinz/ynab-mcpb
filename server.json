@@ -1,17 +1,17 @@
 {
 	"$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
 	"name": "io.github.dizzlkheinz/ynab-mcpb",
-	"description": "Local-first YNAB MCP workflows for bank reconciliation, receipt tax splitting, safe bulk cleanup, scheduled transactions, and deterministic spending analysis",
+	"description": "Local-first YNAB MCP for reconciliation, receipt splitting, safe cleanup, and spending analysis",
 	"repository": {
 		"url": "https://github.com/dizzlkheinz/ynab-mcpb",
 		"source": "github"
 	},
-	"version": "0.27.0",
+	"version": "0.27.1",
 	"packages": [
 		{
 			"registryType": "npm",
 			"identifier": "@dizzlkheinz/ynab-mcpb",
-			"version": "0.27.0",
+			"version": "0.27.1",
 			"transport": {
 				"type": "stdio"
 			},
