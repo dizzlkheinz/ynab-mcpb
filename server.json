@@ -1,17 +1,17 @@
 {
 	"$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
 	"name": "io.github.dizzlkheinz/ynab-mcpb",
-	"description": "MCP server for YNAB (You Need A Budget) — budgets, accounts, transactions, categories",
+	"description": "Local-first YNAB MCP workflows for bank reconciliation, receipt tax splitting, safe bulk cleanup, scheduled transactions, and deterministic spending analysis",
 	"repository": {
 		"url": "https://github.com/dizzlkheinz/ynab-mcpb",
 		"source": "github"
 	},
-	"version": "0.21.2",
+	"version": "0.27.0",
 	"packages": [
 		{
 			"registryType": "npm",
 			"identifier": "@dizzlkheinz/ynab-mcpb",
-			"version": "0.21.2",
+			"version": "0.27.0",
 			"transport": {
 				"type": "stdio"
 			},
@@ -22,6 +22,20 @@
 					"isRequired": true,
 					"format": "string",
 					"isSecret": true
+				},
+				{
+					"name": "YNAB_MCP_WRITE_MODE",
+					"description": "Write policy: read-only, preview (default), or enabled",
+					"isRequired": false,
+					"format": "string",
+					"isSecret": false
+				},
+				{
+					"name": "YNAB_MCP_TOOL_PROFILE",
+					"description": "Static tool profile: core, read-only, or full (default)",
+					"isRequired": false,
+					"format": "string",
+					"isSecret": false
 				}
 			]
 		}

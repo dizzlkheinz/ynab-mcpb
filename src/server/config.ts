@@ -2,6 +2,8 @@ import "dotenv/config";
 import { z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import { ValidationError } from "../utils/errors.js";
+import { DEFAULT_WRITE_MODE, WRITE_MODES } from "./writeSafety.js";
+import { DEFAULT_TOOL_PROFILE, TOOL_PROFILES } from "./toolProfiles.js";
 
 const normalizeEnvValue = (value: unknown) => {
 	if (typeof value !== "string") {
@@ -25,6 +27,8 @@ const envSchema = z.object({
 		.uuid("YNAB_DEFAULT_BUDGET_ID must be a valid UUID")
 		.optional(),
 	YNAB_MCP_ENABLE_DELTA: z.enum(["true", "false"]).optional(),
+	YNAB_MCP_WRITE_MODE: z.enum(WRITE_MODES).default(DEFAULT_WRITE_MODE),
+	YNAB_MCP_TOOL_PROFILE: z.enum(TOOL_PROFILES).default(DEFAULT_TOOL_PROFILE),
 	LOG_LEVEL: z
 		.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 		.default("info"),

@@ -444,6 +444,7 @@ Examples:
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateAccountSchema>>(),
 		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
 				title: "YNAB: Create Account",

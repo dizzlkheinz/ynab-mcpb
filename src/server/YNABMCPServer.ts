@@ -24,6 +24,8 @@ import { DeltaFetcher } from "../tools/deltaFetcher.js";
 import { registerMonthTools } from "../tools/monthTools.js";
 import { registerPayeeTools } from "../tools/payeeTools.js";
 import { registerReconciliationTools } from "../tools/reconciliation/index.js";
+import { registerScheduledTransactionTools } from "../tools/scheduledTransactionTools.js";
+import { registerSpendingAnalyticsTools } from "../tools/spendingAnalytics.js";
 import { emptyObjectSchema } from "../tools/schemas/common.js";
 import {
 	ClearCacheOutputSchema,
@@ -65,6 +67,7 @@ import {
 	type ToolDefinition,
 	ToolRegistry,
 } from "./toolRegistry.js";
+import { WriteSafetyPolicy } from "./writeSafety.js";
 
 /**
  * YNAB MCP Server class that provides integration with You Need A Budget API
@@ -105,7 +108,7 @@ export class YNABMCPServer {
 				title: "YNAB MCP Server",
 				version: this.serverVersion,
 				description:
-					"MCP server for YNAB (You Need A Budget) integration — budgets, accounts, transactions, categories, and reconciliation",
+					"Local-first YNAB workflows for bank-statement reconciliation, receipt tax splitting, safe bulk cleanup, scheduled transactions, and deterministic spending analysis",
 				websiteUrl: "https://github.com/dizzlkheinz/ynab-mcpb",
 			},
 			{
@@ -177,6 +180,10 @@ export class YNABMCPServer {
 					);
 				}
 			},
+			writeSafetyPolicy: new WriteSafetyPolicy({
+				mode: this.configInstance.YNAB_MCP_WRITE_MODE,
+			}),
+			toolProfile: this.configInstance.YNAB_MCP_TOOL_PROFILE,
 		});
 
 		// Initialize service modules
@@ -441,6 +448,8 @@ export class YNABMCPServer {
 		registerAccountTools(this.toolRegistry, toolContext);
 		registerMonthTools(this.toolRegistry, toolContext);
 		registerTransactionTools(this.toolRegistry, toolContext);
+		registerScheduledTransactionTools(this.toolRegistry, toolContext);
+		registerSpendingAnalyticsTools(this.toolRegistry, toolContext);
 		registerReconciliationTools(this.toolRegistry, toolContext);
 		registerUtilityTools(this.toolRegistry, toolContext);
 
@@ -490,7 +499,7 @@ Errors:
 			},
 			metadata: {
 				annotations: {
-					...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
+					...ToolAnnotationPresets.UTILITY_LOCAL_MUTATION,
 					title: "YNAB: Set Default Budget",
 				},
 			},
@@ -742,6 +751,10 @@ Use when: you need fresh data after external YNAB changes, or to free memory.`,
 		return this.toolRegistry;
 	}
 
+	getServerVersion(): string {
+		return this.serverVersion;
+	}
+
 	/**
 	 * Warm cache for frequently accessed data after setting default budget
 	 * Uses fire-and-forget pattern to avoid blocking the main operation
@@ -779,6 +792,11 @@ Use when: you need fresh data after external YNAB changes, or to free memory.`,
 	 */
 	public async handleListResources() {
 		return this.resourceManager.listResources();
+	}
+
+	/** Handle list resource templates request - public method for verification. */
+	public async handleListResourceTemplates() {
+		return this.resourceManager.listResourceTemplates();
 	}
 
 	/**

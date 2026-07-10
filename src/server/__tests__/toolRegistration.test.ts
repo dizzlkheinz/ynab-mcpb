@@ -11,11 +11,15 @@ vi.mock("../config.js", () => ({
 	loadConfig: () => ({
 		YNAB_ACCESS_TOKEN: "test-token-for-registration-tests",
 		YNAB_DEFAULT_BUDGET_ID: undefined,
+		YNAB_MCP_WRITE_MODE: "preview",
+		YNAB_MCP_TOOL_PROFILE: "full",
 		LOG_LEVEL: "info",
 	}),
 	config: {
 		YNAB_ACCESS_TOKEN: "test-token-for-registration-tests",
 		YNAB_DEFAULT_BUDGET_ID: undefined,
+		YNAB_MCP_WRITE_MODE: "preview",
+		YNAB_MCP_TOOL_PROFILE: "full",
 		LOG_LEVEL: "info",
 	},
 }));
@@ -26,7 +30,7 @@ const DEFAULT_BUDGET_ID = "11111111-1111-1111-1111-111111111111";
 
 /**
  * Expected tool names organized by domain.
- * This serves as the authoritative list of all 28 registered tools.
+ * This serves as the authoritative list of all 35 registered tools.
  */
 const EXPECTED_TOOLS_BY_DOMAIN = {
 	budget: ["ynab_list_budgets", "ynab_get_budget"],
@@ -50,6 +54,14 @@ const EXPECTED_TOOLS_BY_DOMAIN = {
 	payee: ["ynab_list_payees", "ynab_get_payee"],
 	month: ["ynab_get_month", "ynab_list_months"],
 	reconciliation: ["ynab_compare_transactions", "ynab_reconcile_account"],
+	scheduled: [
+		"ynab_list_scheduled_transactions",
+		"ynab_get_scheduled_transaction",
+		"ynab_create_scheduled_transaction",
+		"ynab_update_scheduled_transaction",
+		"ynab_delete_scheduled_transaction",
+	],
+	analytics: ["ynab_analyze_spending", "ynab_compare_spending_periods"],
 	utility: ["ynab_get_user"],
 	server: [
 		"ynab_set_default_budget",
@@ -63,13 +75,13 @@ const EXPECTED_TOOLS_BY_DOMAIN = {
 const ALL_EXPECTED_TOOLS = Object.values(EXPECTED_TOOLS_BY_DOMAIN).flat();
 
 /** Expected total tool count */
-const EXPECTED_TOOL_COUNT = 28;
+const EXPECTED_TOOL_COUNT = 35;
 
 describe("Tool Registration", () => {
 	// Config is mocked at module level, no env setup needed
 
 	describe("Tool Count Verification", () => {
-		it("registers exactly 28 tools", () => {
+		it("registers exactly 35 tools", () => {
 			const server = new YNABMCPServer(false);
 			const tools = server.getToolRegistry().listTools();
 			expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);

@@ -1,20 +1,19 @@
 {
 	"name": "@dizzlkheinz/ynab-mcpb",
-	"version": "0.26.11",
+	"version": "0.27.0",
 	"mcpName": "io.github.dizzlkheinz/ynab-mcpb",
-	"description": "Model Context Protocol server for YNAB (You Need A Budget) integration",
+	"description": "Local-first YNAB MCP workflows for reconciliation, receipt splitting, safe bulk cleanup, scheduled transactions, and spending analysis",
 	"main": "dist/index.js",
 	"type": "module",
 	"bin": {
 		"ynab-mcp-server": "bin/ynab-mcp-server.cjs"
 	},
 	"scripts": {
-		"prebuild": "npm run clean",
 		"build": "npm run build:prod",
 		"postbuild": "node scripts/run-generate-mcpb.js",
 		"build:dev": "npm run clean && tsc && npm run bundle",
 		"build:no-lint": "npm run clean && tsc && npm run bundle:prod",
-		"build:prod": "npm run lint:fix && npm run prebuild && tsc --project tsconfig.prod.json && npm run bundle:prod && npm run verify-build",
+		"build:prod": "npm run clean && npm run lint && tsc --project tsconfig.prod.json && npm run bundle:prod && npm run verify-build && npm run verify:metadata",
 		"clean": "rimraf dist",
 		"dev": "tsc --watch",
 		"start": "node -r dotenv/config dist/index.js",
@@ -22,6 +21,8 @@
 		"start:mcp": "node dist/index.js",
 		"validate-env": "node scripts/validate-env.js",
 		"verify-build": "node scripts/verify-build.js",
+		"verify:metadata": "tsx scripts/verify-metadata.ts",
+		"measure:tools": "tsx scripts/measure-tool-profiles.ts",
 		"lint": "biome lint .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
@@ -57,16 +58,22 @@
 		"pr:description": "node scripts/create-pr-description.js",
 		"pr:create": "npm run pr:description && gh pr create --body-file .pr-description.md",
 		"prepare": "npm run build:prod",
-		"prepublishOnly": "npm run test:unit && npm run build:prod"
+		"prepublishOnly": "npm run test:unit && npm run verify:metadata"
 	},
 	"keywords": [
 		"mcp",
 		"ynab",
 		"budget",
-		"finance"
+		"finance",
+		"reconciliation",
+		"receipts",
+		"spending-analysis"
 	],
 	"author": "dizzlkheinz",
 	"license": "AGPL-3.0",
+	"engines": {
+		"node": ">=20.0.0"
+	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"chrono-node": "^2.9.1",

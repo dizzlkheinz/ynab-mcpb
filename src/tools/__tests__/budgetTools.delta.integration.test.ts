@@ -47,7 +47,7 @@ describeIntegration("Delta-backed budget tool handler", () => {
 
 	const parseResponse = (result: CallToolResult) => {
 		const content = result.content?.[0];
-		if (!content || content.type !== "text") {
+		if (content?.type !== "text") {
 			throw new Error("Unexpected tool response format");
 		}
 		return JSON.parse(content.text);

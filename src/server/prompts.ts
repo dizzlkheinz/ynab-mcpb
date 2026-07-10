@@ -152,6 +152,88 @@ const defaultPromptDefinitions: PromptDefinition[] = [
 			},
 		],
 	},
+	{
+		name: "weekly-budget-review",
+		description: "Review deterministic spending and budget status for a week",
+		arguments: [
+			{
+				name: "since_date",
+				description: "Inclusive start date (YYYY-MM-DD)",
+				required: true,
+			},
+			{
+				name: "until_date",
+				description: "Inclusive end date (YYYY-MM-DD)",
+				required: true,
+			},
+		],
+	},
+	{
+		name: "uncategorized-transaction-review",
+		description:
+			"Find and review uncategorized transactions without guessing categories",
+		arguments: [
+			{
+				name: "since_date",
+				description: "Inclusive start date (YYYY-MM-DD)",
+				required: true,
+			},
+			{
+				name: "until_date",
+				description: "Inclusive end date (YYYY-MM-DD)",
+				required: true,
+			},
+		],
+	},
+	{
+		name: "month-end-close",
+		description: "Run a read-first month-end budget close checklist",
+		arguments: [
+			{
+				name: "month",
+				description: "Month to close (YYYY-MM)",
+				required: true,
+			},
+		],
+	},
+	{
+		name: "spending-period-comparison",
+		description: "Compare two periods using server-calculated spending totals",
+		arguments: [
+			{
+				name: "period_a_since",
+				description: "Period A start (YYYY-MM-DD)",
+				required: true,
+			},
+			{
+				name: "period_a_until",
+				description: "Period A end (YYYY-MM-DD)",
+				required: true,
+			},
+			{
+				name: "period_b_since",
+				description: "Period B start (YYYY-MM-DD)",
+				required: true,
+			},
+			{
+				name: "period_b_until",
+				description: "Period B end (YYYY-MM-DD)",
+				required: true,
+			},
+		],
+	},
+	{
+		name: "scheduled-cash-flow-review",
+		description:
+			"Review scheduled inflows and outflows without claiming a forecast model",
+		arguments: [
+			{
+				name: "until_date",
+				description: "Review horizon end (YYYY-MM-DD)",
+				required: true,
+			},
+		],
+	},
 ];
 
 /**
@@ -185,8 +267,9 @@ Use the appropriate YNAB MCP tools to:
 1. First, list budgets to find the budget ID
 2. List accounts for that budget to find the account ID
 3. If a category is specified, list categories to find the category ID
-4. Create the transaction with the correct amount in milliunits (multiply by 1000)
-5. Confirm the transaction was created successfully`,
+4. Create the transaction using amount_decimal (do not manually convert or guess units)
+5. In preview write mode, review the preview and use its single-use confirmation_token only for the identical request
+6. Confirm the transaction was created successfully`,
 					},
 				},
 			],
@@ -264,12 +347,12 @@ Statement ending balance: $${statementBalance} (this is in dollars, not milliuni
 Reconciliation workflow:
 1. Use ynab_list_budgets to find the correct budget ID
 2. Use ynab_list_accounts to find the account ID for "${accountName}"
-3. Call ynab_reconcile_account with dry_run: true first to preview matches without making changes
+3. Call ynab_reconcile_account without a confirmation token to preview matches without making changes
 4. Review the output carefully:
    - "matched" transactions are paired between YNAB and bank — verify these look correct
    - "unmatched_ynab" transactions exist in YNAB but not the bank statement — may be future or missing
    - "unmatched_bank" transactions are in the bank statement but not YNAB — may need to be created
-5. If the dry run looks correct, call ynab_reconcile_account again with dry_run: false to apply changes
+5. If the preview looks correct, repeat the identical request with the returned confirmation_token. If writes are disabled, report that the server is read-only.
 
 Important notes:
 - The statement_balance parameter is in dollars (e.g., 1234.56)
@@ -313,7 +396,47 @@ Convert milliunits to dollars for easy reading.`,
 			],
 		};
 	},
+	"weekly-budget-review": async (_name, args) => {
+		const since = args?.["since_date"] || "[SINCE_DATE]";
+		const until = args?.["until_date"] || "[UNTIL_DATE]";
+		return workflowPrompt(
+			"Weekly budget review",
+			`Review the budget from ${since} through ${until}, inclusive. Use ynab_analyze_spending for server-calculated totals grouped by category and payee, then use ynab_get_month and ynab_list_categories for available balances. Clearly separate calculated totals from interpretation. Do not make writes.`,
+		);
+	},
+	"uncategorized-transaction-review": async (_name, args) => {
+		const since = args?.["since_date"] || "[SINCE_DATE]";
+		const until = args?.["until_date"] || "[UNTIL_DATE]";
+		return workflowPrompt(
+			"Uncategorized transaction review",
+			`List uncategorized transactions since ${since}, retain only transactions through ${until}, and present payee, date, amount, account, and memo. Do not invent category recommendations: the server does not yet calculate them. Ask before any update, and follow the configured write mode.`,
+		);
+	},
+	"month-end-close": async (_name, args) => {
+		const month = args?.["month"] || "[MONTH]";
+		return workflowPrompt(
+			"Month-end close",
+			`Prepare a read-first close for ${month}: review uncleared and uncategorized transactions, inspect account balances, use ynab_analyze_spending for exact month totals, and identify negative category balances. The server does not yet orchestrate a one-click close; present a checklist and request confirmation separately for each proposed mutation.`,
+		);
+	},
+	"spending-period-comparison": async (_name, args) =>
+		workflowPrompt(
+			"Spending period comparison",
+			`Call ynab_compare_spending_periods for period A ${args?.["period_a_since"] || "[A_START]"} through ${args?.["period_a_until"] || "[A_END]"} and period B ${args?.["period_b_since"] || "[B_START]"} through ${args?.["period_b_until"] || "[B_END]"}. Use its code-calculated totals and group differences; do not recompute totals from paginated displays.`,
+		),
+	"scheduled-cash-flow-review": async (_name, args) =>
+		workflowPrompt(
+			"Scheduled cash-flow review",
+			`List scheduled transactions and summarize scheduled inflows and outflows due through ${args?.["until_date"] || "[UNTIL_DATE]"}. Combine this with current account balances, but label the result as a schedule review—not a forecast—because subscription detection, balance projection, and uncertainty modeling are not implemented. Do not create or edit schedules without preview and confirmation.`,
+		),
 };
+
+function workflowPrompt(description: string, text: string): PromptResponse {
+	return {
+		description,
+		messages: [{ role: "user", content: { type: "text", text } }],
+	};
+}
 
 /**
  * PromptManager class that handles prompt registration and request handling

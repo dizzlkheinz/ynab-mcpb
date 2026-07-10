@@ -2,8 +2,8 @@
 
 **Document Version:** 2.0
 **Last Updated:** 2025-12-01
-**Code Version Compatibility:** v0.16.0+
-**Last Verified Against Code:** v0.16.0 (2025-12-01)
+**Code Version Compatibility:** v0.27.0+
+**Last Verified Against Code:** v0.27.0 (2026-07-10)
 **Status:** Active Implementation
 
 ---

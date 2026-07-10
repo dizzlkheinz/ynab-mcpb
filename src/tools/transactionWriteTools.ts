@@ -822,7 +822,7 @@ export async function handleCreateReceiptSplitTransaction(
 	);
 
 	const firstContent = baseResult.content?.[0];
-	if (!firstContent || firstContent.type !== "text") {
+	if (firstContent?.type !== "text") {
 		return baseResult;
 	}
 
@@ -2061,7 +2061,9 @@ export function registerTransactionWriteTools(
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
   - account_id (string, required): Account UUID.
-  - amount (int, required): Amount in milliunits (dollars × 1000). Negative for expenses.
+  - amount_decimal (number, preferred): Amount in decimal currency units (for example, -50.00). Negative for expenses.
+  - amount_milliunits (int, alternative): Explicit raw YNAB milliunits (for example, -50000).
+  - amount (int, deprecated): Backward-compatible alias for amount_milliunits. Values are never guessed by magnitude.
   - date (string, required): ISO date YYYY-MM-DD.
   - payee_name (string, optional): Payee name (creates new payee if not found).
   - payee_id (string, optional): Existing payee UUID (alternative to payee_name).
@@ -2071,7 +2073,7 @@ Args:
   - approved (boolean, optional): Mark as approved. Default: false.
   - flag_color (string, optional): Transaction flag color ("red", "orange", "yellow", "green", "blue", "purple").
   - dry_run (boolean, optional): Preview without saving. Default: false.
-  - subtransactions (array, optional): Manual split lines. Each entry accepts "amount" (integer milliunits), plus optional "memo", "category_id", "payee_id", and "payee_name".
+  - subtransactions (array, optional): Manual split lines. Each entry uses exactly one of amount_decimal, amount_milliunits, or deprecated amount, plus optional "memo", "category_id", "payee_id", and "payee_name".
 
 Use "subtransactions" for manual split transactions. Use "ynab_create_receipt_split_transaction" when you have itemized receipt data and want proportional tax allocation handled for you.
 Advanced: "import_id" is supported, but it is intentionally not part of normal guidance. Usually omit it if you want the transaction to remain eligible for later bank-import matching.
@@ -2079,13 +2081,15 @@ Advanced: "import_id" is supported, but it is intentionally not part of normal g
 Returns: created transaction with account_balance.
 
 Examples:
-  - $50 expense: set amount=-50000 (milliunits)`,
+  - $50 expense: set amount_decimal=-50.00
+  - Already-converted data: set amount_milliunits=-50000`,
 		inputSchema: CreateTransactionSchema,
 		outputSchema: CreateTransactionOutputSchema,
 		handler: adaptWrite(handleCreateTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionSchema>>(),
 		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
 				title: "YNAB: Create Transaction",
@@ -2099,7 +2103,7 @@ Examples:
 
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
-  - transactions (array, required): Up to 100 transaction objects (each requires account_id, amount, date).
+  - transactions (array, required): Up to 100 transaction objects. Each requires account_id, date, and exactly one of amount_decimal (preferred), amount_milliunits, or deprecated amount.
   - dry_run (boolean, optional): Validate without saving. Default: false.
 
 Returns: summary (created, duplicates, failed), results[], transactions[].
@@ -2113,6 +2117,7 @@ Examples:
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionsSchema>>(),
 		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
 				title: "YNAB: Create Multiple Transactions",
@@ -2148,6 +2153,7 @@ Returns: transaction with subtransactions and receipt_summary.`,
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
 		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_CREATE,
 				title: "YNAB: Create Split Transaction from Receipt",
@@ -2162,7 +2168,9 @@ Returns: transaction with subtransactions and receipt_summary.`,
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
   - transaction_id (string, required): Transaction UUID to update.
-  - amount (int, optional): New amount in milliunits.
+  - amount_decimal (number, preferred): New amount in decimal currency units.
+  - amount_milliunits (int, alternative): Explicit raw YNAB milliunits.
+  - amount (int, deprecated): Backward-compatible alias for amount_milliunits.
   - date (string, optional): New date YYYY-MM-DD.
   - payee_name / payee_id (string, optional): New payee.
   - category_id (string, optional): New category UUID.
@@ -2178,6 +2186,7 @@ Returns: updated transaction with updated_balance.`,
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionSchema>>(),
 		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
 				title: "YNAB: Update Transaction",
@@ -2191,7 +2200,7 @@ Returns: updated transaction with updated_balance.`,
 
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
-  - transactions (array, required): Up to 100 objects, each requires id plus fields to update.
+  - transactions (array, required): Up to 100 objects, each requires id plus fields to update. Amount updates use one of amount_decimal (preferred), amount_milliunits, or deprecated amount.
   - dry_run (boolean, optional): Preview changes without saving. Default: false.
 
 Returns: summary (updated, failed), results[], transactions[].
@@ -2204,6 +2213,7 @@ Examples:
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionsSchema>>(),
 		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
 				title: "YNAB: Update Multiple Transactions",
@@ -2230,6 +2240,7 @@ Errors:
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof DeleteTransactionSchema>>(),
 		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_DELETE,
 				title: "YNAB: Delete Transaction",

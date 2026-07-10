@@ -1,5 +1,12 @@
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import {
+	amountInputShape,
+	normalizeOptionalAmount,
+	normalizeRequiredAmount,
+	validateOptionalAmount,
+	validateRequiredAmount,
+} from "./schemas/monetaryInput.js";
 
 /**
  * Transaction Schemas and Types
@@ -64,11 +71,32 @@ export type GetTransactionParams = z.infer<typeof GetTransactionSchema>;
 /**
  * Schema for ynab:create_transaction tool parameters
  */
-const CreateTransactionBaseSchema = z
+const SubtransactionInputSchema = z
+	.object({
+		...amountInputShape,
+		amount: z
+			.number()
+			.int("Subtransaction amount must be an integer in milliunits")
+			.optional()
+			.describe(
+				"Deprecated legacy alias for amount_milliunits on this split line.",
+			),
+		payee_name: z.string().optional(),
+		payee_id: z.string().optional(),
+		category_id: z.string().optional(),
+		memo: z.string().optional(),
+	})
+	.strict()
+	.superRefine((data, ctx) =>
+		validateRequiredAmount(data, ctx, ["amount_decimal"]),
+	)
+	.transform(normalizeRequiredAmount);
+
+const CreateTransactionBaseInputSchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		account_id: z.string().min(1, "Account ID is required"),
-		amount: z.number().int("Amount must be an integer in milliunits"),
+		...amountInputShape,
 		date: z
 			.string()
 			.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in ISO format (YYYY-MM-DD)"),
@@ -84,41 +112,30 @@ const CreateTransactionBaseSchema = z
 		import_id: z.string().min(1, "Import ID cannot be empty").optional(),
 		dry_run: z.boolean().optional(),
 		subtransactions: z
-			.array(
-				z
-					.object({
-						amount: z
-							.number()
-							.int("Subtransaction amount must be an integer in milliunits"),
-						payee_name: z.string().optional(),
-						payee_id: z.string().optional(),
-						category_id: z.string().optional(),
-						memo: z.string().optional(),
-					})
-					.strict(),
-			)
+			.array(SubtransactionInputSchema)
 			.min(1, "At least one subtransaction is required when provided")
 			.optional(),
 	})
 	.strict();
 
-export const CreateTransactionSchema = CreateTransactionBaseSchema.superRefine(
-	(data, ctx) => {
+export const CreateTransactionSchema =
+	CreateTransactionBaseInputSchema.superRefine((data, ctx) => {
+		validateRequiredAmount(data, ctx, ["amount_decimal"]);
 		if (data.subtransactions && data.subtransactions.length > 0) {
 			const total = data.subtransactions.reduce(
 				(sum, sub) => sum + sub.amount,
 				0,
 			);
-			if (total !== data.amount) {
+			const parentAmount = normalizeRequiredAmount(data).amount;
+			if (total !== parentAmount) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					message: "Amount must equal the sum of subtransaction amounts",
-					path: ["amount"],
+					path: ["amount_decimal"],
 				});
 			}
 		}
-	},
-);
+	}).transform(normalizeRequiredAmount);
 
 export type CreateTransactionParams = z.infer<typeof CreateTransactionSchema>;
 
@@ -137,9 +154,11 @@ export interface SubtransactionInput {
 // Create Transactions (Bulk)
 // ============================================================================
 
-const BulkTransactionInputSchemaBase = CreateTransactionBaseSchema.pick({
+const BulkTransactionInputSchemaBase = CreateTransactionBaseInputSchema.pick({
 	account_id: true,
 	amount: true,
+	amount_decimal: true,
+	amount_milliunits: true,
 	date: true,
 	payee_name: true,
 	payee_id: true,
@@ -158,7 +177,11 @@ export type BulkTransactionInput = Omit<
 
 // Schema for bulk transaction creation - subtransactions are not supported
 // The .strict() modifier automatically rejects any fields not in the schema
-const BulkTransactionInputSchema = BulkTransactionInputSchemaBase.strict();
+const BulkTransactionInputSchema = BulkTransactionInputSchemaBase.strict()
+	.superRefine((data, ctx) =>
+		validateRequiredAmount(data, ctx, ["amount_decimal"]),
+	)
+	.transform(normalizeRequiredAmount);
 
 export const CreateTransactionsSchema = z
 	.object({
@@ -321,10 +344,7 @@ export const UpdateTransactionSchema = z
 		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		transaction_id: z.string().min(1, "Transaction ID is required"),
 		account_id: z.string().optional(),
-		amount: z
-			.number()
-			.int("Amount must be an integer in milliunits")
-			.optional(),
+		...amountInputShape,
 		date: z
 			.string()
 			.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in ISO format (YYYY-MM-DD)")
@@ -340,7 +360,11 @@ export const UpdateTransactionSchema = z
 			.optional(),
 		dry_run: z.boolean().optional(),
 	})
-	.strict();
+	.strict()
+	.superRefine((data, ctx) =>
+		validateOptionalAmount(data, ctx, ["amount_decimal"]),
+	)
+	.transform(normalizeOptionalAmount);
 
 export type UpdateTransactionParams = z.infer<typeof UpdateTransactionSchema>;
 
@@ -355,10 +379,7 @@ export type UpdateTransactionParams = z.infer<typeof UpdateTransactionSchema>;
 const BulkUpdateTransactionInputSchema = z
 	.object({
 		id: z.string().min(1, "Transaction ID is required"),
-		amount: z
-			.number()
-			.int("Amount must be an integer in milliunits")
-			.optional(),
+		...amountInputShape,
 		date: z
 			.string()
 			.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in ISO format (YYYY-MM-DD)")
@@ -379,7 +400,11 @@ const BulkUpdateTransactionInputSchema = z
 			.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in ISO format (YYYY-MM-DD)")
 			.optional(),
 	})
-	.strict();
+	.strict()
+	.superRefine((data, ctx) =>
+		validateOptionalAmount(data, ctx, ["amount_decimal"]),
+	)
+	.transform(normalizeOptionalAmount);
 
 export type BulkUpdateTransactionInput = z.infer<
 	typeof BulkUpdateTransactionInputSchema

@@ -21,7 +21,7 @@ This document provides comprehensive documentation for all tools available in th
 
 ## Overview
 
-The YNAB MCP Server provides 29 tools that enable AI assistants to interact with YNAB data. All tools follow consistent patterns for parameters, responses, and error handling.
+The YNAB MCP Server provides 35 tools that enable AI assistants to interact with YNAB data. All tools follow consistent patterns for parameters, responses, and error handling.
 
 ### Tool Naming Convention
 
@@ -38,6 +38,18 @@ All tools require authentication via a YNAB Personal Access Token set in the `YN
 YNAB_ACCESS_TOKEN=your_personal_access_token_here
 ```
 
+## Write safety and tool profiles
+
+`YNAB_MCP_WRITE_MODE` defaults to `preview`:
+
+- `read-only`: YNAB mutation tools are not registered.
+- `preview`: the first mutation call runs a dry-run preview and returns a two-minute, single-use `confirmation_token`. Repeating the identical validated request with that token executes it.
+- `enabled`: direct writes remain available for users who explicitly opt into the legacy behavior.
+
+Tokens are bound to the canonical tool name and normalized validated arguments. A changed field, different tool, expired token, or reused token is rejected. Bulk and deletion tools use the same central enforcement.
+
+`YNAB_MCP_TOOL_PROFILE` selects a stable startup surface: `core`, `read-only`, or `full` (default). Profiles do not use runtime list-change notifications.
+
 ## Data Formats
 
 ### Monetary Amounts
@@ -50,8 +62,10 @@ The server automatically converts YNAB's internal milliunits to dollars in all r
 - Budget amounts: `150.00` (instead of `150000` milliunits)
 
 **Input formats**:
-- Some user-facing helpers accept decimal dollars, such as `create_account.balance`, `create_receipt_split_transaction` receipt amounts, and `reconcile_account.statement_balance`
-- Direct mutation APIs such as `create_transaction.amount`, `create_transaction.subtransactions[].amount`, `update_transaction.amount`, and `update_category.budgeted` require **integer milliunits** (for example, `$50.25` = `50250`)
+- Prefer `amount_decimal` for transaction currency values and `budgeted_decimal` for category funding.
+- Use `amount_milliunits` or `budgeted_milliunits` only when the value is already a raw YNAB integer.
+- Deprecated `amount` and `budgeted` aliases remain backward compatible as milliunits. Their meaning is never inferred from magnitude.
+- Receipt helpers, account opening balances, and reconciliation statement balances use decimal currency units.
 
 **Note**: YNAB's internal representation uses milliunits (1/1000th of a currency unit). Responses are rendered in dollars, but write-tool inputs must follow the per-tool contract below.
 
@@ -700,16 +714,18 @@ The `reconcile_account_v2` tool now includes an optional `recommendations` array
 
 Recommendations include complete parameters for YNAB MCP tool calls:
 
-**CRITICAL**: Recommendation `parameters.amount` values are already in **milliunits** (YNAB's internal format where 1 dollar = 1000 milliunits). Pass them through directly when calling `create_transaction`. `estimated_impact.value` remains in decimal dollars for human readability.
+**CRITICAL**: Recommendation `parameters.amount` values are already in **milliunits** (YNAB's internal format where 1 dollar = 1000 milliunits). Pass them as `amount_milliunits` when calling `create_transaction`. `estimated_impact.value` remains in decimal currency for human readability.
 
 ```typescript
 // For create_transaction recommendations:
-// Note: Recommendation amounts are already in milliunits
+// Recommendation amounts are already in milliunits; name the boundary explicitly.
 const rec = recommendations.find(r => r.action_type === 'create_transaction');
 if (rec) {
+  const { amount, ...parameters } = rec.parameters;
   await create_transaction({
     budget_id: 'your-budget-id',
-    ...rec.parameters
+    ...parameters,
+    amount_milliunits: amount
   });
 }
 
@@ -902,7 +918,9 @@ Creates a new transaction in the specified budget and account.
 **Parameters:**
 - `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `account_id` (string, required): The ID of the account
-- `amount` (number, required): Transaction amount in integer milliunits (negative for outflows)
+- `amount_decimal` (number, preferred): Transaction amount in decimal currency units (negative for outflows)
+- `amount_milliunits` (integer): Explicit raw YNAB milliunits; mutually exclusive with `amount_decimal`
+- `amount` (integer, deprecated): Backward-compatible alias for `amount_milliunits`
 - `date` (string, required): Transaction date in ISO format (YYYY-MM-DD)
 - `payee_name` (string, optional): The payee name
 - `payee_id` (string, optional): The payee ID
@@ -912,9 +930,9 @@ Creates a new transaction in the specified budget and account.
 - `approved` (boolean, optional): Whether the transaction is approved
 - `flag_color` (string, optional): Transaction flag color (`red`, `orange`, `yellow`, `green`, `blue`, `purple`)
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
-- `subtransactions` (array, optional): Split line items; each entry accepts `amount` (integer milliunits), plus optional `memo`, `category_id`, `payee_id`, and `payee_name`
+- `subtransactions` (array, optional): Split line items; each entry uses exactly one of `amount_decimal`, `amount_milliunits`, or deprecated `amount`, plus optional `memo`, `category_id`, `payee_id`, and `payee_name`
 
-When `subtransactions` are supplied, their `amount` values must sum to the parent `amount` in milliunits, matching YNAB API requirements.
+When `subtransactions` are supplied, their normalized milliunit values must sum exactly to the normalized parent amount.
 Use `subtransactions` for manual split transactions. Use `create_receipt_split_transaction` when you have itemized receipt data and want proportional tax allocation handled automatically.
 Advanced: `import_id` is supported, but it is intentionally not part of normal guidance. Usually omit it if you want the transaction to remain eligible for later bank-import matching.
 
@@ -925,7 +943,7 @@ Advanced: `import_id` is supported, but it is intentionally not part of normal g
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "account_id": "87654321-4321-4321-4321-210987654321",
-    "amount": -5000,
+    "amount_decimal": -5.00,
     "date": "2024-01-15",
     "payee_name": "Coffee Shop",
     "category_id": "category-id",
@@ -943,12 +961,12 @@ Advanced: `import_id` is supported, but it is intentionally not part of normal g
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "account_id": "87654321-4321-4321-4321-210987654321",
-    "amount": -125000,
+    "amount_decimal": -125.00,
     "date": "2024-02-01",
     "memo": "Rent and utilities",
     "subtransactions": [
-      { "amount": -100000, "category_id": "rent-category", "memo": "Rent" },
-      { "amount": -25000, "category_id": "utilities-category", "memo": "Utilities" }
+      { "amount_decimal": -100.00, "category_id": "rent-category", "memo": "Rent" },
+      { "amount_milliunits": -25000, "category_id": "utilities-category", "memo": "Utilities" }
     ]
   }
 }
@@ -1062,7 +1080,9 @@ Updates an existing transaction.
 - `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `transaction_id` (string, required): The ID of the transaction to update
 - `account_id` (string, optional): Update the account ID
-- `amount` (number, optional): Update the amount in integer milliunits
+- `amount_decimal` (number, preferred): Updated amount in decimal currency units
+- `amount_milliunits` (integer): Updated raw YNAB milliunits
+- `amount` (integer, deprecated): Backward-compatible milliunit alias
 - `date` (string, optional): Update the date (YYYY-MM-DD)
 - `payee_name` (string, optional): Update the payee name
 - `payee_id` (string, optional): Update the payee ID
@@ -1153,7 +1173,9 @@ Updates the budgeted amount for a category in the current month.
 **Parameters:**
 - `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `category_id` (string, required): The ID of the category
-- `budgeted` (number, required): The budgeted amount in integer milliunits
+- `budgeted_decimal` (number, preferred): Category funding in decimal currency units
+- `budgeted_milliunits` (integer): Explicit raw YNAB milliunits
+- `budgeted` (integer, deprecated): Backward-compatible alias for `budgeted_milliunits`
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
 
 **Example Request:**
@@ -1163,10 +1185,32 @@ Updates the budgeted amount for a category in the current month.
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "category_id": "category-id",
-    "budgeted": 50000
+    "budgeted_decimal": 50.00
   }
 }
 ```
+
+## Scheduled Transaction Tools
+
+Scheduled transaction outputs include both decimal `amount` and exact `amount_milliunits`. Create and update inputs use the same explicit `amount_decimal` / `amount_milliunits` contract as ordinary transactions. All scheduled writes participate in the selected write mode and invalidate scheduled delta state after execution.
+
+- `list_scheduled_transactions`: Delta-cached, paginated list of active schedules.
+- `get_scheduled_transaction`: Retrieve one schedule by ID.
+- `create_scheduled_transaction`: Create a schedule with date, frequency, account, and amount.
+- `update_scheduled_transaction`: Merge selected changes with required current schedule fields.
+- `delete_scheduled_transaction`: Delete a schedule through the destructive confirmation policy.
+
+Supported frequencies are `never`, `daily`, `weekly`, `everyOtherWeek`, `twiceAMonth`, `every4Weeks`, `monthly`, `everyOtherMonth`, `every3Months`, `every4Months`, `twiceAYear`, `yearly`, and `everyOtherYear`.
+
+## Deterministic Spending Analytics
+
+### analyze_spending
+
+Calculates income, spending, net, and transaction counts for an inclusive `since_date` / `until_date` range. `group_by` accepts `category`, `payee`, `account`, `week`, or `month`. Transfers are excluded unless `include_transfers` is true. Category grouping expands split lines, and aggregates are computed from the complete fetched period before grouping.
+
+### compare_spending_periods
+
+Calculates both periods and their total and per-group differences in server code. The result does not depend on display pagination or LLM arithmetic.
 
 ## Payee Management Tools
 
@@ -1482,10 +1526,8 @@ if (!dateRegex.test(date)) {
   throw new Error('Date must be in YYYY-MM-DD format');
 }
 
-// Validate a create_transaction amount is in integer milliunits
-if (!Number.isInteger(amount)) {
-  throw new Error('Amount must be an integer in milliunits');
-}
+// Prefer decimal currency input. Use amount_milliunits only for already-converted data.
+const transactionInput = { amount_decimal: -25.50 };
 ```
 
 ### 3. Efficient Data Retrieval
@@ -1508,20 +1550,28 @@ const recentTransactions = await mcpClient.callTool('list_transactions', {
 
 ### 4. Amount Handling
 
-Responses are returned in dollars, but some write-tool inputs must be sent in milliunits:
+Responses are returned in decimal currency units. Mutation inputs make the conversion boundary explicit:
 
 ```javascript
 // All returned amounts are in dollars - no conversion needed
 const accounts = await mcpClient.callTool('list_accounts', { budget_id: budgetId });
 console.log(`Balance: $${accounts.accounts[0].balance}`); // Balance: $1234.56
 
-// When creating transactions, provide amounts in integer milliunits
+// Preferred decimal currency input
 await mcpClient.callTool('create_transaction', {
   budget_id: budgetId,
   account_id: accountId,
-  amount: -50250,  // Negative for outflows
+  amount_decimal: -50.25,  // Negative for outflows
   date: '2024-01-15',
   payee_name: 'Coffee Shop'
+});
+
+// Explicit raw YNAB input for data already converted upstream
+await mcpClient.callTool('create_transaction', {
+  budget_id: budgetId,
+  account_id: accountId,
+  amount_milliunits: -50250,
+  date: '2024-01-15'
 });
 ```
 

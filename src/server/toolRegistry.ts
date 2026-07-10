@@ -2,6 +2,8 @@ import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
 import { toJSONSchema, z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import type { MCPToolAnnotations } from "../types/toolAnnotations.js";
+import { toolBelongsToProfile, type ToolProfile } from "./toolProfiles.js";
+import type { WriteSafetyPolicy } from "./writeSafety.js";
 
 export type SecurityWrapperFactory = <T extends Record<string, unknown>>(
 	namespace: string,
@@ -58,6 +60,10 @@ export interface ToolSecurityOptions {
 export interface ToolMetadataOptions {
 	inputJsonSchema?: Record<string, unknown>;
 	annotations?: MCPToolAnnotations;
+	writeSafety?: {
+		mutation: true;
+		preview: "dry-run";
+	};
 }
 
 /**
@@ -130,6 +136,8 @@ export interface ToolRegistryDependencies {
 	responseFormatter: ResponseFormatterContract;
 	cacheHelpers?: ToolRegistryCacheHelpers;
 	validateAccessToken?: (token: string) => Promise<void> | void;
+	writeSafetyPolicy?: WriteSafetyPolicy;
+	toolProfile?: ToolProfile;
 }
 
 export class ToolRegistry {
@@ -149,6 +157,31 @@ export class ToolRegistry {
 		TOutput extends Record<string, unknown>,
 	>(definition: ToolDefinition<TInput, TOutput>): void {
 		this.assertValidDefinition(definition);
+		if (
+			!toolBelongsToProfile(
+				this.deps.toolProfile ?? "full",
+				definition.name,
+				definition.metadata?.annotations,
+			)
+		) {
+			return;
+		}
+		if (
+			definition.metadata?.writeSafety?.mutation &&
+			this.deps.writeSafetyPolicy &&
+			!this.deps.writeSafetyPolicy.shouldRegisterMutation()
+		) {
+			return;
+		}
+		if (
+			definition.metadata?.writeSafety?.mutation &&
+			this.deps.writeSafetyPolicy?.requiresConfirmation() &&
+			!this.schemaHasProperty(definition, "dry_run")
+		) {
+			throw new Error(
+				`Mutation tool '${definition.name}' must expose dry_run in preview mode`,
+			);
+		}
 
 		if (this.tools.has(definition.name)) {
 			throw new Error(`Tool '${definition.name}' is already registered`);
@@ -181,15 +214,23 @@ export class ToolRegistry {
 
 	listTools(): Tool[] {
 		return Array.from(this.tools.values()).map((tool) => {
-			const inputSchema = this.ensureRootObjectJsonSchema(
+			let inputSchema = this.ensureRootObjectJsonSchema(
 				(tool.metadata?.inputJsonSchema as Tool["inputSchema"] | undefined) ??
 					(this.generateJsonSchema(tool.inputSchema) as Tool["inputSchema"]),
 				"input",
 				tool.name,
 			) as Tool["inputSchema"];
+			const requiresConfirmation =
+				tool.metadata?.writeSafety?.mutation === true &&
+				this.deps.writeSafetyPolicy?.requiresConfirmation() === true;
+			if (requiresConfirmation) {
+				inputSchema = this.withConfirmationToken(inputSchema);
+			}
 			const result: Tool = {
 				name: tool.name,
-				description: tool.description,
+				description: requiresConfirmation
+					? `${tool.description}\n\nWrite safety: call without confirmation_token to preview. Execute the identical validated request with the short-lived confirmation_token returned by that preview.`
+					: tool.description,
 				inputSchema,
 			};
 			if (tool.outputSchema) {
@@ -256,6 +297,21 @@ export class ToolRegistry {
 			}
 		}
 
+		const providedArguments = { ...(options.arguments ?? {}) };
+		const confirmationValue = providedArguments["confirmation_token"];
+		if (
+			confirmationValue !== undefined &&
+			(typeof confirmationValue !== "string" || confirmationValue.length < 16)
+		) {
+			return this.deps.errorHandler.createValidationError(
+				`Invalid parameters for ${tool.name}`,
+				"confirmation_token must be a non-empty token string",
+			);
+		}
+		const confirmationToken =
+			typeof confirmationValue === "string" ? confirmationValue : undefined;
+		delete providedArguments["confirmation_token"];
+
 		let defaults: Partial<Record<string, unknown>> | undefined;
 
 		if (tool.defaultArgumentResolver) {
@@ -263,7 +319,7 @@ export class ToolRegistry {
 				defaults = await tool.defaultArgumentResolver({
 					name: tool.name,
 					accessToken: options.accessToken,
-					rawArguments: options.arguments ?? {},
+					rawArguments: providedArguments,
 				});
 			} catch (error) {
 				if (error instanceof DefaultArgumentResolutionError) {
@@ -283,7 +339,7 @@ export class ToolRegistry {
 
 		const rawArguments: Record<string, unknown> = {
 			...(defaults ?? {}),
-			...(options.arguments ?? {}),
+			...providedArguments,
 		};
 
 		try {
@@ -307,8 +363,41 @@ export class ToolRegistry {
 					if (options.sendProgress) {
 						context.sendProgress = options.sendProgress;
 					}
+					const isProtectedMutation =
+						tool.metadata?.writeSafety?.mutation === true &&
+						this.deps.writeSafetyPolicy?.requiresConfirmation() === true;
+					// dry_run is a policy control, not a material financial argument.
+					// Normalize it before hashing so preview always runs safely and a
+					// confirmed call always executes, regardless of a client's default.
+					const confirmationArguments = isProtectedMutation
+						? { ...validated, dry_run: false }
+						: validated;
+
+					if (isProtectedMutation && confirmationToken) {
+						const confirmation = this.deps.writeSafetyPolicy?.consume(
+							confirmationToken,
+							tool.name,
+							confirmationArguments,
+						);
+						if (!confirmation?.ok) {
+							const detail =
+								confirmation?.reason === "expired"
+									? "The confirmation token expired. Preview the request again."
+									: confirmation?.reason === "reused"
+										? "The confirmation token was already used. Preview the request again."
+										: "The confirmation token does not match this tool and validated request.";
+							return this.deps.errorHandler.createValidationError(
+								`Write confirmation rejected for ${tool.name}`,
+								detail,
+							);
+						}
+					}
+
+					const handlerInput = isProtectedMutation
+						? { ...validated, dry_run: !confirmationToken }
+						: validated;
 					const handlerResult = await tool.handler({
-						input: validated,
+						input: handlerInput,
 						context,
 					});
 					// Validate output against schema if present
@@ -316,7 +405,35 @@ export class ToolRegistry {
 					if (handlerResult.isError) {
 						return handlerResult;
 					}
-					return this.validateOutput(tool.name, handlerResult);
+					const validatedResult = this.validateOutput(tool.name, handlerResult);
+					if (
+						!isProtectedMutation ||
+						confirmationToken ||
+						validatedResult.isError
+					) {
+						return validatedResult;
+					}
+
+					const issued = this.deps.writeSafetyPolicy?.issue(
+						tool.name,
+						confirmationArguments,
+					);
+					if (!issued) {
+						return this.deps.errorHandler.createValidationError(
+							`Write preview failed for ${tool.name}`,
+							"Write safety policy was unavailable",
+						);
+					}
+					return {
+						...validatedResult,
+						content: [
+							...validatedResult.content,
+							{
+								type: "text",
+								text: `Preview complete. To execute this exact request, call ${tool.name} again with confirmation_token="${issued.token}" before ${issued.expiresAt}. The token is single-use.`,
+							},
+						],
+					};
 				} catch (handlerError) {
 					return this.deps.errorHandler.handleError(
 						handlerError,
@@ -430,6 +547,46 @@ export class ToolRegistry {
 			console.warn(`Failed to generate JSON schema for tool: ${error}`);
 			return { type: "object", additionalProperties: true };
 		}
+	}
+
+	private schemaHasProperty<
+		TInput extends Record<string, unknown>,
+		TOutput extends Record<string, unknown>,
+	>(
+		definition: ToolDefinition<TInput, TOutput>,
+		propertyName: string,
+	): boolean {
+		const schema =
+			definition.metadata?.inputJsonSchema ??
+			this.generateJsonSchema(definition.inputSchema);
+		const properties = schema["properties"];
+		return (
+			typeof properties === "object" &&
+			properties !== null &&
+			propertyName in properties
+		);
+	}
+
+	private withConfirmationToken(
+		inputSchema: Tool["inputSchema"],
+	): Tool["inputSchema"] {
+		const properties =
+			typeof inputSchema.properties === "object" &&
+			inputSchema.properties !== null
+				? inputSchema.properties
+				: {};
+		return {
+			...inputSchema,
+			properties: {
+				...properties,
+				confirmation_token: {
+					type: "string",
+					minLength: 16,
+					description:
+						"Short-lived, single-use token returned by the immediately preceding preview of this exact validated request.",
+				},
+			},
+		};
 	}
 
 	private ensureRootObjectJsonSchema(

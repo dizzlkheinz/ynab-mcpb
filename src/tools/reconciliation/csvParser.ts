@@ -57,7 +57,7 @@ export const BANK_PRESETS: Record<string, BankPreset> = {
 		// so both forms are supported.
 		header: false,
 		dateColumn: ["0", "Date"],
-		amountColumn: ["Amount"],
+		amountColumn: ["Amount", "CAD$"],
 		debitColumn: "2",
 		creditColumn: "3",
 		descriptionColumn: ["1", "Description"],

@@ -87,7 +87,7 @@ describeIntegration("Delta-backed account tool handlers", () => {
 
 	const parseResponse = (result: CallToolResult) => {
 		const content = result.content?.[0];
-		if (!content || content.type !== "text") {
+		if (content?.type !== "text") {
 			throw new Error("Unexpected tool response format");
 		}
 		const parsed = JSON.parse(content.text);

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integration, enabling AI assistants to interact with YNAB budgets, accounts, transactions, and categories. The codebase uses TypeScript with a modular, service-oriented architecture.
 
-**Current Version:** 0.26.11
+**Current Version:** 0.27.0
 
 ## Essential Commands
 
@@ -97,7 +97,7 @@ The architecture is modular and service-oriented:
 - Adapter helpers (`src/tools/adapters.ts`): `adapt`, `adaptNoInput`, `adaptWithDelta`, `adaptWrite`, and `createBudgetResolver` to inject default budget IDs; covered by unit tests in `src/tools/__tests__/adapters.test.ts`.
 - Domain factories (`register*Tools`) live in each tool file: budget, account, transaction, category, payee, month, utility, reconciliation. `setupToolRegistry` now delegates to these factories.
 - Shared schemas: `emptyObjectSchema`, `looseObjectSchema` in `src/tools/schemas/common.ts`.
-- Output schemas: All 28 tools have Zod output schemas in `src/tools/schemas/outputs/`, registered via `outputSchema` field. The registry converts to JSON Schema for `tools/list` and validates handler output for `structuredContent`.
+- Output schemas: All 35 tools have Zod output schemas registered via `outputSchema`. The registry converts to JSON Schema for `tools/list` and validates handler output for `structuredContent`.
 - Server-owned inline tools that stay in `YNABMCPServer`: `ynab_set_default_budget`, `ynab_get_default_budget`, `ynab_diagnostic_info`, `ynab_clear_cache` (they depend on server internals).
 
 ### Tool Implementation (`src/tools/`)
@@ -141,7 +141,7 @@ Tools are organized by domain with some using modular sub-directories:
   - ynabAdapter.ts - YNAB API integration layer
 - **schemas/** - Zod schemas for input/output validation
   - shared/commonOutputs.ts - Reusable base schemas (CacheMetadata, SuccessResponse, ErrorDetails)
-  - outputs/ - Output schema definitions for all 28 tools (11 domain files + index.ts)
+  - outputs/ - Shared output schema definitions; scheduled and analytics domains keep focused schemas beside their handlers
   - outputs/index.ts - Central export point for all output schemas and TypeScript types
 
 ### Type Definitions (`src/types/`)
@@ -389,27 +389,27 @@ The system defines 5 preset annotation patterns in `src/tools/toolCategories.ts`
 
 ### Complete Tool Classification
 
-All 28 tools are classified into the following categories:
+All 35 tools are classified into the following categories:
 
-**Read-Only External (15 tools):**
+**Read-Only External (19 tools):**
 
-- `ynab_list_budgets`, `ynab_get_budget`, `ynab_list_accounts`, `ynab_get_account`, `ynab_list_transactions`, `ynab_export_transactions`, `ynab_compare_transactions`, `ynab_get_transaction`, `ynab_list_categories`, `ynab_get_category`, `ynab_list_payees`, `ynab_get_payee`, `ynab_get_month`, `ynab_list_months`, `ynab_get_user`
+- `ynab_list_budgets`, `ynab_get_budget`, `ynab_list_accounts`, `ynab_get_account`, `ynab_list_transactions`, `ynab_export_transactions`, `ynab_compare_transactions`, `ynab_get_transaction`, `ynab_list_categories`, `ynab_get_category`, `ynab_list_payees`, `ynab_get_payee`, `ynab_get_month`, `ynab_list_months`, `ynab_get_user`, `ynab_list_scheduled_transactions`, `ynab_get_scheduled_transaction`, `ynab_analyze_spending`, `ynab_compare_spending_periods`
 
-**Write External - Create (4 tools):**
+**Write External - Create (5 tools):**
 
-- `ynab_create_account`, `ynab_create_transaction`, `ynab_create_transactions`, `ynab_create_receipt_split_transaction`
+- `ynab_create_account`, `ynab_create_transaction`, `ynab_create_transactions`, `ynab_create_receipt_split_transaction`, `ynab_create_scheduled_transaction`
 
 **Write External - Update (5 tools):**
 
-- `ynab_set_default_budget`, `ynab_reconcile_account`, `ynab_update_transaction`, `ynab_update_transactions`, `ynab_update_category`
+- `ynab_reconcile_account`, `ynab_update_transaction`, `ynab_update_transactions`, `ynab_update_category`, `ynab_update_scheduled_transaction`
 
-**Write External - Delete (1 tool):**
+**Write External - Delete (2 tools):**
 
-- `ynab_delete_transaction` ⚠️
+- `ynab_delete_transaction`, `ynab_delete_scheduled_transaction` ⚠️
 
-**Utility Local (3 tools):**
+**Utility Local (4 tools):**
 
-- `ynab_get_default_budget`, `ynab_diagnostic_info`, `ynab_clear_cache`
+- `ynab_get_default_budget`, `ynab_set_default_budget`, `ynab_diagnostic_info`, `ynab_clear_cache`
 
 ### Usage Example
 
@@ -434,7 +434,7 @@ register({
 
 ## Output Schemas (Structured Content)
 
-All 28 tools define MCP-compliant `outputSchema` using Zod schemas, enabling clients to receive validated `structuredContent` alongside text responses. The registry converts Zod schemas to JSON Schema at tool listing time and validates handler output at execution time.
+All 35 tools define MCP-compliant `outputSchema` using Zod schemas, enabling clients to receive validated `structuredContent` alongside text responses. The registry converts Zod schemas to JSON Schema at tool listing time and validates handler output at execution time.
 
 ### Schema Organization
 

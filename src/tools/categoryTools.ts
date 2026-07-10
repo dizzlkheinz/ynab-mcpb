@@ -35,6 +35,11 @@ import {
 	UpdateCategoryOutputSchema,
 } from "./schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
+import {
+	budgetedInputShape,
+	normalizeRequiredBudgeted,
+	validateRequiredBudgeted,
+} from "./schemas/monetaryInput.js";
 
 /**
  * Schema for ynab:list_categories tool parameters
@@ -76,12 +81,12 @@ export const UpdateCategorySchema = z
 	.object({
 		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		category_id: z.string().min(1, "Category ID is required"),
-		budgeted: z
-			.number()
-			.int("Budgeted amount must be an integer in milliunits"),
+		...budgetedInputShape,
 		dry_run: z.boolean().optional(),
 	})
-	.strict();
+	.strict()
+	.superRefine(validateRequiredBudgeted)
+	.transform(normalizeRequiredBudgeted);
 
 export type UpdateCategoryParams = z.infer<typeof UpdateCategorySchema>;
 
@@ -489,13 +494,16 @@ Errors:
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
   - category_id (string, required): Category UUID.
-  - budgeted (int, required): New budgeted amount in milliunits (dollars × 1000).
+  - budgeted_decimal (number, preferred): New funding amount in decimal currency units.
+  - budgeted_milliunits (int, alternative): Explicit raw YNAB milliunits.
+  - budgeted (int, deprecated): Backward-compatible alias for budgeted_milliunits.
   - dry_run (boolean, optional): Preview without saving. Default: false.
 
 Returns: updated category with new budgeted, activity, balance.
 
 Examples:
-  - Budget $100: set budgeted=100000 (milliunits)
+  - Budget $100: set budgeted_decimal=100.00
+  - Already-converted data: set budgeted_milliunits=100000
   - Dry run: set dry_run=true
 
 Errors:
@@ -505,6 +513,7 @@ Errors:
 		handler: adaptWrite(handleUpdateCategory),
 		defaultArgumentResolver: budgetResolver<UpdateCategoryParams>(),
 		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
 				title: "YNAB: Update Category Budget",

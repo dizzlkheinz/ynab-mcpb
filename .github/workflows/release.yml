@@ -56,7 +56,7 @@ jobs:
       - name: Set build environment
         run: echo "YNAB_ACCESS_TOKEN=${YNAB_ACCESS_TOKEN}" >> $GITHUB_ENV
 
-      - name: Build (format + lint + bundle)
+      - name: Build (verification lint + bundle)
         run: npm run build:prod
         env:
           # Prefer secret if configured; otherwise use the job-level default above

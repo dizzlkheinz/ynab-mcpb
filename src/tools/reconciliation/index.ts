@@ -647,6 +647,7 @@ Examples:
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof ReconcileAccountSchema>>(),
 		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
 				title: "YNAB: Reconcile Account",

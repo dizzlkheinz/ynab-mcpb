@@ -131,6 +131,90 @@ describe("prompts module", () => {
 								},
 							],
 						},
+						{
+							name: "weekly-budget-review",
+							description:
+								"Review deterministic spending and budget status for a week",
+							arguments: [
+								{
+									name: "since_date",
+									description: "Inclusive start date (YYYY-MM-DD)",
+									required: true,
+								},
+								{
+									name: "until_date",
+									description: "Inclusive end date (YYYY-MM-DD)",
+									required: true,
+								},
+							],
+						},
+						{
+							name: "uncategorized-transaction-review",
+							description:
+								"Find and review uncategorized transactions without guessing categories",
+							arguments: [
+								{
+									name: "since_date",
+									description: "Inclusive start date (YYYY-MM-DD)",
+									required: true,
+								},
+								{
+									name: "until_date",
+									description: "Inclusive end date (YYYY-MM-DD)",
+									required: true,
+								},
+							],
+						},
+						{
+							name: "month-end-close",
+							description: "Run a read-first month-end budget close checklist",
+							arguments: [
+								{
+									name: "month",
+									description: "Month to close (YYYY-MM)",
+									required: true,
+								},
+							],
+						},
+						{
+							name: "spending-period-comparison",
+							description:
+								"Compare two periods using server-calculated spending totals",
+							arguments: [
+								{
+									name: "period_a_since",
+									description: "Period A start (YYYY-MM-DD)",
+									required: true,
+								},
+								{
+									name: "period_a_until",
+									description: "Period A end (YYYY-MM-DD)",
+									required: true,
+								},
+								{
+									name: "period_b_since",
+									description: "Period B start (YYYY-MM-DD)",
+									required: true,
+								},
+								{
+									name: "period_b_until",
+									description: "Period B end (YYYY-MM-DD)",
+									required: true,
+								},
+							],
+						},
+						{
+							name: "scheduled-cash-flow-review",
+							description:
+								"Review scheduled inflows and outflows without claiming a forecast model",
+							arguments: [
+								{
+									name: "until_date",
+									description: "Review horizon end (YYYY-MM-DD)",
+									required: true,
+								},
+							],
+						},
 					],
 				});
 			});
@@ -227,10 +311,8 @@ describe("prompts module", () => {
 						"List accounts for that budget to find the account ID",
 					);
 					expect(text).toContain("list categories to find the category ID");
-					expect(text).toContain(
-						"Create the transaction with the correct amount in milliunits",
-					);
-					expect(text).toContain("multiply by 1000");
+					expect(text).toContain("using amount_decimal");
+					expect(text).toContain("single-use confirmation_token");
 				});
 			});
 
@@ -401,6 +483,36 @@ describe("prompts module", () => {
 			});
 
 			describe("edge cases", () => {
+				it("uses reconcile placeholders when arguments are omitted", async () => {
+					const result = await promptManager.getPrompt(
+						"reconcile-account",
+						undefined,
+					);
+					expect(result.messages[0].content.text).toContain(
+						"first available budget",
+					);
+					expect(result.messages[0].content.text).toContain(
+						"No CSV data provided",
+					);
+				});
+
+				it("keeps analytics and cash-flow prompts honest about server calculations", async () => {
+					const comparison = await promptManager.getPrompt(
+						"spending-period-comparison",
+						{},
+					);
+					const cashFlow = await promptManager.getPrompt(
+						"scheduled-cash-flow-review",
+						{},
+					);
+					expect(comparison.messages[0].content.text).toContain(
+						"code-calculated totals",
+					);
+					expect(cashFlow.messages[0].content.text).toContain(
+						"schedule review—not a forecast",
+					);
+				});
+
 				it("should handle very long argument values", async () => {
 					const longValue = "a".repeat(1000);
 					const args = {
@@ -437,7 +549,13 @@ describe("prompts module", () => {
 					const prompts = [
 						"create-transaction",
 						"budget-summary",
+						"reconcile-account",
 						"account-balances",
+						"weekly-budget-review",
+						"uncategorized-transaction-review",
+						"month-end-close",
+						"spending-period-comparison",
+						"scheduled-cash-flow-review",
 					];
 
 					for (const promptName of prompts) {

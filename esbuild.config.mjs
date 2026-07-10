@@ -38,8 +38,8 @@ const buildOptions = {
 	treeShaking: true,
 	minify: isProduction,
 	sourcemap: !isProduction,
-	// Target modern Node.js (reduces polyfills)
-	target: "node18",
+	// Match the declared package and MCPB runtime floor.
+	target: "node20",
 	// Mark packages that Node.js will load at runtime as external
 	external: [],
 	banner: {

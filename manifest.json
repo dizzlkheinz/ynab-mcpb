@@ -1,11 +1,221 @@
 {
 	"manifest_version": "0.3",
 	"name": "ynab-mcp-server",
-	"version": "0.26.11",
-	"description": "Model Context Protocol server for YNAB (You Need A Budget) integration. Provides 28 tools for comprehensive budget management, including delta-optimized data fetching, bulk transaction operations, advanced reconciliation with recommendations, split transaction support, and diagnostic utilities.",
+	"display_name": "YNAB Workflow MCP Server",
+	"version": "0.27.0",
+	"description": "Local MCP server for safe YNAB workflows, reconciliation, receipt splitting, bulk cleanup, scheduled transactions, and spending analysis.",
+	"long_description": "A local-first Model Context Protocol server for YNAB. It supports bank-statement reconciliation, receipt splitting with proportional tax allocation, preview-protected bulk transaction cleanup, scheduled transaction management, and deterministic spending analytics. Read-only, preview, and explicitly enabled write modes let users choose their safety boundary without giving up the full workflow surface.",
 	"author": {
-		"name": "kdizzl"
+		"name": "dizzlkheinz",
+		"url": "https://github.com/dizzlkheinz"
 	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/dizzlkheinz/ynab-mcpb.git"
+	},
+	"homepage": "https://github.com/dizzlkheinz/ynab-mcpb#readme",
+	"documentation": "https://github.com/dizzlkheinz/ynab-mcpb/blob/master/docs/reference/API.md",
+	"support": "https://github.com/dizzlkheinz/ynab-mcpb/issues",
+	"keywords": [
+		"ynab",
+		"budget",
+		"personal-finance",
+		"reconciliation",
+		"receipts",
+		"spending-analysis",
+		"model-context-protocol"
+	],
+	"compatibility": {
+		"platforms": ["darwin", "win32", "linux"],
+		"runtimes": { "node": ">=20.0.0" }
+	},
+	"tools": [
+		{ "name": "ynab_list_budgets", "description": "List YNAB budgets." },
+		{ "name": "ynab_get_budget", "description": "Get budget details." },
+		{ "name": "ynab_list_accounts", "description": "List budget accounts." },
+		{ "name": "ynab_get_account", "description": "Get account details." },
+		{
+			"name": "ynab_create_account",
+			"description": "Create an account with write safety."
+		},
+		{
+			"name": "ynab_list_transactions",
+			"description": "List and filter transactions."
+		},
+		{
+			"name": "ynab_get_transaction",
+			"description": "Get transaction details."
+		},
+		{
+			"name": "ynab_export_transactions",
+			"description": "Export transactions to local disk."
+		},
+		{
+			"name": "ynab_compare_transactions",
+			"description": "Compare bank CSV and YNAB transactions."
+		},
+		{
+			"name": "ynab_create_transaction",
+			"description": "Create a transaction with write safety."
+		},
+		{
+			"name": "ynab_create_transactions",
+			"description": "Create a safe bulk transaction batch."
+		},
+		{
+			"name": "ynab_create_receipt_split_transaction",
+			"description": "Split a receipt and allocate tax."
+		},
+		{
+			"name": "ynab_update_transaction",
+			"description": "Update a transaction with write safety."
+		},
+		{
+			"name": "ynab_update_transactions",
+			"description": "Update transactions in a safe bulk batch."
+		},
+		{
+			"name": "ynab_delete_transaction",
+			"description": "Delete a transaction with confirmation."
+		},
+		{
+			"name": "ynab_list_categories",
+			"description": "List budget categories."
+		},
+		{ "name": "ynab_get_category", "description": "Get category details." },
+		{
+			"name": "ynab_update_category",
+			"description": "Update category funding with write safety."
+		},
+		{ "name": "ynab_list_payees", "description": "List payees." },
+		{ "name": "ynab_get_payee", "description": "Get payee details." },
+		{ "name": "ynab_list_months", "description": "List budget months." },
+		{ "name": "ynab_get_month", "description": "Get monthly budget data." },
+		{
+			"name": "ynab_get_user",
+			"description": "Get the authenticated YNAB user."
+		},
+		{
+			"name": "ynab_set_default_budget",
+			"description": "Set the local default budget."
+		},
+		{
+			"name": "ynab_get_default_budget",
+			"description": "Get the local default budget."
+		},
+		{
+			"name": "ynab_diagnostic_info",
+			"description": "Inspect local server diagnostics."
+		},
+		{ "name": "ynab_clear_cache", "description": "Clear local caches." },
+		{
+			"name": "ynab_reconcile_account",
+			"description": "Reconcile an account from a bank statement."
+		},
+		{
+			"name": "ynab_list_scheduled_transactions",
+			"description": "List scheduled transactions."
+		},
+		{
+			"name": "ynab_get_scheduled_transaction",
+			"description": "Get a scheduled transaction."
+		},
+		{
+			"name": "ynab_create_scheduled_transaction",
+			"description": "Create a scheduled transaction safely."
+		},
+		{
+			"name": "ynab_update_scheduled_transaction",
+			"description": "Update a scheduled transaction safely."
+		},
+		{
+			"name": "ynab_delete_scheduled_transaction",
+			"description": "Delete a scheduled transaction safely."
+		},
+		{
+			"name": "ynab_analyze_spending",
+			"description": "Calculate deterministic spending totals."
+		},
+		{
+			"name": "ynab_compare_spending_periods",
+			"description": "Compare two spending periods in code."
+		}
+	],
+	"tools_generated": false,
+	"prompts": [
+		{
+			"name": "create-transaction",
+			"description": "Create a transaction safely.",
+			"arguments": [
+				"budget_name",
+				"account_name",
+				"amount",
+				"payee",
+				"category",
+				"memo"
+			],
+			"text": "Create a transaction for ${arguments.payee} using amount_decimal and follow the configured write mode."
+		},
+		{
+			"name": "budget-summary",
+			"description": "Summarize a budget month.",
+			"arguments": ["budget_name", "month"],
+			"text": "Summarize ${arguments.budget_name} for ${arguments.month} using YNAB tools."
+		},
+		{
+			"name": "reconcile-account",
+			"description": "Reconcile an account with a bank statement.",
+			"arguments": [
+				"budget_name",
+				"account_name",
+				"statement_balance",
+				"csv_data"
+			],
+			"text": "Reconcile ${arguments.account_name} using a preview-first workflow."
+		},
+		{
+			"name": "account-balances",
+			"description": "Review account balances.",
+			"arguments": ["budget_name", "account_type"],
+			"text": "Review ${arguments.account_type} balances in ${arguments.budget_name}."
+		},
+		{
+			"name": "weekly-budget-review",
+			"description": "Review a budget week.",
+			"arguments": ["since_date", "until_date"],
+			"text": "Review exact spending from ${arguments.since_date} through ${arguments.until_date}."
+		},
+		{
+			"name": "uncategorized-transaction-review",
+			"description": "Review uncategorized transactions.",
+			"arguments": ["since_date", "until_date"],
+			"text": "Review uncategorized transactions from ${arguments.since_date} through ${arguments.until_date}."
+		},
+		{
+			"name": "month-end-close",
+			"description": "Prepare a month-end close checklist.",
+			"arguments": ["month"],
+			"text": "Prepare a read-first close checklist for ${arguments.month}."
+		},
+		{
+			"name": "spending-period-comparison",
+			"description": "Compare two spending periods.",
+			"arguments": [
+				"period_a_since",
+				"period_a_until",
+				"period_b_since",
+				"period_b_until"
+			],
+			"text": "Use server-calculated totals to compare the two supplied periods."
+		},
+		{
+			"name": "scheduled-cash-flow-review",
+			"description": "Review scheduled cash flow.",
+			"arguments": ["until_date"],
+			"text": "Review scheduled inflows and outflows through ${arguments.until_date} without presenting them as a forecast."
+		}
+	],
+	"prompts_generated": false,
 	"user_config": {
 		"YNAB_ACCESS_TOKEN": {
 			"type": "string",
@@ -20,6 +230,20 @@
 			"description": "Directory where exported transaction files will be saved. Leave empty for platform default: Windows/Mac use Downloads, Linux/Unix use Documents. Examples: ~/Desktop, C:\\Users\\YourName\\Documents, /home/user/exports",
 			"required": false,
 			"default": ""
+		},
+		"YNAB_MCP_WRITE_MODE": {
+			"type": "string",
+			"title": "YNAB Write Mode",
+			"description": "read-only hides YNAB mutations; preview requires a short-lived confirmation token; enabled allows direct writes.",
+			"required": false,
+			"default": "preview"
+		},
+		"YNAB_MCP_TOOL_PROFILE": {
+			"type": "string",
+			"title": "Tool Profile",
+			"description": "core exposes common workflows, read-only exposes all read tools, and full exposes every available tool.",
+			"required": false,
+			"default": "full"
 		}
 	},
 	"server": {
@@ -30,7 +254,9 @@
 			"args": ["${__dirname}/dist/bundle/index.cjs"],
 			"env": {
 				"YNAB_ACCESS_TOKEN": "${user_config.YNAB_ACCESS_TOKEN}",
-				"YNAB_EXPORT_PATH": "${user_config.YNAB_EXPORT_PATH}"
+				"YNAB_EXPORT_PATH": "${user_config.YNAB_EXPORT_PATH}",
+				"YNAB_MCP_WRITE_MODE": "${user_config.YNAB_MCP_WRITE_MODE}",
+				"YNAB_MCP_TOOL_PROFILE": "${user_config.YNAB_MCP_TOOL_PROFILE}"
 			}
 		}
 	},

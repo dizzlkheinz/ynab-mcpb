@@ -141,7 +141,7 @@ export function isErrorResult(result: CallToolResult): boolean {
 	}
 
 	const content = result.content[0];
-	if (!content || content.type !== "text") {
+	if (content?.type !== "text") {
 		return false;
 	}
 
@@ -164,7 +164,7 @@ export function getErrorMessage(result: CallToolResult): string {
 	}
 
 	const content = result.content[0];
-	if (!content || content.type !== "text") {
+	if (content?.type !== "text") {
 		return "";
 	}
 
@@ -221,7 +221,7 @@ export function getErrorMessage(result: CallToolResult): string {
 export function parseToolResult<T = any>(result: CallToolResult): T {
 	validateToolResult(result);
 	const content = result.content[0];
-	if (!content || content.type !== "text") {
+	if (content?.type !== "text") {
 		throw new Error("No text content in tool result");
 	}
 
@@ -313,7 +313,7 @@ export function validateOutputSchema(
 	let parsedData: unknown;
 	try {
 		const textContent = result.content.find((c) => c.type === "text");
-		if (!textContent || textContent.type !== "text") {
+		if (textContent?.type !== "text") {
 			return {
 				valid: false,
 				hasSchema: true,

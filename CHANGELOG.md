@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-07-10
+
+### Added
+
+- Centralized `read-only`, `preview`, and `enabled` write-safety modes with short-lived, single-use confirmations bound to validated mutation requests
+- Static `core`, `read-only`, and `full` MCP tool profiles
+- Scheduled transaction list/get/create/update/delete tools with delta caching and invalidation
+- Deterministic spending analysis and period-comparison tools, plus five workflow prompts
+
+### Changed
+
+- Decimal currency inputs now use explicit `amount_decimal` and `budgeted_decimal` fields; raw values use `amount_milliunits` and `budgeted_milliunits`, with legacy integer aliases retained as deprecated compatibility paths
+- The conservative default write behavior is now preview-first; set `YNAB_MCP_WRITE_MODE=enabled` to retain direct writes
+- Build, publishing, MCPB metadata, documentation, and runtime metadata are generated or validated consistently from committed source
+
+### Fixed
+
+- Vitest 4 global coverage thresholds are now enforced correctly
+- TD bank exports using a `CAD$` amount header are parsed correctly
+- Scheduled transaction updates preserve explicit nulls when clearing optional fields
+
 ## [0.26.11] - 2026-07-09
 
 ### Changed
