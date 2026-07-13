@@ -23,19 +23,21 @@ import {
 	validateOutputSchema,
 } from "./testUtils.js";
 
-const runE2ETests = process.env.SKIP_E2E_TESTS !== "true";
-const describeE2E = runE2ETests ? describe : describe.skip;
+const initialTestConfig = getTestConfig();
+const describeE2E = initialTestConfig.liveTestsEnabled
+	? describe
+	: describe.skip;
 
 describeE2E("YNAB MCP Server - Smoke Tests", () => {
 	let server: YNABMCPServer;
-	let testConfig: ReturnType<typeof getTestConfig>;
+	let testConfig = initialTestConfig;
 
 	beforeAll(async () => {
 		testConfig = getTestConfig();
 
 		if (testConfig.skipE2ETests) {
 			console.warn(
-				"Skipping E2E smoke tests - no real API key or SKIP_E2E_TESTS=true",
+				"Skipping E2E smoke tests - set RUN_LIVE_YNAB_TESTS=true with a real token and leave SKIP_E2E_TESTS disabled",
 			);
 			return;
 		}
@@ -49,7 +51,7 @@ describeE2E("YNAB MCP Server - Smoke Tests", () => {
 		const result = await executeToolCall(server, "ynab:get_user");
 
 		// Validate output schema
-		const validation = validateOutputSchema(server, "get_user", result);
+		const validation = validateOutputSchema(server, "ynab_get_user", result);
 		expect(validation.valid).toBe(true);
 
 		const data = parseToolResult(result);
@@ -63,7 +65,11 @@ describeE2E("YNAB MCP Server - Smoke Tests", () => {
 		const result = await executeToolCall(server, "ynab:list_budgets");
 
 		// Validate output schema
-		const validation = validateOutputSchema(server, "list_budgets", result);
+		const validation = validateOutputSchema(
+			server,
+			"ynab_list_budgets",
+			result,
+		);
 		expect(validation.valid).toBe(true);
 
 		const data = parseToolResult(result);

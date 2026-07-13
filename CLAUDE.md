@@ -28,7 +28,8 @@ npm run test:unit                  # Unit tests only (fast, mocked dependencies)
 npm run test:integration           # Integration tests (core only)
 npm run test:integration:core      # Core integration tests
 npm run test:integration:domain    # Domain-specific integration tests
-npm run test:integration:full      # Full integration test suite (throttled)
+npm run test:integration:full      # Full mocked integration suite (never contacts YNAB)
+npm run test:integration:live      # Read-only live smoke (requires explicit opt-in)
 npm run test:integration:budgets   # Budget-specific integration tests
 npm run test:integration:accounts  # Account-specific integration tests
 npm run test:integration:transactions  # Transaction-specific integration tests
@@ -37,7 +38,7 @@ npm run test:integration:payees    # Payee-specific integration tests
 npm run test:integration:months    # Month-specific integration tests
 npm run test:integration:delta     # Delta caching integration tests
 npm run test:integration:reconciliation  # Reconciliation integration tests
-npm run test:e2e                   # End-to-end tests (requires real YNAB token)
+npm run test:e2e                   # E2E project; live tests require explicit opt-in
 npm run test:performance           # Performance and load tests
 npm run test:coverage              # Generate coverage report (requires 80% coverage)
 npm run test:watch                 # Watch mode for test development
@@ -565,7 +566,8 @@ Optional (Testing):
 
 - `TEST_BUDGET_ID` - Specific budget for E2E tests
 - `TEST_ACCOUNT_ID` - Specific account for E2E tests
-- `SKIP_E2E_TESTS` - Skip E2E tests if set
+- `RUN_LIVE_YNAB_TESTS=true` - Explicitly allow tests to contact the real YNAB API; a token alone never enables live tests
+- `SKIP_E2E_TESTS=true` - Force live/E2E tests off, overriding `RUN_LIVE_YNAB_TESTS`
 
 ## TypeScript Configuration
 

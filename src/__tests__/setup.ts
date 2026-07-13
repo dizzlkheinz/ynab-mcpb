@@ -6,40 +6,24 @@
 import "dotenv/config";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { cacheManager } from "../server/cacheManager.js";
+import {
+	getLiveTestGate,
+	MOCK_TEST_ACCESS_TOKEN,
+	normalizeAccessToken,
+} from "./testUtils.js";
 
-const normalizeAccessToken = (
-	token: string | undefined,
-): string | undefined => {
-	if (typeof token !== "string") {
-		return undefined;
-	}
-	const trimmed = token.trim();
-	if (!trimmed) {
-		return undefined;
-	}
-
-	const lowered = trimmed.toLowerCase();
-	if (lowered === "undefined" || lowered === "null") {
-		return undefined;
-	}
-
-	if (lowered === "your_ynab_personal_access_token_here") {
-		return undefined;
-	}
-
-	return trimmed;
-};
-
-// Skip E2E tests by default unless explicitly enabled
-const normalizedToken = normalizeAccessToken(process.env["YNAB_ACCESS_TOKEN"]);
-const hasAccessToken = !!normalizedToken;
-if (!process.env["SKIP_E2E_TESTS"]) {
-	process.env["SKIP_E2E_TESTS"] = hasAccessToken ? "false" : "true";
-}
-if (normalizedToken) {
-	process.env["YNAB_ACCESS_TOKEN"] = normalizedToken;
+// A stored token never enables external tests by itself. Unless all live-test
+// requirements are satisfied, hide the real token from the test process so a
+// misclassified test cannot accidentally contact YNAB.
+const liveTestGate = getLiveTestGate();
+if (liveTestGate.enabled) {
+	process.env["YNAB_ACCESS_TOKEN"] = normalizeAccessToken(
+		process.env["YNAB_ACCESS_TOKEN"],
+	);
+	process.env["SKIP_E2E_TESTS"] = "false";
 } else {
-	process.env["YNAB_ACCESS_TOKEN"] = "test-token-for-mocked-tests";
+	process.env["YNAB_ACCESS_TOKEN"] = MOCK_TEST_ACCESS_TOKEN;
+	process.env["SKIP_E2E_TESTS"] = "true";
 }
 
 // Set test environment variables immediately
@@ -122,7 +106,7 @@ const shouldRunDomain = (domain?: string): boolean => {
 beforeAll(async () => {
 	// Set default test token if not provided
 	if (!process.env["YNAB_ACCESS_TOKEN"]) {
-		process.env["YNAB_ACCESS_TOKEN"] = "test-token-for-mocked-tests";
+		process.env["YNAB_ACCESS_TOKEN"] = MOCK_TEST_ACCESS_TOKEN;
 	}
 
 	if (process.env["VERBOSE_TESTS"]) {
@@ -232,11 +216,7 @@ export class TestEnvironment {
 	 * Check if E2E tests should be skipped
 	 */
 	shouldSkipE2E(): boolean {
-		return (
-			process.env["SKIP_E2E_TESTS"] === "true" ||
-			!process.env["YNAB_ACCESS_TOKEN"] ||
-			this.isCI()
-		);
+		return !getLiveTestGate().enabled;
 	}
 
 	/**

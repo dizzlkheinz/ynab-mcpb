@@ -12,12 +12,15 @@ import type { YNABMCPServer } from "../server/YNABMCPServer.js";
  */
 export interface TestConfig {
 	hasRealApiKey: boolean;
+	liveTestsEnabled: boolean;
 	testBudgetId: string | undefined;
 	testAccountId: string | undefined;
 	skipE2ETests: boolean;
 }
 
-const normalizeAccessToken = (
+export const MOCK_TEST_ACCESS_TOKEN = "test-token-for-mocked-tests";
+
+export const normalizeAccessToken = (
 	token: string | undefined,
 ): string | undefined => {
 	if (typeof token !== "string") {
@@ -37,7 +40,7 @@ const normalizeAccessToken = (
 		return undefined;
 	}
 
-	if (trimmed === "test-token-for-mocked-tests") {
+	if (trimmed === MOCK_TEST_ACCESS_TOKEN) {
 		return undefined;
 	}
 
@@ -47,19 +50,49 @@ const normalizeAccessToken = (
 export const hasRealAccessToken = (token?: string): boolean =>
 	!!normalizeAccessToken(token);
 
+export interface LiveTestGate {
+	hasRealApiKey: boolean;
+	liveTestsRequested: boolean;
+	skipExplicitlyRequested: boolean;
+	enabled: boolean;
+}
+
+/**
+ * Resolve whether tests may contact the real YNAB API.
+ *
+ * A token alone is intentionally insufficient: live access requires the
+ * explicit RUN_LIVE_YNAB_TESTS=true opt-in and must not be disabled through
+ * SKIP_E2E_TESTS=true.
+ */
+export function getLiveTestGate(
+	env: NodeJS.ProcessEnv = process.env,
+): LiveTestGate {
+	const hasRealApiKey = hasRealAccessToken(env["YNAB_ACCESS_TOKEN"]);
+	const liveTestsRequested =
+		env["RUN_LIVE_YNAB_TESTS"]?.trim().toLowerCase() === "true";
+	const skipExplicitlyRequested =
+		env["SKIP_E2E_TESTS"]?.trim().toLowerCase() === "true";
+
+	return {
+		hasRealApiKey,
+		liveTestsRequested,
+		skipExplicitlyRequested,
+		enabled: hasRealApiKey && liveTestsRequested && !skipExplicitlyRequested,
+	};
+}
+
 /**
  * Get test configuration from environment
  */
 export function getTestConfig(): TestConfig {
-	const hasRealApiKey = hasRealAccessToken(process.env["YNAB_ACCESS_TOKEN"]);
-	const skipE2ETests =
-		process.env["SKIP_E2E_TESTS"] === "true" || !hasRealApiKey;
+	const liveGate = getLiveTestGate();
 
 	return {
-		hasRealApiKey,
+		hasRealApiKey: liveGate.hasRealApiKey,
+		liveTestsEnabled: liveGate.enabled,
 		testBudgetId: process.env["TEST_BUDGET_ID"],
 		testAccountId: process.env["TEST_ACCOUNT_ID"],
-		skipE2ETests,
+		skipE2ETests: !liveGate.enabled,
 	};
 }
 
@@ -67,8 +100,10 @@ export function getTestConfig(): TestConfig {
  * Create a test server instance
  */
 export async function createTestServer(): Promise<YNABMCPServer> {
-	if (!hasRealAccessToken(process.env["YNAB_ACCESS_TOKEN"])) {
-		throw new Error("YNAB_ACCESS_TOKEN is required for testing");
+	if (!getLiveTestGate().enabled) {
+		throw new Error(
+			"Live YNAB tests require RUN_LIVE_YNAB_TESTS=true, a real YNAB_ACCESS_TOKEN, and SKIP_E2E_TESTS not set to true",
+		);
 	}
 
 	const { YNABMCPServer } = await import("../server/YNABMCPServer.js");
@@ -103,6 +138,37 @@ export async function executeToolCall(
 		name: normalizedName,
 		accessToken,
 		arguments: args,
+	});
+}
+
+/**
+ * Execute a protected mutation through the server's default preview flow.
+ *
+ * The first call returns a short-lived, single-use confirmation token. The
+ * second call repeats the identical arguments with that token so the mutation
+ * is actually performed.
+ */
+export async function executeConfirmedToolCall(
+	server: YNABMCPServer,
+	toolName: string,
+	args: Record<string, any> = {},
+): Promise<CallToolResult> {
+	const preview = await executeToolCall(server, toolName, args);
+	const text = preview.content
+		.filter((item) => item.type === "text")
+		.map((item) => item.text)
+		.join("\n");
+	const match = text.match(/confirmation_token="([^"]+)"/);
+	const confirmationToken = match?.[1];
+	if (!confirmationToken) {
+		throw new Error(
+			`Preview for ${toolName} did not return a confirmation token`,
+		);
+	}
+
+	return await executeToolCall(server, toolName, {
+		...args,
+		confirmation_token: confirmationToken,
 	});
 }
 

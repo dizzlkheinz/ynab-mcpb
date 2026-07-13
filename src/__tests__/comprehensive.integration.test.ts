@@ -15,6 +15,7 @@ import {
 import { cacheManager } from "../server/cacheManager.js";
 import { YNABMCPServer } from "../server/YNABMCPServer.js";
 import {
+	executeConfirmedToolCall,
 	executeToolCall,
 	parseToolResult,
 	validateToolResult,
@@ -344,7 +345,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			mockYnabAPI.accounts.createAccount.mockResolvedValue(mockCreateResponse);
 
 			// Test account creation
-			const createResult = await executeToolCall(
+			const createResult = await executeConfirmedToolCall(
 				server,
 				"ynab:create_account",
 				{
@@ -492,7 +493,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 
 			// Test transaction creation
-			const createResult = await executeToolCall(
+			const createResult = await executeConfirmedToolCall(
 				server,
 				"ynab:create_transaction",
 				{
@@ -526,7 +527,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 
 			// Test transaction update
-			const updateResult = await executeToolCall(
+			const updateResult = await executeConfirmedToolCall(
 				server,
 				"ynab:update_transaction",
 				{
@@ -549,7 +550,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			});
 
 			// Test transaction deletion
-			const deleteResult = await executeToolCall(
+			const deleteResult = await executeConfirmedToolCall(
 				server,
 				"ynab:delete_transaction",
 				{
@@ -773,7 +774,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 
 			// Test category budget update
-			const updateResult = await executeToolCall(
+			const updateResult = await executeConfirmedToolCall(
 				server,
 				"ynab:update_category",
 				{
@@ -1054,7 +1055,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			expect(statsAfterRead.size).toBeGreaterThan(0);
 
 			// Create a new account (write operation)
-			await executeToolCall(server, "ynab:create_account", {
+			await executeConfirmedToolCall(server, "ynab:create_account", {
 				budget_id: budgetId,
 				name: "New Account",
 				type: "savings",
