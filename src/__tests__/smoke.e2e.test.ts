@@ -48,7 +48,9 @@ describeE2E("YNAB MCP Server - Smoke Tests", () => {
 	it("should authenticate and retrieve user information", async () => {
 		if (testConfig.skipE2ETests) return;
 
-		const result = await executeToolCall(server, "ynab:get_user");
+		const result = await executeToolCall(server, "ynab:get_user", {
+			response_format: "json",
+		});
 
 		// Validate output schema
 		const validation = validateOutputSchema(server, "ynab_get_user", result);
@@ -62,7 +64,9 @@ describeE2E("YNAB MCP Server - Smoke Tests", () => {
 	it("should list budgets", async () => {
 		if (testConfig.skipE2ETests) return;
 
-		const result = await executeToolCall(server, "ynab:list_budgets");
+		const result = await executeToolCall(server, "ynab:list_budgets", {
+			response_format: "json",
+		});
 
 		// Validate output schema
 		const validation = validateOutputSchema(
