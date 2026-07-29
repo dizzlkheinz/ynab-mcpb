@@ -12,13 +12,12 @@ describe("amountUtils", () => {
 		expect(milliunitsToAmount(1234.6)).toBe(1.235);
 	});
 
-	it.each([
-		Number.NaN,
-		Number.POSITIVE_INFINITY,
-		Number.NEGATIVE_INFINITY,
-	])("rejects non-finite amount %s", (amount) => {
-		expect(() => amountToMilliunits(amount)).toThrow("not a finite number");
-	});
+	it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+		"rejects non-finite amount %s",
+		(amount) => {
+			expect(() => amountToMilliunits(amount)).toThrow("not a finite number");
+		},
+	);
 
 	it("formats with default and explicit currency symbols", () => {
 		expect(formatAmount(1234)).toBe("$1.23");

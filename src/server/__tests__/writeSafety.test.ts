@@ -248,25 +248,25 @@ describe("ToolRegistry write safety enforcement", () => {
 		expect(handler).toHaveBeenCalledTimes(1);
 	});
 
-	it.each([
-		"ynab_create_transactions",
-		"ynab_delete_transaction",
-	])("forces dry-run preview for protected bulk/deletion tool %s", async (name) => {
-		const registry = new ToolRegistry(
-			createDependencies(new WriteSafetyPolicy({ mode: "preview" })),
-		);
-		const handler = registerMutation(registry, name);
-		await registry.executeTool({
-			name,
-			accessToken: "token",
-			arguments: { id: "target" },
-		});
-		expect(handler).toHaveBeenCalledWith(
-			expect.objectContaining({
-				input: expect.objectContaining({ dry_run: true }),
-			}),
-		);
-	});
+	it.each(["ynab_create_transactions", "ynab_delete_transaction"])(
+		"forces dry-run preview for protected bulk/deletion tool %s",
+		async (name) => {
+			const registry = new ToolRegistry(
+				createDependencies(new WriteSafetyPolicy({ mode: "preview" })),
+			);
+			const handler = registerMutation(registry, name);
+			await registry.executeTool({
+				name,
+				accessToken: "token",
+				arguments: { id: "target" },
+			});
+			expect(handler).toHaveBeenCalledWith(
+				expect.objectContaining({
+					input: expect.objectContaining({ dry_run: true }),
+				}),
+			);
+		},
+	);
 
 	it("rejects protected registrations that cannot preview", () => {
 		const registry = new ToolRegistry(
