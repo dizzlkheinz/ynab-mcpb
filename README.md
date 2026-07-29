@@ -7,7 +7,7 @@
 [![Download MCPB](https://img.shields.io/badge/Download-MCPB-2563EB?style=for-the-badge&logo=github&logoColor=white)](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
 [![npm](https://img.shields.io/npm/v/@dizzlkheinz/ynab-mcpb.svg?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@dizzlkheinz/ynab-mcpb)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue?style=for-the-badge)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-24%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 
 </div>
 
