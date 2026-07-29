@@ -92,10 +92,13 @@ describe("YNABMCPServer isolated behavior", () => {
 		[new Error("network unavailable"), "network unavailable"],
 		[new Error(""), "Token validation failed"],
 		[42, "Token validation failed: 42"],
-	] as const)("classifies token validation failure %#", async (error, message) => {
-		vi.spyOn(server.getYNABAPI().user, "getUser").mockRejectedValue(error);
-		await expect(server.validateToken()).rejects.toThrow(message);
-	});
+	] as const)(
+		"classifies token validation failure %#",
+		async (error, message) => {
+			vi.spyOn(server.getYNABAPI().user, "getUser").mockRejectedValue(error);
+			await expect(server.validateToken()).rejects.toThrow(message);
+		},
+	);
 
 	it("returns true for a valid token", async () => {
 		vi.spyOn(server.getYNABAPI().user, "getUser").mockResolvedValue({

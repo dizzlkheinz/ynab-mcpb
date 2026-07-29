@@ -49,13 +49,16 @@ describe("ErrorHandler high-risk branches", () => {
 		["transaction lookup", "transaction"],
 		["payee lookup", "payee"],
 		["resource lookup", "find"],
-	] as const)("uses a contextual not-found response for %s", (context, expected) => {
-		const parsed = parse(
-			new YNABAPIError(YNABErrorCode.NOT_FOUND, "missing"),
-			context,
-		);
-		expect(parsed.error.userMessage.toLowerCase()).toContain(expected);
-	});
+	] as const)(
+		"uses a contextual not-found response for %s",
+		(context, expected) => {
+			const parsed = parse(
+				new YNABAPIError(YNABErrorCode.NOT_FOUND, "missing"),
+				context,
+			);
+			expect(parsed.error.userMessage.toLowerCase()).toContain(expected);
+		},
+	);
 
 	it.each([
 		"listing accounts",
@@ -96,13 +99,16 @@ describe("ErrorHandler high-risk branches", () => {
 		[{ status: 418 }, "UNKNOWN_ERROR"],
 		[{ status: 0 }, "UNKNOWN_ERROR"],
 		[{ status: "401" }, "UNKNOWN_ERROR"],
-	] as const)("extracts supported HTTP status shapes", (error, expectedCode) => {
-		const parsed = parse(error, "requesting data");
-		expect(parsed.error.code).toBe(expectedCode);
-		if (parsed.error.details) {
-			expect(parsed.error.details).not.toContain("secret");
-		}
-	});
+	] as const)(
+		"extracts supported HTTP status shapes",
+		(error, expectedCode) => {
+			const parsed = parse(error, "requesting data");
+			expect(parsed.error.code).toBe(expectedCode);
+			if (parsed.error.details) {
+				expect(parsed.error.details).not.toContain("secret");
+			}
+		},
+	);
 
 	it.each([
 		[{ error: { id: "401", detail: "token=secret" } }, 401],

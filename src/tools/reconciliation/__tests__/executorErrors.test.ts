@@ -64,11 +64,12 @@ describe("reconciliation executor error normalization", () => {
 		});
 	});
 
-	it.each([
-		400, 401, 403, 404, 429, 500, 503,
-	])("propagates fatal HTTP status %s", (status) => {
-		expect(shouldPropagateYnabError({ status, message: "fatal" })).toBe(true);
-	});
+	it.each([400, 401, 403, 404, 429, 500, 503])(
+		"propagates fatal HTTP status %s",
+		(status) => {
+			expect(shouldPropagateYnabError({ status, message: "fatal" })).toBe(true);
+		},
+	);
 
 	it("does not propagate nonfatal or absent statuses", () => {
 		expect(shouldPropagateYnabError({ status: 409, message: "conflict" })).toBe(

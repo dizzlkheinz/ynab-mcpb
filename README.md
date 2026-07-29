@@ -256,7 +256,7 @@ Profiles are selected once at server startup, so clients receive a stable `tools
 
 | Symptom | Fix |
 |---|---|
-| `npx` fails | Install Node.js 20+, then restart your MCP client. |
+| `npx` fails | Install Node.js 24+, then restart your MCP client. |
 | Auth errors | Regenerate your YNAB token and update `YNAB_ACCESS_TOKEN`. |
 | Tools not detected | Restart the MCP client after any config change. |
 | Reconciliation issues | [Open an issue](https://github.com/dizzlkheinz/ynab-mcpb/issues) with an anonymized CSV sample. |
