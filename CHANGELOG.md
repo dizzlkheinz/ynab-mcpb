@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-07-29
+
+### Changed
+
+- Raised the minimum supported Node.js runtime from 20 to 24 and aligned CI, MCPB metadata, documentation, and Node.js types with Node 24
+- Updated the MCP SDK, natural-language date parser, Biome, tsx, and vulnerable transitive dependencies
+- Split integration testing into a fully mocked suite that never contacts YNAB and a separately gated, read-only live smoke suite
+
+### Fixed
+
+- Live smoke tests now request JSON responses before validating response schemas
+- Release packaging now excludes local Graphify and temporary analysis artifacts
+
+### Security
+
+- Resolved all six previously reported npm audit advisories, including three high-severity advisories
+
 ## [0.27.1] - 2026-07-10
 
 ### Fixed

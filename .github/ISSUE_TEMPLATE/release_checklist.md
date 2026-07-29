@@ -16,7 +16,7 @@ labels: release
 - [ ] Changelog entry prepared (Added/Changed/Fixed/Removed)
 - [ ] Tests and lint pass
 - [ ] Built with `npm run package:mcpb`
-- [ ] Manual sanity check in Claude Desktop (`get_env_status`, basic tool calls)
+- [ ] Manual sanity check in Claude Desktop (`ynab_diagnostic_info`, basic tool calls)
 
 ## Publish
 

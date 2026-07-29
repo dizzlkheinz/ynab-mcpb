@@ -125,6 +125,8 @@ coverage/
 # Temporary files
 tmp/
 temp/
+.tmp/
+graphify-out/
 
 # API keys and sensitive data
 api_key.txt

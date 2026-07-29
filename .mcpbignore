@@ -42,6 +42,7 @@ accountactivity-merged.csv
 # Temporary and development files
 temp/
 tmp/
+graphify-out/
 fix-types.sh
 NUL
 package-lock.json
