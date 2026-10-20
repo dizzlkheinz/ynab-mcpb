@@ -2,11 +2,11 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { DeltaCache } from "../server/deltaCache.js";
-import { handleToolError, type ErrorHandler } from "../server/errorHandler.js";
+import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
-import { milliunitsToAmount } from "../utils/amountUtils.js";
+import { milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
 	createBudgetResolver,

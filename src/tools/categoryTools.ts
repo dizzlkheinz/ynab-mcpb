@@ -18,7 +18,7 @@ import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
-import { milliunitsToAmount } from "../utils/amountUtils.js";
+import { milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
 	createBudgetResolver,
@@ -30,16 +30,16 @@ import {
 	resolveDeltaWriteArgs,
 } from "./deltaSupport.js";
 import {
+	budgetedInputShape,
+	normalizeRequiredBudgeted,
+	validateRequiredBudgeted,
+} from "./schemas/monetaryInput.js";
+import {
 	GetCategoryOutputSchema,
 	ListCategoriesOutputSchema,
 	UpdateCategoryOutputSchema,
 } from "./schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
-import {
-	budgetedInputShape,
-	normalizeRequiredBudgeted,
-	validateRequiredBudgeted,
-} from "./schemas/monetaryInput.js";
 
 /**
  * Schema for ynab:list_categories tool parameters

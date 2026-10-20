@@ -1,4 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { ValidationError } from "../utils/errors.js";
+
+export { ValidationError };
 
 /**
  * Response formatter contract for dependency injection in error handling
@@ -59,22 +62,6 @@ export class YNABAPIError extends Error {
 	// Expose status as an alias for code for backward compatibility with tests
 	get status(): YNABErrorCode {
 		return this.code;
-	}
-}
-
-export class ValidationError extends Error {
-	public readonly details?: string | undefined;
-	public readonly suggestions?: string[] | undefined;
-
-	constructor(
-		message: string,
-		details?: string | undefined,
-		suggestions?: string[] | undefined,
-	) {
-		super(message);
-		this.name = "ValidationError";
-		this.details = details;
-		this.suggestions = suggestions;
 	}
 }
 

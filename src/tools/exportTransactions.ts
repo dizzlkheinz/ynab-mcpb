@@ -8,7 +8,7 @@ import { z } from "zod/v4";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { ValidationError, withToolErrorHandling } from "../types/index.js";
-import { milliunitsToAmount } from "../utils/amountUtils.js";
+import { milliunitsToAmount } from "../utils/money.js";
 import { requireResolvedBudgetId } from "./adapters.js";
 
 /**

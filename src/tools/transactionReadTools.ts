@@ -16,7 +16,7 @@ import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolContext } from "../types/toolRegistration.js";
-import { milliunitsToAmount } from "../utils/amountUtils.js";
+import { milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
 	createBudgetResolver,

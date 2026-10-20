@@ -18,10 +18,7 @@ import { responseFormatter } from "../server/responseFormatter.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
-import {
-	amountToMilliunits,
-	milliunitsToAmount,
-} from "../utils/amountUtils.js";
+import { amountToMilliunits, milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
 	createBudgetResolver,
