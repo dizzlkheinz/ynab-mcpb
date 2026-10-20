@@ -2,7 +2,7 @@ import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
 import { toJSONSchema, z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import type { MCPToolAnnotations } from "../types/toolAnnotations.js";
-import { toolBelongsToProfile, type ToolProfile } from "./toolProfiles.js";
+import { type ToolProfile, toolBelongsToProfile } from "./toolProfiles.js";
 import type { WriteSafetyPolicy } from "./writeSafety.js";
 
 export type SecurityWrapperFactory = <T extends Record<string, unknown>>(
