@@ -6,7 +6,7 @@ run was not successful, so `npm test` fails correctly.
 
 */
 
-const fs = require("node:fs");
+import fs from "node:fs";
 
 try {
 	const raw = fs.readFileSync("test-results.json", "utf-8");
@@ -18,7 +18,7 @@ try {
 		process.exit(1);
 	}
 	console.log(
-		`Tests passed: ${results.quickStats.testCount ?? "unknown count"} tests.`,
+		`Tests passed: ${results.quickStats.passed ?? "unknown count"}/${results.quickStats.total ?? "?"} tests.`,
 	);
 } catch (e) {
 	console.warn("Could not read test results:", e.message);
