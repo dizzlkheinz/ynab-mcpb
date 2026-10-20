@@ -71,11 +71,15 @@ describeIntegration("Delta-backed payee tool handler", () => {
 			budget_id: testBudgetId,
 			response_format: "json" as const,
 		};
-		const firstCall = await handleListPayees(ynabAPI, deltaFetcher, params);
+		const firstCall = await handleListPayees(ynabAPI, params, {
+			deltaFetcher: deltaFetcher,
+		});
 		const firstPayload = parseResponse(firstCall);
 		expect(firstPayload.cached).toBe(false);
 
-		const secondCall = await handleListPayees(ynabAPI, deltaFetcher, params);
+		const secondCall = await handleListPayees(ynabAPI, params, {
+			deltaFetcher: deltaFetcher,
+		});
 		const secondPayload = parseResponse(secondCall);
 		expectCacheHit(secondPayload);
 	});

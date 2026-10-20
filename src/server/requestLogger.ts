@@ -2,6 +2,8 @@
  * Request logging functionality that sanitizes sensitive data
  */
 
+import { getRuntimeConfig } from "./config.js";
+
 export interface LogEntry {
 	timestamp: Date;
 	toolName: string;
@@ -26,6 +28,21 @@ export interface LoggerConfig {
 /**
  * Request logger that sanitizes sensitive information
  */
+
+const LOG_LEVEL_ALIASES: Record<string, LoggerConfig["logLevel"]> = {
+	trace: "debug",
+	debug: "debug",
+	info: "info",
+	warn: "warn",
+	error: "error",
+	fatal: "error",
+};
+
+function defaultLogLevel(): LoggerConfig["logLevel"] {
+	const raw = getRuntimeConfig().LOG_LEVEL as string | undefined;
+	return LOG_LEVEL_ALIASES[raw ?? "info"] ?? "info";
+}
+
 export class RequestLogger {
 	private logs: LogEntry[] = [];
 	private config: LoggerConfig;
@@ -33,8 +50,7 @@ export class RequestLogger {
 	constructor(config: Partial<LoggerConfig> = {}) {
 		this.config = {
 			enabled: process.env["NODE_ENV"] !== "production",
-			logLevel:
-				(process.env["LOG_LEVEL"] as LoggerConfig["logLevel"]) || "info",
+			logLevel: config.logLevel ?? defaultLogLevel(),
 			maxLogEntries: 1000,
 			sanitizeParameters: true,
 			...config,

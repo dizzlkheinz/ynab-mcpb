@@ -126,7 +126,9 @@ describeIntegration("Reconciliation delta isolation", () => {
 			);
 			const txDeltaSpy = vi.spyOn(deltaFetcher, "fetchTransactionsByAccount");
 
-			await handleReconcileAccount(ynabAPI, deltaFetcher, params);
+			await handleReconcileAccount(ynabAPI, params, {
+				deltaFetcher: deltaFetcher,
+			});
 
 			expect(accountsFullSpy).toHaveBeenCalledWith(testBudgetId);
 			expect(txFullSpy).toHaveBeenCalledWith(

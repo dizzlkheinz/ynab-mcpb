@@ -338,10 +338,14 @@ describe("Month Tools", () => {
 				usedDelta: true,
 			});
 
-			const result = await handleListMonths(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListMonths(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
@@ -426,10 +430,14 @@ describe("Month Tools", () => {
 				wasCached: false,
 			});
 
-			const result = await handleListMonths(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListMonths(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0].type).toBe("text");
@@ -469,10 +477,14 @@ describe("Month Tools", () => {
 				new Error("401 Unauthorized"),
 			);
 
-			const result = await handleListMonths(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListMonths(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -487,10 +499,14 @@ describe("Month Tools", () => {
 				new Error("404 Not Found"),
 			);
 
-			const result = await handleListMonths(mockYnabAPI, fetcher, {
-				budget_id: "invalid-budget",
-				response_format: "json",
-			});
+			const result = await handleListMonths(
+				mockYnabAPI,
+				{
+					budget_id: "invalid-budget",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);

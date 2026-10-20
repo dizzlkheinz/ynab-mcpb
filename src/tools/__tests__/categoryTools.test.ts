@@ -115,10 +115,14 @@ describe("Category Tools", () => {
 				usedDelta: true,
 			});
 
-			const result = await handleListCategories(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListCategories(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
@@ -198,10 +202,14 @@ describe("Category Tools", () => {
 				wasCached: false,
 			});
 
-			const result = await handleListCategories(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListCategories(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.categories).toHaveLength(3);
@@ -240,10 +248,14 @@ describe("Category Tools", () => {
 				new Error("401 Unauthorized"),
 			);
 
-			const result = await handleListCategories(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListCategories(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.error.message).toBe(
@@ -257,10 +269,14 @@ describe("Category Tools", () => {
 				new Error("404 Not Found"),
 			);
 
-			const result = await handleListCategories(mockYnabAPI, fetcher, {
-				budget_id: "invalid-budget",
-				response_format: "json",
-			});
+			const result = await handleListCategories(
+				mockYnabAPI,
+				{
+					budget_id: "invalid-budget",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.error.message).toBe("Budget or category not found");

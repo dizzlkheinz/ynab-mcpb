@@ -71,7 +71,9 @@ describeIntegration("Delta-backed category tool handler", () => {
 			budget_id: testBudgetId,
 			response_format: "json" as const,
 		};
-		const firstCall = await handleListCategories(ynabAPI, deltaFetcher, params);
+		const firstCall = await handleListCategories(ynabAPI, params, {
+			deltaFetcher: deltaFetcher,
+		});
 		const firstPayload = parseResponse(firstCall);
 		expect(firstPayload.cached).toBe(false);
 

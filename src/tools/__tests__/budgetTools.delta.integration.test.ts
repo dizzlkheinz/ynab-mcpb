@@ -62,7 +62,9 @@ describeIntegration("Delta-backed budget tool handler", () => {
 	}, async (ctx) => {
 		await skipOnRateLimit(async () => {
 			const params = { response_format: "json" as const };
-			const firstCall = await handleListBudgets(ynabAPI, deltaFetcher, params);
+			const firstCall = await handleListBudgets(ynabAPI, params, {
+				deltaFetcher: deltaFetcher,
+			});
 			const firstPayload = parseResponse(firstCall);
 
 			// If response contains an error, throw it so skipOnRateLimit can catch it
@@ -72,7 +74,9 @@ describeIntegration("Delta-backed budget tool handler", () => {
 
 			expect(firstPayload.cached).toBe(false);
 
-			const secondCall = await handleListBudgets(ynabAPI, deltaFetcher, params);
+			const secondCall = await handleListBudgets(ynabAPI, params, {
+				deltaFetcher: deltaFetcher,
+			});
 			const secondPayload = parseResponse(secondCall);
 
 			// If response contains an error, throw it so skipOnRateLimit can catch it

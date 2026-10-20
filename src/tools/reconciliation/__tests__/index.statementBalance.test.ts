@@ -98,17 +98,21 @@ describe("handleReconcileAccount statement balance handling", () => {
 		} as unknown as ynab.API;
 		const deltaFetcher = new DeltaFetcher(ynabAPI, {} as any);
 
-		await handleReconcileAccount(ynabAPI, deltaFetcher, {
-			budget_id: "budget-1",
-			account_id: "credit-card",
-			csv_data: "Date,Description,Amount\n",
-			statement_balance: 10,
-			auto_create_transactions: false,
-			auto_update_cleared_status: false,
-			auto_unclear_missing: false,
-			auto_adjust_dates: false,
-			dry_run: true,
-		});
+		await handleReconcileAccount(
+			ynabAPI,
+			{
+				budget_id: "budget-1",
+				account_id: "credit-card",
+				csv_data: "Date,Description,Amount\n",
+				statement_balance: 10,
+				auto_create_transactions: false,
+				auto_update_cleared_status: false,
+				auto_unclear_missing: false,
+				auto_adjust_dates: false,
+				dry_run: true,
+			},
+			{ deltaFetcher: deltaFetcher },
+		);
 
 		expect(analyzerMocks.analyzeReconciliation).toHaveBeenCalled();
 		expect(analyzerMocks.analyzeReconciliation.mock.calls[0]?.[3]).toBe(10);

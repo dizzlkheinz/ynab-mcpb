@@ -8,6 +8,20 @@ import { describe, expect, it, vi } from "vitest";
 
 // Mock config before importing YNABMCPServer
 vi.mock("../config.js", () => ({
+	getRuntimeConfig: () => ({
+		LOG_LEVEL: "error",
+		RATE_LIMIT_LOGGING: false,
+		VERBOSE_TESTS: false,
+		YNAB_MCP_ENABLE_DELTA: undefined,
+		YNAB_EXPORT_PATH: undefined,
+		XDG_DOCUMENTS_DIR: undefined,
+	}),
+	getAppConfig: () => ({
+		LOG_LEVEL: "error",
+		RATE_LIMIT_LOGGING: false,
+		VERBOSE_TESTS: false,
+		YNAB_MCP_ENABLE_DELTA: undefined,
+	}),
 	loadConfig: () => ({
 		YNAB_ACCESS_TOKEN: "test-token-for-registration-tests",
 		YNAB_DEFAULT_BUDGET_ID: undefined,

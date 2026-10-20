@@ -101,13 +101,17 @@ describe("handleReconcileAccount", () => {
 
 		const deltaFetcher = new DeltaFetcher(ynabAPI, {} as any);
 
-		const result = await handleReconcileAccount(ynabAPI, deltaFetcher, {
-			budget_id: "budget-1",
-			account_id: "account-1",
-			csv_data: "Date,Description,Amount\n2025-01-01,Coffee,-10.00",
-			statement_balance: -10,
-			auto_unclear_missing: false,
-		});
+		const result = await handleReconcileAccount(
+			ynabAPI,
+			{
+				budget_id: "budget-1",
+				account_id: "account-1",
+				csv_data: "Date,Description,Amount\n2025-01-01,Coffee,-10.00",
+				statement_balance: -10,
+				auto_unclear_missing: false,
+			},
+			{ deltaFetcher: deltaFetcher },
+		);
 
 		const structured = (result.structuredContent as Record<string, unknown>)
 			.structured as Record<string, unknown>;

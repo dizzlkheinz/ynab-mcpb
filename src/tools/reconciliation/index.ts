@@ -23,8 +23,10 @@ import {
 	handleCompareTransactions,
 } from "../compareTransactions/index.js";
 import { resolveCsvPathCandidates } from "../csvFilePath.js";
-import type { DeltaFetcher } from "../deltaFetcher.js";
-import { resolveDeltaFetcherArgs } from "../deltaSupport.js";
+import {
+	type DeltaFetcherDeps,
+	resolveDeltaFetcherDeps,
+} from "../deltaSupport.js";
 import {
 	CompareTransactionsOutputSchema,
 	ReconcileAccountOutputSchema,
@@ -139,26 +141,12 @@ export type ReconcileAccountRequest = z.infer<typeof ReconcileAccountSchema>;
  */
 export async function handleReconcileAccount(
 	ynabAPI: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: ReconcileAccountRequest,
-	sendProgress?: ProgressCallback,
-): Promise<CallToolResult>;
-export async function handleReconcileAccount(
-	ynabAPI: ynab.API,
-	params: ReconcileAccountRequest,
-): Promise<CallToolResult>;
-export async function handleReconcileAccount(
-	ynabAPI: ynab.API,
-	deltaFetcherOrParams: DeltaFetcher | ReconcileAccountRequest,
-	maybeParams?: ReconcileAccountRequest,
+	deps?: DeltaFetcherDeps,
 	sendProgress?: ProgressCallback,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-		ynabAPI,
-		deltaFetcherOrParams,
-		maybeParams,
-	);
+	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);

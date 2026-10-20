@@ -66,10 +66,10 @@ describe("createAdapters", () => {
 
 		expect(handler).toHaveBeenCalledWith(
 			context.ynabAPI,
-			deltaFetcher,
 			{
 				a: 1,
 			},
+			{ deltaFetcher },
 			context.errorHandler,
 		);
 	});
@@ -86,11 +86,10 @@ describe("createAdapters", () => {
 
 		expect(handler).toHaveBeenCalledWith(
 			context.ynabAPI,
-			deltaCache,
-			serverKnowledgeStore,
 			{
 				a: 2,
 			},
+			{ deltaCache, serverKnowledgeStore },
 			context.errorHandler,
 		);
 	});

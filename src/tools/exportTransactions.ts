@@ -5,6 +5,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { format } from "date-fns";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import { getRuntimeConfig } from "../server/config.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { ValidationError, withToolErrorHandling } from "../types/index.js";
@@ -147,7 +148,7 @@ function getDefaultExportPath(): string {
 		case "aix":
 			// Linux/Unix: Documents folder (more common for data files)
 			// Try XDG_DOCUMENTS_DIR first, fallback to ~/Documents
-			return process.env["XDG_DOCUMENTS_DIR"] || join(home, "Documents");
+			return getRuntimeConfig().XDG_DOCUMENTS_DIR || join(home, "Documents");
 		default:
 			// Fallback for unknown platforms
 			return join(home, "Downloads");
@@ -158,7 +159,7 @@ function getDefaultExportPath(): string {
  * Get the export directory path, with platform-specific defaults
  */
 function getExportPath(): string {
-	const exportPath = process.env["YNAB_EXPORT_PATH"]?.trim();
+	const exportPath = getRuntimeConfig().YNAB_EXPORT_PATH?.trim();
 
 	let targetPath: string;
 

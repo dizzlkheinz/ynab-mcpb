@@ -63,12 +63,21 @@ export type Handler<TInput extends Record<string, unknown>> = (
 ) => Promise<CallToolResult>;
 
 /**
+ * Optional delta dependencies that handlers may receive from the adapter.
+ */
+export interface HandlerDeltaDeps {
+	deltaFetcher?: DeltaFetcher;
+	deltaCache?: DeltaCache;
+	serverKnowledgeStore?: ServerKnowledgeStore;
+}
+
+/**
  * Handler signature for operations that require delta fetching.
  */
 export type DeltaHandler<TInput extends Record<string, unknown>> = (
 	api: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: TInput,
+	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ) => Promise<CallToolResult>;
 
@@ -77,9 +86,8 @@ export type DeltaHandler<TInput extends Record<string, unknown>> = (
  */
 export type WriteHandler<TInput extends Record<string, unknown>> = (
 	api: ynab.API,
-	deltaCache: DeltaCache,
-	serverKnowledgeStore: ServerKnowledgeStore,
 	params: TInput,
+	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ) => Promise<CallToolResult>;
 

@@ -20,8 +20,10 @@ import {
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import type { DeltaFetcher } from "./deltaFetcher.js";
-import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
+import {
+	type DeltaFetcherDeps,
+	resolveDeltaFetcherDeps,
+} from "./deltaSupport.js";
 import {
 	GetPayeeOutputSchema,
 	ListPayeesOutputSchema,
@@ -67,24 +69,11 @@ export type GetPayeeParams = z.infer<typeof GetPayeeSchema>;
  */
 export async function handleListPayees(
 	ynabAPI: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: ListPayeesParams,
-): Promise<CallToolResult>;
-export async function handleListPayees(
-	ynabAPI: ynab.API,
-	params: ListPayeesParams,
-): Promise<CallToolResult>;
-export async function handleListPayees(
-	ynabAPI: ynab.API,
-	deltaFetcherOrParams: DeltaFetcher | ListPayeesParams,
-	maybeParams?: ListPayeesParams,
+	deps?: DeltaFetcherDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-		ynabAPI,
-		deltaFetcherOrParams,
-		maybeParams,
-	);
+	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);

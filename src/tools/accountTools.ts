@@ -7,7 +7,6 @@ import {
 	CacheManager,
 	cacheManager,
 } from "../server/cacheManager.js";
-import type { DeltaCache } from "../server/deltaCache.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import {
 	formatAccountDetail,
@@ -15,7 +14,6 @@ import {
 } from "../server/markdownFormatter.js";
 import { invalidateBudgetResourceCaches } from "../server/resourceCacheInvalidation.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
 import { amountToMilliunits, milliunitsToAmount } from "../utils/money.js";
@@ -24,10 +22,11 @@ import {
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import type { DeltaFetcher } from "./deltaFetcher.js";
 import {
-	resolveDeltaFetcherArgs,
-	resolveDeltaWriteArgs,
+	type DeltaFetcherDeps,
+	type DeltaWriteDeps,
+	resolveDeltaFetcherDeps,
+	resolveDeltaWriteDeps,
 } from "./deltaSupport.js";
 import {
 	CreateAccountOutputSchema,
@@ -98,24 +97,11 @@ export type CreateAccountParams = z.infer<typeof CreateAccountSchema>;
  */
 export async function handleListAccounts(
 	ynabAPI: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: ListAccountsParams,
-): Promise<CallToolResult>;
-export async function handleListAccounts(
-	ynabAPI: ynab.API,
-	params: ListAccountsParams,
-): Promise<CallToolResult>;
-export async function handleListAccounts(
-	ynabAPI: ynab.API,
-	deltaFetcherOrParams: DeltaFetcher | ListAccountsParams,
-	maybeParams?: ListAccountsParams,
+	deps?: DeltaFetcherDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-		ynabAPI,
-		deltaFetcherOrParams,
-		maybeParams,
-	);
+	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -251,26 +237,11 @@ export async function handleGetAccount(
  */
 export async function handleCreateAccount(
 	ynabAPI: ynab.API,
-	deltaCache: DeltaCache,
-	knowledgeStore: ServerKnowledgeStore,
 	params: CreateAccountParams,
-): Promise<CallToolResult>;
-export async function handleCreateAccount(
-	ynabAPI: ynab.API,
-	params: CreateAccountParams,
-): Promise<CallToolResult>;
-export async function handleCreateAccount(
-	ynabAPI: ynab.API,
-	deltaCacheOrParams: DeltaCache | CreateAccountParams,
-	knowledgeStoreOrParams?: ServerKnowledgeStore | CreateAccountParams,
-	maybeParams?: CreateAccountParams,
+	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, params } = resolveDeltaWriteArgs(
-		deltaCacheOrParams,
-		knowledgeStoreOrParams,
-		maybeParams,
-	);
+	const { deltaCache } = resolveDeltaWriteDeps(deps);
 	return await withToolErrorHandling(
 		async () => {
 			if (params.dry_run) {

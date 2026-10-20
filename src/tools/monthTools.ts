@@ -22,8 +22,10 @@ import {
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import type { DeltaFetcher } from "./deltaFetcher.js";
-import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
+import {
+	type DeltaFetcherDeps,
+	resolveDeltaFetcherDeps,
+} from "./deltaSupport.js";
 import {
 	GetMonthOutputSchema,
 	ListMonthsOutputSchema,
@@ -166,24 +168,11 @@ export async function handleGetMonth(
  */
 export async function handleListMonths(
 	ynabAPI: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: ListMonthsParams,
-): Promise<CallToolResult>;
-export async function handleListMonths(
-	ynabAPI: ynab.API,
-	params: ListMonthsParams,
-): Promise<CallToolResult>;
-export async function handleListMonths(
-	ynabAPI: ynab.API,
-	deltaFetcherOrParams: DeltaFetcher | ListMonthsParams,
-	maybeParams?: ListMonthsParams,
+	deps?: DeltaFetcherDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-		ynabAPI,
-		deltaFetcherOrParams,
-		maybeParams,
-	);
+	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);

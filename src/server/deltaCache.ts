@@ -1,4 +1,5 @@
 import type { CacheManager } from "./cacheManager.js";
+import { getRuntimeConfig } from "./config.js";
 import globalRequestLogger from "./requestLogger.js";
 import type { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
 
@@ -379,6 +380,6 @@ export class DeltaCache {
 	}
 
 	private isDeltaEnabled(): boolean {
-		return process.env["YNAB_MCP_ENABLE_DELTA"] === "true";
+		return getRuntimeConfig().YNAB_MCP_ENABLE_DELTA === "true";
 	}
 }
