@@ -73,4 +73,50 @@ export function resetAppConfig(): void {
 	cachedConfig = undefined;
 }
 
+/**
+ * Runtime-infrastructure settings that must be readable without YNAB
+ * credentials. Standalone imports (tests, tooling) must not require
+ * YNAB_ACCESS_TOKEN, so this schema only covers optional keys and never
+ * throws.
+ */
+const runtimeEnvSchema = z.object({
+	LOG_LEVEL: z
+		.enum(["trace", "debug", "info", "warn", "error", "fatal"])
+		.default("info"),
+	YNAB_EXPORT_PATH: z.string().optional(),
+	XDG_DOCUMENTS_DIR: z.string().optional(),
+	YNAB_MCP_ENABLE_DELTA: z.enum(["true", "false"]).optional(),
+	RATE_LIMIT_LOGGING: z
+		.enum(["true", "false"])
+		.optional()
+		.transform((value) => value === "true"),
+	VERBOSE_TESTS: z
+		.enum(["true", "false"])
+		.optional()
+		.transform((value) => value === "true"),
+});
+
+export type RuntimeConfig = z.infer<typeof runtimeEnvSchema>;
+
+let cachedRuntimeConfig: RuntimeConfig | undefined;
+
+/**
+ * Returns the memoized runtime config for infrastructure modules (logging,
+ * rate limiting, exports). Never throws, so modules can read these values
+ * at import time without YNAB credentials present.
+ */
+export function getRuntimeConfig(): RuntimeConfig {
+	if (!cachedRuntimeConfig) {
+		const result = runtimeEnvSchema.safeParse(process.env);
+		cachedRuntimeConfig = result.success
+			? result.data
+			: runtimeEnvSchema.parse({});
+	}
+	return cachedRuntimeConfig;
+}
+
+export function resetRuntimeConfig(): void {
+	cachedRuntimeConfig = undefined;
+}
+
 export const RESPONSE_SIZE_LIMIT_BYTES = 90_000;

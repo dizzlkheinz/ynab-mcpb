@@ -55,6 +55,7 @@ import {
 	formatDiagnosticInfo,
 } from "./markdownFormatter.js";
 import { PromptManager } from "./prompts.js";
+import { globalRequestLogger } from "./requestLogger.js";
 import { ResourceManager } from "./resources.js";
 import { responseFormatter } from "./responseFormatter.js";
 import {
@@ -94,6 +95,19 @@ export class YNABMCPServer {
 		this.configInstance = loadConfig();
 		// Config is now imported and validated at startup
 		this.defaultBudgetId = this.configInstance.YNAB_DEFAULT_BUDGET_ID;
+
+		// Apply the validated log level to the global request logger
+		const levelAliases: Record<string, "error" | "warn" | "info" | "debug"> = {
+			trace: "debug",
+			debug: "debug",
+			info: "info",
+			warn: "warn",
+			error: "error",
+			fatal: "error",
+		};
+		globalRequestLogger.setConfig({
+			logLevel: levelAliases[this.configInstance.LOG_LEVEL] ?? "info",
+		});
 
 		// Initialize YNAB API
 		this.ynabAPI = new ynab.API(this.configInstance.YNAB_ACCESS_TOKEN);

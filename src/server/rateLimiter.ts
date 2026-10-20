@@ -2,7 +2,7 @@
  * Rate limiting implementation for YNAB API compliance
  * YNAB API has a rate limit of 200 requests per hour per access token
  */
-import { getAppConfig } from "./config.js";
+import { getRuntimeConfig } from "./config.js";
 
 export interface RateLimitConfig {
 	maxRequests: number;
@@ -186,10 +186,10 @@ export class RateLimitError extends Error {
 /**
  * Global rate limiter instance
  */
-const appConfig = getAppConfig();
+const runtimeConfig = getRuntimeConfig();
 export const globalRateLimiter = new RateLimiter({
 	enableLogging:
-		appConfig.RATE_LIMIT_LOGGING ||
-		appConfig.LOG_LEVEL === "debug" ||
-		appConfig.VERBOSE_TESTS,
+		runtimeConfig.RATE_LIMIT_LOGGING ||
+		runtimeConfig.LOG_LEVEL === "debug" ||
+		runtimeConfig.VERBOSE_TESTS,
 });

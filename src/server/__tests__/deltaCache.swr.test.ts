@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CacheManager } from "../cacheManager.js";
+import { resetRuntimeConfig } from "../config.js";
 import {
 	DeltaCache,
 	type DeltaCacheEntry,
@@ -87,6 +88,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 		process.env.YNAB_MCP_ENABLE_DELTA = undefined;
+		resetRuntimeConfig();
 	});
 
 	const createFetcher = (response: {
