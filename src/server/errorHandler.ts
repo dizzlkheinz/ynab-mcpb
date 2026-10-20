@@ -483,10 +483,7 @@ export class ErrorHandler {
 		) {
 			return "Budget or payee not found";
 		}
-		if (
-			context.includes("listing transactions") ||
-			context.includes("getting transaction")
-		) {
+		if (context.includes("transaction")) {
 			return "Budget, account, category, or transaction not found";
 		}
 		return "The requested resource was not found. Please verify the provided IDs are correct.";
@@ -543,6 +540,9 @@ export class ErrorHandler {
 		}
 		if (context.includes("updating transaction")) {
 			return "Failed to update transaction";
+		}
+		if (context.includes("deleting transaction")) {
+			return "Failed to delete transaction";
 		}
 		if (context.includes("getting user")) {
 			return "Failed to get user information";

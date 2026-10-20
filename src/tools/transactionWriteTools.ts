@@ -67,6 +67,97 @@ import {
 	toMonthKey,
 } from "./transactionUtils.js";
 
+function toMajorUnitTransaction(transaction: ynab.TransactionDetail) {
+	return {
+		...transaction,
+		amount: milliunitsToAmount(transaction.amount),
+		subtransactions: (transaction.subtransactions ?? []).map(
+			(subtransaction) => ({
+				...subtransaction,
+				amount: milliunitsToAmount(subtransaction.amount),
+			}),
+		),
+	};
+}
+
+type SubtransactionPayload = {
+	amount: number;
+	payee_name?: string | null | undefined;
+	payee_id?: string | null | undefined;
+	category_id?: string | null | undefined;
+	memo?: string | null | undefined;
+};
+
+function toSaveSubtransactions(
+	subtransactions: readonly SubtransactionPayload[],
+): SaveSubTransaction[] {
+	return subtransactions.map((subtransaction) => {
+		const mapped: SaveSubTransaction = {
+			amount: subtransaction.amount,
+		};
+		if (subtransaction.payee_name !== undefined) {
+			mapped.payee_name = subtransaction.payee_name;
+		}
+		if (subtransaction.payee_id !== undefined) {
+			mapped.payee_id = subtransaction.payee_id;
+		}
+		if (subtransaction.category_id !== undefined) {
+			mapped.category_id = subtransaction.category_id;
+		}
+		if (subtransaction.memo !== undefined) {
+			mapped.memo = subtransaction.memo;
+		}
+		return mapped;
+	});
+}
+
+function toSubtransactionPreview(subtransaction: SubtransactionPayload) {
+	const preview: {
+		amount: number;
+		payee_name?: string;
+		payee_id?: string;
+		category_id?: string;
+		memo?: string;
+	} = {
+		amount: milliunitsToAmount(subtransaction.amount),
+	};
+	if (subtransaction.payee_name) {
+		preview.payee_name = subtransaction.payee_name;
+	}
+	if (subtransaction.payee_id) {
+		preview.payee_id = subtransaction.payee_id;
+	}
+	if (subtransaction.category_id) {
+		preview.category_id = subtransaction.category_id;
+	}
+	if (subtransaction.memo) {
+		preview.memo = subtransaction.memo;
+	}
+	return preview;
+}
+
+function toUnavailableUpdatePreview(transaction: BulkUpdateTransactionInput) {
+	const {
+		id: _id,
+		original_account_id: _originalAccountId,
+		original_date: _originalDate,
+		...preview
+	} = transaction;
+	return {
+		...preview,
+		...(transaction.amount === undefined
+			? {}
+			: { amount: milliunitsToAmount(transaction.amount) }),
+		...(transaction.subtransactions === undefined
+			? {}
+			: {
+					subtransactions: transaction.subtransactions.map(
+						toSubtransactionPreview,
+					),
+				}),
+	};
+}
+
 /**
  * Handles the ynab:create_transaction tool call
  * Creates a new transaction in the specified budget and account
@@ -86,7 +177,7 @@ export async function handleCreateTransaction(
 	deltaCacheOrParams: DeltaCache | CreateTransactionParams,
 	knowledgeStoreOrParams?: ServerKnowledgeStore | CreateTransactionParams,
 	maybeParams?: CreateTransactionParams,
-	_errorHandler?: ErrorHandler,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,
@@ -131,27 +222,9 @@ export async function handleCreateTransaction(
 		if (params.import_id !== undefined)
 			transactionData.import_id = params.import_id;
 		if (params.subtransactions && params.subtransactions.length > 0) {
-			const subtransactions: SaveSubTransaction[] = params.subtransactions.map(
-				(subtransaction) => {
-					const mapped: SaveSubTransaction = {
-						amount: subtransaction.amount,
-					};
-
-					if (subtransaction.payee_name !== undefined)
-						mapped.payee_name = subtransaction.payee_name;
-					if (subtransaction.payee_id !== undefined)
-						mapped.payee_id = subtransaction.payee_id;
-					if (subtransaction.category_id !== undefined) {
-						mapped.category_id = subtransaction.category_id;
-					}
-					if (subtransaction.memo !== undefined)
-						mapped.memo = subtransaction.memo;
-
-					return mapped;
-				},
+			transactionData.subtransactions = toSaveSubtransactions(
+				params.subtransactions,
 			);
-
-			transactionData.subtransactions = subtransactions;
 		}
 
 		const response = await ynabAPI.transactions.createTransaction(budgetId, {
@@ -204,9 +277,8 @@ export async function handleCreateTransaction(
 				matched_transaction_id: transaction.matched_transaction_id,
 				import_id: transaction.import_id,
 				deleted: transaction.deleted,
-				// New fields for account balance
-				account_balance: account.balance,
-				account_cleared_balance: account.cleared_balance,
+				account_balance: milliunitsToAmount(account.balance),
+				account_cleared_balance: milliunitsToAmount(account.cleared_balance),
 				subtransactions: transaction.subtransactions?.map((subtransaction) => ({
 					id: subtransaction.id,
 					transaction_id: subtransaction.transaction_id,
@@ -232,7 +304,12 @@ export async function handleCreateTransaction(
 			structuredContent: createdTxData,
 		};
 	} catch (error) {
-		return handleTransactionError(error, "Failed to create transaction");
+		return handleTransactionError(
+			error,
+			"Failed to create transaction",
+			errorHandler,
+			"creating transaction",
+		);
 	}
 }
 
@@ -865,7 +942,7 @@ export async function handleUpdateTransaction(
 	deltaCacheOrParams: DeltaCache | UpdateTransactionParams,
 	knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateTransactionParams,
 	maybeParams?: UpdateTransactionParams,
-	_errorHandler?: ErrorHandler,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,
@@ -936,6 +1013,11 @@ export async function handleUpdateTransaction(
 		if (params.flag_color !== undefined) {
 			transactionData.flag_color =
 				params.flag_color as ynab.TransactionFlagColor;
+		}
+		if (params.subtransactions && params.subtransactions.length > 0) {
+			transactionData.subtransactions = toSaveSubtransactions(
+				params.subtransactions,
+			);
 		}
 
 		const response = await ynabAPI.transactions.updateTransaction(
@@ -1038,9 +1120,15 @@ export async function handleUpdateTransaction(
 				matched_transaction_id: transaction.matched_transaction_id,
 				import_id: transaction.import_id,
 				deleted: transaction.deleted,
+				subtransactions: (transaction.subtransactions ?? []).map(
+					(subtransaction) => ({
+						...subtransaction,
+						amount: milliunitsToAmount(subtransaction.amount),
+					}),
+				),
 			},
-			updated_balance: account.balance,
-			updated_cleared_balance: account.cleared_balance,
+			updated_balance: milliunitsToAmount(account.balance),
+			updated_cleared_balance: milliunitsToAmount(account.cleared_balance),
 		};
 		return {
 			content: [
@@ -1052,7 +1140,12 @@ export async function handleUpdateTransaction(
 			structuredContent: updatedTxData,
 		};
 	} catch (error) {
-		return handleTransactionError(error, "Failed to update transaction");
+		return handleTransactionError(
+			error,
+			"Failed to update transaction",
+			errorHandler,
+			"updating transaction",
+		);
 	}
 }
 
@@ -1075,7 +1168,7 @@ export async function handleDeleteTransaction(
 	deltaCacheOrParams: DeltaCache | DeleteTransactionParams,
 	knowledgeStoreOrParams?: ServerKnowledgeStore | DeleteTransactionParams,
 	maybeParams?: DeleteTransactionParams,
-	_errorHandler?: ErrorHandler,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
 		deltaCacheOrParams,
@@ -1152,8 +1245,8 @@ export async function handleDeleteTransaction(
 				id: transaction.id,
 				deleted: transaction.deleted,
 			},
-			updated_balance: account.balance,
-			updated_cleared_balance: account.cleared_balance,
+			updated_balance: milliunitsToAmount(account.balance),
+			updated_cleared_balance: milliunitsToAmount(account.cleared_balance),
 		};
 		return {
 			content: [
@@ -1165,7 +1258,12 @@ export async function handleDeleteTransaction(
 			structuredContent: deletedTxData,
 		};
 	} catch (error) {
-		return handleTransactionError(error, "Failed to delete transaction");
+		return handleTransactionError(
+			error,
+			"Failed to delete transaction",
+			errorHandler,
+			"deleting transaction",
+		);
 	}
 }
 
@@ -1383,7 +1481,9 @@ export async function handleCreateTransactions(
 				server_knowledge: responseData.server_knowledge,
 				summary,
 				results,
-				transactions: responseData.transactions ?? [],
+				transactions: (responseData.transactions ?? []).map(
+					toMajorUnitTransaction,
+				),
 				duplicate_import_ids: responseData.duplicate_import_ids ?? [],
 				message: `Processed ${summary.total_requested} transactions: ${summary.created} created, ${summary.duplicates} duplicates, ${summary.failed} failed.`,
 			};
@@ -1661,7 +1761,7 @@ export async function handleUpdateTransactions(
 						transactionsPreview.push({
 							transaction_id: transaction.id,
 							before: "unavailable",
-							after: transaction,
+							after: toUnavailableUpdatePreview(transaction),
 						});
 						continue;
 					}
@@ -1732,6 +1832,14 @@ export async function handleUpdateTransactions(
 						before["flag_color"] = currentState.flag_color;
 						after["flag_color"] = transaction.flag_color;
 					}
+					if (transaction.subtransactions !== undefined) {
+						before["subtransactions"] = (currentState.subtransactions ?? [])
+							.filter((subtransaction) => !subtransaction.deleted)
+							.map(toSubtransactionPreview);
+						after["subtransactions"] = transaction.subtransactions.map(
+							toSubtransactionPreview,
+						);
+					}
 
 					transactionsPreview.push({
 						transaction_id: transaction.id,
@@ -1784,6 +1892,8 @@ export async function handleUpdateTransactions(
 						fieldsToUpdate.add("approved");
 					if (transaction.flag_color !== undefined)
 						fieldsToUpdate.add("flag_color");
+					if (transaction.subtransactions !== undefined)
+						fieldsToUpdate.add("subtransactions");
 				}
 
 				const response: Record<string, unknown> = {
@@ -1899,6 +2009,14 @@ export async function handleUpdateTransactions(
 						transactionData.flag_color =
 							transaction.flag_color as ynab.TransactionFlagColor;
 					}
+					if (
+						transaction.subtransactions &&
+						transaction.subtransactions.length > 0
+					) {
+						transactionData.subtransactions = toSaveSubtransactions(
+							transaction.subtransactions,
+						);
+					}
 
 					return transactionData;
 				});
@@ -1946,7 +2064,7 @@ export async function handleUpdateTransactions(
 				server_knowledge: responseData.server_knowledge,
 				summary,
 				results,
-				transactions: updatedTransactions,
+				transactions: updatedTransactions.map(toMajorUnitTransaction),
 				message: `Processed ${summary.total_requested} transactions: ${summary.updated} updated, ${summary.failed} failed.`,
 			};
 
@@ -1972,7 +2090,9 @@ export async function handleUpdateTransactions(
 				const meta = metadata.get(transaction.id);
 				const amountChanged = transaction.amount !== undefined;
 				const clearedChanged = transaction.cleared !== undefined;
-				const categoryChanged = transaction.category_id !== undefined;
+				const categoryChanged =
+					transaction.category_id !== undefined ||
+					transaction.subtransactions !== undefined;
 				const dateChanged = transaction.date !== undefined;
 
 				if ((amountChanged || clearedChanged) && meta) {
@@ -1993,6 +2113,11 @@ export async function handleUpdateTransactions(
 					invalidateAllCategories = true;
 					if (transaction.category_id) {
 						affectedCategoryIds.add(transaction.category_id);
+					}
+					for (const subtransaction of transaction.subtransactions ?? []) {
+						if (subtransaction.category_id) {
+							affectedCategoryIds.add(subtransaction.category_id);
+						}
 					}
 					if (meta) {
 						affectedMonthKeys.add(toMonthKey(meta.date));
@@ -2177,6 +2302,7 @@ Args:
   - memo (string, optional): New memo.
   - cleared (string, optional): "cleared", "uncleared", or "reconciled".
   - approved (boolean, optional): Approval status.
+  - subtransactions (array, optional): Convert a non-split transaction into a split. Supply the parent amount and split lines using amount_decimal, amount_milliunits, or deprecated amount; split amounts must sum to the parent and category_id must be omitted on the parent. YNAB does not support replacing lines on an existing split.
   - dry_run (boolean, optional): Preview without saving.
 
 Returns: updated transaction with updated_balance.`,
@@ -2200,7 +2326,7 @@ Returns: updated transaction with updated_balance.`,
 
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
-  - transactions (array, required): Up to 100 objects, each requires id plus fields to update. Amount updates use one of amount_decimal (preferred), amount_milliunits, or deprecated amount.
+  - transactions (array, required): Up to 100 objects, each requires id plus fields to update. Amount updates use one of amount_decimal (preferred), amount_milliunits, or deprecated amount. A non-split transaction can be converted to a split by supplying the parent amount plus subtransactions that sum to it; YNAB does not support replacing lines on an existing split.
   - dry_run (boolean, optional): Preview changes without saving. Default: false.
 
 Returns: summary (updated, failed), results[], transactions[].

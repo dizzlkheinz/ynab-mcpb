@@ -230,6 +230,7 @@ export async function handleExportTransactions(
 				response = await ynabAPI.transactions.getTransactions(
 					budgetId,
 					params.since_date,
+					undefined,
 					params.type,
 				);
 			}

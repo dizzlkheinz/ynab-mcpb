@@ -336,6 +336,51 @@ export interface ReceiptCategoryCalculation {
 // Update Transaction
 // ============================================================================
 
+function validateSplitUpdate(
+	data: {
+		amount_decimal?: number | undefined;
+		amount_milliunits?: number | undefined;
+		amount?: number | undefined;
+		category_id?: string | undefined;
+		subtransactions?: { amount: number }[] | undefined;
+	},
+	ctx: z.RefinementCtx,
+): void {
+	if (!data.subtransactions || data.subtransactions.length === 0) {
+		return;
+	}
+
+	const normalizedParent = normalizeOptionalAmount(data).amount;
+	if (normalizedParent === undefined) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "Provide a parent amount when updating split subtransactions",
+			path: ["amount_decimal"],
+		});
+	} else {
+		const splitTotal = data.subtransactions.reduce(
+			(total, subtransaction) => total + subtransaction.amount,
+			0,
+		);
+		if (splitTotal !== normalizedParent) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Amount must equal the sum of subtransaction amounts",
+				path: ["amount_decimal"],
+			});
+		}
+	}
+
+	if (data.category_id !== undefined) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			message:
+				"Do not set category_id on a split parent; categorize each subtransaction instead",
+			path: ["category_id"],
+		});
+	}
+}
+
 /**
  * Schema for ynab:update_transaction tool parameters
  */
@@ -358,12 +403,17 @@ export const UpdateTransactionSchema = z
 		flag_color: z
 			.enum(["red", "orange", "yellow", "green", "blue", "purple"])
 			.optional(),
+		subtransactions: z
+			.array(SubtransactionInputSchema)
+			.min(1, "At least one subtransaction is required when provided")
+			.optional(),
 		dry_run: z.boolean().optional(),
 	})
 	.strict()
-	.superRefine((data, ctx) =>
-		validateOptionalAmount(data, ctx, ["amount_decimal"]),
-	)
+	.superRefine((data, ctx) => {
+		validateOptionalAmount(data, ctx, ["amount_decimal"]);
+		validateSplitUpdate(data, ctx);
+	})
 	.transform(normalizeOptionalAmount);
 
 export type UpdateTransactionParams = z.infer<typeof UpdateTransactionSchema>;
@@ -393,6 +443,10 @@ const BulkUpdateTransactionInputSchema = z
 		flag_color: z
 			.enum(["red", "orange", "yellow", "green", "blue", "purple"])
 			.optional(),
+		subtransactions: z
+			.array(SubtransactionInputSchema)
+			.min(1, "At least one subtransaction is required when provided")
+			.optional(),
 		// Metadata fields for cache invalidation
 		original_account_id: z.string().optional(),
 		original_date: z
@@ -401,9 +455,10 @@ const BulkUpdateTransactionInputSchema = z
 			.optional(),
 	})
 	.strict()
-	.superRefine((data, ctx) =>
-		validateOptionalAmount(data, ctx, ["amount_decimal"]),
-	)
+	.superRefine((data, ctx) => {
+		validateOptionalAmount(data, ctx, ["amount_decimal"]);
+		validateSplitUpdate(data, ctx);
+	})
 	.transform(normalizeOptionalAmount);
 
 export type BulkUpdateTransactionInput = z.infer<

@@ -3,9 +3,35 @@ import {
 	CreateReceiptSplitTransactionOutputSchema,
 	SubtransactionPreviewSchema,
 	TransactionDryRunPreviewSchema,
+	UpdateTransactionsOutputSchema,
 } from "../transactionMutationOutputs.js";
 
 describe("Transaction Mutation Schema Type Safety", () => {
+	describe("UpdateTransactionsOutputSchema dry-run", () => {
+		it("accepts the account ID array emitted by the handler", () => {
+			const result = UpdateTransactionsOutputSchema.safeParse({
+				dry_run: true,
+				action: "ynab_update_transactions",
+				validation: "passed",
+				summary: {
+					total_transactions: 2,
+					accounts_affected: ["acct-1", "acct-2"],
+					fields_to_update: ["category_id", "memo"],
+				},
+				transactions_preview: [
+					{
+						transaction_id: "txn-1",
+						before: { category_id: "cat-1" },
+						after: { category_id: "cat-2" },
+					},
+				],
+				note: "Dry run complete.",
+			});
+
+			expect(result.success).toBe(true);
+		});
+	});
+
 	describe("TransactionDryRunPreviewSchema", () => {
 		it("should accept valid transaction preview", () => {
 			const validPreview = {

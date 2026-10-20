@@ -5,6 +5,7 @@ import type { SaveTransactionsResponseData } from "ynab/dist/models/SaveTransact
 import { CacheKeys } from "../server/cacheKeys.js";
 import { CacheManager, cacheManager } from "../server/cacheManager.js";
 import type { DeltaCache } from "../server/deltaCache.js";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import { globalRequestLogger } from "../server/requestLogger.js";
 import { invalidateBudgetResourceCaches } from "../server/resourceCacheInvalidation.js";
 import { responseFormatter } from "../server/responseFormatter.js";
@@ -301,6 +302,8 @@ export function correlateResults(
 ): BulkTransactionResult[] {
 	const createdByImportId = new Map<string, string[]>();
 	const createdByHash = new Map<string, string[]>();
+	const createdByPayeeAgnosticHash = new Map<string, string[]>();
+	const claimedTransactionIds = new Set<string>();
 	const responseTransactions = responseData.transactions ?? [];
 
 	const register = (
@@ -323,18 +326,12 @@ export function correlateResults(
 		const key = generateCorrelationKey(transaction);
 		if (key.startsWith("hash:")) {
 			register(createdByHash, key, transaction.id);
-			// YNAB populates payee_id on responses even when the request only sent payee_name.
-			// Register a secondary hash using payee_name only so requests that omitted payee_id
-			// (e.g. reconciliation bulk creates) can still find their created transaction.
-			if (transaction.payee_id) {
-				const nameOnlyKey = generateCorrelationKey({
-					...transaction,
-					payee_id: null,
-				});
-				if (nameOnlyKey !== key) {
-					register(createdByHash, nameOnlyKey, transaction.id);
-				}
-			}
+			const payeeAgnosticKey = generateCorrelationKey({
+				...transaction,
+				payee_id: null,
+				payee_name: null,
+			});
+			register(createdByPayeeAgnosticHash, payeeAgnosticKey, transaction.id);
 		} else {
 			register(createdByImportId, key, transaction.id);
 		}
@@ -348,9 +345,35 @@ export function correlateResults(
 		if (!bucket || bucket.length === 0) {
 			return undefined;
 		}
-		const [transactionId] = bucket.splice(0, 1);
+		let transactionId: string | undefined;
+		while (bucket.length > 0 && transactionId === undefined) {
+			const [candidate] = bucket.splice(0, 1);
+			if (candidate && !claimedTransactionIds.has(candidate)) {
+				transactionId = candidate;
+			}
+		}
 		if (bucket.length === 0) {
 			map.delete(key);
+		}
+		if (transactionId) {
+			claimedTransactionIds.add(transactionId);
+		}
+		return transactionId;
+	};
+
+	const popUniqueId = (
+		map: Map<string, string[]>,
+		key: string,
+	): string | undefined => {
+		const candidates = (map.get(key) ?? []).filter(
+			(id) => !claimedTransactionIds.has(id),
+		);
+		if (candidates.length !== 1) {
+			return undefined;
+		}
+		const [transactionId] = candidates;
+		if (transactionId) {
+			claimedTransactionIds.add(transactionId);
 		}
 		return transactionId;
 	};
@@ -386,6 +409,22 @@ export function correlateResults(
 				toCorrelationPayload({ ...transaction, import_id: undefined }),
 			);
 			transactionId = popId(createdByHash, hashKey);
+		}
+
+		if (!transactionId) {
+			// YNAB responses may contain only payee_id even when the request used
+			// payee_name. Ignore payee only when the remaining fields identify one
+			// unclaimed response; ambiguous matches are left failed rather than
+			// assigning the wrong transaction ID.
+			const payeeAgnosticKey = generateCorrelationKey(
+				toCorrelationPayload({
+					...transaction,
+					payee_id: undefined,
+					payee_name: undefined,
+					import_id: undefined,
+				}),
+			);
+			transactionId = popUniqueId(createdByPayeeAgnosticHash, payeeAgnosticKey);
 		}
 
 		if (transactionId) {
@@ -596,7 +635,13 @@ export function finalizeBulkUpdateResponse(
 export function handleTransactionError(
 	error: unknown,
 	defaultMessage: string,
+	errorHandler?: ErrorHandler,
+	context = defaultMessage,
 ): CallToolResult {
+	if (errorHandler) {
+		return errorHandler.handleError(error, context);
+	}
+
 	let errorMessage = defaultMessage;
 
 	if (error instanceof Error) {

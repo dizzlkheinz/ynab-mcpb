@@ -1158,8 +1158,8 @@ describe("transactionTools", () => {
 
 			const response = JSON.parse(result.content[0].text);
 			expect(response.transaction.amount).toBe(-75);
-			expect(response.transaction.account_balance).toBe(250000);
-			expect(response.transaction.account_cleared_balance).toBe(225000);
+			expect(response.transaction.account_balance).toBe(250);
+			expect(response.transaction.account_cleared_balance).toBe(225);
 			expect(response.transaction.subtransactions).toEqual([
 				{
 					id: "sub-1",
@@ -2675,6 +2675,59 @@ describe("transactionTools", () => {
 			const response = JSON.parse(result.content[0].text);
 			expect(response.transaction.id).toBe("transaction-456");
 			expect(response.transaction.amount).toBe(-60);
+			expect(response.updated_balance).toBe(150);
+			expect(response.updated_cleared_balance).toBe(140);
+		});
+
+		it("converts a transaction to a split in place", async () => {
+			const subtransactions = [
+				{ amount: -40000, category_id: "category-1", memo: "First" },
+				{ amount: -20000, category_id: "category-2", memo: "Second" },
+			];
+			(mockYnabAPI.transactions.updateTransaction as any).mockResolvedValue({
+				data: {
+					transaction: {
+						...mockUpdatedTransaction,
+						category_id: null,
+						subtransactions: subtransactions.map((subtransaction, index) => ({
+							...subtransaction,
+							id: `sub-${index + 1}`,
+							transaction_id: "transaction-456",
+							deleted: false,
+						})),
+					},
+				},
+			});
+			(mockYnabAPI.accounts.getAccountById as any).mockResolvedValue({
+				data: {
+					account: {
+						id: "account-789",
+						balance: 150000,
+						cleared_balance: 140000,
+					},
+				},
+			});
+
+			const result = await handleUpdateTransaction(mockYnabAPI, {
+				budget_id: "budget-123",
+				transaction_id: "transaction-456",
+				amount: -60000,
+				subtransactions,
+			});
+
+			expect(mockYnabAPI.transactions.updateTransaction).toHaveBeenCalledWith(
+				"budget-123",
+				"transaction-456",
+				{
+					transaction: {
+						amount: -60000,
+						subtransactions,
+					},
+				},
+			);
+			const response = JSON.parse(result.content[0].text);
+			expect(response.transaction.subtransactions[0].amount).toBe(-40);
+			expect(response.transaction.subtransactions[1].amount).toBe(-20);
 		});
 
 		it("should update transaction with multiple fields", async () => {
@@ -4290,6 +4343,44 @@ describe("transactionTools", () => {
 				expect(response.summary.fields_to_update).toContain("memo");
 			});
 
+			it("previews split lines in major currency units", async () => {
+				(cacheManager.get as any).mockReturnValue(null);
+				(mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue({
+					data: {
+						transaction: buildApiTransaction({
+							id: "transaction-001",
+							amount: -5000,
+							subtransactions: [],
+						}),
+					},
+				});
+
+				const response = await parseResponse(
+					handleUpdateTransactions(
+						mockYnabAPI,
+						buildParams({
+							dry_run: true,
+							transactions: [
+								buildUpdateTransaction({
+									id: "transaction-001",
+									amount: -5000,
+									subtransactions: [
+										{ amount: -3000, category_id: "category-1" },
+										{ amount: -2000, category_id: "category-2" },
+									],
+								}),
+							],
+						}),
+					),
+				);
+
+				expect(response.summary.fields_to_update).toContain("subtransactions");
+				expect(response.transactions_preview[0].after.subtransactions).toEqual([
+					{ amount: -3, category_id: "category-1" },
+					{ amount: -2, category_id: "category-2" },
+				]);
+			});
+
 			it("surfaces validation errors before execution", async () => {
 				const invalidParams = buildParams({
 					transactions: [{ amount: -2000 }],
@@ -4403,6 +4494,7 @@ describe("transactionTools", () => {
 				expect(
 					response.results.every((result: any) => result.status === "updated"),
 				).toBe(true);
+				expect(response.transactions[0].amount).toBe(-1.5);
 				// Cache invalidation now uses individual delete calls
 				expect(cacheManager.delete).toHaveBeenCalled();
 			});
@@ -4429,6 +4521,37 @@ describe("transactionTools", () => {
 				expect(updatePayload.memo).toBe("Updated memo only");
 				expect(updatePayload.amount).toBeUndefined();
 				expect(updatePayload.account_id).toBeUndefined();
+			});
+
+			it("maps split lines into bulk update payloads", async () => {
+				const transaction = buildUpdateTransaction({
+					id: "transaction-001",
+					amount: -5000,
+					subtransactions: [
+						{ amount: -3000, category_id: "category-1" },
+						{ amount: -2000, category_id: "category-2" },
+					],
+				});
+				(mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
+					buildApiResponse([
+						buildApiTransaction({
+							id: "transaction-001",
+							amount: -5000,
+						}),
+					]),
+				);
+
+				await handleUpdateTransactions(
+					mockYnabAPI,
+					buildParams({ transactions: [transaction] }),
+				);
+
+				const payload = (mockYnabAPI.transactions.updateTransactions as any)
+					.mock.calls[0][1].transactions[0];
+				expect(payload.subtransactions).toEqual([
+					{ amount: -3000, category_id: "category-1" },
+					{ amount: -2000, category_id: "category-2" },
+				]);
 			});
 		});
 

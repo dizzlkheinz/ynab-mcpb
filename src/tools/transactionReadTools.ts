@@ -235,7 +235,7 @@ export async function handleListTransactions(
 export async function handleGetTransaction(
 	ynabAPI: ynab.API,
 	params: GetTransactionParams,
-	_errorHandler?: ErrorHandler,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
 		const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -318,7 +318,12 @@ export async function handleGetTransaction(
 			structuredContent: txData,
 		};
 	} catch (error) {
-		return handleTransactionError(error, "Failed to get transaction");
+		return handleTransactionError(
+			error,
+			"Failed to get transaction",
+			errorHandler,
+			"getting transaction",
+		);
 	}
 }
 

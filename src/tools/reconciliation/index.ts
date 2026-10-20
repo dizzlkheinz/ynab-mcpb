@@ -467,6 +467,7 @@ export async function handleReconcileAccount(
 				finalInvertAmounts, // Use smart-detected value
 				csvOptions,
 				initialAccount,
+				effectiveStatementEndDate,
 			);
 
 			const effectiveParams =

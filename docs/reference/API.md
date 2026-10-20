@@ -1091,7 +1091,12 @@ Updates an existing transaction.
 - `cleared` (string, optional): Update the cleared status
 - `approved` (boolean, optional): Update the approved status
 - `flag_color` (string, optional): Update the flag color
+- `subtransactions` (array, optional): Convert a non-split transaction into a split; each line uses exactly one of `amount_decimal`, `amount_milliunits`, or deprecated `amount`
 - `dry_run` (boolean, optional): Validate and return simulated result; no API call
+
+When `subtransactions` are supplied, the parent amount is required, the normalized
+split amounts must sum exactly to it, and `category_id` must be omitted from the
+parent. YNAB does not support replacing the lines of an already-split transaction.
 
 **Example Request:**
 ```json
@@ -1100,7 +1105,7 @@ Updates an existing transaction.
   "arguments": {
     "budget_id": "12345678-1234-1234-1234-123456789012",
     "transaction_id": "transaction-id",
-    "amount": -6000,
+    "amount_decimal": -6.00,
     "memo": "Updated memo",
     "flag_color": "red"
   }

@@ -33,6 +33,19 @@ import { normalizeYNABTransactions } from "./ynabAdapter.js";
 
 // --- Helper Functions ---
 
+const SYSTEM_PAYEE_NAMES = new Set([
+	"starting balance",
+	"manual balance adjustment",
+	"reconciliation balance adjustment",
+]);
+
+function isSystemPayee(payee: string | null | undefined): boolean {
+	return (
+		typeof payee === "string" &&
+		SYSTEM_PAYEE_NAMES.has(payee.trim().toLowerCase())
+	);
+}
+
 /**
  * Calculate the date range from bank transactions
  * Returns { minDate, maxDate } as ISO date strings (YYYY-MM-DD)
@@ -71,11 +84,13 @@ function calculateDateRange(bankTransactions: BankTransaction[]): {
  * Returns { inRange, outsideRange } arrays
  *
  * @param dateToleranceDays - Buffer to add to the date range to account for bank posting delays
+ * @param statementEndDate - Optional hard upper bound for statement-period matching
  */
 function filterByDateRange(
 	ynabTransactions: YNABTransaction[],
 	dateRange: { minDate: string; maxDate: string },
 	dateToleranceDays = 7,
+	statementEndDate?: string,
 ): { inRange: YNABTransaction[]; outsideRange: YNABTransaction[] } {
 	// Validate dateToleranceDays is non-negative
 	const safeToleranceDays = dateToleranceDays < 0 ? 0 : dateToleranceDays;
@@ -117,10 +132,11 @@ function filterByDateRange(
 	);
 	const minDateStr = minDateWithBuffer.toISOString().split("T")[0] ?? "";
 
-	const maxDateWithBuffer = new Date(
-		Date.UTC(maxYear, maxMonth - 1, maxDay + safeToleranceDays),
-	);
-	const maxDateStr = maxDateWithBuffer.toISOString().split("T")[0] ?? "";
+	const maxDateStr = /^\d{4}-\d{2}-\d{2}$/.test(statementEndDate ?? "")
+		? (statementEndDate ?? dateRange.maxDate)
+		: (new Date(Date.UTC(maxYear, maxMonth - 1, maxDay + safeToleranceDays))
+				.toISOString()
+				.split("T")[0] ?? "");
 
 	for (const txn of ynabTransactions) {
 		// Compare dates as strings (YYYY-MM-DD format sorts correctly)
@@ -476,6 +492,7 @@ function detectInsights(
  * @param budgetId - Budget ID for recommendation context
  * @param invertBankAmounts - Whether to invert bank transaction amounts (for banks that show charges as positive)
  * @param csvOptions - Optional CSV parsing options (manual overrides)
+ * @param statementEndDate - Optional hard upper bound for statement-period matching
  */
 export function analyzeReconciliation(
 	csvContentOrParsed: string | CSVParseResult,
@@ -493,6 +510,7 @@ export function analyzeReconciliation(
 		cleared_balance?: number;
 		uncleared_balance?: number;
 	},
+	statementEndDate?: string,
 ): ReconciliationAnalysis {
 	// Step 1: Parse bank CSV using new Parser (or use provided result)
 	let parseResult: CSVParseResult;
@@ -525,6 +543,7 @@ export function analyzeReconciliation(
 			allYNABTransactions,
 			csvDateRange,
 			dateToleranceDays,
+			statementEndDate,
 		);
 		ynabInRange = filtered.inRange;
 		ynabOutsideRange = filtered.outsideRange;
@@ -579,7 +598,9 @@ export function analyzeReconciliation(
 			matchedYnabIds.add(match.ynabTransaction.id);
 		}
 	}
-	const unmatchedYNAB = ynabInRange.filter((t) => !matchedYnabIds.has(t.id));
+	const unmatchedYNAB = ynabInRange.filter(
+		(t) => !matchedYnabIds.has(t.id) && !isSystemPayee(t.payee),
+	);
 
 	// Step 6: Calculate balances (use ALL YNAB transactions for balance calculation)
 	const balances = calculateBalances(

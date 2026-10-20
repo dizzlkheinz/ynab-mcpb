@@ -13,9 +13,9 @@
  *   transaction: {
  *     id: "txn-123",
  *     date: "2025-11-18",
- *     amount: -25500,
- *     account_balance: 1500000, // Raw milliunits: $1,500.00
- *     account_cleared_balance: 1000000 // Raw milliunits: $1,000.00
+ *     amount: -25.5,
+ *     account_balance: 1500,
+ *     account_cleared_balance: 1000
  *   }
  * }
  *
@@ -74,16 +74,15 @@ export type Subtransaction = z.infer<typeof SubtransactionSchema>;
  * Extends base transaction schema with balance tracking.
  *
  * @remarks
- * IMPORTANT: `account_balance` and `account_cleared_balance` are **raw YNAB milliunits** (not user-facing dollar amounts).
- * These values come directly from the YNAB API Account object and represent 1/1000th of the currency unit.
- * For example, $1,250.50 is represented as 1250500 milliunits.
+ * `account_balance` and `account_cleared_balance` use major currency units,
+ * consistent with transaction `amount` and read-tool responses.
  *
  * @see src/tools/transactionTools.ts:950-1094 - create_transaction handler
  * @see src/tools/transactionTools.ts:1336-1530 - update_transaction handler
  */
 export const TransactionWithBalanceSchema = TransactionSchema.extend({
-	account_balance: z.number().optional(), // Raw YNAB milliunits
-	account_cleared_balance: z.number().optional(), // Raw YNAB milliunits
+	account_balance: z.number().optional(),
+	account_cleared_balance: z.number().optional(),
 	subtransactions: z.array(SubtransactionSchema).optional(),
 });
 
@@ -190,6 +189,16 @@ export const BulkResultSchema = z
 
 export type BulkResult = z.infer<typeof BulkResultSchema>;
 
+const UpdateSubtransactionPreviewSchema = z
+	.object({
+		amount: z.number(),
+		payee_name: z.string().optional(),
+		payee_id: z.string().optional(),
+		category_id: z.string().optional(),
+		memo: z.string().optional(),
+	})
+	.strict();
+
 /**
  * Transaction diff fields for bulk update dry-run before/after comparison.
  * Contains only the fields that changed between current and updated state.
@@ -212,6 +221,7 @@ export const TransactionDiffFieldsSchema = z.object({
 		.enum(["red", "orange", "yellow", "green", "blue", "purple"])
 		.nullable()
 		.optional(),
+	subtransactions: z.array(UpdateSubtransactionPreviewSchema).optional(),
 });
 
 export type TransactionDiffFields = z.infer<typeof TransactionDiffFieldsSchema>;
@@ -261,9 +271,9 @@ export type DryRunWarning = z.infer<typeof DryRunWarningSchema>;
  *   transaction: {
  *     id: "txn-123",
  *     date: "2025-11-18",
- *     amount: -25500,
- *     account_balance: 1500000, // Raw milliunits: $1,500.00
- *     account_cleared_balance: 1000000 // Raw milliunits: $1,000.00
+ *     amount: -25.5,
+ *     account_balance: 1500,
+ *     account_cleared_balance: 1000
  *   }
  * }
  *
@@ -401,9 +411,9 @@ export type CreateTransactionsOutput = z.infer<
  * @example
  * // Normal execution
  * {
- *   transaction: { id: "txn-123", amount: -30000, ... },
- *   updated_balance: 1450000, // Raw milliunits: $1,450.00
- *   updated_cleared_balance: 950000 // Raw milliunits: $950.00
+ *   transaction: { id: "txn-123", amount: -30, ... },
+ *   updated_balance: 1450,
+ *   updated_cleared_balance: 950
  * }
  *
  * @example
@@ -422,8 +432,8 @@ export const UpdateTransactionOutputSchema = z.union([
 	}),
 	z.object({
 		transaction: TransactionWithBalanceSchema,
-		updated_balance: z.number(), // Raw YNAB milliunits
-		updated_cleared_balance: z.number(), // Raw YNAB milliunits
+		updated_balance: z.number(),
+		updated_cleared_balance: z.number(),
 	}),
 ]);
 
@@ -446,7 +456,7 @@ export type UpdateTransactionOutput = z.infer<
  *   validation: "passed",
  *   summary: {
  *     total_transactions: 50,
- *     accounts_affected: 3,
+ *     accounts_affected: ["acct-1", "acct-2", "acct-3"],
  *     fields_to_update: ["cleared", "category_id"]
  *   },
  *   transactions_preview: [
@@ -482,7 +492,7 @@ export const UpdateTransactionsOutputSchema = z.union([
 			validation: z.literal("passed"),
 			summary: z.object({
 				total_transactions: z.number(),
-				accounts_affected: z.number(),
+				accounts_affected: z.array(z.string()),
 				fields_to_update: z.array(z.string()),
 			}),
 			transactions_preview: z.array(DryRunPreviewItemSchema),
@@ -519,8 +529,8 @@ export type UpdateTransactionsOutput = z.infer<
  * {
  *   message: "Transaction deleted successfully",
  *   transaction: { id: "txn-123", deleted: true },
- *   updated_balance: 175500,
- *   updated_cleared_balance: 125500
+ *   updated_balance: 175.5,
+ *   updated_cleared_balance: 125.5
  * }
  *
  * @example
@@ -543,8 +553,8 @@ export const DeleteTransactionOutputSchema = z.union([
 			id: z.string(),
 			deleted: z.boolean(),
 		}),
-		updated_balance: z.number(), // Raw YNAB milliunits
-		updated_cleared_balance: z.number(), // Raw YNAB milliunits
+		updated_balance: z.number(),
+		updated_cleared_balance: z.number(),
 	}),
 ]);
 

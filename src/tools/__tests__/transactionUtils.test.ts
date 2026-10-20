@@ -4,6 +4,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import type { SaveTransactionsResponseData } from "ynab/dist/models/SaveTransactionsResponseData.js";
+import {
+	ErrorHandler,
+	YNABAPIError,
+	YNABErrorCode,
+} from "../../server/errorHandler.js";
 import { responseFormatter } from "../../server/responseFormatter.js";
 import { ValidationError } from "../../types/index.js";
 import type {
@@ -478,6 +483,81 @@ describe("transactionUtils", () => {
 			expect(results).toHaveLength(1);
 			expect(results[0].status).toBe("created");
 			expect(results[0].transaction_id).toBe("txn-1");
+		});
+
+		it("correlates a unique response that omits payee_name", () => {
+			const requests: BulkTransactionInput[] = [
+				{
+					account_id: "acc-1",
+					date: "2024-03-15",
+					amount: 5000,
+					payee_name: "Test Payee",
+				},
+			];
+			const responseData: SaveTransactionsResponseData = {
+				transactions: [
+					{
+						id: "txn-1",
+						account_id: "acc-1",
+						date: "2024-03-15",
+						amount: 5000,
+						payee_id: "payee-uuid-123",
+					} as ynab.TransactionDetail,
+				],
+				duplicate_import_ids: [],
+				server_knowledge: 100,
+			};
+
+			const results = correlateResults(requests, responseData, new Set());
+
+			expect(results[0]).toMatchObject({
+				status: "created",
+				transaction_id: "txn-1",
+			});
+		});
+
+		it("does not guess when payee-agnostic correlation is ambiguous", () => {
+			const requests: BulkTransactionInput[] = [
+				{
+					account_id: "acc-1",
+					date: "2024-03-15",
+					amount: 5000,
+					payee_name: "Payee A",
+				},
+				{
+					account_id: "acc-1",
+					date: "2024-03-15",
+					amount: 5000,
+					payee_name: "Payee B",
+				},
+			];
+			const responseData: SaveTransactionsResponseData = {
+				transactions: [
+					{
+						id: "txn-a",
+						account_id: "acc-1",
+						date: "2024-03-15",
+						amount: 5000,
+						payee_id: "payee-a",
+					} as ynab.TransactionDetail,
+					{
+						id: "txn-b",
+						account_id: "acc-1",
+						date: "2024-03-15",
+						amount: 5000,
+						payee_id: "payee-b",
+					} as ynab.TransactionDetail,
+				],
+				duplicate_import_ids: [],
+				server_knowledge: 100,
+			};
+
+			const results = correlateResults(requests, responseData, new Set());
+
+			expect(results.map((result) => result.status)).toEqual([
+				"failed",
+				"failed",
+			]);
 		});
 
 		it("should mark duplicates based on duplicateImportIds", () => {
@@ -1045,6 +1125,31 @@ describe("transactionUtils", () => {
 			handleTransactionError(null, "Default message");
 			expect(responseFormatter.format).toHaveBeenCalledWith({
 				error: { message: "Default message" },
+			});
+		});
+
+		it("delegates to the centralized error handler with transaction context", () => {
+			const format = vi.fn(() => "formatted error");
+			const errorHandler = new ErrorHandler({ format });
+
+			const result = handleTransactionError(
+				new YNABAPIError(YNABErrorCode.NOT_FOUND, "Missing"),
+				"Default message",
+				errorHandler,
+				"updating transaction",
+			);
+
+			expect(result).toMatchObject({
+				isError: true,
+				content: [{ type: "text", text: "formatted error" }],
+			});
+			expect(format).toHaveBeenCalledWith({
+				error: expect.objectContaining({
+					code: YNABErrorCode.NOT_FOUND,
+					message: "Budget, account, category, or transaction not found",
+					userMessage:
+						"We couldn't find that transaction. It may have been deleted or moved.",
+				}),
 			});
 		});
 	});

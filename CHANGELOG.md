@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Transaction update tools can convert a non-split transaction into a split, with decimal/milliunit input normalization, exact parent-total validation, dry-run previews, and category cache invalidation
+
+### Changed
+
+- Transaction mutation responses now consistently return transaction amounts and account balances in decimal currency units
+- Bulk transaction correlation now avoids ambiguous payee-agnostic matches instead of guessing which response belongs to an input
+
+### Fixed
+
+- Transaction exports now pass the transaction type filter in the correct YNAB SDK argument position
+- Bulk update dry-run output schemas now describe `accounts_affected` as an array of account IDs
+- Reconciliation excludes YNAB balance-adjustment payees from unmatched results and uses the statement end date as a hard upper matching bound
+- Transaction read and write failures now retain operation context when routed through the centralized error handler
+
 ## [0.28.0] - 2026-07-29
 
 ### Changed

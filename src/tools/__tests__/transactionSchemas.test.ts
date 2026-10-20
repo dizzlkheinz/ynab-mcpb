@@ -897,6 +897,58 @@ describe("Transaction Schemas", () => {
 			expect(result.dry_run).toBe(true);
 		});
 
+		it("normalizes and validates an in-place split update", () => {
+			const result = UpdateTransactionSchema.parse({
+				...validBase,
+				amount_decimal: -14.2,
+				subtransactions: [
+					{ amount_decimal: -10, category_id: "cat-1" },
+					{ amount_milliunits: -4200, category_id: "cat-2" },
+				],
+			});
+
+			expect(result.amount).toBe(-14200);
+			expect(result.subtransactions).toEqual([
+				{ amount: -10000, category_id: "cat-1" },
+				{ amount: -4200, category_id: "cat-2" },
+			]);
+		});
+
+		it("requires a parent amount for split updates", () => {
+			const result = UpdateTransactionSchema.safeParse({
+				...validBase,
+				subtransactions: [{ amount_decimal: -10, category_id: "cat-1" }],
+			});
+
+			expect(result.success).toBe(false);
+		});
+
+		it("rejects split lines that do not sum to the parent amount", () => {
+			const result = UpdateTransactionSchema.safeParse({
+				...validBase,
+				amount_decimal: -12,
+				subtransactions: [
+					{ amount_decimal: -10, category_id: "cat-1" },
+					{ amount_decimal: -1, category_id: "cat-2" },
+				],
+			});
+
+			expect(result.success).toBe(false);
+		});
+
+		it("rejects a category on the split parent", () => {
+			const result = UpdateTransactionSchema.safeParse({
+				...validBase,
+				amount_decimal: -10,
+				category_id: "parent-category",
+				subtransactions: [
+					{ amount_decimal: -10, category_id: "split-category" },
+				],
+			});
+
+			expect(result.success).toBe(false);
+		});
+
 		it("should allow missing budget_id for default resolution", () => {
 			const result = UpdateTransactionSchema.parse({
 				transaction_id: "trans-1",
@@ -1001,6 +1053,28 @@ describe("Transaction Schemas", () => {
 			expect(result.transactions[0].amount).toBe(20000);
 			expect(result.transactions[0].original_account_id).toBe("account-1");
 			expect(result.transactions[0].original_date).toBe("2024-01-01");
+		});
+
+		it("supports normalized split updates in a bulk request", () => {
+			const result = UpdateTransactionsSchema.parse({
+				budget_id: "budget-1",
+				transactions: [
+					{
+						id: "trans-1",
+						amount_decimal: -8.624,
+						subtransactions: [
+							{ amount_decimal: -3.799, category_id: "groceries" },
+							{ amount_milliunits: -4825, category_id: "tools" },
+						],
+					},
+				],
+			});
+
+			expect(result.transactions[0]?.amount).toBe(-8624);
+			expect(result.transactions[0]?.subtransactions).toEqual([
+				{ amount: -3799, category_id: "groceries" },
+				{ amount: -4825, category_id: "tools" },
+			]);
 		});
 
 		it("should reject empty transactions array", () => {

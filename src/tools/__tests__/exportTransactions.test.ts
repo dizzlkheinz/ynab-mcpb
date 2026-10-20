@@ -108,6 +108,20 @@ describe("exportTransactions", () => {
 	});
 
 	describe("handleExportTransactions", () => {
+		it("passes type in the SDK type argument slot", async () => {
+			await handleExportTransactions(mockYnabAPI, {
+				budget_id: "test-budget",
+				type: "unapproved",
+			});
+
+			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
+				"test-budget",
+				undefined,
+				undefined,
+				"unapproved",
+			);
+		});
+
 		it("should export minimal fields by default", async () => {
 			const params = { budget_id: "test-budget" };
 

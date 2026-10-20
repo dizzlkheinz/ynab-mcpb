@@ -462,5 +462,101 @@ describe("analyzer", () => {
 			// The inside-range transaction should match and not be in unmatched
 			expect(result.unmatched_ynab).toHaveLength(0);
 		});
+
+		it("treats statement_end_date as a hard upper bound", () => {
+			vi.mocked(csvParser.parseCSV).mockReturnValue({
+				transactions: [
+					{
+						id: "b1",
+						date: "2025-01-15",
+						amount: -50000,
+						payee: "Grocery Store",
+						memo: "",
+						sourceRow: 1,
+						raw: {} as any,
+					},
+				],
+				meta: {
+					detectedDelimiter: ",",
+					detectedColumns: [],
+					totalRows: 1,
+					validRows: 1,
+					skippedRows: 0,
+				},
+				errors: [],
+				warnings: [],
+			});
+
+			const ynabTxns = [
+				{
+					id: "after-close",
+					date: "2025-01-16",
+					amount: -1000,
+					payee_name: "After Close",
+					cleared: "uncleared",
+					approved: true,
+				},
+			] as YNABAPITransaction[];
+
+			const result = analyzeReconciliation(
+				"csv",
+				undefined,
+				ynabTxns,
+				0,
+				undefined,
+				"USD",
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				"2025-01-15",
+			);
+
+			expect(result.ynab_outside_date_range.map((txn) => txn.id)).toContain(
+				"after-close",
+			);
+			expect(result.unmatched_ynab).toHaveLength(0);
+		});
+
+		it("does not report balance-adjustment payees as unmatched", () => {
+			vi.mocked(csvParser.parseCSV).mockReturnValue({
+				transactions: [
+					{
+						id: "b1",
+						date: "2025-01-15",
+						amount: -50000,
+						payee: "Grocery Store",
+						memo: "",
+						sourceRow: 1,
+						raw: {} as any,
+					},
+				],
+				meta: {
+					detectedDelimiter: ",",
+					detectedColumns: [],
+					totalRows: 1,
+					validRows: 1,
+					skippedRows: 0,
+				},
+				errors: [],
+				warnings: [],
+			});
+
+			const ynabTxns = [
+				{
+					id: "starting-balance",
+					date: "2025-01-15",
+					amount: 100000,
+					payee_name: "Starting Balance",
+					cleared: "cleared",
+					approved: true,
+				},
+			] as YNABAPITransaction[];
+
+			const result = analyzeReconciliation("csv", undefined, ynabTxns, 0);
+
+			expect(result.unmatched_ynab).toHaveLength(0);
+		});
 	});
 });
