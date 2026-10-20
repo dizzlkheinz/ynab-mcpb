@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-10-20
+
+### Fixed
+
+- Publish workflow now waits and retries the MCP Registry step so it no longer fails while a just-published npm version propagates
+
 ## [0.29.0] - 2026-10-20
 
 ### Added
