@@ -1,5 +1,5 @@
 import { z } from "zod/v4";
-import { amountToMilliunits } from "../../utils/amountUtils.js";
+import { amountToMilliunits } from "../../utils/money.js";
 
 export const amountInputShape = {
 	amount_decimal: z

@@ -21,6 +21,7 @@ src/tools/
 ├── transactionTools.ts         # Transaction facade (delegates to read/write modules)
 ├── transactionReadTools.ts     # Transaction read handlers (list/get/export)
 ├── transactionWriteTools.ts    # Transaction write handlers (create/update/delete)
+├── receiptSplit/               # Receipt-split collapse and tax-allocation logic
 ├── transactionSchemas.ts       # Transaction Zod schemas (v0.18.4 extraction)
 ├── transactionUtils.ts         # Transaction utilities (v0.18.4 extraction)
 ├── categoryTools.ts            # Category management (list, get, update)
@@ -167,7 +168,7 @@ export const BudgetOutputSchema = z.object({
 YNAB uses **milliunits** (1 dollar = 1000 milliunits). Always convert before API calls:
 
 ```typescript
-import { milliunitsToAmount, amountToMilliunits } from '../utils/amountUtils.js';
+import { milliunitsToAmount, amountToMilliunits } from '../utils/money.js';
 
 // User provides dollars, convert to milliunits for API
 const transaction = {
@@ -289,6 +290,7 @@ Transaction tooling is split into focused modules for maintainability:
 4. **transactionWriteTools.ts**
    - Mutation handlers (`create_transaction`, `update_transaction`, `delete_transaction`, `create_transactions`, `create_receipt_split_transaction`, `update_transactions`)
    - Registration factory for write tools
+   - Receipt-split subtransaction logic lives in `receiptSplit/collapseLogic.ts`
 
 5. **transactionTools.ts**
    - Facade that calls read/write registration factories

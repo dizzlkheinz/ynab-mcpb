@@ -42,6 +42,16 @@ export class RequestLogger {
 	}
 
 	/**
+	 * Update logger configuration (useful for testing)
+	 */
+	setConfig(config: Partial<LoggerConfig>): void {
+		this.config = {
+			...this.config,
+			...config,
+		};
+	}
+
+	/**
 	 * Log a tool request with sanitized parameters
 	 */
 	logRequest(

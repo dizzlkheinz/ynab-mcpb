@@ -1,11 +1,11 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import { handleToolError, type ErrorHandler } from "../server/errorHandler.js";
+import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
-import { milliunitsToAmount } from "../utils/amountUtils.js";
 import { isValidISODate } from "../utils/dateUtils.js";
+import { milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
 	createBudgetResolver,

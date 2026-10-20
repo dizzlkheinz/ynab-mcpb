@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import { parse } from "csv-parse/sync";
 import { parse as parseDateFns } from "date-fns";
+import Papa from "papaparse";
 import type { Milli } from "../../utils/money.js";
 import { toMilli } from "../../utils/money.js";
 import { resolveCsvPathCandidates } from "../csvFilePath.js";
@@ -124,28 +124,22 @@ function detectDelimiter(lines: string[]): string {
 
 		for (const line of sampleLines) {
 			try {
-				const rows = parse(line, {
+				const result = Papa.parse<string[]>(line, {
 					delimiter,
-					quote: '"',
-					escape: '"',
-					skip_empty_lines: true,
-					trim: true,
-					relax_column_count: true,
+					quoteChar: '"',
+					skipEmptyLines: true,
 				});
 
-				// rows should be an array with one row (since we're parsing one line)
-				if (rows && rows.length > 0 && rows[0]) {
-					const columns = Array.isArray(rows[0])
-						? rows[0]
-						: Object.values(rows[0]);
-					columnCounts.push(columns.length);
+				const firstRow = result.data?.[0];
+				if (Array.isArray(firstRow)) {
+					columnCounts.push(firstRow.length);
 				} else {
 					// If parsing failed or returned empty, fall back to simple split
 					const columns = line.split(delimiter);
 					columnCounts.push(columns.length);
 				}
 			} catch {
-				// If csv-parse fails, fall back to simple split method
+				// If parsing fails, fall back to simple split method
 				parseFailed = true;
 				const columns = line.split(delimiter);
 				columnCounts.push(columns.length);
@@ -388,15 +382,15 @@ export function parseBankCSV(
 	// Preprocess CSV to fix common issues like unquoted dates
 	const processedCSV = preprocessCSV(csvContent, format);
 
-	const records = parse(processedCSV, {
+	const parsed = Papa.parse<string[] | Record<string, string>>(processedCSV, {
 		delimiter: format.delimiter,
-		columns: format.has_header,
-		skip_empty_lines: true,
-		trim: true,
-		quote: '"',
-		escape: '"',
-		relax_column_count: true,
+		header: format.has_header,
+		skipEmptyLines: true,
+		transformHeader: (header) => header.trim(),
+		transform: (value) => value.trim(),
+		quoteChar: '"',
 	});
+	const records = parsed.data.filter((record) => record != null);
 
 	const transactions: BankTransaction[] = [];
 

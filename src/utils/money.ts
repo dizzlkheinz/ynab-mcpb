@@ -135,3 +135,35 @@ export const toMoneyValueFromDecimal = (
 	currency: string = DEFAULT_CURRENCY,
 	decimalDigits: number = DEFAULT_DECIMAL_DIGITS,
 ): MoneyValue => toMoneyValue(toMilli(amount), currency, decimalDigits);
+
+/**
+ * Converts an amount from milliunits to a currency amount (major units).
+ * Uses the milliunit boundary of the input value; see `fromMilli` for
+ * currency-aware decimal-digit conversion.
+ */
+export const milliunitsToAmount = (milliunits: number): number => {
+	return Math.round(milliunits) / 1000;
+};
+
+/**
+ * Converts a currency amount (major units) to integer milliunits.
+ * Rounds half away from zero for positive amounts and truncates toward
+ * zero for negative amounts, matching YNAB's stored-milliunit behavior.
+ */
+export const amountToMilliunits = (amount: number): number => {
+	if (!Number.isFinite(amount)) {
+		throw new Error(`Invalid amount: ${amount} is not a finite number`);
+	}
+	return Math.round(amount * 1000);
+};
+
+/**
+ * Formats a milliunit amount as a currency string with 2 decimal places.
+ */
+export const formatAmount = (
+	milliunits: number,
+	currencySymbol = "$",
+): string => {
+	const amount = milliunitsToAmount(milliunits);
+	return `${currencySymbol}${amount.toFixed(2)}`;
+};
