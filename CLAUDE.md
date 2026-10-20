@@ -156,7 +156,7 @@ Tools are organized by domain with some using modular sub-directories:
 
 - **money.ts** - Amount conversion (dollars ↔ milliunits)
 - **dateUtils.ts** - Date formatting and validation
-- **amountUtils.ts** - Amount validation and utilities
+- **money.ts** - Amount validation and utilities
 - **baseError.ts** - Base error class for custom errors
 - **errors.ts** - Custom error classes and error handling utilities
 - **validationError.ts** - Validation-specific error handling
@@ -504,7 +504,7 @@ YNAB uses **milliunits** internally (1 dollar = 1000 milliunits):
 
 ```typescript
 // Converting amounts
-import { milliunitsToAmount, amountToMilliunits } from './utils/amountUtils.js';
+import { milliunitsToAmount, amountToMilliunits } from './utils/money.js';
 
 const dollars = milliunitsToAmount(25500); // 25.50
 const milliunits = amountToMilliunits(25.5); // 25500

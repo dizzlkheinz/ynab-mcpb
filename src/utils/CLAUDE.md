@@ -16,8 +16,7 @@ The `src/utils/` directory provides:
 
 | File | Responsibility | Lines | Critical |
 |------|---------------|-------|----------|
-| **amountUtils.ts** | Dollar ↔ milliunit conversion and amount formatting (CRITICAL!) | ~50 | CRITICAL |
-| **money.ts** | Currency-aware money helpers (`toMilli`, `fromMilli`, `formatMoney`) | ~150 | HIGH |
+| **money.ts** | Dollar ↔ milliunit conversion, currency-aware helpers (`toMilli`, `fromMilli`), and amount formatting (CRITICAL!) | ~200 | CRITICAL |
 | **dateUtils.ts** | ISO/YNAB month formatting and validation | ~100 | HIGH |
 | **baseError.ts** | Base error class for custom errors | ~50 | HIGH |
 | **errors.ts** | Custom error classes and utilities | ~200 | HIGH |
@@ -32,7 +31,7 @@ The `src/utils/` directory provides:
 This is the **most critical** utility in the entire codebase. Getting this wrong means amounts are 1000x off.
 
 ```typescript
-// amountUtils.ts
+// money.ts
 export function amountToMilliunits(dollars: number): number {
   return Math.round(dollars * 1000);
 }
@@ -107,7 +106,7 @@ export function isValidISODate(dateString: string): boolean {
 Validate monetary amounts before API calls:
 
 ```typescript
-// amountUtils.ts
+// money.ts
 export function validateAmount(amount: number): boolean {
   // Check for finite number
   if (!Number.isFinite(amount)) return false;
