@@ -21,11 +21,11 @@ import { DefaultArgumentResolutionError } from "../server/toolRegistry.js";
 import type {
 	DeltaHandler,
 	Handler,
+	HandlerDeltaDeps,
 	NoInputHandler,
 	ToolContext,
 	WriteHandler,
 } from "../types/toolRegistration.js";
-import type { DeltaFetcher } from "./deltaFetcher.js";
 
 /**
  * Creates adapter functions bound to the provided context. These helpers reduce
@@ -57,7 +57,7 @@ export function createAdapters(context: ToolContext) {
 			async ({
 				input,
 			}: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
-				handler(ynabAPI, deltaFetcher, input, errorHandler),
+				handler(ynabAPI, input, { deltaFetcher }, errorHandler),
 
 		/**
 		 * Adapter for delta operations that may emit progress notifications.
@@ -67,8 +67,8 @@ export function createAdapters(context: ToolContext) {
 			<TInput extends Record<string, unknown>>(
 				handler: (
 					api: typeof ynabAPI,
-					deltaFetcher: DeltaFetcher,
 					params: TInput,
+					deps?: HandlerDeltaDeps,
 					sendProgress?: ProgressCallback,
 					errorHandler?: ErrorHandler,
 				) => Promise<CallToolResult>,
@@ -79,8 +79,8 @@ export function createAdapters(context: ToolContext) {
 			}: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
 				handler(
 					ynabAPI,
-					deltaFetcher,
 					input,
+					{ deltaFetcher },
 					execContext.sendProgress,
 					errorHandler,
 				),
@@ -90,7 +90,12 @@ export function createAdapters(context: ToolContext) {
 			async ({
 				input,
 			}: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
-				handler(ynabAPI, deltaCache, serverKnowledgeStore, input, errorHandler),
+				handler(
+					ynabAPI,
+					input,
+					{ deltaCache, serverKnowledgeStore },
+					errorHandler,
+				),
 	};
 }
 

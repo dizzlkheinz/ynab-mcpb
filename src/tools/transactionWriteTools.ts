@@ -5,11 +5,9 @@ import type { SaveSubTransaction } from "ynab/dist/models/SaveSubTransaction.js"
 import type { SaveTransactionWithIdOrImportId } from "ynab/dist/models/SaveTransactionWithIdOrImportId.js";
 import type { z } from "zod/v4";
 import { CacheManager, cacheManager } from "../server/cacheManager.js";
-import type { DeltaCache } from "../server/deltaCache.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import { globalRequestLogger } from "../server/requestLogger.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
 import { ValidationError, withToolErrorHandling } from "../types/index.js";
 import type { ToolContext } from "../types/toolRegistration.js";
@@ -19,7 +17,7 @@ import {
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import { resolveDeltaWriteArgs } from "./deltaSupport.js";
+import { type DeltaWriteDeps, resolveDeltaWriteDeps } from "./deltaSupport.js";
 import { applySmartCollapseLogic } from "./receiptSplit/collapseLogic.js";
 import {
 	CreateReceiptSplitTransactionOutputSchema,
@@ -161,26 +159,11 @@ function toUnavailableUpdatePreview(transaction: BulkUpdateTransactionInput) {
  */
 export async function handleCreateTransaction(
 	ynabAPI: ynab.API,
-	deltaCache: DeltaCache,
-	knowledgeStore: ServerKnowledgeStore,
 	params: CreateTransactionParams,
-): Promise<CallToolResult>;
-export async function handleCreateTransaction(
-	ynabAPI: ynab.API,
-	params: CreateTransactionParams,
-): Promise<CallToolResult>;
-export async function handleCreateTransaction(
-	ynabAPI: ynab.API,
-	deltaCacheOrParams: DeltaCache | CreateTransactionParams,
-	knowledgeStoreOrParams?: ServerKnowledgeStore | CreateTransactionParams,
-	maybeParams?: CreateTransactionParams,
+	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
-		deltaCacheOrParams,
-		knowledgeStoreOrParams,
-		maybeParams,
-	);
+	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	try {
 		if (params.dry_run) {
 			const dryRunData = {
@@ -312,28 +295,11 @@ export async function handleCreateTransaction(
 
 export async function handleCreateReceiptSplitTransaction(
 	ynabAPI: ynab.API,
-	deltaCache: DeltaCache,
-	knowledgeStore: ServerKnowledgeStore,
 	params: CreateReceiptSplitTransactionParams,
-): Promise<CallToolResult>;
-export async function handleCreateReceiptSplitTransaction(
-	ynabAPI: ynab.API,
-	params: CreateReceiptSplitTransactionParams,
-): Promise<CallToolResult>;
-export async function handleCreateReceiptSplitTransaction(
-	ynabAPI: ynab.API,
-	deltaCacheOrParams: DeltaCache | CreateReceiptSplitTransactionParams,
-	knowledgeStoreOrParams?:
-		| ServerKnowledgeStore
-		| CreateReceiptSplitTransactionParams,
-	maybeParams?: CreateReceiptSplitTransactionParams,
-	_errorHandler?: ErrorHandler,
+	deps?: DeltaWriteDeps,
+	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
-		deltaCacheOrParams,
-		knowledgeStoreOrParams,
-		maybeParams,
-	);
+	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	const date = params.date ?? new Date().toISOString().slice(0, 10);
 
 	const categoryCalculations: ReceiptCategoryCalculation[] =
@@ -483,9 +449,9 @@ export async function handleCreateReceiptSplitTransaction(
 
 	const baseResult = await handleCreateTransaction(
 		ynabAPI,
-		deltaCache,
-		knowledgeStore,
 		createTransactionParams,
+		{ deltaCache, knowledgeStore },
+		errorHandler,
 	);
 
 	const firstContent = baseResult.content?.[0];
@@ -519,26 +485,11 @@ export async function handleCreateReceiptSplitTransaction(
  */
 export async function handleUpdateTransaction(
 	ynabAPI: ynab.API,
-	deltaCache: DeltaCache,
-	knowledgeStore: ServerKnowledgeStore,
 	params: UpdateTransactionParams,
-): Promise<CallToolResult>;
-export async function handleUpdateTransaction(
-	ynabAPI: ynab.API,
-	params: UpdateTransactionParams,
-): Promise<CallToolResult>;
-export async function handleUpdateTransaction(
-	ynabAPI: ynab.API,
-	deltaCacheOrParams: DeltaCache | UpdateTransactionParams,
-	knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateTransactionParams,
-	maybeParams?: UpdateTransactionParams,
+	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
-		deltaCacheOrParams,
-		knowledgeStoreOrParams,
-		maybeParams,
-	);
+	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	try {
 		if (params.dry_run) {
 			const updateDryRunData = {
@@ -745,26 +696,11 @@ export async function handleUpdateTransaction(
  */
 export async function handleDeleteTransaction(
 	ynabAPI: ynab.API,
-	deltaCache: DeltaCache,
-	knowledgeStore: ServerKnowledgeStore,
 	params: DeleteTransactionParams,
-): Promise<CallToolResult>;
-export async function handleDeleteTransaction(
-	ynabAPI: ynab.API,
-	params: DeleteTransactionParams,
-): Promise<CallToolResult>;
-export async function handleDeleteTransaction(
-	ynabAPI: ynab.API,
-	deltaCacheOrParams: DeltaCache | DeleteTransactionParams,
-	knowledgeStoreOrParams?: ServerKnowledgeStore | DeleteTransactionParams,
-	maybeParams?: DeleteTransactionParams,
+	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
-		deltaCacheOrParams,
-		knowledgeStoreOrParams,
-		maybeParams,
-	);
+	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	try {
 		if (params.dry_run) {
 			const deleteDryRunData = {
@@ -859,26 +795,11 @@ export async function handleDeleteTransaction(
 
 export async function handleCreateTransactions(
 	ynabAPI: ynab.API,
-	deltaCache: DeltaCache,
-	knowledgeStore: ServerKnowledgeStore,
 	params: CreateTransactionsParams,
-): Promise<CallToolResult>;
-export async function handleCreateTransactions(
-	ynabAPI: ynab.API,
-	params: CreateTransactionsParams,
-): Promise<CallToolResult>;
-export async function handleCreateTransactions(
-	ynabAPI: ynab.API,
-	deltaCacheOrParams: DeltaCache | CreateTransactionsParams,
-	knowledgeStoreOrParams?: ServerKnowledgeStore | CreateTransactionsParams,
-	maybeParams?: CreateTransactionsParams,
+	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
-		deltaCacheOrParams,
-		knowledgeStoreOrParams,
-		maybeParams,
-	);
+	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	return (await withToolErrorHandling(
 		async () => {
 			const validationResult = CreateTransactionsSchema.safeParse(params);
@@ -1271,26 +1192,11 @@ async function resolveMetadata(
  */
 export async function handleUpdateTransactions(
 	ynabAPI: ynab.API,
-	deltaCache: DeltaCache,
-	knowledgeStore: ServerKnowledgeStore,
 	params: UpdateTransactionsParams,
-): Promise<CallToolResult>;
-export async function handleUpdateTransactions(
-	ynabAPI: ynab.API,
-	params: UpdateTransactionsParams,
-): Promise<CallToolResult>;
-export async function handleUpdateTransactions(
-	ynabAPI: ynab.API,
-	deltaCacheOrParams: DeltaCache | UpdateTransactionsParams,
-	knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateTransactionsParams,
-	maybeParams?: UpdateTransactionsParams,
+	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
-		deltaCacheOrParams,
-		knowledgeStoreOrParams,
-		maybeParams,
-	);
+	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	return (await withToolErrorHandling(
 		async () => {
 			const validationResult = UpdateTransactionsSchema.safeParse(params);

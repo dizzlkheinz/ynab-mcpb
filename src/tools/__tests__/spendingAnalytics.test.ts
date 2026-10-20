@@ -72,7 +72,6 @@ describe("deterministic spending analytics", () => {
 		const output = structured(
 			await handleAnalyzeSpending(
 				{} as ynab.API,
-				fetcher({ "2026-07-02": data }),
 				{
 					budget_id: "budget-1",
 					since_date: "2026-07-02",
@@ -80,6 +79,7 @@ describe("deterministic spending analytics", () => {
 					group_by: "payee",
 					include_transfers: false,
 				},
+				{ deltaFetcher: fetcher({ "2026-07-02": data }) },
 			),
 		);
 		expect(output["totals"]).toEqual(
@@ -120,13 +120,13 @@ describe("deterministic spending analytics", () => {
 		const output = structured(
 			await handleAnalyzeSpending(
 				{} as ynab.API,
-				fetcher({ "2026-07-01": [split] }),
 				{
 					budget_id: "budget-1",
 					since_date: "2026-07-01",
 					until_date: "2026-07-31",
 					group_by: "category",
 				},
+				{ deltaFetcher: fetcher({ "2026-07-01": [split] }) },
 			),
 		);
 		expect(output["totals"]).toEqual(
@@ -141,15 +141,17 @@ describe("deterministic spending analytics", () => {
 	it("compares two complete periods in code", async () => {
 		const result = await handleCompareSpendingPeriods(
 			{} as ynab.API,
-			fetcher({
-				"2026-06-01": [transaction({ date: "2026-06-10", amount: -10_000 })],
-				"2026-07-01": [transaction({ date: "2026-07-10", amount: -25_000 })],
-			}),
 			{
 				budget_id: "budget-1",
 				period_a: { since_date: "2026-06-01", until_date: "2026-06-30" },
 				period_b: { since_date: "2026-07-01", until_date: "2026-07-31" },
 				group_by: "account",
+			},
+			{
+				deltaFetcher: fetcher({
+					"2026-06-01": [transaction({ date: "2026-06-10", amount: -10_000 })],
+					"2026-07-01": [transaction({ date: "2026-07-10", amount: -25_000 })],
+				}),
 			},
 		);
 		const output = result.structuredContent as Record<string, unknown>;
@@ -166,13 +168,13 @@ describe("deterministic spending analytics", () => {
 		const weekly = structured(
 			await handleAnalyzeSpending(
 				{} as ynab.API,
-				fetcher({ "2026-07-01": data }),
 				{
 					budget_id: "budget-1",
 					since_date: "2026-07-01",
 					until_date: "2026-07-31",
 					group_by: "week",
 				},
+				{ deltaFetcher: fetcher({ "2026-07-01": data }) },
 			),
 		);
 		expect(weekly["groups"]).toEqual([

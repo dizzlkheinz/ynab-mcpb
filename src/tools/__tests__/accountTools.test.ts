@@ -104,10 +104,14 @@ describe("Account Tools", () => {
 				usedDelta: true,
 			});
 
-			const result = await handleListAccounts(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListAccounts(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			const fetchAccountsMock = fetcher.fetchAccounts as ReturnType<
 				typeof vi.fn
@@ -155,10 +159,14 @@ describe("Account Tools", () => {
 				wasCached: false,
 			});
 
-			const result = await handleListAccounts(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListAccounts(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0].type).toBe("text");
@@ -191,10 +199,14 @@ describe("Account Tools", () => {
 				new Error("404 Not Found"),
 			);
 
-			const result = await handleListAccounts(mockYnabAPI, fetcher, {
-				budget_id: "invalid-budget",
-				response_format: "json",
-			});
+			const result = await handleListAccounts(
+				mockYnabAPI,
+				{
+					budget_id: "invalid-budget",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -209,10 +221,14 @@ describe("Account Tools", () => {
 				new Error("401 Unauthorized"),
 			);
 
-			const result = await handleListAccounts(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListAccounts(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -227,10 +243,14 @@ describe("Account Tools", () => {
 				new Error("Network error"),
 			);
 
-			const result = await handleListAccounts(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListAccounts(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);

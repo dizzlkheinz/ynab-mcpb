@@ -119,7 +119,9 @@ describeIntegration("Delta-backed account tool handlers", () => {
 				budget_id: testBudgetId,
 				response_format: "json" as const,
 			};
-			const firstCall = await handleListAccounts(ynabAPI, deltaFetcher, params);
+			const firstCall = await handleListAccounts(ynabAPI, params, {
+				deltaFetcher: deltaFetcher,
+			});
 			const firstPayload = parseResponse(firstCall);
 			expect(firstPayload.cached).toBe(false);
 

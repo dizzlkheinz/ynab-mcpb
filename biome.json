@@ -9,7 +9,8 @@
 			"!**/.git",
 			"!**/.claude",
 			"!**/test-results",
-			"!**/test-results.json"
+			"!**/test-results.json",
+			"!**/.vitest"
 		]
 	},
 	"linter": {

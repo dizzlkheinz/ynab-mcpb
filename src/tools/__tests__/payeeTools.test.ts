@@ -88,10 +88,14 @@ describe("Payee Tools", () => {
 				usedDelta: true,
 			});
 
-			const result = await handleListPayees(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
@@ -169,10 +173,14 @@ describe("Payee Tools", () => {
 				wasCached: false,
 			});
 
-			const result = await handleListPayees(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0].type).toBe("text");
@@ -203,10 +211,14 @@ describe("Payee Tools", () => {
 				new Error("401 Unauthorized"),
 			);
 
-			const result = await handleListPayees(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -221,10 +233,14 @@ describe("Payee Tools", () => {
 				new Error("403 Forbidden"),
 			);
 
-			const result = await handleListPayees(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -239,10 +255,14 @@ describe("Payee Tools", () => {
 				new Error("404 Not Found"),
 			);
 
-			const result = await handleListPayees(mockYnabAPI, fetcher, {
-				budget_id: "invalid-budget",
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "invalid-budget",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -255,10 +275,14 @@ describe("Payee Tools", () => {
 				new Error("429 Too Many Requests"),
 			);
 
-			const result = await handleListPayees(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -273,10 +297,14 @@ describe("Payee Tools", () => {
 				new Error("500 Internal Server Error"),
 			);
 
-			const result = await handleListPayees(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -291,10 +319,14 @@ describe("Payee Tools", () => {
 				new Error("Network error"),
 			);
 
-			const result = await handleListPayees(mockYnabAPI, fetcher, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);

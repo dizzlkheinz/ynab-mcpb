@@ -25,7 +25,6 @@ import { registerMonthTools } from "../tools/monthTools.js";
 import { registerPayeeTools } from "../tools/payeeTools.js";
 import { registerReconciliationTools } from "../tools/reconciliation/index.js";
 import { registerScheduledTransactionTools } from "../tools/scheduledTransactionTools.js";
-import { registerSpendingAnalyticsTools } from "../tools/spendingAnalytics.js";
 import { emptyObjectSchema } from "../tools/schemas/common.js";
 import {
 	ClearCacheOutputSchema,
@@ -33,6 +32,7 @@ import {
 	GetDefaultBudgetOutputSchema,
 	SetDefaultBudgetOutputSchema,
 } from "../tools/schemas/outputs/index.js";
+import { registerSpendingAnalyticsTools } from "../tools/spendingAnalytics.js";
 import { ToolAnnotationPresets } from "../tools/toolCategories.js";
 import { registerTransactionTools } from "../tools/transactionTools.js";
 import { registerUtilityTools } from "../tools/utilityTools.js";

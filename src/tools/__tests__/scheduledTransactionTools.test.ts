@@ -62,7 +62,7 @@ function cacheMock() {
 	} as unknown as DeltaCache;
 }
 
-const knowledgeStore = {} as ServerKnowledgeStore;
+const _knowledgeStore = {} as ServerKnowledgeStore;
 
 describe("scheduled transaction tools", () => {
 	it("lists normalized scheduled transactions from the delta cache", async () => {
@@ -74,11 +74,15 @@ describe("scheduled transaction tools", () => {
 			}),
 		} as unknown as DeltaFetcher;
 		const output = parse(
-			await handleListScheduledTransactions(apiMock(), deltaFetcher, {
-				budget_id: "budget-1",
-				limit: 10,
-				offset: 0,
-			}),
+			await handleListScheduledTransactions(
+				apiMock(),
+				{
+					budget_id: "budget-1",
+					limit: 10,
+					offset: 0,
+				},
+				{ deltaFetcher },
+			),
 		);
 		expect(output["total_count"]).toBe(1);
 		expect(output["cached"]).toBe(true);
@@ -109,14 +113,7 @@ describe("scheduled transaction tools", () => {
 			frequency: "monthly",
 			dry_run: true,
 		});
-		const output = parse(
-			await handleCreateScheduledTransaction(
-				api,
-				cacheMock(),
-				knowledgeStore,
-				params,
-			),
-		);
+		const output = parse(await handleCreateScheduledTransaction(api, params));
 		expect(output).toMatchObject({
 			dry_run: true,
 			request: { amount: -20.125 },
@@ -136,7 +133,9 @@ describe("scheduled transaction tools", () => {
 			amount_milliunits: -20_125,
 			frequency: "monthly",
 		});
-		await handleCreateScheduledTransaction(api, cache, knowledgeStore, params);
+		await handleCreateScheduledTransaction(api, params, {
+			deltaCache: cache,
+		});
 		expect(
 			api.scheduledTransactions.createScheduledTransaction,
 		).toHaveBeenCalledWith(
@@ -159,7 +158,9 @@ describe("scheduled transaction tools", () => {
 			scheduled_transaction_id: "scheduled-1",
 			amount_decimal: -20,
 		});
-		await handleUpdateScheduledTransaction(api, cache, knowledgeStore, params);
+		await handleUpdateScheduledTransaction(api, params, {
+			deltaCache: cache,
+		});
 		expect(
 			api.scheduledTransactions.updateScheduledTransaction,
 		).toHaveBeenCalledWith(
@@ -185,12 +186,7 @@ describe("scheduled transaction tools", () => {
 			memo: null,
 			flag_color: null,
 		});
-		await handleUpdateScheduledTransaction(
-			api,
-			cacheMock(),
-			knowledgeStore,
-			params,
-		);
+		await handleUpdateScheduledTransaction(api, params);
 		expect(
 			api.scheduledTransactions.updateScheduledTransaction,
 		).toHaveBeenCalledWith(
@@ -211,10 +207,14 @@ describe("scheduled transaction tools", () => {
 		const api = apiMock();
 		const cache = cacheMock();
 		const output = parse(
-			await handleDeleteScheduledTransaction(api, cache, knowledgeStore, {
-				budget_id: "budget-1",
-				scheduled_transaction_id: "scheduled-1",
-			}),
+			await handleDeleteScheduledTransaction(
+				api,
+				{
+					budget_id: "budget-1",
+					scheduled_transaction_id: "scheduled-1",
+				},
+				{ deltaCache: cache },
+			),
 		);
 		expect(output).toEqual({
 			success: true,

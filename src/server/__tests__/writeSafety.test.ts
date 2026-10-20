@@ -2,14 +2,14 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod/v4";
 import {
+	ToolRegistry,
+	type ToolRegistryDependencies,
+} from "../toolRegistry.js";
+import {
 	canonicalJson,
 	DEFAULT_WRITE_MODE,
 	WriteSafetyPolicy,
 } from "../writeSafety.js";
-import {
-	ToolRegistry,
-	type ToolRegistryDependencies,
-} from "../toolRegistry.js";
 
 const FIXED_TOKEN = "fixed-confirmation-token-123";
 

@@ -22,8 +22,10 @@ import {
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import type { DeltaFetcher } from "./deltaFetcher.js";
-import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
+import {
+	type DeltaFetcherDeps,
+	resolveDeltaFetcherDeps,
+} from "./deltaSupport.js";
 import {
 	ExportTransactionsSchema,
 	handleExportTransactions,
@@ -56,24 +58,11 @@ import {
 
 export async function handleListTransactions(
 	ynabAPI: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: ListTransactionsParams,
-): Promise<CallToolResult>;
-export async function handleListTransactions(
-	ynabAPI: ynab.API,
-	params: ListTransactionsParams,
-): Promise<CallToolResult>;
-export async function handleListTransactions(
-	ynabAPI: ynab.API,
-	deltaFetcherOrParams: DeltaFetcher | ListTransactionsParams,
-	maybeParams?: ListTransactionsParams,
+	deps?: DeltaFetcherDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-		ynabAPI,
-		deltaFetcherOrParams,
-		maybeParams,
-	);
+	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);

@@ -2,9 +2,28 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { DeltaCache } from "../server/deltaCache.js";
+import type { HandlerDeltaDeps } from "../types/toolRegistration.js";
+
+function requireDeltaFetcher(deps?: HandlerDeltaDeps): DeltaFetcher {
+	if (!deps?.deltaFetcher) {
+		throw new Error(
+			"handleListScheduledTransactions requires a DeltaFetcher via deps",
+		);
+	}
+	return deps.deltaFetcher;
+}
+
+function requireDeltaCache(deps?: HandlerDeltaDeps): DeltaCache {
+	if (!deps?.deltaCache) {
+		throw new Error(
+			"Scheduled transaction write handlers require a DeltaCache via deps",
+		);
+	}
+	return deps.deltaCache;
+}
+
 import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import {
@@ -195,10 +214,11 @@ function asResult(data: Record<string, unknown>): CallToolResult {
 
 export async function handleListScheduledTransactions(
 	_api: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: z.infer<typeof ListScheduledTransactionsSchema>,
+	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
+	const deltaFetcher = requireDeltaFetcher(deps);
 	try {
 		const budgetId = requireResolvedBudgetId(params.budget_id);
 		const fetched = await deltaFetcher.fetchScheduledTransactions(budgetId);
@@ -275,9 +295,8 @@ function saveRequest(
 
 export async function handleCreateScheduledTransaction(
 	api: ynab.API,
-	deltaCache: DeltaCache,
-	_knowledgeStore: ServerKnowledgeStore,
 	params: z.infer<typeof CreateScheduledTransactionSchema>,
+	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
@@ -294,6 +313,7 @@ export async function handleCreateScheduledTransaction(
 			budgetId,
 			{ scheduled_transaction: request },
 		);
+		const deltaCache = requireDeltaCache(deps);
 		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			scheduled_transaction: normalizeScheduledTransaction(
@@ -312,9 +332,8 @@ export async function handleCreateScheduledTransaction(
 
 export async function handleUpdateScheduledTransaction(
 	api: ynab.API,
-	deltaCache: DeltaCache,
-	_knowledgeStore: ServerKnowledgeStore,
 	params: z.infer<typeof UpdateScheduledTransactionSchema>,
+	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
@@ -370,6 +389,7 @@ export async function handleUpdateScheduledTransaction(
 			id,
 			{ scheduled_transaction: request },
 		);
+		const deltaCache = requireDeltaCache(deps);
 		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			scheduled_transaction: normalizeScheduledTransaction(
@@ -388,9 +408,8 @@ export async function handleUpdateScheduledTransaction(
 
 export async function handleDeleteScheduledTransaction(
 	api: ynab.API,
-	deltaCache: DeltaCache,
-	_knowledgeStore: ServerKnowledgeStore,
 	params: z.infer<typeof DeleteScheduledTransactionSchema>,
+	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
@@ -406,6 +425,7 @@ export async function handleDeleteScheduledTransaction(
 			budgetId,
 			params.scheduled_transaction_id,
 		);
+		const deltaCache = requireDeltaCache(deps);
 		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			success: true,

@@ -68,9 +68,13 @@ describe("Budget Tools", () => {
 				usedDelta: true,
 			});
 
-			const result = await handleListBudgets(mockYnabAPI, fetcher, {
-				response_format: "json",
-			});
+			const result = await handleListBudgets(
+				mockYnabAPI,
+				{
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			const parsedContent = JSON.parse(result.content[0].text);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
@@ -103,9 +107,13 @@ describe("Budget Tools", () => {
 				wasCached: false,
 			});
 
-			const result = await handleListBudgets(mockYnabAPI, fetcher, {
-				response_format: "json",
-			});
+			const result = await handleListBudgets(
+				mockYnabAPI,
+				{
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);
@@ -147,9 +155,13 @@ describe("Budget Tools", () => {
 				new Error("401 Unauthorized"),
 			);
 
-			const result = await handleListBudgets(mockYnabAPI, fetcher, {
-				response_format: "json",
-			});
+			const result = await handleListBudgets(
+				mockYnabAPI,
+				{
+					response_format: "json",
+				},
+				{ deltaFetcher: fetcher },
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(result.content[0].text);

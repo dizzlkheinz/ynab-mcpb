@@ -2,8 +2,8 @@ import "dotenv/config";
 import { z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import { ValidationError } from "../utils/errors.js";
-import { DEFAULT_WRITE_MODE, WRITE_MODES } from "./writeSafety.js";
 import { DEFAULT_TOOL_PROFILE, TOOL_PROFILES } from "./toolProfiles.js";
+import { DEFAULT_WRITE_MODE, WRITE_MODES } from "./writeSafety.js";
 
 const normalizeEnvValue = (value: unknown) => {
 	if (typeof value !== "string") {
@@ -32,6 +32,16 @@ const envSchema = z.object({
 	LOG_LEVEL: z
 		.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 		.default("info"),
+	YNAB_EXPORT_PATH: z.string().optional(),
+	XDG_DOCUMENTS_DIR: z.string().optional(),
+	RATE_LIMIT_LOGGING: z
+		.enum(["true", "false"])
+		.optional()
+		.transform((value) => value === "true"),
+	VERBOSE_TESTS: z
+		.enum(["true", "false"])
+		.optional()
+		.transform((value) => value === "true"),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
@@ -43,6 +53,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 		throw new ValidationError(validationError.toString());
 	}
 	return result.data;
+}
+
+let cachedConfig: AppConfig | undefined;
+
+/**
+ * Returns the memoized application config, loading it from the environment on
+ * first use. Tests that mutate relevant environment variables should call
+ * `resetAppConfig()` to force a reload.
+ */
+export function getAppConfig(): AppConfig {
+	if (!cachedConfig) {
+		cachedConfig = loadConfig();
+	}
+	return cachedConfig;
+}
+
+export function resetAppConfig(): void {
+	cachedConfig = undefined;
 }
 
 export const RESPONSE_SIZE_LIMIT_BYTES = 90_000;

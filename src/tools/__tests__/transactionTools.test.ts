@@ -64,60 +64,57 @@ vi.mock("../deltaSupport.js", async (importOriginal) => {
 	const original = await importOriginal<typeof import("../deltaSupport.js")>();
 	return {
 		...original,
-		resolveDeltaFetcherArgs: vi.fn(
-			(_ynabAPI, _deltaFetcherOrParams, maybeParams) => {
-				const params = maybeParams ?? _deltaFetcherOrParams;
-				// Create a simple mock delta fetcher that calls the API directly
-				const mockDeltaFetcher = {
-					fetchAccounts: vi.fn(async (budgetId: string) => {
-						const response = await mockYnabAPI.accounts.getAccounts(budgetId);
+		resolveDeltaFetcherDeps: vi.fn(() => {
+			// Create a simple mock delta fetcher that calls the API directly
+			const mockDeltaFetcher = {
+				fetchAccounts: vi.fn(async (budgetId: string) => {
+					const response = await mockYnabAPI.accounts.getAccounts(budgetId);
+					return {
+						data: response.data.accounts,
+						wasCached: false,
+						usedDelta: false,
+						serverKnowledge: response.data.server_knowledge ?? 0,
+					};
+				}),
+				fetchTransactions: vi.fn(
+					async (budgetId: string, sinceDate?: string, type?: string) => {
+						// Pass all 4 arguments to match YNAB API signature
+						const response = await mockYnabAPI.transactions.getTransactions(
+							budgetId,
+							sinceDate,
+							type,
+							undefined,
+						);
 						return {
-							data: response.data.accounts,
+							data: response.data.transactions,
 							wasCached: false,
 							usedDelta: false,
 							serverKnowledge: response.data.server_knowledge ?? 0,
 						};
-					}),
-					fetchTransactions: vi.fn(
-						async (budgetId: string, sinceDate?: string, type?: string) => {
-							// Pass all 4 arguments to match YNAB API signature
-							const response = await mockYnabAPI.transactions.getTransactions(
+					},
+				),
+				fetchTransactionsByAccount: vi.fn(
+					async (budgetId: string, accountId: string, sinceDate?: string) => {
+						// Pass all 5 arguments to match YNAB API signature
+						const response =
+							await mockYnabAPI.transactions.getTransactionsByAccount(
 								budgetId,
+								accountId,
 								sinceDate,
-								type,
+								undefined,
 								undefined,
 							);
-							return {
-								data: response.data.transactions,
-								wasCached: false,
-								usedDelta: false,
-								serverKnowledge: response.data.server_knowledge ?? 0,
-							};
-						},
-					),
-					fetchTransactionsByAccount: vi.fn(
-						async (budgetId: string, accountId: string, sinceDate?: string) => {
-							// Pass all 5 arguments to match YNAB API signature
-							const response =
-								await mockYnabAPI.transactions.getTransactionsByAccount(
-									budgetId,
-									accountId,
-									sinceDate,
-									undefined,
-									undefined,
-								);
-							return {
-								data: response.data.transactions,
-								wasCached: false,
-								usedDelta: false,
-								serverKnowledge: response.data.server_knowledge ?? 0,
-							};
-						},
-					),
-				};
-				return { deltaFetcher: mockDeltaFetcher, params };
-			},
-		),
+						return {
+							data: response.data.transactions,
+							wasCached: false,
+							usedDelta: false,
+							serverKnowledge: response.data.server_knowledge ?? 0,
+						};
+					},
+				),
+			};
+			return mockDeltaFetcher;
+		}),
 	};
 });
 
@@ -126,7 +123,7 @@ const { cacheManager, CacheManager } = await import(
 	"../../server/cacheManager.js"
 );
 const { globalRequestLogger } = await import("../../server/requestLogger.js");
-const { resolveDeltaFetcherArgs } = await import("../deltaSupport.js");
+const { resolveDeltaFetcherDeps } = await import("../deltaSupport.js");
 
 describe("transactionTools", () => {
 	beforeEach(() => {
@@ -411,13 +408,15 @@ describe("transactionTools", () => {
 				response_format: "json" as const,
 			});
 			const deltaFetcherResult = vi
-				.mocked(resolveDeltaFetcherArgs)
+				.mocked(resolveDeltaFetcherDeps)
 				.mock.results.at(-1)!.value;
 
-			expect(vi.mocked(resolveDeltaFetcherArgs)).toHaveBeenCalled();
-			expect(
-				deltaFetcherResult.deltaFetcher.fetchTransactions,
-			).toHaveBeenCalledWith("budget-123", undefined, undefined);
+			expect(vi.mocked(resolveDeltaFetcherDeps)).toHaveBeenCalled();
+			expect(deltaFetcherResult.fetchTransactions).toHaveBeenCalledWith(
+				"budget-123",
+				undefined,
+				undefined,
+			);
 			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
 				"budget-123",
 				undefined,

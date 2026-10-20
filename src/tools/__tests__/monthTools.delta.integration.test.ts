@@ -71,11 +71,15 @@ describeIntegration("Delta-backed month tool handler", () => {
 			budget_id: testBudgetId,
 			response_format: "json" as const,
 		};
-		const firstCall = await handleListMonths(ynabAPI, deltaFetcher, params);
+		const firstCall = await handleListMonths(ynabAPI, params, {
+			deltaFetcher: deltaFetcher,
+		});
 		const firstPayload = parseResponse(firstCall);
 		expect(firstPayload.cached).toBe(false);
 
-		const secondCall = await handleListMonths(ynabAPI, deltaFetcher, params);
+		const secondCall = await handleListMonths(ynabAPI, params, {
+			deltaFetcher: deltaFetcher,
+		});
 		const secondPayload = parseResponse(secondCall);
 		expectCacheHit(secondPayload);
 	});

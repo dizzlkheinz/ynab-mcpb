@@ -33,8 +33,7 @@ export class RequestLogger {
 	constructor(config: Partial<LoggerConfig> = {}) {
 		this.config = {
 			enabled: process.env["NODE_ENV"] !== "production",
-			logLevel:
-				(process.env["LOG_LEVEL"] as LoggerConfig["logLevel"]) || "info",
+			logLevel: config.logLevel ?? "info",
 			maxLogEntries: 1000,
 			sanitizeParameters: true,
 			...config,

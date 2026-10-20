@@ -3,7 +3,10 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import type { ToolFactory } from "../types/toolRegistration.js";
+import type {
+	HandlerDeltaDeps,
+	ToolFactory,
+} from "../types/toolRegistration.js";
 import { isValidISODate } from "../utils/dateUtils.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import {
@@ -12,6 +15,16 @@ import {
 	requireResolvedBudgetId,
 } from "./adapters.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
+
+function requireDeltaFetcher(deps?: HandlerDeltaDeps): DeltaFetcher {
+	if (!deps?.deltaFetcher) {
+		throw new Error(
+			"Spending analytics handlers require a DeltaFetcher via deps",
+		);
+	}
+	return deps.deltaFetcher;
+}
+
 import { ToolAnnotationPresets } from "./toolCategories.js";
 
 const dateSchema = z
@@ -298,10 +311,11 @@ function asResult(data: object): CallToolResult {
 
 export async function handleAnalyzeSpending(
 	_api: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: z.infer<typeof AnalyzeSpendingSchema>,
+	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
+	const deltaFetcher = requireDeltaFetcher(deps);
 	try {
 		const data = await analyze(
 			deltaFetcher,
@@ -338,10 +352,11 @@ function difference(
 
 export async function handleCompareSpendingPeriods(
 	_api: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: z.infer<typeof CompareSpendingPeriodsSchema>,
+	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
+	const deltaFetcher = requireDeltaFetcher(deps);
 	try {
 		const budgetId = requireResolvedBudgetId(params.budget_id);
 		const [periodA, periodB] = await Promise.all([

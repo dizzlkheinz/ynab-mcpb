@@ -11,8 +11,8 @@ import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
 import { getBudgetByIdCompat } from "../utils/ynabApiCompat.js";
 import { createAdapters } from "./adapters.js";
-import type { DeltaFetcher } from "./deltaFetcher.js";
-import { resolveDeltaFetcherArgs } from "./deltaSupport.js";
+import type { DeltaFetcherDeps } from "./deltaSupport.js";
+import { resolveDeltaFetcherDeps } from "./deltaSupport.js";
 import {
 	GetBudgetOutputSchema,
 	ListBudgetsOutputSchema,
@@ -54,15 +54,11 @@ export type GetBudgetParams = z.infer<typeof GetBudgetSchema>;
  */
 export async function handleListBudgets(
 	ynabAPI: ynab.API,
-	deltaFetcherOrParams?: DeltaFetcher | Record<string, unknown>,
-	maybeParams?: Record<string, unknown>,
+	params: Record<string, unknown> = {},
+	deps?: DeltaFetcherDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-		ynabAPI,
-		(deltaFetcherOrParams ?? {}) as DeltaFetcher | Record<string, unknown>,
-		maybeParams,
-	);
+	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
 	return await withToolErrorHandling(
 		async () => {
 			// Always use cache unless explicitly disabled

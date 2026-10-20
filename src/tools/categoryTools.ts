@@ -7,7 +7,6 @@ import {
 	CacheManager,
 	cacheManager,
 } from "../server/cacheManager.js";
-import type { DeltaCache } from "../server/deltaCache.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import {
 	formatCategoriesList,
@@ -15,7 +14,6 @@ import {
 } from "../server/markdownFormatter.js";
 import { invalidateBudgetResourceCaches } from "../server/resourceCacheInvalidation.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/money.js";
@@ -24,10 +22,11 @@ import {
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import type { DeltaFetcher } from "./deltaFetcher.js";
 import {
-	resolveDeltaFetcherArgs,
-	resolveDeltaWriteArgs,
+	type DeltaFetcherDeps,
+	type DeltaWriteDeps,
+	resolveDeltaFetcherDeps,
+	resolveDeltaWriteDeps,
 } from "./deltaSupport.js";
 import {
 	budgetedInputShape,
@@ -121,24 +120,11 @@ function convertGoalFields(category: ynab.Category) {
  */
 export async function handleListCategories(
 	ynabAPI: ynab.API,
-	deltaFetcher: DeltaFetcher,
 	params: ListCategoriesParams,
-): Promise<CallToolResult>;
-export async function handleListCategories(
-	ynabAPI: ynab.API,
-	params: ListCategoriesParams,
-): Promise<CallToolResult>;
-export async function handleListCategories(
-	ynabAPI: ynab.API,
-	deltaFetcherOrParams: DeltaFetcher | ListCategoriesParams,
-	maybeParams?: ListCategoriesParams,
+	deps?: DeltaFetcherDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaFetcher, params } = resolveDeltaFetcherArgs(
-		ynabAPI,
-		deltaFetcherOrParams,
-		maybeParams,
-	);
+	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -290,26 +276,11 @@ export async function handleGetCategory(
  */
 export async function handleUpdateCategory(
 	ynabAPI: ynab.API,
-	deltaCache: DeltaCache,
-	knowledgeStore: ServerKnowledgeStore,
 	params: UpdateCategoryParams,
-): Promise<CallToolResult>;
-export async function handleUpdateCategory(
-	ynabAPI: ynab.API,
-	params: UpdateCategoryParams,
-): Promise<CallToolResult>;
-export async function handleUpdateCategory(
-	ynabAPI: ynab.API,
-	deltaCacheOrParams: DeltaCache | UpdateCategoryParams,
-	knowledgeStoreOrParams?: ServerKnowledgeStore | UpdateCategoryParams,
-	maybeParams?: UpdateCategoryParams,
+	deps?: DeltaWriteDeps,
 	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore, params } = resolveDeltaWriteArgs(
-		deltaCacheOrParams,
-		knowledgeStoreOrParams,
-		maybeParams,
-	);
+	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	try {
 		if (params.dry_run) {
 			const currentDate = new Date();

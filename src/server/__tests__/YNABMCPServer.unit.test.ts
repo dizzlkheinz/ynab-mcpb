@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfigurationError } from "../../utils/errors.js";
 
 vi.mock("../config.js", () => ({
+	getAppConfig: () => ({
+		LOG_LEVEL: "error",
+		RATE_LIMIT_LOGGING: false,
+		VERBOSE_TESTS: false,
+		YNAB_MCP_ENABLE_DELTA: undefined,
+	}),
 	loadConfig: () => ({
 		YNAB_ACCESS_TOKEN: "unit-test-token",
 		YNAB_DEFAULT_BUDGET_ID: undefined,
