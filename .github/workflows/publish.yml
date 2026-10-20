@@ -57,4 +57,12 @@ jobs:
         run: ./mcp-publisher login github-oidc
 
       - name: Publish to MCP Registry
-        run: ./mcp-publisher publish
+        # npm can take a minute to serve a just-published version; the registry 404s until then
+        run: |
+          sleep 15
+          for attempt in 1 2 3 4 5; do
+            ./mcp-publisher publish && exit 0
+            echo "mcp-publisher attempt $attempt failed; retrying in 30s"
+            sleep 30
+          done
+          exit 1
