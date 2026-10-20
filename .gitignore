@@ -117,3 +117,4 @@ lib-cov/
 *.csv
 # Generated build metadata
 meta.json
+.vitest/
