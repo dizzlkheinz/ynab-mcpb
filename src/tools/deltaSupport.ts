@@ -110,6 +110,34 @@ export function resolveDeltaFetcherDeps(
 }
 
 /**
+ * Return the injected DeltaFetcher, throwing with the given message when absent.
+ * Unlike resolveDeltaFetcherDeps, this never falls back to the shared context.
+ */
+export function requireDeltaFetcher(
+	deps: DeltaFetcherDeps | undefined,
+	errorMessage: string,
+): DeltaFetcher {
+	if (!deps?.deltaFetcher) {
+		throw new Error(errorMessage);
+	}
+	return deps.deltaFetcher;
+}
+
+/**
+ * Return the injected DeltaCache, throwing with the given message when absent.
+ * Unlike resolveDeltaWriteDeps, this never falls back to the shared context.
+ */
+export function requireDeltaCache(
+	deps: DeltaWriteDeps | undefined,
+	errorMessage: string,
+): DeltaCache {
+	if (!deps?.deltaCache) {
+		throw new Error(errorMessage);
+	}
+	return deps.deltaCache;
+}
+
+/**
  * Resolve the DeltaCache and ServerKnowledgeStore for a write handler. Uses
  * the provided instances when given; otherwise falls back to the shared
  * context (creating them on demand).

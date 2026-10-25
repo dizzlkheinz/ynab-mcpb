@@ -156,15 +156,22 @@ export class RateLimiter {
 	 * Hash identifier for logging (to avoid exposing sensitive tokens)
 	 */
 	private hashIdentifier(identifier: string): string {
-		// Simple hash for logging purposes - not cryptographically secure
-		let hash = 0;
-		for (let i = 0; i < identifier.length; i++) {
-			const char = identifier.charCodeAt(i);
-			hash = (hash << 5) - hash + char;
-			hash = hash & hash; // Convert to 32-bit integer
-		}
-		return `token_${Math.abs(hash).toString(16)}`;
+		return hashToken(identifier);
 	}
+}
+
+/**
+ * Hash an access token for rate limiting and logging (to avoid exposing sensitive tokens)
+ */
+export function hashToken(token: string): string {
+	// Simple hash for logging purposes - not cryptographically secure
+	let hash = 0;
+	for (let i = 0; i < token.length; i++) {
+		const char = token.charCodeAt(i);
+		hash = (hash << 5) - hash + char;
+		hash = hash & hash; // Convert to 32-bit integer
+	}
+	return `token_${Math.abs(hash).toString(16)}`;
 }
 
 /**

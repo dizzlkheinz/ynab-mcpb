@@ -13,6 +13,7 @@ import {
 } from "./balanceReconciliation.js";
 import {
 	attachStatusToError,
+	type NormalizedYnabError,
 	normalizeYnabError,
 	shouldPropagateYnabError,
 } from "./executorErrors.js";
@@ -29,7 +30,12 @@ import {
 	updateReason,
 } from "./executorHelpers.js";
 import type { ReconcileAccountRequest } from "./index.js";
-import type { BankTransaction, ReconciliationAnalysis } from "./types.js";
+import type {
+	BankTransaction,
+	ReconciliationAnalysis,
+	TransactionMatch,
+	YNABTransaction,
+} from "./types.js";
 
 // Re-export extracted types/functions for backward compatibility
 export type { NormalizedYnabError } from "./executorErrors.js";
@@ -121,6 +127,30 @@ interface PreparedBulkCreateEntry {
 	correlationKey: string;
 }
 
+/**
+ * Mutable state shared by every step of a single reconciliation execution.
+ */
+interface ExecutionState {
+	readonly options: ExecutionOptions;
+	readonly summary: ExecutionSummary;
+	readonly actions: ExecutionActionRecord[];
+	readonly totalOperations: number;
+	readonly balanceToleranceMilli: number;
+	completedOperations: number;
+	clearedDeltaMilli: number;
+	balanceAligned: boolean;
+	accountSnapshotDirty: boolean;
+	bulkOperationDetails: BulkOperationDetails | undefined;
+}
+
+interface ChunkedUpdateConfig {
+	failureType: string;
+	failureVerb: string;
+	onChunkSuccess: (
+		transactions: ynab.TransactionDetail[],
+	) => Promise<void> | void;
+}
+
 function parseISODate(dateStr: string | undefined): Date | undefined {
 	if (!dateStr) return undefined;
 	const d = new Date(dateStr);
@@ -169,20 +199,89 @@ function isWithinStatementWindow(
 export async function executeReconciliation(
 	options: ExecutionOptions,
 ): Promise<ExecutionResult> {
-	const {
+	const { analysis, params, initialAccount } = options;
+	const statementTargetMilli = resolveStatementBalanceMilli(
+		analysis.balance_info,
+	);
+
+	const state: ExecutionState = {
+		options,
+		summary: buildInitialSummary(analysis, params),
+		actions: [],
+		totalOperations: countPlannedOperations(analysis, params),
+		balanceToleranceMilli: DEFAULT_TOLERANCE_CENTS * CENTS_TO_MILLI,
+		completedOperations: 0,
+		clearedDeltaMilli: addMilli(
+			initialAccount.cleared_balance ?? 0,
+			-statementTargetMilli,
+		),
+		balanceAligned: false,
+		accountSnapshotDirty: false,
+		bulkOperationDetails: undefined,
+	};
+
+	recordAlignmentIfNeeded(state, "initial balance check", { log: false });
+
+	const orderedAutoMatches = sortMatchesByBankDateDescending(
+		analysis.auto_matches,
+	);
+	const reconcilableMatchedTransactionIds = new Set<string>();
+	for (const match of orderedAutoMatches) {
+		if (match.ynabTransaction?.cleared === "cleared") {
+			reconcilableMatchedTransactionIds.add(match.ynabTransaction.id);
+		}
+	}
+	const orderedUnmatchedYNAB = orderUnmatchedYnabInStatementWindow(
 		analysis,
 		params,
-		ynabAPI,
-		budgetId,
-		accountId,
-		initialAccount,
-		currencyCode,
-		decimalDigits,
-		sendProgress,
-	} = options;
-	const actions_taken: ExecutionActionRecord[] = [];
+	);
 
-	const summary: ExecutionSummary = {
+	// STEP 1: Auto-create missing transactions (bank -> YNAB)
+	if (params.auto_create_transactions && !state.balanceAligned) {
+		await createMissingTransactions(
+			state,
+			sortByDateDescending(analysis.unmatched_bank),
+		);
+	}
+
+	// STEP 2: Update matched YNAB transactions (cleared status / date)
+	if (!state.balanceAligned) {
+		await updateMatchedTransactions(
+			state,
+			orderedAutoMatches,
+			reconcilableMatchedTransactionIds,
+		);
+	}
+
+	// STEP 3: Auto-unclear YNAB transactions missing from bank
+	await unclearMissingTransactions(state, orderedUnmatchedYNAB);
+
+	// STEP 4: Mark all matched transactions as reconciled when balance aligns
+	if (
+		state.balanceAligned &&
+		!params.dry_run &&
+		params.auto_update_cleared_status
+	) {
+		await reconcileMatchedTransactions(
+			state,
+			orderedAutoMatches,
+			reconcilableMatchedTransactionIds,
+		);
+	}
+
+	// STEPS 5-6: Balance snapshot, recommendations, and result assembly
+	return buildExecutionResult(state, statementTargetMilli);
+}
+
+// ============================================================================
+// Setup
+// ============================================================================
+
+function buildInitialSummary(
+	analysis: ReconciliationAnalysis,
+	params: ReconcileAccountRequest,
+): ExecutionSummary {
+	return {
 		bank_transactions_count: analysis.summary.bank_transactions_count,
 		ynab_transactions_count: analysis.summary.ynab_transactions_count,
 		matches_found: analysis.auto_matches.length,
@@ -193,758 +292,871 @@ export async function executeReconciliation(
 		dates_adjusted: 0,
 		dry_run: params.dry_run,
 	};
+}
 
-	// Progress tracking for MCP notifications
-	// Pre-filter matches to only count those that will actually be updated
-	// This ensures accurate progress percentages (skipped matches don't inflate total)
+/**
+ * Count operations for MCP progress notifications. Only matches that will
+ * actually be updated are counted, so skipped matches don't inflate the total.
+ */
+function countPlannedOperations(
+	analysis: ReconciliationAnalysis,
+	params: ReconcileAccountRequest,
+): number {
 	const matchesNeedingUpdate = analysis.auto_matches.filter((match) => {
 		const flags = computeUpdateFlags(match, params);
 		return flags.needsClearedUpdate || flags.needsDateUpdate;
 	});
-	const totalOperations =
+	return (
 		(params.auto_create_transactions ? analysis.unmatched_bank.length : 0) +
 		matchesNeedingUpdate.length +
-		(params.auto_unclear_missing ? analysis.unmatched_ynab.length : 0);
-	let completedOperations = 0;
-
-	const reportProgress = async (message: string): Promise<void> => {
-		if (sendProgress && totalOperations > 0) {
-			await sendProgress({
-				progress: completedOperations,
-				total: totalOperations,
-				message,
-			});
-		}
-	};
-
-	let afterAccount: AccountSnapshot = { ...initialAccount };
-	let accountSnapshotDirty = false;
-	const statementTargetMilli = resolveStatementBalanceMilli(
-		analysis.balance_info,
+		(params.auto_unclear_missing ? analysis.unmatched_ynab.length : 0)
 	);
-	let clearedDeltaMilli = addMilli(
-		initialAccount.cleared_balance ?? 0,
-		-statementTargetMilli,
-	);
-	const balanceToleranceMilli = DEFAULT_TOLERANCE_CENTS * CENTS_TO_MILLI;
-	let balanceAligned = false;
+}
 
-	const applyClearedDelta = (delta: number) => {
-		if (delta === 0) return;
-		clearedDeltaMilli = addMilli(clearedDeltaMilli, delta);
-	};
-
-	const recordAlignmentIfNeeded = (trigger: string, { log = true } = {}) => {
-		if (balanceAligned) {
-			return true;
-		}
-		if (Math.abs(clearedDeltaMilli) <= balanceToleranceMilli) {
-			balanceAligned = true;
-			if (log) {
-				const deltaDisplay = toMoneyValue(
-					clearedDeltaMilli,
-					currencyCode,
-				).value_display;
-				const toleranceDisplay = toMoneyValue(
-					balanceToleranceMilli,
-					currencyCode,
-				).value_display;
-				actions_taken.push({
-					type: "balance_checkpoint",
-					transaction: null,
-					reason: `Cleared delta ${deltaDisplay} within ±${toleranceDisplay} after ${trigger} - halting newest-to-oldest pass`,
-				});
-			}
-			return true;
-		}
-		return false;
-	};
-
-	recordAlignmentIfNeeded("initial balance check", { log: false });
-
-	const orderedUnmatchedBank = params.auto_create_transactions
-		? sortByDateDescending(analysis.unmatched_bank)
-		: [];
-	const orderedAutoMatches = sortMatchesByBankDateDescending(
-		analysis.auto_matches,
-	);
-	const reconcilableMatchedTransactionIds = new Set<string>();
-	for (const match of orderedAutoMatches) {
-		if (match.ynabTransaction?.cleared === "cleared") {
-			reconcilableMatchedTransactionIds.add(match.ynabTransaction.id);
-		}
-	}
+function orderUnmatchedYnabInStatementWindow(
+	analysis: ReconciliationAnalysis,
+	params: ReconcileAccountRequest,
+): YNABTransaction[] {
 	const statementWindow = resolveStatementWindow(
 		params,
 		analysis.summary.statement_date_range,
 	);
-	const orderedUnmatchedYNAB = sortByDateDescending(
+	return sortByDateDescending(
 		statementWindow
 			? analysis.unmatched_ynab.filter((txn) =>
 					isWithinStatementWindow(txn.date, statementWindow),
 				)
 			: analysis.unmatched_ynab,
 	);
+}
 
-	let bulkOperationDetails: BulkOperationDetails | undefined;
+// ============================================================================
+// Shared state helpers
+// ============================================================================
 
-	// STEP 1: Auto-create missing transactions (bank -> YNAB)
-	if (params.auto_create_transactions && !balanceAligned) {
-		const buildPreparedEntry = (
-			bankTxn: BankTransaction,
-		): PreparedBulkCreateEntry => {
-			const amountMilli = bankTxn.amount;
-			const saveTransaction: NewTransaction = {
-				account_id: accountId,
-				amount: amountMilli,
-				date: bankTxn.date,
-				payee_name: bankTxn.payee ?? undefined,
-				memo: truncateMemo(bankTxn.memo),
-				cleared: "cleared",
-				approved: true,
-				// Note: import_id intentionally omitted so transactions can match with bank imports
-			};
-			const correlationKey = generateCorrelationKey(
-				toCorrelationPayload(saveTransaction),
-			);
-			return {
-				bankTransaction: bankTxn,
-				saveTransaction,
-				amountMilli,
-				correlationKey,
-			};
-		};
+async function reportProgress(
+	state: ExecutionState,
+	message: string,
+): Promise<void> {
+	const { sendProgress } = state.options;
+	if (sendProgress && state.totalOperations > 0) {
+		await sendProgress({
+			progress: state.completedOperations,
+			total: state.totalOperations,
+			message,
+		});
+	}
+}
 
-		const recordCreateAction = (args: {
-			entry: PreparedBulkCreateEntry;
-			createdTxn: ynab.TransactionDetail | null;
-			chunkIndex?: number;
-			prefix?: string;
-		}) => {
-			const { entry, createdTxn, chunkIndex, prefix } = args;
-			summary.transactions_created += 1;
-			const action: ExecutionActionRecord = {
-				type: "create_transaction",
-				transaction: createdTxn as unknown as Record<string, unknown> | null,
-				reason: `${prefix ?? "Created missing transaction"}: ${
-					entry.bankTransaction.payee ?? "Unknown"
-				} (${formatDisplay(entry.bankTransaction.amount, currencyCode)})`,
-				correlation_key: entry.correlationKey,
-			};
-			if (chunkIndex !== undefined) {
-				action.bulk_chunk_index = chunkIndex;
-			}
-			actions_taken.push(action);
-		};
+function applyClearedDelta(state: ExecutionState, delta: number): void {
+	if (delta === 0) return;
+	state.clearedDeltaMilli = addMilli(state.clearedDeltaMilli, delta);
+}
 
-		const processSequentialEntries = async (
-			entries: PreparedBulkCreateEntry[],
-			options: { chunkIndex?: number; fallbackError?: unknown } = {},
-		) => {
-			let sequentialAttempts = 0;
-			for (const entry of entries) {
-				if (balanceAligned) break;
-				if (options.fallbackError) {
-					sequentialAttempts += 1;
-				}
-				try {
-					const response = await ynabAPI.transactions.createTransaction(
-						budgetId,
-						{
-							transaction: entry.saveTransaction,
-						},
-					);
-					const createdTransaction = response.data.transaction ?? null;
-					const recordArgs: Parameters<typeof recordCreateAction>[0] = {
-						entry,
-						createdTxn: createdTransaction,
-						prefix: options.fallbackError
-							? "Created missing transaction after bulk fallback"
-							: "Created missing transaction",
-					};
-					if (options.chunkIndex !== undefined) {
-						recordArgs.chunkIndex = options.chunkIndex;
-					}
-					recordCreateAction(recordArgs);
-					accountSnapshotDirty = true;
-					applyClearedDelta(entry.amountMilli);
-					// Report progress for sequential/fallback operations
-					completedOperations += 1;
-					await reportProgress(
-						`Created ${completedOperations} of ${totalOperations} transactions`,
-					);
-					const trigger = options.chunkIndex
-						? `creating ${entry.bankTransaction.payee ?? "missing transaction"} (chunk ${options.chunkIndex})`
-						: `creating ${entry.bankTransaction.payee ?? "missing transaction"}`;
-					recordAlignmentIfNeeded(trigger);
-				} catch (error) {
-					const ynabError = normalizeYnabError(error);
-					if (bulkOperationDetails) {
-						bulkOperationDetails.transaction_failures += 1; // Canonical counter for per-transaction failures
-					}
-					const failureReason = ynabError.message || "Unknown error occurred";
-					const statusSuffix = ynabError.status
-						? ` (HTTP ${ynabError.status})`
-						: "";
-					const failureAction: ExecutionActionRecord = {
-						type: "create_transaction_failed",
-						transaction: entry.saveTransaction as unknown as Record<
-							string,
-							unknown
-						>,
-						reason: options.fallbackError
-							? `Bulk fallback failed for ${entry.bankTransaction.payee ?? "Unknown"} (${failureReason}${statusSuffix})`
-							: `Failed to create transaction ${entry.bankTransaction.payee ?? "Unknown"} (${failureReason}${statusSuffix})`,
-						correlation_key: entry.correlationKey,
-					};
-					if (options.chunkIndex !== undefined) {
-						failureAction.bulk_chunk_index = options.chunkIndex;
-					}
-					actions_taken.push(failureAction);
+function recordAlignmentIfNeeded(
+	state: ExecutionState,
+	trigger: string,
+	{ log = true } = {},
+): boolean {
+	if (state.balanceAligned) {
+		return true;
+	}
+	if (Math.abs(state.clearedDeltaMilli) <= state.balanceToleranceMilli) {
+		state.balanceAligned = true;
+		if (log) {
+			recordBalanceCheckpoint(state, trigger);
+		}
+		return true;
+	}
+	return false;
+}
 
-					if (shouldPropagateYnabError(ynabError)) {
-						throw attachStatusToError(ynabError, error);
-					}
-				}
-			}
-			// Update sequential_attempts metric if this was a fallback operation
-			if (
-				bulkOperationDetails &&
-				options.fallbackError &&
-				sequentialAttempts > 0
-			) {
-				bulkOperationDetails.sequential_attempts =
-					(bulkOperationDetails.sequential_attempts ?? 0) + sequentialAttempts;
-			}
-		};
+function recordBalanceCheckpoint(state: ExecutionState, trigger: string): void {
+	const { currencyCode } = state.options;
+	const deltaDisplay = toMoneyValue(
+		state.clearedDeltaMilli,
+		currencyCode,
+	).value_display;
+	const toleranceDisplay = toMoneyValue(
+		state.balanceToleranceMilli,
+		currencyCode,
+	).value_display;
+	state.actions.push({
+		type: "balance_checkpoint",
+		transaction: null,
+		reason: `Cleared delta ${deltaDisplay} within ±${toleranceDisplay} after ${trigger} - halting newest-to-oldest pass`,
+	});
+}
 
-		const processBulkChunk = async (
-			chunk: PreparedBulkCreateEntry[],
-			chunkIndex: number,
-		) => {
-			// bulkOperationDetails is guaranteed to be defined when this function is called
-			// (it's only called from within the bulk operation block where it's initialized)
-			if (!bulkOperationDetails) {
-				throw new Error("Bulk operation details not initialized");
-			}
-			const bulkDetails = bulkOperationDetails;
+function httpStatusSuffix(ynabError: NormalizedYnabError): string {
+	return ynabError.status ? ` (HTTP ${ynabError.status})` : "";
+}
 
-			const payload = chunk.map((entry) => entry.saveTransaction);
-			const response = await ynabAPI.transactions.createTransactions(budgetId, {
-				transactions: payload,
+/**
+ * Send updates in chunks of MAX_BULK_UPDATE_CHUNK, recording a failure action
+ * per failed chunk and pausing between chunks to avoid rate limiting.
+ */
+async function runChunkedUpdates(
+	state: ExecutionState,
+	payloads: ynab.SaveTransactionWithIdOrImportId[],
+	config: ChunkedUpdateConfig,
+): Promise<void> {
+	const { ynabAPI, budgetId } = state.options;
+	const chunks = chunkArray(payloads, MAX_BULK_UPDATE_CHUNK);
+
+	for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+		const chunk = chunks[chunkIdx];
+		if (!chunk) continue;
+		try {
+			const response = await ynabAPI.transactions.updateTransactions(budgetId, {
+				transactions: chunk,
 			});
-			const responseData = response.data;
-			const duplicateImportIds = new Set(
-				responseData.duplicate_import_ids ?? [],
-			);
-			const correlationRequests = chunk.map((entry) =>
-				toCorrelationPayload(entry.saveTransaction),
-			) as Parameters<typeof correlateResults>[0];
-			const correlated = correlateResults(
-				correlationRequests,
-				responseData,
-				duplicateImportIds,
-			);
-			const transactionMap = new Map<string, ynab.TransactionDetail>();
-			for (const transaction of responseData.transactions ?? []) {
-				if (transaction.id) {
-					transactionMap.set(transaction.id, transaction);
-				}
-			}
-			for (const result of correlated) {
-				const entry = chunk[result.request_index];
-				if (!entry) continue;
-				if (result.status === "created") {
-					const createdTransaction = result.transaction_id
-						? (transactionMap.get(result.transaction_id) ?? null)
-						: null;
-					recordCreateAction({
-						entry,
-						createdTxn: createdTransaction,
-						chunkIndex,
-						prefix: "Created missing transaction via bulk",
-					});
-					accountSnapshotDirty = true;
-					applyClearedDelta(entry.amountMilli);
-					recordAlignmentIfNeeded(
-						`creating ${entry.bankTransaction.payee ?? "missing transaction"} via bulk chunk ${chunkIndex}`,
-					);
-				} else if (result.status === "duplicate") {
-					bulkDetails.duplicates_detected += 1;
-					actions_taken.push({
-						type: "create_transaction_duplicate",
-						transaction: {
-							transaction_id: result.transaction_id ?? null,
-							import_id: entry.saveTransaction.import_id,
-						},
-						reason: `Duplicate import detected for ${
-							entry.bankTransaction.payee ?? "Unknown"
-						} (import_id ${entry.saveTransaction.import_id})`,
-						bulk_chunk_index: chunkIndex,
-						correlation_key: result.correlation_key,
-						duplicate: true,
-					});
-				} else {
-					bulkDetails.transaction_failures += 1; // Canonical counter for per-transaction failures
-					actions_taken.push({
-						type: "create_transaction_failed",
-						transaction: entry.saveTransaction as unknown as Record<
-							string,
-							unknown
-						>,
-						reason:
-							result.error ??
-							`Bulk create failed for ${entry.bankTransaction.payee ?? "Unknown"}`,
-						bulk_chunk_index: chunkIndex,
-						correlation_key: result.correlation_key,
-					});
-				}
-			}
-		};
+			await config.onChunkSuccess(response.data.transactions ?? []);
+		} catch (error) {
+			const ynabError = normalizeYnabError(error);
+			const failureReason = ynabError.message || "Unknown error occurred";
+			state.actions.push({
+				type: config.failureType,
+				transaction: null,
+				reason: `Failed to ${config.failureVerb} chunk ${chunkIdx + 1}/${chunks.length} (${chunk.length} transaction(s)): ${failureReason}${httpStatusSuffix(ynabError)}`,
+			});
 
-		if (params.dry_run) {
-			for (const bankTxn of orderedUnmatchedBank) {
-				if (balanceAligned) break;
-				const entry = buildPreparedEntry(bankTxn);
-				summary.transactions_created += 1;
-				actions_taken.push({
-					type: "create_transaction",
-					transaction: entry.saveTransaction as unknown as Record<
-						string,
-						unknown
-					>,
-					reason: `Would create missing transaction: ${bankTxn.payee ?? "Unknown"} (${formatDisplay(bankTxn.amount, currencyCode)})`,
-					correlation_key: entry.correlationKey,
-				});
-				applyClearedDelta(entry.amountMilli);
-				recordAlignmentIfNeeded(
-					`creating ${bankTxn.payee ?? "missing transaction"}`,
+			if (shouldPropagateYnabError(ynabError)) {
+				throw attachStatusToError(ynabError, error);
+			}
+		}
+
+		// Add delay between chunks to avoid rate limiting (except after last chunk)
+		if (chunkIdx < chunks.length - 1) {
+			await sleep(BATCH_DELAY_MS);
+		}
+	}
+}
+
+// ============================================================================
+// STEP 1: Auto-create missing transactions (bank -> YNAB)
+// ============================================================================
+
+async function createMissingTransactions(
+	state: ExecutionState,
+	orderedUnmatchedBank: BankTransaction[],
+): Promise<void> {
+	const { params, accountId } = state.options;
+	if (params.dry_run) {
+		previewMissingTransactions(state, orderedUnmatchedBank);
+	} else if (orderedUnmatchedBank.length >= 2) {
+		await bulkCreateMissingTransactions(state, orderedUnmatchedBank);
+	} else {
+		const entries = orderedUnmatchedBank.map((bankTxn) =>
+			buildPreparedEntry(bankTxn, accountId),
+		);
+		await processSequentialEntries(state, entries);
+	}
+}
+
+function buildPreparedEntry(
+	bankTxn: BankTransaction,
+	accountId: string,
+): PreparedBulkCreateEntry {
+	const amountMilli = bankTxn.amount;
+	const saveTransaction: NewTransaction = {
+		account_id: accountId,
+		amount: amountMilli,
+		date: bankTxn.date,
+		payee_name: bankTxn.payee ?? undefined,
+		memo: truncateMemo(bankTxn.memo),
+		cleared: "cleared",
+		approved: true,
+		// Note: import_id intentionally omitted so transactions can match with bank imports
+	};
+	const correlationKey = generateCorrelationKey(
+		toCorrelationPayload(saveTransaction),
+	);
+	return {
+		bankTransaction: bankTxn,
+		saveTransaction,
+		amountMilli,
+		correlationKey,
+	};
+}
+
+function previewMissingTransactions(
+	state: ExecutionState,
+	orderedUnmatchedBank: BankTransaction[],
+): void {
+	const { accountId, currencyCode } = state.options;
+	for (const bankTxn of orderedUnmatchedBank) {
+		if (state.balanceAligned) break;
+		const entry = buildPreparedEntry(bankTxn, accountId);
+		state.summary.transactions_created += 1;
+		state.actions.push({
+			type: "create_transaction",
+			transaction: entry.saveTransaction as unknown as Record<string, unknown>,
+			reason: `Would create missing transaction: ${bankTxn.payee ?? "Unknown"} (${formatDisplay(bankTxn.amount, currencyCode)})`,
+			correlation_key: entry.correlationKey,
+		});
+		applyClearedDelta(state, entry.amountMilli);
+		recordAlignmentIfNeeded(
+			state,
+			`creating ${bankTxn.payee ?? "missing transaction"}`,
+		);
+	}
+}
+
+function recordCreateAction(
+	state: ExecutionState,
+	args: {
+		entry: PreparedBulkCreateEntry;
+		createdTxn: ynab.TransactionDetail | null;
+		chunkIndex?: number;
+		prefix?: string;
+	},
+): void {
+	const { entry, createdTxn, chunkIndex, prefix } = args;
+	state.summary.transactions_created += 1;
+	const action: ExecutionActionRecord = {
+		type: "create_transaction",
+		transaction: createdTxn as unknown as Record<string, unknown> | null,
+		reason: `${prefix ?? "Created missing transaction"}: ${
+			entry.bankTransaction.payee ?? "Unknown"
+		} (${formatDisplay(entry.bankTransaction.amount, state.options.currencyCode)})`,
+		correlation_key: entry.correlationKey,
+	};
+	if (chunkIndex !== undefined) {
+		action.bulk_chunk_index = chunkIndex;
+	}
+	state.actions.push(action);
+}
+
+async function processSequentialEntries(
+	state: ExecutionState,
+	entries: PreparedBulkCreateEntry[],
+	options: { chunkIndex?: number; fallbackError?: unknown } = {},
+): Promise<void> {
+	let sequentialAttempts = 0;
+	for (const entry of entries) {
+		if (state.balanceAligned) break;
+		if (options.fallbackError) {
+			sequentialAttempts += 1;
+		}
+		try {
+			await createSequentialEntry(state, entry, options);
+		} catch (error) {
+			recordSequentialFailure(state, entry, options, error);
+		}
+	}
+	// Update sequential_attempts metric if this was a fallback operation
+	const bulkDetails = state.bulkOperationDetails;
+	if (bulkDetails && options.fallbackError && sequentialAttempts > 0) {
+		bulkDetails.sequential_attempts =
+			(bulkDetails.sequential_attempts ?? 0) + sequentialAttempts;
+	}
+}
+
+async function createSequentialEntry(
+	state: ExecutionState,
+	entry: PreparedBulkCreateEntry,
+	options: { chunkIndex?: number; fallbackError?: unknown },
+): Promise<void> {
+	const { ynabAPI, budgetId } = state.options;
+	const response = await ynabAPI.transactions.createTransaction(budgetId, {
+		transaction: entry.saveTransaction,
+	});
+	const createdTransaction = response.data.transaction ?? null;
+	const recordArgs: Parameters<typeof recordCreateAction>[1] = {
+		entry,
+		createdTxn: createdTransaction,
+		prefix: options.fallbackError
+			? "Created missing transaction after bulk fallback"
+			: "Created missing transaction",
+	};
+	if (options.chunkIndex !== undefined) {
+		recordArgs.chunkIndex = options.chunkIndex;
+	}
+	recordCreateAction(state, recordArgs);
+	state.accountSnapshotDirty = true;
+	applyClearedDelta(state, entry.amountMilli);
+	// Report progress for sequential/fallback operations
+	state.completedOperations += 1;
+	await reportProgress(
+		state,
+		`Created ${state.completedOperations} of ${state.totalOperations} transactions`,
+	);
+	const trigger = options.chunkIndex
+		? `creating ${entry.bankTransaction.payee ?? "missing transaction"} (chunk ${options.chunkIndex})`
+		: `creating ${entry.bankTransaction.payee ?? "missing transaction"}`;
+	recordAlignmentIfNeeded(state, trigger);
+}
+
+function recordSequentialFailure(
+	state: ExecutionState,
+	entry: PreparedBulkCreateEntry,
+	options: { chunkIndex?: number; fallbackError?: unknown },
+	error: unknown,
+): void {
+	const ynabError = normalizeYnabError(error);
+	if (state.bulkOperationDetails) {
+		state.bulkOperationDetails.transaction_failures += 1; // Canonical counter for per-transaction failures
+	}
+	const failureReason = ynabError.message || "Unknown error occurred";
+	const statusSuffix = httpStatusSuffix(ynabError);
+	const failureAction: ExecutionActionRecord = {
+		type: "create_transaction_failed",
+		transaction: entry.saveTransaction as unknown as Record<string, unknown>,
+		reason: options.fallbackError
+			? `Bulk fallback failed for ${entry.bankTransaction.payee ?? "Unknown"} (${failureReason}${statusSuffix})`
+			: `Failed to create transaction ${entry.bankTransaction.payee ?? "Unknown"} (${failureReason}${statusSuffix})`,
+		correlation_key: entry.correlationKey,
+	};
+	if (options.chunkIndex !== undefined) {
+		failureAction.bulk_chunk_index = options.chunkIndex;
+	}
+	state.actions.push(failureAction);
+
+	if (shouldPropagateYnabError(ynabError)) {
+		throw attachStatusToError(ynabError, error);
+	}
+}
+
+async function bulkCreateMissingTransactions(
+	state: ExecutionState,
+	orderedUnmatchedBank: BankTransaction[],
+): Promise<void> {
+	const bulkDetails: BulkOperationDetails = {
+		chunks_processed: 0,
+		bulk_successes: 0,
+		sequential_fallbacks: 0,
+		duplicates_detected: 0,
+		failed_transactions: 0,
+		bulk_chunk_failures: 0,
+		transaction_failures: 0,
+	};
+	state.bulkOperationDetails = bulkDetails;
+
+	let nextBankIndex = 0;
+	while (nextBankIndex < orderedUnmatchedBank.length && !state.balanceAligned) {
+		const { batch, nextIndex } = collectBulkBatch(
+			state,
+			orderedUnmatchedBank,
+			nextBankIndex,
+		);
+		nextBankIndex = nextIndex;
+
+		if (batch.length === 0) {
+			break;
+		}
+
+		const chunks = chunkArray(batch, MAX_BULK_CREATE_CHUNK);
+		for (const chunk of chunks) {
+			if (state.balanceAligned) break;
+			bulkDetails.chunks_processed += 1;
+			const chunkIndex = bulkDetails.chunks_processed;
+			try {
+				await processBulkChunk(state, bulkDetails, chunk, chunkIndex);
+				bulkDetails.bulk_successes += 1;
+				// Report progress after successful chunk processing
+				state.completedOperations += chunk.length;
+				await reportProgress(
+					state,
+					`Created ${state.completedOperations} of ${state.totalOperations} transactions`,
+				);
+			} catch (error) {
+				await fallBackToSequential(
+					state,
+					bulkDetails,
+					chunk,
+					chunkIndex,
+					error,
 				);
 			}
-		} else if (orderedUnmatchedBank.length >= 2) {
-			bulkOperationDetails = {
-				chunks_processed: 0,
-				bulk_successes: 0,
-				sequential_fallbacks: 0,
-				duplicates_detected: 0,
-				failed_transactions: 0,
-				bulk_chunk_failures: 0,
-				transaction_failures: 0,
-			};
+		}
+	}
+}
 
-			let nextBankIndex = 0;
-			while (nextBankIndex < orderedUnmatchedBank.length && !balanceAligned) {
-				const batch: PreparedBulkCreateEntry[] = [];
-				let projectedDelta = clearedDeltaMilli;
-				while (nextBankIndex < orderedUnmatchedBank.length) {
-					const bankTxn = orderedUnmatchedBank[nextBankIndex];
-					if (!bankTxn) {
-						nextBankIndex += 1;
-						continue;
-					}
-					const entry = buildPreparedEntry(bankTxn);
-					batch.push(entry);
-					nextBankIndex += 1;
-					projectedDelta = addMilli(projectedDelta, entry.amountMilli);
-					if (Math.abs(projectedDelta) <= balanceToleranceMilli) {
-						break;
-					}
-				}
+/**
+ * Take bank transactions from startIndex until the projected cleared delta
+ * falls within tolerance, so bulk creation stops once the balance would align.
+ */
+function collectBulkBatch(
+	state: ExecutionState,
+	orderedUnmatchedBank: BankTransaction[],
+	startIndex: number,
+): { batch: PreparedBulkCreateEntry[]; nextIndex: number } {
+	const batch: PreparedBulkCreateEntry[] = [];
+	let nextIndex = startIndex;
+	let projectedDelta = state.clearedDeltaMilli;
+	while (nextIndex < orderedUnmatchedBank.length) {
+		const bankTxn = orderedUnmatchedBank[nextIndex];
+		if (!bankTxn) {
+			nextIndex += 1;
+			continue;
+		}
+		const entry = buildPreparedEntry(bankTxn, state.options.accountId);
+		batch.push(entry);
+		nextIndex += 1;
+		projectedDelta = addMilli(projectedDelta, entry.amountMilli);
+		if (Math.abs(projectedDelta) <= state.balanceToleranceMilli) {
+			break;
+		}
+	}
+	return { batch, nextIndex };
+}
 
-				if (batch.length === 0) {
-					break;
-				}
-
-				const chunks = chunkArray(batch, MAX_BULK_CREATE_CHUNK);
-				for (const chunk of chunks) {
-					if (balanceAligned) break;
-					bulkOperationDetails.chunks_processed += 1;
-					const chunkIndex = bulkOperationDetails.chunks_processed;
-					try {
-						await processBulkChunk(chunk, chunkIndex);
-						bulkOperationDetails.bulk_successes += 1;
-						// Report progress after successful chunk processing
-						completedOperations += chunk.length;
-						await reportProgress(
-							`Created ${completedOperations} of ${totalOperations} transactions`,
-						);
-					} catch (error) {
-						const ynabError = normalizeYnabError(error);
-						const failureReason = ynabError.message || "unknown error";
-						bulkOperationDetails.bulk_chunk_failures += 1; // API-level failure (entire chunk failed)
-
-						if (shouldPropagateYnabError(ynabError)) {
-							bulkOperationDetails.transaction_failures += chunk.length;
-							throw attachStatusToError(ynabError, error);
-						}
-
-						bulkOperationDetails.sequential_fallbacks += 1;
-						actions_taken.push({
-							type: "bulk_create_fallback",
-							transaction: null,
-							reason: `Bulk chunk #${chunkIndex} failed (${failureReason}${
-								ynabError.status ? ` (HTTP ${ynabError.status})` : ""
-							}) - falling back to sequential creation`,
-							bulk_chunk_index: chunkIndex,
-						});
-						await processSequentialEntries(chunk, {
-							chunkIndex,
-							fallbackError: ynabError,
-						});
-					}
-				}
-			}
+async function processBulkChunk(
+	state: ExecutionState,
+	bulkDetails: BulkOperationDetails,
+	chunk: PreparedBulkCreateEntry[],
+	chunkIndex: number,
+): Promise<void> {
+	const { ynabAPI, budgetId } = state.options;
+	const payload = chunk.map((entry) => entry.saveTransaction);
+	const response = await ynabAPI.transactions.createTransactions(budgetId, {
+		transactions: payload,
+	});
+	const responseData = response.data;
+	const duplicateImportIds = new Set(responseData.duplicate_import_ids ?? []);
+	const correlationRequests = chunk.map((entry) =>
+		toCorrelationPayload(entry.saveTransaction),
+	) as Parameters<typeof correlateResults>[0];
+	const correlated = correlateResults(
+		correlationRequests,
+		responseData,
+		duplicateImportIds,
+	);
+	const transactionMap = new Map<string, ynab.TransactionDetail>();
+	for (const transaction of responseData.transactions ?? []) {
+		if (transaction.id) {
+			transactionMap.set(transaction.id, transaction);
+		}
+	}
+	for (const result of correlated) {
+		const entry = chunk[result.request_index];
+		if (!entry) continue;
+		if (result.status === "created") {
+			const createdTransaction = result.transaction_id
+				? (transactionMap.get(result.transaction_id) ?? null)
+				: null;
+			recordCreateAction(state, {
+				entry,
+				createdTxn: createdTransaction,
+				chunkIndex,
+				prefix: "Created missing transaction via bulk",
+			});
+			state.accountSnapshotDirty = true;
+			applyClearedDelta(state, entry.amountMilli);
+			recordAlignmentIfNeeded(
+				state,
+				`creating ${entry.bankTransaction.payee ?? "missing transaction"} via bulk chunk ${chunkIndex}`,
+			);
+		} else if (result.status === "duplicate") {
+			bulkDetails.duplicates_detected += 1;
+			state.actions.push({
+				type: "create_transaction_duplicate",
+				transaction: {
+					transaction_id: result.transaction_id ?? null,
+					import_id: entry.saveTransaction.import_id,
+				},
+				reason: `Duplicate import detected for ${
+					entry.bankTransaction.payee ?? "Unknown"
+				} (import_id ${entry.saveTransaction.import_id})`,
+				bulk_chunk_index: chunkIndex,
+				correlation_key: result.correlation_key,
+				duplicate: true,
+			});
 		} else {
-			const entries = orderedUnmatchedBank.map((bankTxn) =>
-				buildPreparedEntry(bankTxn),
-			);
-			await processSequentialEntries(entries);
+			bulkDetails.transaction_failures += 1; // Canonical counter for per-transaction failures
+			state.actions.push({
+				type: "create_transaction_failed",
+				transaction: entry.saveTransaction as unknown as Record<
+					string,
+					unknown
+				>,
+				reason:
+					result.error ??
+					`Bulk create failed for ${entry.bankTransaction.payee ?? "Unknown"}`,
+				bulk_chunk_index: chunkIndex,
+				correlation_key: result.correlation_key,
+			});
 		}
 	}
+}
 
-	// STEP 2: Update matched YNAB transactions (cleared status / date)
-	// Collect all updates for batch processing
-	if (!balanceAligned) {
-		const transactionsToUpdate: ynab.SaveTransactionWithIdOrImportId[] = [];
+async function fallBackToSequential(
+	state: ExecutionState,
+	bulkDetails: BulkOperationDetails,
+	chunk: PreparedBulkCreateEntry[],
+	chunkIndex: number,
+	error: unknown,
+): Promise<void> {
+	const ynabError = normalizeYnabError(error);
+	const failureReason = ynabError.message || "unknown error";
+	bulkDetails.bulk_chunk_failures += 1; // API-level failure (entire chunk failed)
 
-		for (const match of orderedAutoMatches) {
-			if (balanceAligned) break;
-			const flags = computeUpdateFlags(match, params);
-			if (!flags.needsClearedUpdate && !flags.needsDateUpdate) continue;
-			if (!match.ynabTransaction) continue;
+	if (shouldPropagateYnabError(ynabError)) {
+		bulkDetails.transaction_failures += chunk.length;
+		throw attachStatusToError(ynabError, error);
+	}
 
-			// Build minimal update payload - only include ID and fields that are changing
-			// Including unnecessary fields (like amount, payee_name) can cause unexpected behavior
-			// BUT we must include memo to fix existing memos that exceed YNAB's 500 char limit
-			const updatePayload: ynab.SaveTransactionWithIdOrImportId = {
-				id: match.ynabTransaction.id,
-			};
+	bulkDetails.sequential_fallbacks += 1;
+	state.actions.push({
+		type: "bulk_create_fallback",
+		transaction: null,
+		reason: `Bulk chunk #${chunkIndex} failed (${failureReason}${httpStatusSuffix(
+			ynabError,
+		)}) - falling back to sequential creation`,
+		bulk_chunk_index: chunkIndex,
+	});
+	await processSequentialEntries(state, chunk, {
+		chunkIndex,
+		fallbackError: ynabError,
+	});
+}
 
-			// Truncate memo if it exists and is too long (YNAB validates on update even if not changed)
-			if (match.ynabTransaction.memo) {
-				updatePayload.memo = truncateMemo(match.ynabTransaction.memo);
-			}
+// ============================================================================
+// STEP 2: Update matched YNAB transactions (cleared status / date)
+// ============================================================================
 
-			// Only include fields that are actually changing
-			if (flags.needsDateUpdate) {
-				updatePayload.date = match.bankTransaction.date;
-			}
-			if (flags.needsClearedUpdate) {
-				updatePayload.cleared = "cleared" as ynab.TransactionClearedStatus;
-			}
+async function updateMatchedTransactions(
+	state: ExecutionState,
+	orderedAutoMatches: TransactionMatch[],
+	reconcilableMatchedTransactionIds: Set<string>,
+): Promise<void> {
+	const { params, currencyCode } = state.options;
+	const transactionsToUpdate = collectMatchUpdates(state, orderedAutoMatches);
 
-			if (params.dry_run) {
-				summary.transactions_updated += 1;
-				if (flags.needsDateUpdate) summary.dates_adjusted += 1;
-				actions_taken.push({
+	if (params.dry_run || transactionsToUpdate.length === 0) {
+		return;
+	}
+
+	// YNAB API has a limit of ~100 transactions per batch, so we chunk the updates
+	await runChunkedUpdates(state, transactionsToUpdate, {
+		failureType: "batch_update_failed",
+		failureVerb: "update",
+		onChunkSuccess: async (updatedTransactions) => {
+			state.summary.transactions_updated += updatedTransactions.length;
+
+			for (const updatedTransaction of updatedTransactions) {
+				const match = orderedAutoMatches.find(
+					(m) => m.ynabTransaction?.id === updatedTransaction.id,
+				);
+				const flags = match
+					? computeUpdateFlags(match, params)
+					: { needsClearedUpdate: false, needsDateUpdate: false };
+				if (match && flags.needsClearedUpdate) {
+					reconcilableMatchedTransactionIds.add(updatedTransaction.id);
+				}
+				state.actions.push({
 					type: "update_transaction",
-					transaction: {
-						transaction_id: match.ynabTransaction.id,
-						new_date: flags.needsDateUpdate
-							? match.bankTransaction.date
-							: undefined,
-						cleared: flags.needsClearedUpdate ? "cleared" : undefined,
-					},
-					reason: `Would update transaction: ${updateReason(match, flags, currencyCode)}`,
+					transaction: updatedTransaction as unknown as Record<
+						string,
+						unknown
+					> | null,
+					reason: `Updated transaction: ${match ? updateReason(match, flags, currencyCode) : "cleared"}`,
 				});
-				if (flags.needsClearedUpdate) {
-					applyClearedDelta(match.ynabTransaction.amount);
-					if (
-						recordAlignmentIfNeeded(
-							`clearing ${match.ynabTransaction.id ?? "transaction"} (dry run)`,
-						)
-					) {
-						break;
-					}
-				}
-			} else {
-				transactionsToUpdate.push(updatePayload);
-				if (flags.needsDateUpdate) summary.dates_adjusted += 1;
-				if (flags.needsClearedUpdate) {
-					applyClearedDelta(match.ynabTransaction.amount);
-					if (recordAlignmentIfNeeded(`clearing ${match.ynabTransaction.id}`)) {
-						break;
-					}
-				}
 			}
+			state.accountSnapshotDirty = true;
+			// Report progress after successful batch update
+			state.completedOperations += updatedTransactions.length;
+			await reportProgress(
+				state,
+				`Updated ${state.completedOperations} of ${state.totalOperations} transactions`,
+			);
+		},
+	});
+}
+
+/**
+ * Walk matches newest-to-oldest, building update payloads (or dry-run actions)
+ * until the cleared balance aligns with the statement.
+ */
+function collectMatchUpdates(
+	state: ExecutionState,
+	orderedAutoMatches: TransactionMatch[],
+): ynab.SaveTransactionWithIdOrImportId[] {
+	const { params, currencyCode } = state.options;
+	const transactionsToUpdate: ynab.SaveTransactionWithIdOrImportId[] = [];
+
+	for (const match of orderedAutoMatches) {
+		if (state.balanceAligned) break;
+		const flags = computeUpdateFlags(match, params);
+		if (!flags.needsClearedUpdate && !flags.needsDateUpdate) continue;
+		if (!match.ynabTransaction) continue;
+
+		if (params.dry_run) {
+			state.summary.transactions_updated += 1;
+			if (flags.needsDateUpdate) state.summary.dates_adjusted += 1;
+			state.actions.push({
+				type: "update_transaction",
+				transaction: {
+					transaction_id: match.ynabTransaction.id,
+					new_date: flags.needsDateUpdate
+						? match.bankTransaction.date
+						: undefined,
+					cleared: flags.needsClearedUpdate ? "cleared" : undefined,
+				},
+				reason: `Would update transaction: ${updateReason(match, flags, currencyCode)}`,
+			});
+		} else {
+			transactionsToUpdate.push(
+				buildMatchUpdatePayload(
+					match.ynabTransaction,
+					match.bankTransaction.date,
+					flags,
+				),
+			);
+			if (flags.needsDateUpdate) state.summary.dates_adjusted += 1;
 		}
 
-		// Batch update all transactions in a single API call
-		// YNAB API has a limit of ~100 transactions per batch, so we chunk the updates
-		if (!params.dry_run && transactionsToUpdate.length > 0) {
-			const updateChunks = chunkArray(
-				transactionsToUpdate,
-				MAX_BULK_UPDATE_CHUNK,
-			);
-
-			for (let chunkIdx = 0; chunkIdx < updateChunks.length; chunkIdx++) {
-				const chunk = updateChunks[chunkIdx];
-				if (!chunk) continue;
-				try {
-					const response = await ynabAPI.transactions.updateTransactions(
-						budgetId,
-						{
-							transactions: chunk,
-						},
-					);
-
-					const updatedTransactions = response.data.transactions ?? [];
-					summary.transactions_updated += updatedTransactions.length;
-
-					for (const updatedTransaction of updatedTransactions) {
-						const match = orderedAutoMatches.find(
-							(m) => m.ynabTransaction?.id === updatedTransaction.id,
-						);
-						const flags = match
-							? computeUpdateFlags(match, params)
-							: { needsClearedUpdate: false, needsDateUpdate: false };
-						if (match && flags.needsClearedUpdate) {
-							reconcilableMatchedTransactionIds.add(updatedTransaction.id);
-						}
-						actions_taken.push({
-							type: "update_transaction",
-							transaction: updatedTransaction as unknown as Record<
-								string,
-								unknown
-							> | null,
-							reason: `Updated transaction: ${match ? updateReason(match, flags, currencyCode) : "cleared"}`,
-						});
-					}
-					accountSnapshotDirty = true;
-					// Report progress after successful batch update
-					completedOperations += updatedTransactions.length;
-					await reportProgress(
-						`Updated ${completedOperations} of ${totalOperations} transactions`,
-					);
-				} catch (error) {
-					const ynabError = normalizeYnabError(error);
-					const failureReason = ynabError.message || "Unknown error occurred";
-					const statusSuffix = ynabError.status
-						? ` (HTTP ${ynabError.status})`
-						: "";
-					actions_taken.push({
-						type: "batch_update_failed",
-						transaction: null,
-						reason: `Failed to update chunk ${chunkIdx + 1}/${updateChunks.length} (${chunk.length} transaction(s)): ${failureReason}${statusSuffix}`,
-					});
-
-					if (shouldPropagateYnabError(ynabError)) {
-						throw attachStatusToError(ynabError, error);
-					}
-				}
-
-				// Add delay between chunks to avoid rate limiting (except after last chunk)
-				if (chunkIdx < updateChunks.length - 1) {
-					await sleep(BATCH_DELAY_MS);
-				}
+		if (flags.needsClearedUpdate) {
+			applyClearedDelta(state, match.ynabTransaction.amount);
+			const trigger = params.dry_run
+				? `clearing ${match.ynabTransaction.id ?? "transaction"} (dry run)`
+				: `clearing ${match.ynabTransaction.id}`;
+			if (recordAlignmentIfNeeded(state, trigger)) {
+				break;
 			}
 		}
 	}
 
-	// STEP 3: Auto-unclear YNAB transactions missing from bank
-	const shouldRunSanityPass = params.auto_unclear_missing && !balanceAligned;
+	return transactionsToUpdate;
+}
 
-	// Diagnostic logging for auto_unclear_missing debugging
-	actions_taken.push({
+function buildMatchUpdatePayload(
+	ynabTransaction: YNABTransaction,
+	bankDate: string,
+	flags: ReturnType<typeof computeUpdateFlags>,
+): ynab.SaveTransactionWithIdOrImportId {
+	// Build minimal update payload - only include ID and fields that are changing
+	// Including unnecessary fields (like amount, payee_name) can cause unexpected behavior
+	// BUT we must include memo to fix existing memos that exceed YNAB's 500 char limit
+	const updatePayload: ynab.SaveTransactionWithIdOrImportId = {
+		id: ynabTransaction.id,
+	};
+
+	// Truncate memo if it exists and is too long (YNAB validates on update even if not changed)
+	if (ynabTransaction.memo) {
+		updatePayload.memo = truncateMemo(ynabTransaction.memo);
+	}
+
+	// Only include fields that are actually changing
+	if (flags.needsDateUpdate) {
+		updatePayload.date = bankDate;
+	}
+	if (flags.needsClearedUpdate) {
+		updatePayload.cleared = "cleared" as ynab.TransactionClearedStatus;
+	}
+
+	return updatePayload;
+}
+
+// ============================================================================
+// STEP 3: Auto-unclear YNAB transactions missing from bank
+// ============================================================================
+
+async function unclearMissingTransactions(
+	state: ExecutionState,
+	orderedUnmatchedYNAB: YNABTransaction[],
+): Promise<void> {
+	const { params } = state.options;
+	const shouldRunSanityPass =
+		params.auto_unclear_missing && !state.balanceAligned;
+
+	recordUnclearDiagnostics(state, orderedUnmatchedYNAB, shouldRunSanityPass);
+
+	if (!shouldRunSanityPass) {
+		return;
+	}
+
+	const transactionsToUnclear = collectUnclearUpdates(
+		state,
+		orderedUnmatchedYNAB,
+	);
+
+	if (params.dry_run || transactionsToUnclear.length === 0) {
+		return;
+	}
+
+	// YNAB API has a limit of ~100 transactions per batch, so we chunk the updates
+	await runChunkedUpdates(state, transactionsToUnclear, {
+		failureType: "batch_unclear_failed",
+		failureVerb: "unclear",
+		onChunkSuccess: async (updatedTransactions) => {
+			state.summary.transactions_updated += updatedTransactions.length;
+
+			for (const updatedTransaction of updatedTransactions) {
+				state.actions.push({
+					type: "update_transaction",
+					transaction: updatedTransaction as unknown as Record<
+						string,
+						unknown
+					> | null,
+					reason: `Marked transaction ${updatedTransaction.id} as uncleared - not found on statement`,
+				});
+			}
+			state.accountSnapshotDirty = true;
+			// Report progress after successful unclear batch
+			state.completedOperations += updatedTransactions.length;
+			await reportProgress(
+				state,
+				`Marked ${state.completedOperations} of ${state.totalOperations} transactions uncleared`,
+			);
+		},
+	});
+}
+
+// Diagnostic logging for auto_unclear_missing debugging
+function recordUnclearDiagnostics(
+	state: ExecutionState,
+	orderedUnmatchedYNAB: YNABTransaction[],
+	shouldRunSanityPass: boolean,
+): void {
+	const { params, currencyCode } = state.options;
+	state.actions.push({
 		type: "diagnostic_step3_entry",
 		transaction: null,
-		reason: `STEP 3 diagnostics: auto_unclear_missing=${params.auto_unclear_missing}, balanceAligned=${balanceAligned}, shouldRunSanityPass=${shouldRunSanityPass}, orderedUnmatchedYNAB.length=${orderedUnmatchedYNAB.length}`,
+		reason: `STEP 3 diagnostics: auto_unclear_missing=${params.auto_unclear_missing}, balanceAligned=${state.balanceAligned}, shouldRunSanityPass=${shouldRunSanityPass}, orderedUnmatchedYNAB.length=${orderedUnmatchedYNAB.length}`,
 	});
 
-	if (orderedUnmatchedYNAB.length > 0) {
-		const unmatchedDetails = orderedUnmatchedYNAB.slice(0, 10).map((t) => ({
-			id: t.id,
-			date: t.date,
-			cleared: t.cleared,
-			amount: formatDisplay(t.amount, currencyCode),
-			payee: t.payee ?? "Unknown",
-		}));
-		actions_taken.push({
-			type: "diagnostic_unmatched_ynab",
-			transaction: {
-				unmatched_transactions: unmatchedDetails,
-			} as unknown as Record<string, unknown>,
-			reason: `First ${Math.min(10, orderedUnmatchedYNAB.length)} unmatched YNAB transactions (cleared status and amounts)`,
+	if (orderedUnmatchedYNAB.length === 0) {
+		return;
+	}
+
+	const unmatchedDetails = orderedUnmatchedYNAB.slice(0, 10).map((t) => ({
+		id: t.id,
+		date: t.date,
+		cleared: t.cleared,
+		amount: formatDisplay(t.amount, currencyCode),
+		payee: t.payee ?? "Unknown",
+	}));
+	state.actions.push({
+		type: "diagnostic_unmatched_ynab",
+		transaction: {
+			unmatched_transactions: unmatchedDetails,
+		} as unknown as Record<string, unknown>,
+		reason: `First ${Math.min(10, orderedUnmatchedYNAB.length)} unmatched YNAB transactions (cleared status and amounts)`,
+	});
+}
+
+/**
+ * Walk cleared unmatched YNAB transactions newest-to-oldest, building unclear
+ * payloads (or dry-run actions) until the cleared balance aligns.
+ */
+function collectUnclearUpdates(
+	state: ExecutionState,
+	orderedUnmatchedYNAB: YNABTransaction[],
+): ynab.SaveTransactionWithIdOrImportId[] {
+	const { params } = state.options;
+	const transactionsToUnclear: ynab.SaveTransactionWithIdOrImportId[] = [];
+
+	for (const ynabTxn of orderedUnmatchedYNAB) {
+		if (ynabTxn.cleared !== "cleared") continue;
+		if (state.balanceAligned) break;
+
+		if (params.dry_run) {
+			state.summary.transactions_updated += 1;
+			state.actions.push({
+				type: "update_transaction",
+				transaction: { transaction_id: ynabTxn.id, cleared: "uncleared" },
+				reason: `Would mark transaction ${ynabTxn.id} as uncleared - not present on statement`,
+			});
+		} else {
+			// Minimal update payload - only include ID and the field we're changing
+			transactionsToUnclear.push({
+				id: ynabTxn.id,
+				cleared: "uncleared" as ynab.TransactionClearedStatus,
+			});
+		}
+
+		applyClearedDelta(state, -ynabTxn.amount);
+		const trigger = params.dry_run
+			? `unclearing ${ynabTxn.id} (dry run)`
+			: `unclearing ${ynabTxn.id}`;
+		if (recordAlignmentIfNeeded(state, trigger)) {
+			break;
+		}
+	}
+
+	return transactionsToUnclear;
+}
+
+// ============================================================================
+// STEP 4: Mark all matched transactions as reconciled when balance aligns
+// ============================================================================
+
+async function reconcileMatchedTransactions(
+	state: ExecutionState,
+	orderedAutoMatches: TransactionMatch[],
+	reconcilableMatchedTransactionIds: Set<string>,
+): Promise<void> {
+	const { currencyCode } = state.options;
+	const transactionsToReconcile: ynab.SaveTransactionWithIdOrImportId[] = [];
+
+	for (const match of orderedAutoMatches) {
+		if (!match.ynabTransaction) continue;
+		// Only reconcile transactions that are not already reconciled
+		if (match.ynabTransaction.cleared === "reconciled") continue;
+		if (!reconcilableMatchedTransactionIds.has(match.ynabTransaction.id)) {
+			continue;
+		}
+
+		transactionsToReconcile.push({
+			id: match.ynabTransaction.id,
+			cleared: "reconciled" as ynab.TransactionClearedStatus,
 		});
 	}
 
-	if (shouldRunSanityPass) {
-		const transactionsToUnclear: ynab.SaveTransactionWithIdOrImportId[] = [];
+	if (transactionsToReconcile.length === 0) {
+		return;
+	}
 
-		for (const ynabTxn of orderedUnmatchedYNAB) {
-			if (ynabTxn.cleared !== "cleared") continue;
-			if (balanceAligned) break;
+	await runChunkedUpdates(state, transactionsToReconcile, {
+		failureType: "batch_reconcile_failed",
+		failureVerb: "reconcile",
+		onChunkSuccess: (reconciledTransactions) => {
+			state.summary.transactions_updated += reconciledTransactions.length;
 
-			if (params.dry_run) {
-				summary.transactions_updated += 1;
-				actions_taken.push({
+			for (const reconciledTransaction of reconciledTransactions) {
+				const match = orderedAutoMatches.find(
+					(m) => m.ynabTransaction?.id === reconciledTransaction.id,
+				);
+				state.actions.push({
 					type: "update_transaction",
-					transaction: { transaction_id: ynabTxn.id, cleared: "uncleared" },
-					reason: `Would mark transaction ${ynabTxn.id} as uncleared - not present on statement`,
+					transaction: reconciledTransaction as unknown as Record<
+						string,
+						unknown
+					> | null,
+					reason: `Marked as reconciled: ${match?.bankTransaction.payee ?? "transaction"} (${formatDisplay(reconciledTransaction.amount, currencyCode)})`,
 				});
-				applyClearedDelta(-ynabTxn.amount);
-				if (recordAlignmentIfNeeded(`unclearing ${ynabTxn.id} (dry run)`)) {
-					break;
-				}
-			} else {
-				// Minimal update payload - only include ID and the field we're changing
-				transactionsToUnclear.push({
-					id: ynabTxn.id,
-					cleared: "uncleared" as ynab.TransactionClearedStatus,
-				});
-				applyClearedDelta(-ynabTxn.amount);
-				if (recordAlignmentIfNeeded(`unclearing ${ynabTxn.id}`)) {
-					break;
-				}
 			}
-		}
+			state.accountSnapshotDirty = true;
+		},
+	});
 
-		// Batch update all unclear operations in a single API call
-		// YNAB API has a limit of ~100 transactions per batch, so we chunk the updates
-		if (!params.dry_run && transactionsToUnclear.length > 0) {
-			const unclearChunks = chunkArray(
-				transactionsToUnclear,
-				MAX_BULK_UPDATE_CHUNK,
-			);
+	state.actions.push({
+		type: "reconciliation_complete",
+		transaction: null,
+		reason: `Marked ${transactionsToReconcile.length} matched transaction(s) as reconciled - balance aligned within tolerance`,
+	});
+}
 
-			for (let chunkIdx = 0; chunkIdx < unclearChunks.length; chunkIdx++) {
-				const chunk = unclearChunks[chunkIdx];
-				if (!chunk) continue;
-				try {
-					const response = await ynabAPI.transactions.updateTransactions(
-						budgetId,
-						{
-							transactions: chunk,
-						},
-					);
+// ============================================================================
+// STEPS 5-6: Balance snapshot, recommendations, and result assembly
+// ============================================================================
 
-					const updatedTransactions = response.data.transactions ?? [];
-					summary.transactions_updated += updatedTransactions.length;
-
-					for (const updatedTransaction of updatedTransactions) {
-						actions_taken.push({
-							type: "update_transaction",
-							transaction: updatedTransaction as unknown as Record<
-								string,
-								unknown
-							> | null,
-							reason: `Marked transaction ${updatedTransaction.id} as uncleared - not found on statement`,
-						});
-					}
-					accountSnapshotDirty = true;
-					// Report progress after successful unclear batch
-					completedOperations += updatedTransactions.length;
-					await reportProgress(
-						`Marked ${completedOperations} of ${totalOperations} transactions uncleared`,
-					);
-				} catch (error) {
-					const ynabError = normalizeYnabError(error);
-					const failureReason = ynabError.message || "Unknown error occurred";
-					const statusSuffix = ynabError.status
-						? ` (HTTP ${ynabError.status})`
-						: "";
-					actions_taken.push({
-						type: "batch_unclear_failed",
-						transaction: null,
-						reason: `Failed to unclear chunk ${chunkIdx + 1}/${unclearChunks.length} (${chunk.length} transaction(s)): ${failureReason}${statusSuffix}`,
-					});
-
-					if (shouldPropagateYnabError(ynabError)) {
-						throw attachStatusToError(ynabError, error);
-					}
-				}
-
-				// Add delay between chunks to avoid rate limiting (except after last chunk)
-				if (chunkIdx < unclearChunks.length - 1) {
-					await sleep(BATCH_DELAY_MS);
-				}
-			}
-		}
-	}
-
-	// STEP 4: Mark all matched transactions as reconciled when balance aligns
-	if (balanceAligned && !params.dry_run && params.auto_update_cleared_status) {
-		const transactionsToReconcile: ynab.SaveTransactionWithIdOrImportId[] = [];
-
-		for (const match of orderedAutoMatches) {
-			if (!match.ynabTransaction) continue;
-			// Only reconcile transactions that are not already reconciled
-			if (match.ynabTransaction.cleared === "reconciled") continue;
-			if (!reconcilableMatchedTransactionIds.has(match.ynabTransaction.id)) {
-				continue;
-			}
-
-			transactionsToReconcile.push({
-				id: match.ynabTransaction.id,
-				cleared: "reconciled" as ynab.TransactionClearedStatus,
-			});
-		}
-
-		// Batch update all reconciliations in chunks
-		if (transactionsToReconcile.length > 0) {
-			const reconcileChunks = chunkArray(
-				transactionsToReconcile,
-				MAX_BULK_UPDATE_CHUNK,
-			);
-
-			for (let chunkIdx = 0; chunkIdx < reconcileChunks.length; chunkIdx++) {
-				const chunk = reconcileChunks[chunkIdx];
-				if (!chunk) continue;
-				try {
-					const response = await ynabAPI.transactions.updateTransactions(
-						budgetId,
-						{
-							transactions: chunk,
-						},
-					);
-
-					const reconciledTransactions = response.data.transactions ?? [];
-					summary.transactions_updated += reconciledTransactions.length;
-
-					for (const reconciledTransaction of reconciledTransactions) {
-						const match = orderedAutoMatches.find(
-							(m) => m.ynabTransaction?.id === reconciledTransaction.id,
-						);
-						actions_taken.push({
-							type: "update_transaction",
-							transaction: reconciledTransaction as unknown as Record<
-								string,
-								unknown
-							> | null,
-							reason: `Marked as reconciled: ${match?.bankTransaction.payee ?? "transaction"} (${formatDisplay(reconciledTransaction.amount, currencyCode)})`,
-						});
-					}
-					accountSnapshotDirty = true;
-				} catch (error) {
-					const ynabError = normalizeYnabError(error);
-					const failureReason = ynabError.message || "Unknown error occurred";
-					const statusSuffix = ynabError.status
-						? ` (HTTP ${ynabError.status})`
-						: "";
-					actions_taken.push({
-						type: "batch_reconcile_failed",
-						transaction: null,
-						reason: `Failed to reconcile chunk ${chunkIdx + 1}/${reconcileChunks.length} (${chunk.length} transaction(s)): ${failureReason}${statusSuffix}`,
-					});
-
-					if (shouldPropagateYnabError(ynabError)) {
-						throw attachStatusToError(ynabError, error);
-					}
-				}
-
-				// Add delay between chunks to avoid rate limiting (except after last chunk)
-				if (chunkIdx < reconcileChunks.length - 1) {
-					await sleep(BATCH_DELAY_MS);
-				}
-			}
-
-			actions_taken.push({
-				type: "reconciliation_complete",
-				transaction: null,
-				reason: `Marked ${transactionsToReconcile.length} matched transaction(s) as reconciled - balance aligned within tolerance`,
-			});
-		}
-	}
+async function buildExecutionResult(
+	state: ExecutionState,
+	statementTargetMilli: number,
+): Promise<ExecutionResult> {
+	const {
+		analysis,
+		params,
+		ynabAPI,
+		budgetId,
+		accountId,
+		initialAccount,
+		currencyCode,
+		decimalDigits,
+	} = state.options;
 
 	// STEP 5: Balance reconciliation snapshot (only once per execution)
 	let balance_reconciliation: ExecutionResult["balance_reconciliation"];
@@ -961,17 +1173,18 @@ export async function executeReconciliation(
 	}
 
 	// STEP 6: Recommendations and balance changes
-	if (!params.dry_run && accountSnapshotDirty) {
+	let afterAccount: AccountSnapshot = { ...initialAccount };
+	if (!params.dry_run && state.accountSnapshotDirty) {
 		afterAccount = await refreshAccountSnapshot(ynabAPI, budgetId, accountId);
 	}
 
 	const balanceChangeMilli =
-		params.dry_run || !accountSnapshotDirty
+		params.dry_run || !state.accountSnapshotDirty
 			? 0
 			: afterAccount.balance - initialAccount.balance;
 
 	const recommendations = buildRecommendations({
-		summary,
+		summary: state.summary,
 		params,
 		analysis,
 		balanceChangeMilli,
@@ -979,12 +1192,12 @@ export async function executeReconciliation(
 	});
 
 	const result: ExecutionResult = {
-		summary,
+		summary: state.summary,
 		account_balance: {
 			before: initialAccount,
 			after: afterAccount,
 		},
-		actions_taken,
+		actions_taken: state.actions,
 		recommendations,
 	};
 
@@ -992,11 +1205,11 @@ export async function executeReconciliation(
 		result.balance_reconciliation = balance_reconciliation;
 	}
 
-	if (bulkOperationDetails) {
+	const bulkDetails = state.bulkOperationDetails;
+	if (bulkDetails) {
 		// Ensure failed_transactions mirrors transaction_failures for backward compatibility
-		bulkOperationDetails.failed_transactions =
-			bulkOperationDetails.transaction_failures;
-		result.bulk_operation_details = bulkOperationDetails;
+		bulkDetails.failed_transactions = bulkDetails.transaction_failures;
+		result.bulk_operation_details = bulkDetails;
 	}
 
 	return result;
