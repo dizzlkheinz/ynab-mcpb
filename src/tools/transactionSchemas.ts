@@ -563,8 +563,11 @@ export interface CorrelationPayloadInput {
  * Interface for category source (used in cache invalidation)
  */
 export interface CategorySource {
-	category_id?: string | null;
-	subtransactions?: { category_id?: string | null }[] | null | undefined;
+	category_id?: string | null | undefined;
+	subtransactions?:
+		| { category_id?: string | null | undefined }[]
+		| null
+		| undefined;
 }
 
 /**
