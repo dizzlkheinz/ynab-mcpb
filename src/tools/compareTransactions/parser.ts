@@ -7,6 +7,16 @@ import { resolveCsvPathCandidates } from "../csvFilePath.js";
 import type { BankTransaction, CSVFormat } from "./types.js";
 
 /**
+ * Format a Date as YYYY-MM-DD using local date components
+ */
+export function formatDateOnly(date: Date): string {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
+}
+
+/**
  * Parse date string using date-fns for better reliability
  */
 export function parseDate(dateStr: string, format: string): Date {
@@ -578,16 +588,8 @@ export function extractDateRangeFromCSV(
 	const minDateObj = new Date(Math.min(...dates));
 	const maxDateObj = new Date(Math.max(...dates));
 
-	// Convert to YYYY-MM-DD format
-	const toYYYYMMDD = (date: Date): string => {
-		const year = date.getFullYear();
-		const month = String(date.getMonth() + 1).padStart(2, "0");
-		const day = String(date.getDate()).padStart(2, "0");
-		return `${year}-${month}-${day}`;
-	};
-
 	return {
-		minDate: toYYYYMMDD(minDateObj),
-		maxDate: toYYYYMMDD(maxDateObj),
+		minDate: formatDateOnly(minDateObj),
+		maxDate: formatDateOnly(maxDateObj),
 	};
 }

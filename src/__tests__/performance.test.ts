@@ -9,6 +9,7 @@ import {
 	type AccountSnapshot,
 	executeReconciliation,
 } from "../tools/reconciliation/executor.js";
+import { sleep as delay } from "../tools/reconciliation/executorHelpers.js";
 import type { ReconcileAccountRequest } from "../tools/reconciliation/index.js";
 import type { ReconciliationAnalysis } from "../tools/reconciliation/types.js";
 import { executeToolCall, parseToolResult } from "./testUtils.js";
@@ -252,10 +253,6 @@ function buildPerformanceParams(
 		dry_run: false,
 		...overrides,
 	};
-}
-
-function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function createPerformanceApi(options: {

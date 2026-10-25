@@ -1,6 +1,6 @@
 import type { CacheManager } from "./cacheManager.js";
 import { getRuntimeConfig } from "./config.js";
-import globalRequestLogger from "./requestLogger.js";
+import { globalRequestLogger } from "./requestLogger.js";
 import type { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
 
 export interface Logger {

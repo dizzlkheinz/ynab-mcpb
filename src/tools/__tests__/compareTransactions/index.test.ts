@@ -15,7 +15,10 @@ const mockFindMatches = vi.hoisted(() => vi.fn());
 const mockBuildComparisonResult = vi.hoisted(() => vi.fn());
 
 // Mock all the sub-modules with hoisted mocks wired directly
-vi.mock("../../compareTransactions/parser.js", () => ({
+vi.mock("../../compareTransactions/parser.js", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("../../compareTransactions/parser.js")
+	>()),
 	parseBankCSV: mockParseBankCSV,
 	readCSVFile: mockReadCSVFile,
 	autoDetectCSVFormat: mockAutoDetectCSVFormat,

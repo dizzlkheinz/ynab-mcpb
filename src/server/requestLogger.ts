@@ -394,5 +394,3 @@ export class RequestLogger {
  * Global request logger instance
  */
 export const globalRequestLogger = new RequestLogger();
-
-export default globalRequestLogger;
