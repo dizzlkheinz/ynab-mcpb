@@ -5,6 +5,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetRuntimeConfig } from "../config.js";
 import {
 	type DiagnosticDependencies,
 	DiagnosticManager,
@@ -330,6 +331,7 @@ describe("diagnostics module", () => {
 				it("should include delta metrics when include_delta is true", async () => {
 					const originalEnv = process.env.YNAB_MCP_ENABLE_DELTA;
 					process.env.YNAB_MCP_ENABLE_DELTA = "true";
+					resetRuntimeConfig();
 
 					try {
 						mockKnowledgeStore.getStats.mockReturnValue({
@@ -373,6 +375,7 @@ describe("diagnostics module", () => {
 						} else {
 							process.env.YNAB_MCP_ENABLE_DELTA = originalEnv;
 						}
+						resetRuntimeConfig();
 					}
 				});
 
