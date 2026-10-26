@@ -356,6 +356,67 @@ describe("executeReconciliation (apply mode)", () => {
 	});
 });
 
+describe("executeReconciliation (swallowed chunk failures)", () => {
+	it("withdraws balance alignment when the clearing update never reaches YNAB", async () => {
+		const analysis = buildAnalysis();
+		analysis.unmatched_bank = [];
+		analysis.unmatched_ynab = [];
+		// Clearing the single match (-45.23) is exactly what aligns the balance
+		analysis.balance_info.target_statement = toMoneyValue(-944250, "USD");
+		const params = {
+			budget_id: "budget-fail",
+			account_id: "account-fail",
+			csv_data: "Date,Description,Amount",
+			statement_balance: -944.25,
+			statement_end_date: "2025-10-31",
+			date_tolerance_days: 2,
+			match_strictness: "strict" as const,
+			auto_create_transactions: false,
+			auto_update_cleared_status: true,
+			auto_unclear_missing: false,
+			auto_adjust_dates: true,
+			dry_run: false,
+		} satisfies ReconcileAccountRequest;
+
+		const { api, mocks } = createMockYnabAPI({
+			balance: -944250,
+			cleared_balance: -899020,
+			uncleared_balance: -45230,
+		});
+		// Network error: no HTTP status, so it is recorded but not propagated
+		mocks.updateTransactions.mockRejectedValue(new Error("socket hang up"));
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: "budget-fail",
+			accountId: "account-fail",
+			initialAccount: {
+				balance: -944250,
+				cleared_balance: -899020,
+				uncleared_balance: -45230,
+			},
+			currencyCode: "USD",
+		});
+
+		const actionTypes = result.actions_taken.map((action) => action.type);
+		expect(actionTypes).toContain("batch_update_failed");
+		expect(actionTypes).not.toContain("reconciliation_complete");
+		expect(
+			result.actions_taken.some(
+				(action) =>
+					action.type === "balance_checkpoint" &&
+					action.reason.includes("no longer aligned"),
+			),
+		).toBe(true);
+		// STEP 4 must not try to mark anything reconciled
+		expect(mocks.updateTransactions).toHaveBeenCalledTimes(1);
+		expect(result.summary.transactions_updated).toBe(0);
+		expect(result.summary.dates_adjusted).toBe(0);
+	});
+});
+
 describe("executeReconciliation (ordered halting)", () => {
 	it("processes newest auto matches first and stops once balances align", async () => {
 		const analysis: ReconciliationAnalysis = {

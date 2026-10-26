@@ -135,13 +135,22 @@ interface ExecutionState {
 	readonly options: ExecutionOptions;
 	readonly summary: ExecutionSummary;
 	readonly actions: ExecutionActionRecord[];
-	readonly totalOperations: number;
+	readonly plannedOperations: PlannedOperations;
 	readonly balanceToleranceMilli: number;
+	/** Progress total; shrinks as steps settle how much work they actually do */
+	totalOperations: number;
 	completedOperations: number;
 	clearedDeltaMilli: number;
 	balanceAligned: boolean;
 	accountSnapshotDirty: boolean;
 	bulkOperationDetails: BulkOperationDetails | undefined;
+}
+
+/** Upper-bound operation counts per step, used for MCP progress totals */
+interface PlannedOperations {
+	readonly create: number;
+	readonly update: number;
+	readonly unclear: number;
 }
 
 interface PlannedMatch {
@@ -162,6 +171,8 @@ interface ChunkedUpdateConfig {
 	onChunkSuccess: (
 		transactions: ynab.TransactionDetail[],
 	) => Promise<void> | void;
+	/** Called for a failed chunk whose error is not propagated */
+	onChunkFailure?: (chunk: ynab.SaveTransactionWithIdOrImportId[]) => void;
 }
 
 function parseISODate(dateStr: string | undefined): Date | undefined {
@@ -217,12 +228,26 @@ export async function executeReconciliation(
 		analysis.balance_info,
 	);
 	const matchPlan = buildMatchPlan(analysis.auto_matches, params);
+	const orderedUnmatchedYNAB = orderUnmatchedYnabInStatementWindow(
+		analysis,
+		params,
+	);
+	const plannedOperations = countPlannedOperations(
+		analysis,
+		params,
+		matchPlan,
+		orderedUnmatchedYNAB,
+	);
 
 	const state: ExecutionState = {
 		options,
 		summary: buildInitialSummary(analysis, params),
 		actions: [],
-		totalOperations: countPlannedOperations(analysis, params, matchPlan),
+		plannedOperations,
+		totalOperations:
+			plannedOperations.create +
+			plannedOperations.update +
+			plannedOperations.unclear,
 		balanceToleranceMilli: DEFAULT_TOLERANCE_CENTS * CENTS_TO_MILLI,
 		completedOperations: 0,
 		clearedDeltaMilli: addMilli(
@@ -242,10 +267,6 @@ export async function executeReconciliation(
 			reconcilableMatchedTransactionIds.add(match.ynabTransaction.id);
 		}
 	}
-	const orderedUnmatchedYNAB = orderUnmatchedYnabInStatementWindow(
-		analysis,
-		params,
-	);
 
 	// STEP 1: Auto-create missing transactions (bank -> YNAB)
 	if (params.auto_create_transactions && !state.balanceAligned) {
@@ -254,6 +275,10 @@ export async function executeReconciliation(
 			sortByDateDescending(analysis.unmatched_bank),
 		);
 	}
+	settleProgressTotal(
+		state,
+		plannedOperations.update + plannedOperations.unclear,
+	);
 
 	// STEP 2: Update matched YNAB transactions (cleared status / date)
 	if (!state.balanceAligned) {
@@ -263,9 +288,11 @@ export async function executeReconciliation(
 			reconcilableMatchedTransactionIds,
 		);
 	}
+	settleProgressTotal(state, plannedOperations.unclear);
 
 	// STEP 3: Auto-unclear YNAB transactions missing from bank
 	await unclearMissingTransactions(state, orderedUnmatchedYNAB);
+	await finishProgress(state);
 
 	// STEP 4: Mark all matched transactions as reconciled when balance aligns
 	if (
@@ -329,21 +356,28 @@ function buildMatchPlan(
 
 /**
  * Count operations for MCP progress notifications. Only matches that will
- * actually be updated are counted, so skipped matches don't inflate the total.
+ * actually be updated and cleared in-window transactions that could be
+ * uncleared are counted, so skipped items don't inflate the total.
  */
 function countPlannedOperations(
 	analysis: ReconciliationAnalysis,
 	params: ReconcileAccountRequest,
 	matchPlan: MatchPlan,
-): number {
+	orderedUnmatchedYNAB: YNABTransaction[],
+): PlannedOperations {
 	const matchesNeedingUpdate = matchPlan.ordered.filter(
 		({ flags }) => flags.needsClearedUpdate || flags.needsDateUpdate,
 	);
-	return (
-		(params.auto_create_transactions ? analysis.unmatched_bank.length : 0) +
-		matchesNeedingUpdate.length +
-		(params.auto_unclear_missing ? analysis.unmatched_ynab.length : 0)
+	const unclearCandidates = orderedUnmatchedYNAB.filter(
+		(txn) => txn.cleared === "cleared",
 	);
+	return {
+		create: params.auto_create_transactions
+			? analysis.unmatched_bank.length
+			: 0,
+		update: matchesNeedingUpdate.length,
+		unclear: params.auto_unclear_missing ? unclearCandidates.length : 0,
+	};
 }
 
 function orderUnmatchedYnabInStatementWindow(
@@ -381,9 +415,61 @@ async function reportProgress(
 	}
 }
 
+/**
+ * Shrink the progress total to what has completed plus what is still to come,
+ * dropping planned operations that a step skipped once the balance aligned.
+ */
+function settleProgressTotal(
+	state: ExecutionState,
+	remainingOperations: number,
+): void {
+	state.totalOperations = state.completedOperations + remainingOperations;
+}
+
+/** Settle the progress total and close out progress if the total shrank */
+async function finishProgress(state: ExecutionState): Promise<void> {
+	const previousTotal = state.totalOperations;
+	settleProgressTotal(state, 0);
+	if (
+		state.completedOperations > 0 &&
+		state.totalOperations !== previousTotal
+	) {
+		await reportProgress(
+			state,
+			`Completed ${state.completedOperations} of ${state.totalOperations} operations`,
+		);
+	}
+}
+
 function applyClearedDelta(state: ExecutionState, delta: number): void {
 	if (delta === 0) return;
 	state.clearedDeltaMilli = addMilli(state.clearedDeltaMilli, delta);
+}
+
+/**
+ * Undo the projected cleared delta for updates that never reached YNAB. If the
+ * balance falls back outside tolerance, alignment is withdrawn so later steps
+ * don't treat the account as reconciled.
+ */
+function revertClearedDelta(
+	state: ExecutionState,
+	delta: number,
+	trigger: string,
+): void {
+	applyClearedDelta(state, delta);
+	if (
+		!state.balanceAligned ||
+		Math.abs(state.clearedDeltaMilli) <= state.balanceToleranceMilli
+	) {
+		return;
+	}
+	state.balanceAligned = false;
+	const { currencyCode } = state.options;
+	state.actions.push({
+		type: "balance_checkpoint",
+		transaction: null,
+		reason: `Cleared delta ${formatDisplay(state.clearedDeltaMilli, currencyCode)} outside ±${formatDisplay(state.balanceToleranceMilli, currencyCode)} after ${trigger} - balance no longer aligned`,
+	});
 }
 
 function recordAlignmentIfNeeded(
@@ -457,6 +543,7 @@ async function runChunkedUpdates(
 			if (shouldPropagateYnabError(ynabError)) {
 				throw attachStatusToError(ynabError, error);
 			}
+			config.onChunkFailure?.(chunk);
 		}
 
 		// Add delay between chunks to avoid rate limiting (except after last chunk)
@@ -856,6 +943,10 @@ async function updateMatchedTransactions(
 ): Promise<void> {
 	const { params, currencyCode } = state.options;
 	const transactionsToUpdate = collectMatchUpdates(state, matchPlan);
+	settleProgressTotal(
+		state,
+		transactionsToUpdate.length + state.plannedOperations.unclear,
+	);
 
 	if (params.dry_run || transactionsToUpdate.length === 0) {
 		return;
@@ -889,6 +980,21 @@ async function updateMatchedTransactions(
 				state,
 				`Updated ${state.completedOperations} of ${state.totalOperations} transactions`,
 			);
+		},
+		onChunkFailure: (failedChunk) => {
+			let clearedDelta = 0;
+			for (const payload of failedChunk) {
+				const planned = payload.id
+					? matchPlan.byTransactionId.get(payload.id)
+					: undefined;
+				const ynabTransaction = planned?.match.ynabTransaction;
+				if (!planned || !ynabTransaction) continue;
+				if (planned.flags.needsDateUpdate) state.summary.dates_adjusted -= 1;
+				if (planned.flags.needsClearedUpdate) {
+					clearedDelta = addMilli(clearedDelta, -ynabTransaction.amount);
+				}
+			}
+			revertClearedDelta(state, clearedDelta, "failed update chunk");
 		},
 	});
 }
@@ -998,10 +1104,14 @@ async function unclearMissingTransactions(
 		state,
 		orderedUnmatchedYNAB,
 	);
+	settleProgressTotal(state, transactionsToUnclear.length);
 
 	if (params.dry_run || transactionsToUnclear.length === 0) {
 		return;
 	}
+	const amountsById = new Map(
+		orderedUnmatchedYNAB.map((txn) => [txn.id, txn.amount]),
+	);
 
 	// YNAB API has a limit of ~100 transactions per batch, so we chunk the updates
 	await runChunkedUpdates(state, transactionsToUnclear, {
@@ -1027,6 +1137,16 @@ async function unclearMissingTransactions(
 				state,
 				`Marked ${state.completedOperations} of ${state.totalOperations} transactions uncleared`,
 			);
+		},
+		onChunkFailure: (failedChunk) => {
+			let clearedDelta = 0;
+			for (const payload of failedChunk) {
+				const amount = payload.id ? amountsById.get(payload.id) : undefined;
+				if (amount !== undefined) {
+					clearedDelta = addMilli(clearedDelta, amount);
+				}
+			}
+			revertClearedDelta(state, clearedDelta, "failed unclear chunk");
 		},
 	});
 }

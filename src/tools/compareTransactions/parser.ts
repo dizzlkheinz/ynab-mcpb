@@ -380,6 +380,8 @@ export function parseBankCSV(
 	format: CSVFormat,
 	options: { debug?: boolean } = {},
 ): BankTransaction[] {
+	assertIndexedDebitCreditColumns(format);
+
 	// Preprocess CSV to fix common issues like unquoted dates
 	const processedCSV = preprocessCSV(csvContent, format);
 
@@ -529,19 +531,40 @@ function toColumnIndex(column: string | number): number {
 }
 
 /**
- * Convert separate debit/credit values into one signed raw amount:
- * debits negative, credits positive, "0" when neither is non-zero
+ * Convert separate debit/credit values into one signed raw amount: debits
+ * negative (whatever sign or parentheses the bank used), credits as given,
+ * and "" when neither is non-zero so the row is skipped
  */
 function combineDebitCredit(debitVal: string, creditVal: string): string {
-	const debitNum = Number.parseFloat(debitVal.replace(/[^\d.-]/g, ""));
+	const debitMagnitude = debitVal.replace(/[^\d.]/g, "");
+	const debitNum = Number.parseFloat(debitMagnitude);
 	const creditNum = Number.parseFloat(creditVal.replace(/[^\d.-]/g, ""));
 	if (!Number.isNaN(debitNum) && debitNum !== 0) {
-		return `-${debitVal}`;
+		return `-${debitMagnitude}`;
 	}
 	if (!Number.isNaN(creditNum) && creditNum !== 0) {
 		return creditVal;
 	}
-	return "0";
+	return "";
+}
+
+/**
+ * Without a header row, debit/credit columns must be numeric indices; a
+ * column name would read record[NaN] on every row and silently drop them all.
+ * @throws {Error} when a configured debit/credit column is not an index
+ */
+function assertIndexedDebitCreditColumns(format: CSVFormat): void {
+	if (format.has_header || format.amount_column !== undefined) return;
+	for (const [label, column] of [
+		["debit_column", format.debit_column],
+		["credit_column", format.credit_column],
+	] as const) {
+		if (column !== undefined && Number.isNaN(toColumnIndex(column))) {
+			throw new Error(
+				`${label} "${column}" must be a column index when has_header is false`,
+			);
+		}
+	}
 }
 
 /**

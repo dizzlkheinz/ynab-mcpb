@@ -464,6 +464,62 @@ describe("parser", () => {
 			expect(transactions[1].amount).toBe(67890); // Credit is positive
 		});
 
+		test("should treat already-signed debits as outflows", () => {
+			const csvContent =
+				'Date,Description,Debit,Credit\n09/15/2023,Minus,-25.00,\n09/16/2023,Parens,(30.00),\n09/17/2023,Dollar,"$1,234.56",';
+			const format: CSVFormat = {
+				date_column: "Date",
+				description_column: "Description",
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: true,
+				delimiter: ",",
+			};
+
+			const transactions = parseBankCSV(csvContent, format);
+
+			expect(transactions.map((t) => t.amount)).toEqual([
+				-25000, -30000, -1234560,
+			]);
+		});
+
+		test("should skip debit/credit rows where both values are blank or zero", () => {
+			const csvContent =
+				"Date,Description,Debit,Credit\n09/15/2023,Balance forward,,\n09/16/2023,Zero row,0.00,0.00\n09/17/2023,Real,12.00,";
+			const format: CSVFormat = {
+				date_column: "Date",
+				description_column: "Description",
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: true,
+				delimiter: ",",
+			};
+
+			const transactions = parseBankCSV(csvContent, format);
+
+			expect(transactions).toHaveLength(1);
+			expect(transactions[0].description).toBe("Real");
+			expect(transactions[0].amount).toBe(-12000);
+		});
+
+		test("should reject named debit/credit columns when there is no header", () => {
+			const format: CSVFormat = {
+				date_column: 0,
+				description_column: 1,
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: false,
+				delimiter: ",",
+			};
+
+			expect(() =>
+				parseBankCSV("09/15/2023,Test Transaction,123.45,", format),
+			).toThrow(/debit_column "Debit" must be a column index/);
+		});
+
 		test("should skip rows with missing data", () => {
 			const csvContent =
 				"Date,Amount,Description\n09/15/2023,123.45,Test Transaction\n,67.89,Missing Date\n09/17/2023,,Missing Amount";

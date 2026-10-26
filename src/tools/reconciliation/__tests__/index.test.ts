@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type * as ynab from "ynab";
 import { DeltaFetcher } from "../../deltaFetcher.js";
@@ -57,47 +60,77 @@ describe("ReconcileAccountSchema", () => {
 	});
 });
 
-describe("handleReconcileAccount", () => {
-	it("always returns unmatched_only structured content", async () => {
-		const ynabAPI = {
-			accounts: {
-				getAccounts: async () => ({
-					data: {
-						accounts: [
-							{
-								id: "account-1",
-								name: "Checking",
-								type: "checking",
-								balance: 0,
-								cleared_balance: 0,
-								uncleared_balance: 0,
-								deleted: false,
-							},
-						],
-						server_knowledge: 1,
-					},
-				}),
-			},
-			transactions: {
-				getTransactionsByAccount: async () => ({
-					data: {
-						transactions: [],
-						server_knowledge: 1,
-					},
-				}),
-			},
-			plans: {
-				getPlanById: async () => ({
-					data: {
-						plan: {
-							currency_format: {
-								iso_code: "USD",
-							},
+const buildEmptyAccountAPI = () =>
+	({
+		accounts: {
+			getAccounts: async () => ({
+				data: {
+					accounts: [
+						{
+							id: "account-1",
+							name: "Checking",
+							type: "checking",
+							balance: 0,
+							cleared_balance: 0,
+							uncleared_balance: 0,
+							deleted: false,
+						},
+					],
+					server_knowledge: 1,
+				},
+			}),
+		},
+		transactions: {
+			getTransactionsByAccount: async () => ({
+				data: {
+					transactions: [],
+					server_knowledge: 1,
+				},
+			}),
+		},
+		plans: {
+			getPlanById: async () => ({
+				data: {
+					plan: {
+						currency_format: {
+							iso_code: "USD",
 						},
 					},
-				}),
-			},
-		} as unknown as ynab.API;
+				},
+			}),
+		},
+	}) as unknown as ynab.API;
+
+describe("handleReconcileAccount", () => {
+	it("reports an empty CSV file as empty rather than as a read failure", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "reconcile-empty-"));
+		const csvPath = join(dir, "statement.csv");
+		await writeFile(csvPath, "");
+		const ynabAPI = buildEmptyAccountAPI();
+
+		try {
+			const result = await handleReconcileAccount(
+				ynabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "account-1",
+					csv_file_path: csvPath,
+					statement_balance: -10,
+				},
+				{ deltaFetcher: new DeltaFetcher(ynabAPI, {} as any) },
+			);
+
+			expect(result.isError).toBe(true);
+			const text = JSON.stringify(result.content);
+			expect(text).toMatch(/CSV content is empty/);
+			expect(text).not.toMatch(/Failed to read CSV file/);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("always returns unmatched_only structured content", async () => {
+		const ynabAPI = buildEmptyAccountAPI();
 
 		const deltaFetcher = new DeltaFetcher(ynabAPI, {} as any);
 

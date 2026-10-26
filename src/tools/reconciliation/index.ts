@@ -580,22 +580,30 @@ async function readCsvFromPath(
 ): Promise<string> {
 	const pathCandidates = resolveCsvPathCandidates(csvFilePath);
 	let lastReadError: unknown;
+	let foundEmptyFile = false;
 
 	for (const candidatePath of pathCandidates) {
 		try {
 			const csvContent = await fs.readFile(candidatePath, "utf8");
+			if (!csvContent.trim()) {
+				// Keep looking: another candidate may hold the real CSV
+				foundEmptyFile = true;
+				continue;
+			}
 			if (candidatePath !== csvFilePath) {
 				narrativeNotes.push(
 					`Read CSV using normalized path "${candidatePath}" from "${csvFilePath}".`,
 				);
 			}
-			if (csvContent) {
-				return csvContent;
-			}
-			break;
+			return csvContent;
 		} catch (error) {
 			lastReadError = error;
 		}
+	}
+
+	if (foundEmptyFile) {
+		// The caller reports empty CSV content
+		return "";
 	}
 
 	const attemptedPaths =

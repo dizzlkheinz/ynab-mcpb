@@ -451,6 +451,63 @@ describe("Reconciliation Progress Notifications", () => {
 				expect(anyCall?.total).toBe(3);
 			}
 		});
+
+		it("should reach the total when unclearing stops early or skips uncleared transactions", async () => {
+			const unmatchedYnab = [
+				createMockTransaction({ id: "cleared-1", cleared: "cleared" }),
+				createMockTransaction({ id: "cleared-2", cleared: "cleared" }),
+				createMockTransaction({ id: "cleared-3", cleared: "cleared" }),
+				createMockTransaction({ id: "uncleared-1", cleared: "uncleared" }),
+				createMockTransaction({ id: "uncleared-2", cleared: "uncleared" }),
+			];
+
+			const analysis: ReconciliationAnalysis = {
+				summary: {
+					bank_transactions_count: 0,
+					ynab_transactions_count: 5,
+					matches: 0,
+					unmatched_bank: 0,
+					unmatched_ynab: 5,
+					match_rate: 0,
+					statement_date_range: "2024-01-01 to 2024-01-31",
+				},
+				auto_matches: [],
+				unmatched_bank: [],
+				unmatched_ynab: unmatchedYnab,
+				// Unclearing one -25.00 transaction aligns the balance
+				balance_info: {
+					current_cleared: 75000,
+					target_statement: 100000,
+				},
+			};
+
+			const params: ReconcileAccountRequest = {
+				account_id: "acc-1",
+				csv_data: "date,amount,payee\n2024-01-15,-25,Test",
+				dry_run: false,
+				auto_unclear_missing: true,
+			};
+
+			await executeReconciliation({
+				ynabAPI: mockYnabAPI as ynab.API,
+				analysis,
+				params,
+				budgetId: "budget-1",
+				accountId: "acc-1",
+				initialAccount: {
+					balance: 100000,
+					cleared_balance: 75000,
+					uncleared_balance: 25000,
+				},
+				currencyCode: "USD",
+				sendProgress: mockProgressCallback,
+			});
+
+			expect(progressCalls.length).toBeGreaterThan(0);
+			const lastCall = progressCalls[progressCalls.length - 1]!;
+			expect(lastCall.progress).toBe(1);
+			expect(lastCall.total).toBe(1);
+		});
 	});
 
 	describe("dry run behavior", () => {
