@@ -173,6 +173,45 @@ describe("handleReconcileAccount", () => {
 		}
 	});
 
+	it("reports the missing user path rather than an error from a translated candidate", async () => {
+		const csvPath = join(tmpdir(), "statement.csv");
+		const csvUrl = pathToFileURL(csvPath).href;
+		const readFile = vi
+			.spyOn(fsPromises, "readFile")
+			.mockImplementation(async (path) => {
+				if (String(path) === csvUrl) {
+					throw Object.assign(new Error("ENOENT: no such file or directory"), {
+						code: "ENOENT",
+					});
+				}
+				throw Object.assign(new Error("EINVAL: invalid argument"), {
+					code: "EINVAL",
+				});
+			});
+		const ynabAPI = buildEmptyAccountAPI();
+
+		try {
+			const result = await handleReconcileAccount(
+				ynabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "account-1",
+					csv_file_path: csvUrl,
+					statement_balance: -10,
+				},
+				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
+			);
+
+			expect(readFile).toHaveBeenCalledTimes(2);
+			expect(result.isError).toBe(true);
+			const text = JSON.stringify(result.content);
+			expect(text).toMatch(/ENOENT/);
+			expect(text).not.toMatch(/EINVAL/);
+		} finally {
+			readFile.mockRestore();
+		}
+	});
+
 	it("always returns unmatched_only structured content", async () => {
 		const ynabAPI = buildEmptyAccountAPI();
 

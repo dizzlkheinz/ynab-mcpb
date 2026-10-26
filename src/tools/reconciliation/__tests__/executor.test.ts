@@ -975,6 +975,68 @@ describe("executeReconciliation - bulk create mode", () => {
 		expect(result.bulk_operation_details).toBeUndefined();
 	});
 
+	it("does not record a sequential create as failed when recording it throws", async () => {
+		const analysis = buildBulkAnalysis(1, 15);
+		const params = buildBulkParams(analysis.summary.target_statement_balance);
+		const initialAccount = { ...defaultAccountSnapshot };
+		const { api, mocks } = createMockYnabAPI(initialAccount);
+
+		mocks.createTransaction.mockResolvedValue({
+			data: { transaction: { id: "single-txn", amount: 15000 } },
+		});
+
+		// An invalid currency code makes formatting the create action throw
+		// after YNAB has already created the transaction
+		await expect(
+			executeReconciliation({
+				ynabAPI: api,
+				analysis,
+				params,
+				budgetId: params.budget_id,
+				accountId: params.account_id,
+				initialAccount,
+				currencyCode: "NOT-A-CURRENCY",
+			}),
+		).rejects.toThrow(RangeError);
+		expect(mocks.createTransaction).toHaveBeenCalledTimes(1);
+	});
+
+	it("records an uncorrelatable bulk chunk as created instead of aborting", async () => {
+		const analysis = buildBulkAnalysis(3, 12);
+		const params = buildBulkParams(analysis.summary.target_statement_balance);
+		const initialAccount = { ...defaultAccountSnapshot };
+		const { api, mocks } = createMockYnabAPI(initialAccount);
+
+		// A malformed response entry makes correlation throw
+		mocks.createTransactions.mockResolvedValue({
+			data: { transactions: [null], duplicate_import_ids: [] },
+		});
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: params.budget_id,
+			accountId: params.account_id,
+			initialAccount,
+			currencyCode: "USD",
+		});
+
+		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
+		expect(mocks.createTransaction).not.toHaveBeenCalled();
+		expect(result.summary.transactions_created).toBe(3);
+		const creates = result.actions_taken.filter(
+			(action) => action.type === "create_transaction",
+		);
+		expect(creates).toHaveLength(3);
+		for (const action of creates) {
+			expect(action.reason).toContain("response could not be matched");
+		}
+		expect(result.bulk_operation_details).toEqual(
+			expect.objectContaining({ bulk_successes: 1, transaction_failures: 0 }),
+		);
+	});
+
 	it("falls back to sequential creation when bulk request fails", async () => {
 		const analysis = buildBulkAnalysis(3, 1000);
 		const params = buildBulkParams(analysis.summary.target_statement_balance);

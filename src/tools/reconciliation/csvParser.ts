@@ -846,7 +846,7 @@ function detectPreset(columns: string[]): BankPreset | undefined {
 const CURRENCY_SYMBOLS = /[$€£¥]/g;
 const CURRENCY_CODES = /\b(CAD|USD|EUR|GBP)\b/gi;
 
-function parseAmount(str: string): {
+export function parseAmount(str: string): {
 	valid: boolean;
 	valueMilliunits: number;
 	reason?: string;

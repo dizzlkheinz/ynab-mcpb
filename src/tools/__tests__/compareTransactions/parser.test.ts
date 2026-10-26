@@ -523,6 +523,28 @@ describe("parser", () => {
 			expect(transactions.map((t) => t.amount)).toEqual([12500, 7250]);
 		});
 
+		test("should read debit/credit cells the same way as reconciliation", () => {
+			const csvContent =
+				'Date,Description,Debit,Credit\n09/15/2023,Euro,"1.234,56",\n09/16/2023,Code,25.00 CAD,\n09/17/2023,Thousands,,"2,500"';
+			const format: CSVFormat = {
+				date_column: "Date",
+				description_column: "Description",
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: true,
+				delimiter: ",",
+			};
+
+			const transactions = parseBankCSV(csvContent, format);
+
+			expect(transactions.map((t) => [t.amount, t.raw_amount])).toEqual([
+				[-1234560, "-1234.56"],
+				[-25000, "-25"],
+				[2500000, "2500"],
+			]);
+		});
+
 		test("should reject named debit/credit columns when there is no header", () => {
 			const format: CSVFormat = {
 				date_column: 0,

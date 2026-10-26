@@ -5,6 +5,7 @@ import { formatISODate } from "../../utils/dateUtils.js";
 import type { Milli } from "../../utils/money.js";
 import { toMilli } from "../../utils/money.js";
 import { resolveCsvPathCandidates } from "../csvFilePath.js";
+import { parseAmount } from "../reconciliation/csvParser.js";
 import type { BankTransaction, CSVFormat } from "./types.js";
 
 /**
@@ -419,6 +420,8 @@ interface RawRowFields {
 	rawDate: string;
 	rawAmount: string;
 	description: string;
+	/** Already-signed amount, set when combined from debit/credit columns */
+	amount?: Milli;
 }
 
 /**
@@ -431,11 +434,12 @@ function parseBankRow(
 	rowNumber: number,
 	options: { debug?: boolean },
 ): BankTransaction | null {
-	const { rawDate, rawAmount, description } = format.has_header
+	const fields = format.has_header
 		? // Record is an object when using headers
 			extractHeaderedFields(record as Record<string, string>, format)
 		: // Record is an array when not using headers, so use column indices
 			extractIndexedFields(record as string[], format);
+	const { rawDate, rawAmount, description } = fields;
 
 	if (!rawDate || !rawAmount) {
 		if (options.debug) {
@@ -447,7 +451,7 @@ function parseBankRow(
 	const date = parseDate(rawDate, format.date_format);
 	let amount: Milli;
 	try {
-		amount = amountToMilliunits(rawAmount);
+		amount = fields.amount ?? amountToMilliunits(rawAmount);
 	} catch (error) {
 		if (options.debug) {
 			console.warn(
@@ -472,24 +476,23 @@ function extractHeaderedFields(
 	format: CSVFormat,
 ): RawRowFields {
 	const rawDate = record[format.date_column as string] || "";
-
-	let rawAmount: string;
-	if (format.amount_column) {
-		rawAmount = record[format.amount_column as string] || "";
-	} else if (
-		format.debit_column !== undefined &&
-		format.credit_column !== undefined
-	) {
-		rawAmount = combineDebitCredit(
-			record[format.debit_column as string] || "",
-			record[format.credit_column as string] || "",
-		);
-	} else {
-		throw new Error("No amount column configuration found");
-	}
-
 	const description = record[format.description_column as string] || "";
-	return { rawDate, rawAmount, description };
+
+	if (format.amount_column) {
+		const rawAmount = record[format.amount_column as string] || "";
+		return { rawDate, rawAmount, description };
+	}
+	if (format.debit_column !== undefined && format.credit_column !== undefined) {
+		return {
+			rawDate,
+			description,
+			...combineDebitCredit(
+				record[format.debit_column as string] || "",
+				record[format.credit_column as string] || "",
+			),
+		};
+	}
+	throw new Error("No amount column configuration found");
 }
 
 function extractIndexedFields(
@@ -504,26 +507,25 @@ function extractIndexedFields(
 	const safeDescIndex = Number.isNaN(descIndex) ? 2 : descIndex;
 
 	const rawDate = record[safeDateIndex] || "";
+	const description = record[safeDescIndex] || "";
 
-	let rawAmount: string;
 	if (format.amount_column !== undefined) {
 		const amountIndex = toColumnIndex(format.amount_column);
 		const safeAmountIndex = Number.isNaN(amountIndex) ? 1 : amountIndex;
-		rawAmount = record[safeAmountIndex] || "";
-	} else if (
-		format.debit_column !== undefined &&
-		format.credit_column !== undefined
-	) {
-		rawAmount = combineDebitCredit(
-			record[toColumnIndex(format.debit_column)] || "",
-			record[toColumnIndex(format.credit_column)] || "",
-		);
-	} else {
-		throw new Error("No amount column configuration found");
+		const rawAmount = record[safeAmountIndex] || "";
+		return { rawDate, rawAmount, description };
 	}
-
-	const description = record[safeDescIndex] || "";
-	return { rawDate, rawAmount, description };
+	if (format.debit_column !== undefined && format.credit_column !== undefined) {
+		return {
+			rawDate,
+			description,
+			...combineDebitCredit(
+				record[toColumnIndex(format.debit_column)] || "",
+				record[toColumnIndex(format.credit_column)] || "",
+			),
+		};
+	}
+	throw new Error("No amount column configuration found");
 }
 
 function toColumnIndex(column: string | number): number {
@@ -531,23 +533,31 @@ function toColumnIndex(column: string | number): number {
 }
 
 /**
- * Convert separate debit/credit values into one signed raw amount: debits
- * negative and credits positive, whatever sign or parentheses the bank used.
- * Explicit zeros give "0"; "" only when neither cell holds a number, so blank
- * rows such as "balance forward" lines are skipped.
+ * Combine separate debit/credit cells into one signed amount: debits negative
+ * and credits positive, whatever sign or parentheses the bank used. This is
+ * the same convention as reconciliation's split-amount parsing, and cells are
+ * read by the same amount parser, so the two tools agree on every amount they
+ * both accept. Explicit zeros give 0; rawAmount is "" only when neither cell
+ * holds a number, so blank rows such as "balance forward" lines are skipped.
  */
-function combineDebitCredit(debitVal: string, creditVal: string): string {
-	const debitMagnitude = debitVal.replace(/[^\d.]/g, "");
-	const creditMagnitude = creditVal.replace(/[^\d.]/g, "");
-	const debitNum = Number.parseFloat(debitMagnitude);
-	const creditNum = Number.parseFloat(creditMagnitude);
-	if (!Number.isNaN(debitNum) && debitNum !== 0) {
-		return `-${debitMagnitude}`;
+function combineDebitCredit(
+	debitVal: string,
+	creditVal: string,
+): Pick<RawRowFields, "rawAmount" | "amount"> {
+	const debit = parseAmount(debitVal);
+	const credit = parseAmount(creditVal);
+	let amount: Milli;
+	if (debit.valid && debit.valueMilliunits !== 0) {
+		amount = -Math.abs(debit.valueMilliunits);
+	} else if (credit.valid && credit.valueMilliunits !== 0) {
+		amount = Math.abs(credit.valueMilliunits);
+	} else if (debit.valid || credit.valid) {
+		amount = 0;
+	} else {
+		return { rawAmount: "" };
 	}
-	if (!Number.isNaN(creditNum) && creditNum !== 0) {
-		return creditMagnitude;
-	}
-	return Number.isNaN(debitNum) && Number.isNaN(creditNum) ? "" : "0";
+	// Report the combined signed amount, as a single amount column would hold it
+	return { rawAmount: String(amount / 1000), amount };
 }
 
 /**

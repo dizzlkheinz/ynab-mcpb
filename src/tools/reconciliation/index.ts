@@ -574,12 +574,26 @@ async function loadCsvContent(
 	return csvContent;
 }
 
+/**
+ * Read errors meaning nothing usable exists at a path. Translated candidate
+ * paths (sandbox or WSL forms) often fail this way on the host, and those
+ * failures must not hide the real error for the path the user gave.
+ */
+const MISSING_PATH_ERROR_CODES = new Set([
+	"ENOENT",
+	"ENOTDIR",
+	"EINVAL",
+	"ENAMETOOLONG",
+]);
+
 async function readCsvFromPath(
 	csvFilePath: string,
 	narrativeNotes: string[],
 ): Promise<string> {
 	const pathCandidates = resolveCsvPathCandidates(csvFilePath);
-	let lastReadError: unknown;
+	// The user's own path is the first candidate, so its error is the one to
+	// report when nothing exists at any candidate.
+	let firstReadError: unknown;
 	// A candidate that exists but can't be read (EACCES, EISDIR, ...) matters
 	// more than an empty candidate, so it must not be masked by one.
 	let lastAccessError: unknown;
@@ -600,8 +614,9 @@ async function readCsvFromPath(
 			}
 			return csvContent;
 		} catch (error) {
-			lastReadError = error;
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			firstReadError ??= error;
+			const code = (error as NodeJS.ErrnoException).code;
+			if (code === undefined || !MISSING_PATH_ERROR_CODES.has(code)) {
 				lastAccessError = error;
 			}
 		}
@@ -612,7 +627,7 @@ async function readCsvFromPath(
 		return "";
 	}
 
-	const reportedError = lastAccessError ?? lastReadError;
+	const reportedError = lastAccessError ?? firstReadError;
 	const attemptedPaths =
 		pathCandidates.length > 0 ? pathCandidates.join(", ") : csvFilePath;
 	const message =
@@ -658,9 +673,10 @@ function applyStatementWindow(
 			endDate: statementWindowEnd,
 		}),
 	};
-	const clampedCsv = clampCSVToStatementWindow(parseResult, {
-		...statementWindowBounds,
-	});
+	const clampedCsv = clampCSVToStatementWindow(
+		parseResult,
+		statementWindowBounds,
+	);
 	if (clampedCsv.excludedCount > 0) {
 		narrativeNotes.push(
 			`Filtered ${clampedCsv.excludedCount} CSV transaction(s) outside statement window ${formatStatementWindow(statementWindowBounds)}.`,
