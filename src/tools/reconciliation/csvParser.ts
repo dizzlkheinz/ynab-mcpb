@@ -234,45 +234,12 @@ export function parseCSV(
 	const errors: ParseError[] = [];
 	const warnings: ParseWarning[] = [];
 
-	// Security: Validate delimiter if provided
-	if (options.delimiter) {
-		validateDelimiter(options.delimiter);
-	}
+	assertWithinParseLimits(content, options);
 
-	// Security: Check file size limit
-	const MAX_BYTES = options.maxBytes ?? 10 * 1024 * 1024; // 10MB default
-	if (content.length > MAX_BYTES) {
-		throw new Error(
-			`File size exceeds limit of ${Math.round(MAX_BYTES / 1024 / 1024)}MB`,
-		);
-	}
-
-	// Auto-detect format when preset or header are not fully specified
-	let detectedPreset: string | undefined = options.preset;
-	let detectedHeader: boolean | undefined = options.header;
-
-	if (!detectedPreset || detectedHeader === undefined) {
-		const autoResult = autoDetectFormat(content);
-		if (autoResult) {
-			if (!detectedPreset) {
-				detectedPreset = autoResult.preset;
-			}
-			if (detectedHeader === undefined && autoResult.header !== undefined) {
-				detectedHeader = autoResult.header;
-			}
-		}
-	}
-
-	// Determine header setting: Explicit > Detected > Preset > Default (true)
-	let hasHeader = true;
-	if (detectedHeader !== undefined) {
-		hasHeader = detectedHeader;
-	} else if (detectedPreset) {
-		const preset = BANK_PRESETS[detectedPreset];
-		if (preset && preset.header !== undefined) {
-			hasHeader = preset.header;
-		}
-	}
+	const { presetKey: detectedPreset, hasHeader } = resolveFormat(
+		content,
+		options,
+	);
 
 	const maxRows = options.maxRows ?? 10000;
 
@@ -287,30 +254,19 @@ export function parseCSV(
 		...(options.delimiter ? { delimiter: options.delimiter } : {}),
 	});
 
-	if (parsed.errors.length > 0) {
-		for (const err of parsed.errors) {
-			errors.push({
-				row: err.row ?? 0,
-				field: "csv",
-				message: err.message,
-				rawValue: "",
-			});
-		}
+	for (const err of parsed.errors) {
+		errors.push({
+			row: err.row ?? 0,
+			field: "csv",
+			message: err.message,
+			rawValue: "",
+		});
 	}
 
-	const rows = parsed.data as (Record<string, string> | string[])[];
-	let columns: string[] = [];
-
-	if (hasHeader) {
-		columns = parsed.meta.fields ?? [];
-	} else {
-		// If no header, rows are arrays. Create dummy columns based on max length
-		const maxLen = rows.reduce(
-			(max, row) => Math.max(max, Array.isArray(row) ? row.length : 0),
-			0,
-		);
-		columns = Array.from({ length: maxLen }, (_, i) => String(i));
-	}
+	const rows = parsed.data as CSVRow[];
+	const columns = hasHeader
+		? (parsed.meta.fields ?? [])
+		: buildIndexColumns(rows);
 
 	const preset = detectedPreset
 		? BANK_PRESETS[detectedPreset]
@@ -318,8 +274,153 @@ export function parseCSV(
 			? detectPreset(columns)
 			: undefined;
 
-	// Determine column names (Priority: Options > Preset > Defaults)
+	const mapping = resolveColumnMapping(columns, preset, options, hasHeader);
+	errors.push(...findMissingColumnErrors(mapping, columns));
 
+	const transactions: BankTransaction[] = [];
+	const rowContext: RowParseContext = {
+		mapping,
+		dateFormat: options.dateFormat ?? preset?.dateFormat,
+		// Apply amount inversion if needed
+		amountMultiplier: options.invertAmounts
+			? -1
+			: (preset?.amountMultiplier ?? 1),
+	};
+
+	// Papa.parse preview already limited rows, but keep defensive check
+	for (let i = 0; i < Math.min(rows.length, maxRows); i++) {
+		const row = rows[i];
+		if (!row) continue;
+
+		const rowNum = i + (hasHeader ? 2 : 1); // 1-indexed. Header consumes line 1.
+		const result = parseRow(row, rowNum, rowContext);
+		if (result.status === "error") {
+			errors.push(result.error);
+			continue;
+		}
+		if (result.status === "skip") continue;
+
+		for (const message of result.transaction.warnings ?? []) {
+			warnings.push({ row: rowNum, message });
+		}
+		transactions.push(result.transaction);
+	}
+
+	return {
+		transactions,
+		errors,
+		warnings,
+		meta: {
+			detectedDelimiter: parsed.meta.delimiter || ",",
+			detectedColumns: columns,
+			totalRows: rows.length,
+			validRows: transactions.length,
+			skippedRows: rows.length - transactions.length,
+		},
+	};
+}
+
+type CSVRow = Record<string, string> | string[];
+
+interface ColumnMapping {
+	dateCol: string | null;
+	descCol: string | null;
+	amountCol: string | null;
+	debitCol: string | null;
+	creditCol: string | null;
+}
+
+interface RowParseContext {
+	mapping: ColumnMapping;
+	dateFormat: BankPreset["dateFormat"];
+	amountMultiplier: number;
+}
+
+type RowParseResult =
+	| { status: "ok"; transaction: BankTransaction }
+	| { status: "error"; error: ParseError }
+	| { status: "skip" };
+
+type AmountParseResult =
+	| {
+			status: "ok";
+			amountMilliunits: number;
+			rawAmount: string;
+			warnings: string[];
+	  }
+	| { status: "error"; error: ParseError }
+	| { status: "skip" };
+
+/**
+ * Security checks that run before any parsing: delimiter allowlist and size cap.
+ * @throws {Error} if the delimiter is unsafe or the content exceeds maxBytes
+ */
+function assertWithinParseLimits(
+	content: string,
+	options: ParseCSVOptions,
+): void {
+	// Security: Validate delimiter if provided
+	if (options.delimiter) {
+		validateDelimiter(options.delimiter);
+	}
+
+	// Security: Check file size limit
+	const MAX_BYTES = options.maxBytes ?? 10 * 1024 * 1024; // 10MB default
+	if (content.length > MAX_BYTES) {
+		throw new Error(
+			`File size exceeds limit of ${Math.round(MAX_BYTES / 1024 / 1024)}MB`,
+		);
+	}
+}
+
+/**
+ * Resolve the bank preset key and header setting, auto-detecting from content
+ * when either is not specified.
+ */
+function resolveFormat(
+	content: string,
+	options: ParseCSVOptions,
+): { presetKey: string | undefined; hasHeader: boolean } {
+	let presetKey: string | undefined = options.preset;
+	let header: boolean | undefined = options.header;
+
+	if (!presetKey || header === undefined) {
+		const autoResult = autoDetectFormat(content);
+		if (autoResult) {
+			if (!presetKey) {
+				presetKey = autoResult.preset;
+			}
+			if (header === undefined && autoResult.header !== undefined) {
+				header = autoResult.header;
+			}
+		}
+	}
+
+	// Determine header setting: Explicit > Detected > Preset > Default (true)
+	const presetHeader = presetKey ? BANK_PRESETS[presetKey]?.header : undefined;
+	return { presetKey, hasHeader: header ?? presetHeader ?? true };
+}
+
+/**
+ * Headerless rows are arrays, so name columns by index up to the widest row.
+ */
+function buildIndexColumns(rows: CSVRow[]): string[] {
+	const maxLen = rows.reduce(
+		(max, row) => Math.max(max, Array.isArray(row) ? row.length : 0),
+		0,
+	);
+	return Array.from({ length: maxLen }, (_, i) => String(i));
+}
+
+/**
+ * Determine column names (Priority: Options > Preset > Defaults)
+ */
+function resolveColumnMapping(
+	columns: string[],
+	preset: BankPreset | undefined,
+	options: ParseCSVOptions,
+	hasHeader: boolean,
+): ColumnMapping {
 	const dateCandidates = options.columns?.date
 		? [options.columns.date]
 		: (preset?.dateColumn ?? ["Date", "Transaction Date", "Posted Date"]);
@@ -337,17 +438,28 @@ export function parseCSV(
 				"Reference",
 			]);
 
-	const dateCol = findColumn(columns, dateCandidates, !hasHeader);
-	const descCol = findColumn(columns, descCandidates, !hasHeader);
+	return {
+		dateCol: findColumn(columns, dateCandidates, !hasHeader),
+		descCol: findColumn(columns, descCandidates, !hasHeader),
+		...resolveAmountColumns(columns, preset, options, hasHeader),
+	};
+}
 
-	let amountCol: string | null = null;
-	let debitCol: string | null = null;
-	let creditCol: string | null = null;
-
+function resolveAmountColumns(
+	columns: string[],
+	preset: BankPreset | undefined,
+	options: ParseCSVOptions,
+	hasHeader: boolean,
+): Pick<ColumnMapping, "amountCol" | "debitCol" | "creditCol"> {
 	if (options.columns?.debit && options.columns?.credit) {
-		debitCol = findColumn(columns, [options.columns.debit], !hasHeader);
-		creditCol = findColumn(columns, [options.columns.credit], !hasHeader);
-	} else if (
+		return {
+			amountCol: null,
+			debitCol: findColumn(columns, [options.columns.debit], !hasHeader),
+			creditCol: findColumn(columns, [options.columns.credit], !hasHeader),
+		};
+	}
+
+	if (
 		preset?.debitColumn &&
 		preset?.creditColumn &&
 		!options.columns?.amount &&
@@ -357,14 +469,29 @@ export function parseCSV(
 		// with headers.
 		(hasHeader ? !preset?.amountColumn : true)
 	) {
-		debitCol = findColumn(columns, [preset.debitColumn], !hasHeader);
-		creditCol = findColumn(columns, [preset.creditColumn], !hasHeader);
-	} else {
-		const amountCandidates = options.columns?.amount
-			? [options.columns.amount]
-			: (preset?.amountColumn ?? ["Amount", "CAD$", "Value"]);
-		amountCol = findColumn(columns, amountCandidates, !hasHeader);
+		return {
+			amountCol: null,
+			debitCol: findColumn(columns, [preset.debitColumn], !hasHeader),
+			creditCol: findColumn(columns, [preset.creditColumn], !hasHeader),
+		};
 	}
+
+	const amountCandidates = options.columns?.amount
+		? [options.columns.amount]
+		: (preset?.amountColumn ?? ["Amount", "CAD$", "Value"]);
+	return {
+		amountCol: findColumn(columns, amountCandidates, !hasHeader),
+		debitCol: null,
+		creditCol: null,
+	};
+}
+
+function findMissingColumnErrors(
+	mapping: ColumnMapping,
+	columns: string[],
+): ParseError[] {
+	const { dateCol, amountCol, debitCol, creditCol } = mapping;
+	const errors: ParseError[] = [];
 
 	if (!dateCol) {
 		errors.push({
@@ -382,7 +509,7 @@ export function parseCSV(
 				message: `Could not identify amount column from: ${columns.join(", ")}. Try using preset option or specify columns manually with columns.amount (or columns.debit/credit for split columns)`,
 				rawValue: columns.join(", "),
 			});
-		} else if (!debitCol || !creditCol) {
+		} else {
 			errors.push({
 				row: 0,
 				field: "amount",
@@ -392,175 +519,202 @@ export function parseCSV(
 		}
 	}
 
-	const transactions: BankTransaction[] = [];
+	return errors;
+}
 
-	const dateFormat = options.dateFormat ?? preset?.dateFormat;
+function getRowValue(row: CSVRow, colName: string | null): string {
+	if (!colName) return "";
+	if (Array.isArray(row)) {
+		const idx = Number.parseInt(colName, 10);
+		return String(row[idx] ?? "");
+	}
+	return String(row[colName] ?? "");
+}
 
-	// Papa.parse preview already limited rows, but keep defensive check
-	for (let i = 0; i < Math.min(rows.length, maxRows); i++) {
-		const row = rows[i];
-		if (!row) continue;
+function parseRow(
+	row: CSVRow,
+	rowNum: number,
+	context: RowParseContext,
+): RowParseResult {
+	const { mapping } = context;
+	const getValue = (colName: string | null): string =>
+		getRowValue(row, colName).trim();
 
-		// Helper to get value
-		const getValue = (colName: string | null): string => {
-			if (!colName) return "";
-			if (Array.isArray(row)) {
-				const idx = Number.parseInt(colName, 10);
-				return String(row[idx] ?? "");
-			}
-			return String(row[colName as keyof typeof row] ?? "");
-		};
-
-		const rowNum = i + (hasHeader ? 2 : 1); // 1-indexed. Header consumes line 1.
-		const rowWarnings: string[] = [];
-
-		// Parse date
-		const rawDate = getValue(dateCol)?.trim() ?? "";
-		const parsedDate = parseDate(rawDate, dateFormat);
-		if (!parsedDate) {
-			errors.push({
+	// Parse date
+	const rawDate = getValue(mapping.dateCol);
+	const parsedDate = parseDate(rawDate, context.dateFormat);
+	if (!parsedDate) {
+		return {
+			status: "error",
+			error: {
 				row: rowNum,
 				field: "date",
 				message: `Could not parse date: "${rawDate}"`,
 				rawValue: rawDate,
-			});
-			continue;
-		}
-		// Use LOCAL date components (now derived from UTC date object)
-		const dateStr = formatLocalDate(parsedDate);
+			},
+		};
+	}
+	// Use LOCAL date components (now derived from UTC date object)
+	const dateStr = formatLocalDate(parsedDate);
 
-		// Parse amount
-		let amountMilliunits: number;
-		let rawAmount: string;
+	const amount = parseRowAmount(getValue, mapping, rowNum);
+	if (amount.status !== "ok") {
+		return amount;
+	}
 
-		if (amountCol) {
-			rawAmount = getValue(amountCol)?.trim() ?? "";
-			const parsedAmount = parseAmount(rawAmount);
-			if (!parsedAmount.valid) {
-				errors.push({
+	const rawDesc = sanitizeDescription(getValue(mapping.descCol));
+
+	return {
+		status: "ok",
+		transaction: {
+			id: randomUUID(),
+			date: dateStr,
+			amount: amount.amountMilliunits * context.amountMultiplier,
+			payee: rawDesc || "Unknown",
+			sourceRow: rowNum,
+			raw: {
+				date: rawDate,
+				amount: amount.rawAmount,
+				description: rawDesc,
+			},
+			...(amount.warnings.length > 0 && { warnings: amount.warnings }),
+		},
+	};
+}
+
+function parseRowAmount(
+	getValue: (colName: string | null) => string,
+	mapping: ColumnMapping,
+	rowNum: number,
+): AmountParseResult {
+	if (mapping.amountCol) {
+		const rawAmount = getValue(mapping.amountCol);
+		const parsedAmount = parseAmount(rawAmount);
+		if (!parsedAmount.valid) {
+			return {
+				status: "error",
+				error: {
 					row: rowNum,
 					field: "amount",
 					message: parsedAmount.reason ?? `Invalid amount: "${rawAmount}"`,
 					rawValue: rawAmount,
-				});
-				continue;
-			}
-			amountMilliunits = parsedAmount.valueMilliunits;
-		} else if (debitCol && creditCol) {
-			const debit = getValue(debitCol)?.trim() ?? "";
-			const credit = getValue(creditCol)?.trim() ?? "";
-			rawAmount = debit || credit;
-
-			const parsedDebit = parseAmount(debit);
-			const parsedCredit = parseAmount(credit);
-
-			if (!parsedDebit.valid && debit) {
-				errors.push({
-					row: rowNum,
-					field: "amount",
-					message: parsedDebit.reason ?? `Invalid debit amount: "${debit}"`,
-					rawValue: debit,
-				});
-				continue;
-			}
-			if (!parsedCredit.valid && credit) {
-				errors.push({
-					row: rowNum,
-					field: "amount",
-					message: parsedCredit.reason ?? `Invalid credit amount: "${credit}"`,
-					rawValue: credit,
-				});
-				continue;
-			}
-
-			const debitMilliunits = parsedDebit.valid
-				? parsedDebit.valueMilliunits
-				: 0;
-			const creditMilliunits = parsedCredit.valid
-				? parsedCredit.valueMilliunits
-				: 0;
-
-			// Warn if both debit and credit have values (ambiguous)
-			if (Math.abs(debitMilliunits) > 0 && Math.abs(creditMilliunits) > 0) {
-				const warning = `Both Debit (${debit}) and Credit (${credit}) have values - using Debit`;
-				rowWarnings.push(warning);
-				warnings.push({ row: rowNum, message: warning });
-			}
-
-			if (Math.abs(debitMilliunits) > 0) {
-				amountMilliunits = -Math.abs(debitMilliunits); // Debits are outflows (negative)
-			} else if (Math.abs(creditMilliunits) > 0) {
-				amountMilliunits = Math.abs(creditMilliunits); // Credits are inflows (positive)
-			} else {
-				errors.push({
-					row: rowNum,
-					field: "amount",
-					message: "Missing debit/credit amount",
-					rawValue: `${debit}|${credit}`,
-				});
-				continue;
-			}
-
-			// Warn if debit column contains negative value (unusual)
-			if (debitMilliunits < 0) {
-				const warning = `Debit column contains negative value (${debit}) - treating as positive debit`;
-				rowWarnings.push(warning);
-				warnings.push({ row: rowNum, message: warning });
-			}
-		} else {
-			continue;
+				},
+			};
 		}
+		return {
+			status: "ok",
+			amountMilliunits: parsedAmount.valueMilliunits,
+			rawAmount,
+			warnings: [],
+		};
+	}
 
-		// Apply amount inversion if needed
-		const multiplier = options.invertAmounts
-			? -1
-			: (preset?.amountMultiplier ?? 1);
-		amountMilliunits *= multiplier;
+	if (mapping.debitCol && mapping.creditCol) {
+		return parseSplitAmount(
+			getValue(mapping.debitCol),
+			getValue(mapping.creditCol),
+			rowNum,
+		);
+	}
 
-		// Parse description & Sanitize
-		let rawDesc = getValue(descCol)?.trim() ?? "";
-		// Security: Remove potentially malicious/confusing Unicode characters:
-		// - ASCII control chars (0x00-0x1F, 0x7F)
-		// - C1 control chars (0x80-0x9F)
-		// - Bidirectional text overrides (U+202A-202E, U+2066-2069)
-		// - Zero-width characters (U+200B-200D, U+FEFF)
-		// - Unicode line/paragraph separators (U+2028-2029)
+	return { status: "skip" };
+}
 
-		rawDesc = rawDesc
+/**
+ * Combine separate Debit/Credit columns into a signed amount
+ * (debits are outflows, credits are inflows).
+ */
+function parseSplitAmount(
+	debit: string,
+	credit: string,
+	rowNum: number,
+): AmountParseResult {
+	const warnings: string[] = [];
+	const rawAmount = debit || credit;
+
+	const parsedDebit = parseAmount(debit);
+	const parsedCredit = parseAmount(credit);
+
+	if (!parsedDebit.valid && debit) {
+		return {
+			status: "error",
+			error: {
+				row: rowNum,
+				field: "amount",
+				message: parsedDebit.reason ?? `Invalid debit amount: "${debit}"`,
+				rawValue: debit,
+			},
+		};
+	}
+	if (!parsedCredit.valid && credit) {
+		return {
+			status: "error",
+			error: {
+				row: rowNum,
+				field: "amount",
+				message: parsedCredit.reason ?? `Invalid credit amount: "${credit}"`,
+				rawValue: credit,
+			},
+		};
+	}
+
+	const debitMilliunits = parsedDebit.valid ? parsedDebit.valueMilliunits : 0;
+	const creditMilliunits = parsedCredit.valid
+		? parsedCredit.valueMilliunits
+		: 0;
+
+	// Warn if both debit and credit have values (ambiguous)
+	if (Math.abs(debitMilliunits) > 0 && Math.abs(creditMilliunits) > 0) {
+		warnings.push(
+			`Both Debit (${debit}) and Credit (${credit}) have values - using Debit`,
+		);
+	}
+
+	let amountMilliunits: number;
+	if (Math.abs(debitMilliunits) > 0) {
+		amountMilliunits = -Math.abs(debitMilliunits); // Debits are outflows (negative)
+	} else if (Math.abs(creditMilliunits) > 0) {
+		amountMilliunits = Math.abs(creditMilliunits); // Credits are inflows (positive)
+	} else {
+		return {
+			status: "error",
+			error: {
+				row: rowNum,
+				field: "amount",
+				message: "Missing debit/credit amount",
+				rawValue: `${debit}|${credit}`,
+			},
+		};
+	}
+
+	// Warn if debit column contains negative value (unusual)
+	if (debitMilliunits < 0) {
+		warnings.push(
+			`Debit column contains negative value (${debit}) - treating as positive debit`,
+		);
+	}
+
+	return { status: "ok", amountMilliunits, rawAmount, warnings };
+}
+
+/**
+ * Security: Remove potentially malicious/confusing Unicode characters:
+ * - ASCII control chars (0x00-0x1F, 0x7F)
+ * - C1 control chars (0x80-0x9F)
+ * - Bidirectional text overrides (U+202A-202E, U+2066-2069)
+ * - Zero-width characters (U+200B-200D, U+FEFF)
+ * - Unicode line/paragraph separators (U+2028-2029)
+ */
+function sanitizeDescription(rawDesc: string): string {
+	return (
+		rawDesc
 			// biome-ignore lint/suspicious/noControlCharactersInRegex: strip ASCII/C1 control chars
 			.replace(/[\u0000-\u001F\u007F-\u009F]/g, "") // ASCII + C1 control chars
 			.replace(/[\u202A-\u202E\u2066-\u2069]/g, "") // Bidirectional overrides
 			.replace(/\u200B|\u200C|\u200D|\uFEFF/g, "") // Zero-width chars
 			.replace(/[\u2028-\u2029]/g, "") // Line/paragraph separators
-			.substring(0, 500);
-
-		transactions.push({
-			id: randomUUID(),
-			date: dateStr,
-			amount: amountMilliunits,
-			payee: rawDesc || "Unknown",
-			sourceRow: rowNum,
-			raw: {
-				date: rawDate,
-				amount: rawAmount,
-				description: rawDesc,
-			},
-			...(rowWarnings.length > 0 && { warnings: rowWarnings }),
-		});
-	}
-
-	return {
-		transactions,
-		errors,
-		warnings,
-		meta: {
-			detectedDelimiter: parsed.meta.delimiter || ",",
-			detectedColumns: columns,
-			totalRows: rows.length,
-			validRows: transactions.length,
-			skippedRows: rows.length - transactions.length,
-		},
-	};
+			.substring(0, 500)
+	);
 }
 
 function parseDate(
