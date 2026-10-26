@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { textOf } from "../../__tests__/testUtils.js";
 import {
 	GetBudgetSchema,
 	handleGetBudget,
@@ -76,7 +77,7 @@ describe("Budget Tools", () => {
 				{ deltaFetcher: fetcher },
 			);
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toContain("delta merge applied");
 		});
@@ -116,7 +117,7 @@ describe("Budget Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.budgets).toHaveLength(2);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toBe(
@@ -145,8 +146,8 @@ describe("Budget Tools", () => {
 				response_format: "json",
 			});
 
-			expect(() => JSON.parse(result.content[0]!.text)).not.toThrow();
-			expect(JSON.parse(result.content[0]!.text).budgets).toHaveLength(1);
+			expect(() => JSON.parse(textOf(result.content[0]))).not.toThrow();
+			expect(JSON.parse(textOf(result.content[0])).budgets).toHaveLength(1);
 		});
 
 		it("should handle errors reported by the delta fetcher", async () => {
@@ -164,7 +165,7 @@ describe("Budget Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -197,7 +198,7 @@ describe("Budget Tools", () => {
 
 			// Verify result structure
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.budget.id).toBe("budget-1");
 		});
 
@@ -264,7 +265,7 @@ describe("Budget Tools", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.budget.id).toBe("budget-1");
 			expect(parsedContent.budget.name).toBe("My Budget");
 			expect(parsedContent.budget.accounts_count).toBe(1);
@@ -305,7 +306,7 @@ describe("Budget Tools", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.budget.id).toBe("budget-2");
 			expect(parsedContent.budget.name).toBe("Empty Budget");
 			// Assert all counts are 0
@@ -434,7 +435,7 @@ describe("Budget Tools", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.budget.id).toBe("budget-3");
 			expect(parsedContent.budget.name).toBe("Multi-Item Budget");
 			// Assert counts reflect multiple items
@@ -460,7 +461,7 @@ describe("Budget Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe("Budget not found");
 		});
 
@@ -475,7 +476,7 @@ describe("Budget Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);

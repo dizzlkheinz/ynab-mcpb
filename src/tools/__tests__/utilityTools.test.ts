@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { textOf } from "../../__tests__/testUtils.js";
 import { handleGetUser } from "../utilityTools.js";
 
 // Mock the YNAB API
@@ -31,7 +32,7 @@ describe("Utility Tools", () => {
 			const result = await handleGetUser(mockYnabAPI, {
 				response_format: "json",
 			});
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.user).toBeDefined();
 			expect(parsed.user.id).toBe("user-123");
 			expect(mockYnabAPI.user.getUser).toHaveBeenCalledTimes(1);
@@ -45,7 +46,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0]!.text).toContain(
+			expect(textOf(result.content[0])).toContain(
 				"Invalid or expired YNAB access token",
 			);
 		});
@@ -58,7 +59,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0]!.text).toContain(
+			expect(textOf(result.content[0])).toContain(
 				"Insufficient permissions to access YNAB data",
 			);
 		});
@@ -71,7 +72,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0]!.text).toContain(
+			expect(textOf(result.content[0])).toContain(
 				"Rate limit exceeded. Please try again later",
 			);
 		});
@@ -84,7 +85,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0]!.text).toContain(
+			expect(textOf(result.content[0])).toContain(
 				"YNAB service is currently unavailable",
 			);
 		});
@@ -97,7 +98,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0]!.text).toContain(
+			expect(textOf(result.content[0])).toContain(
 				"Failed to get user information",
 			);
 		});

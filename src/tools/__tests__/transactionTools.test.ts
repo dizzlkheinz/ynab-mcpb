@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { maybeTextOf, textOf } from "../../__tests__/testUtils.js";
 import {
 	CreateReceiptSplitTransactionSchema,
 	CreateTransactionSchema,
@@ -239,7 +240,7 @@ describe("transactionTools", () => {
 				undefined,
 			);
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(false);
 			expect(parsedContent.cache_info).toBe(
 				"Fresh data retrieved from YNAB API",
@@ -279,7 +280,7 @@ describe("transactionTools", () => {
 				mockYnabAPI.transactions.getTransactionsByAccount,
 			).toHaveBeenCalledWith("budget-123", "account-456", undefined);
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(false);
 			expect(parsedContent.cache_info).toBe(
 				"Fresh data retrieved from YNAB API",
@@ -312,8 +313,8 @@ describe("transactionTools", () => {
 				undefined,
 				undefined,
 			);
-			expect(result.content[0]!.text).toContain("transaction-123");
-			expect(result.content[0]!.text).toContain("-50");
+			expect(textOf(result.content[0])).toContain("transaction-123");
+			expect(textOf(result.content[0])).toContain("-50");
 		});
 
 		it("should filter by account_id when provided", async () => {
@@ -357,7 +358,7 @@ describe("transactionTools", () => {
 				undefined,
 				undefined,
 			);
-			expect(result.content[0]!.text).toContain("transaction-123");
+			expect(textOf(result.content[0])).toContain("transaction-123");
 		});
 
 		it("should filter by category_id when provided", async () => {
@@ -381,7 +382,7 @@ describe("transactionTools", () => {
 			expect(
 				mockYnabAPI.transactions.getTransactionsByCategory,
 			).toHaveBeenCalledWith("budget-123", "category-789", undefined);
-			expect(result.content[0]!.text).toContain("transaction-123");
+			expect(textOf(result.content[0])).toContain("transaction-123");
 		});
 
 		it("should filter fetched transactions by cleared status before pagination", async () => {
@@ -423,7 +424,7 @@ describe("transactionTools", () => {
 				undefined,
 				undefined,
 			);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.total_count).toBe(1);
 			expect(parsedContent.transactions).toHaveLength(1);
 			expect(parsedContent.transactions[0].id).toBe("transaction-456");
@@ -468,7 +469,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -483,7 +484,7 @@ describe("transactionTools", () => {
 			const params = { budget_id: "invalid-budget" };
 			const result = await handleListTransactions(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -501,7 +502,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Rate limit exceeded. Please try again later",
 			);
@@ -519,7 +520,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe("Failed to list transactions");
 		});
 
@@ -585,7 +586,7 @@ describe("transactionTools", () => {
 			expect(content).toBeDefined();
 			expect(content?.type).toBe("text");
 
-			const parsedResponse = JSON.parse(content?.text);
+			const parsedResponse = JSON.parse(maybeTextOf(content));
 
 			// Large response path returns preview with message and preview_transactions
 			expect(parsedResponse.message).toBeDefined();
@@ -686,7 +687,7 @@ describe("transactionTools", () => {
 				"transaction-456",
 			);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.transaction.id).toBe("transaction-123");
 			expect(response.transaction.amount).toBe(-50);
 			expect(response.transaction.account_name).toBe("Test Account");
@@ -707,7 +708,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -726,7 +727,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -745,7 +746,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe("Failed to get transaction");
 		});
 	});
@@ -983,7 +984,7 @@ describe("transactionTools", () => {
 			expect(payload.transaction).not.toHaveProperty("subtransactions");
 			expect(payload.transaction).not.toHaveProperty("approved");
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.transaction.id).toBe("new-transaction-123");
 			expect(response.transaction.amount).toBe(-50);
 		});
@@ -1046,7 +1047,7 @@ describe("transactionTools", () => {
 			});
 			expect(payload.transaction).not.toHaveProperty("subtransactions");
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.transaction.id).toBe("new-transaction-123");
 		});
 
@@ -1155,7 +1156,7 @@ describe("transactionTools", () => {
 				],
 			});
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.transaction.amount).toBe(-75);
 			expect(response.transaction.account_balance).toBe(250);
 			expect(response.transaction.account_cleared_balance).toBe(225);
@@ -1203,7 +1204,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleCreateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -1223,7 +1224,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleCreateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -1243,7 +1244,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleCreateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe("Failed to create transaction");
 		});
 
@@ -1290,7 +1291,7 @@ describe("transactionTools", () => {
 			expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.transaction.id).toBe("new-transaction-123");
 		});
 
@@ -1331,7 +1332,7 @@ describe("transactionTools", () => {
 			expect(CacheManager.generateKey).not.toHaveBeenCalled();
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.dry_run).toBe(true);
 			expect(parsedContent.action).toBe("ynab_create_transaction");
 			expect(parsedContent.request).toMatchObject({
@@ -1357,7 +1358,7 @@ describe("transactionTools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe("VALIDATION_ERROR");
 			expect(parsed.error.details).toBeDefined();
 
@@ -1390,7 +1391,7 @@ describe("transactionTools", () => {
 				invalidParams as any,
 			);
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe("VALIDATION_ERROR");
 			expect(parsed.error.details).toBeDefined();
 
@@ -1596,7 +1597,7 @@ describe("transactionTools", () => {
 			);
 
 			expect(mockYnabAPI.transactions.createTransaction).not.toHaveBeenCalled();
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.dry_run).toBe(true);
 			expect(parsed.transaction_preview.amount).toBe(-55);
 			expect(parsed.receipt_summary.total).toBe(55);
@@ -1656,7 +1657,7 @@ describe("transactionTools", () => {
 			expect(callArgs[1].transaction.amount).toBe(-55000);
 			expect(callArgs[1].transaction.subtransactions).toHaveLength(5);
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.receipt_summary.total).toBe(55);
 			const homeCategory = parsed.receipt_summary.categories.find(
 				(category: any) => category.category_id === "category-home",
@@ -1696,7 +1697,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					expect(parsed.subtransactions).toHaveLength(4);
 					// Each item should be separate and use live YNAB outflow signs
@@ -1751,7 +1752,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Should have 4 subtransactions: 3 collapsed batches + 1 tax
 					expect(parsed.subtransactions).toHaveLength(4);
@@ -1825,7 +1826,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Should have: 1 big ticket + 2 collapsed grocery batches + 2 tax subtransactions
 					expect(parsed.subtransactions).toHaveLength(5);
@@ -1908,7 +1909,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Should have: 1 return + 2 collapsed grocery batches + 1 tax (groceries only)
 					expect(parsed.subtransactions).toHaveLength(4);
@@ -1981,7 +1982,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Should have: 1 discount + 2 collapsed batches + 1 tax
 					expect(parsed.subtransactions).toHaveLength(4);
@@ -2046,7 +2047,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Total items: 1 widget entry + 4 groceries = 5 items -> collapse mode (>= 5)
 					// Widget has unit price $30 < $50, so NOT big ticket
@@ -2106,7 +2107,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Should have: 1 return + 1 tax refund
 					expect(parsed.subtransactions).toHaveLength(2);
@@ -2157,7 +2158,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Should have 3 itemized items, no tax
 					expect(parsed.subtransactions).toHaveLength(3);
@@ -2195,7 +2196,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Should have 2 subtransactions: 1 collapsed batch + 1 tax
 					expect(parsed.subtransactions).toHaveLength(2);
@@ -2232,7 +2233,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Should have 5 subtransactions: 4 itemized + 1 tax
 					expect(parsed.subtransactions).toHaveLength(5);
@@ -2280,7 +2281,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Total: 7 items -> collapse mode
 					// All categories should collapse (consistency rule)
@@ -2340,7 +2341,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					expect(parsed.subtransactions).toHaveLength(2);
 					const collapsedMemo = parsed.subtransactions[0].memo;
@@ -2380,7 +2381,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Big ticket separate + collapsed remaining items + tax
 					expect(parsed.subtransactions.length).toBeGreaterThanOrEqual(3);
@@ -2420,7 +2421,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// Should have 2 subtransactions: 1 itemized + 1 tax
 					// (only 1 item, so no collapse, but name gets truncated)
@@ -2467,7 +2468,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0]!.text);
+					const parsed = JSON.parse(textOf(result.content[0]));
 
 					// 6 items -> collapse mode, long item first creates its own subtransaction
 					// that gets truncated
@@ -2671,7 +2672,7 @@ describe("transactionTools", () => {
 				},
 			);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.transaction.id).toBe("transaction-456");
 			expect(response.transaction.amount).toBe(-60);
 			expect(response.updated_balance).toBe(150);
@@ -2724,7 +2725,7 @@ describe("transactionTools", () => {
 					},
 				},
 			);
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.transaction.subtransactions[0].amount).toBe(-40);
 			expect(response.transaction.subtransactions[1].amount).toBe(-20);
 		});
@@ -2782,7 +2783,7 @@ describe("transactionTools", () => {
 				},
 			);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.transaction.id).toBe("transaction-456");
 		});
 
@@ -2799,7 +2800,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleUpdateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -2818,7 +2819,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleUpdateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -2837,7 +2838,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleUpdateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe("Failed to update transaction");
 		});
 
@@ -2883,7 +2884,7 @@ describe("transactionTools", () => {
 			expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.transaction.id).toBe("transaction-456");
 		});
 
@@ -2923,7 +2924,7 @@ describe("transactionTools", () => {
 			expect(CacheManager.generateKey).not.toHaveBeenCalled();
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.dry_run).toBe(true);
 			expect(parsedContent.action).toBe("ynab_update_transaction");
 			expect(parsedContent.request).toEqual({
@@ -3210,7 +3211,7 @@ describe("transactionTools", () => {
 				"transaction-456",
 			);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.message).toBe("Transaction deleted successfully");
 			expect(response.transaction.id).toBe("transaction-456");
 			expect(response.transaction.deleted).toBe(true);
@@ -3228,7 +3229,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleDeleteTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -3246,7 +3247,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleDeleteTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -3264,7 +3265,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleDeleteTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0]!.text);
+			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe("Failed to delete transaction");
 		});
 
@@ -3311,7 +3312,7 @@ describe("transactionTools", () => {
 			expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.transaction.id).toBe("transaction-456");
 			expect(parsedContent.transaction.deleted).toBe(true);
 		});
@@ -3351,7 +3352,7 @@ describe("transactionTools", () => {
 			expect(CacheManager.generateKey).not.toHaveBeenCalled();
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.dry_run).toBe(true);
 			expect(parsedContent.action).toBe("ynab_delete_transaction");
 			expect(parsedContent.request).toEqual({
@@ -3419,7 +3420,7 @@ describe("transactionTools", () => {
 			resultPromise: ReturnType<typeof handleCreateTransactions>,
 		) => {
 			const result = await resultPromise;
-			const text = result.content?.[0]?.text ?? "{}";
+			const text = maybeTextOf(result.content?.[0]) ?? "{}";
 			return JSON.parse(text) as Record<string, any>;
 		};
 
@@ -3476,7 +3477,7 @@ describe("transactionTools", () => {
 					mockYnabAPI,
 					invalidParams as any,
 				);
-				const parsed = JSON.parse(result.content?.[0]?.text ?? "{}");
+				const parsed = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 				expect(parsed.error).toBeDefined();
 				expect(parsed.error.message).toContain("validation failed");
 				expect(
@@ -3717,7 +3718,7 @@ describe("transactionTools", () => {
 					mockYnabAPI,
 					buildParams(),
 				);
-				const parsed = JSON.parse(result.content?.[0]?.text ?? "{}");
+				const parsed = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 				expect(parsed.error).toBeDefined();
 				expect(parsed.error.message).toContain("RESPONSE_TOO_LARGE");
 				byteSpy.mockRestore();
@@ -3897,7 +3898,7 @@ describe("transactionTools", () => {
 					mockYnabAPI,
 					buildParams(),
 				);
-				const parsed = JSON.parse(result.content?.[0]?.text ?? "{}");
+				const parsed = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 				expect(parsed.error).toBeDefined();
 			});
 
@@ -3910,7 +3911,7 @@ describe("transactionTools", () => {
 					mockYnabAPI,
 					invalidParams as any,
 				);
-				const parsed = JSON.parse(result.content?.[0]?.text ?? "{}");
+				const parsed = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 				expect(parsed.error).toBeDefined();
 			});
 
@@ -4201,7 +4202,7 @@ describe("transactionTools", () => {
 			resultPromise: ReturnType<typeof handleUpdateTransactions>,
 		) => {
 			const result = await resultPromise;
-			const text = result.content?.[0]?.text ?? "{}";
+			const text = maybeTextOf(result.content?.[0]) ?? "{}";
 			return JSON.parse(text) as Record<string, any>;
 		};
 
@@ -4395,7 +4396,7 @@ describe("transactionTools", () => {
 					mockYnabAPI,
 					invalidParams as any,
 				);
-				const parsed = JSON.parse(result.content?.[0]?.text ?? "{}");
+				const parsed = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 				expect(parsed.error).toBeDefined();
 				expect(parsed.error.message).toContain("validation failed");
 				expect(
@@ -4732,7 +4733,7 @@ describe("transactionTools", () => {
 					}),
 				);
 
-				const response = JSON.parse(result.content[0]!.text);
+				const response = JSON.parse(textOf(result.content[0]));
 				expect(response.error).toBeDefined();
 			});
 
@@ -4842,7 +4843,7 @@ describe("transactionTools", () => {
 					mockYnabAPI,
 					buildParams({ transactions }),
 				);
-				const response = JSON.parse(result.content[0]!.text);
+				const response = JSON.parse(textOf(result.content[0]));
 
 				expect(response.error).toBeDefined();
 				expect(response.error.code).toBe("VALIDATION_ERROR");

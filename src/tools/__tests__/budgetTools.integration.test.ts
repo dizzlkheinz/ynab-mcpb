@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
-import { skipOnRateLimit } from "../../__tests__/testUtils.js";
+import { skipOnRateLimit, textOf } from "../../__tests__/testUtils.js";
 import { handleGetBudget, handleListBudgets } from "../budgetTools.js";
 
 /**
@@ -35,7 +35,7 @@ describeIntegration("Budget Tools Integration", () => {
 				expect(result.content).toHaveLength(1);
 				expect(result.content[0]!.type).toBe("text");
 
-				const parsedContent = JSON.parse(result.content[0]!.text);
+				const parsedContent = JSON.parse(textOf(result.content[0]));
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (parsedContent.error) {
@@ -75,7 +75,7 @@ describeIntegration("Budget Tools Integration", () => {
 					const listResult = await handleListBudgets(ynabAPI, {
 						response_format: "json",
 					});
-					const listContent = JSON.parse(listResult.content[0]!.text);
+					const listContent = JSON.parse(textOf(listResult.content[0]));
 					if (listContent.error) {
 						throw new Error(JSON.stringify(listContent.error));
 					}
@@ -94,7 +94,7 @@ describeIntegration("Budget Tools Integration", () => {
 				expect(result.content).toHaveLength(1);
 				expect(result.content[0]!.type).toBe("text");
 
-				const parsedContent = JSON.parse(result.content[0]!.text);
+				const parsedContent = JSON.parse(textOf(result.content[0]));
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (parsedContent.error) {
@@ -129,7 +129,7 @@ describeIntegration("Budget Tools Integration", () => {
 				expect(result.content).toHaveLength(1);
 				expect(result.content[0]!.type).toBe("text");
 
-				const parsedContent = JSON.parse(result.content[0]!.text);
+				const parsedContent = JSON.parse(textOf(result.content[0]));
 				expect(parsedContent.error).toBeDefined();
 				expect(parsedContent.error.message).toBeDefined();
 

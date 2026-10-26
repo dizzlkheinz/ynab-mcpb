@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { textOf } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { handleGetPayee, handleListPayees } from "../payeeTools.js";
 
@@ -35,7 +36,7 @@ describeIntegration("Payee Tools Integration", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.payees).toBeDefined();
 			expect(Array.isArray(parsedContent.payees)).toBe(true);
 			expect(parsedContent.payees.length).toBeGreaterThan(0);
@@ -74,7 +75,7 @@ describeIntegration("Payee Tools Integration", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 
@@ -98,7 +99,7 @@ describeIntegration("Payee Tools Integration", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.payee).toBeDefined();
 
 			const payee = parsedContent.payee;
@@ -129,7 +130,7 @@ describeIntegration("Payee Tools Integration", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 
@@ -150,7 +151,7 @@ describeIntegration("Payee Tools Integration", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 

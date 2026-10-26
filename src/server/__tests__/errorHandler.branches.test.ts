@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { maybeTextOf } from "../../__tests__/testUtils.js";
 import {
 	createErrorHandler,
 	ValidationError,
@@ -12,7 +13,7 @@ const handler = createErrorHandler({
 
 function parse(error: unknown, context: string) {
 	const result = handler.handleError(error, context);
-	const text = result.content[0]?.text;
+	const text = maybeTextOf(result.content[0]);
 	if (typeof text !== "string") {
 		throw new Error("Expected a text error response");
 	}

@@ -1,6 +1,7 @@
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { maybeTextOf } from "../../__tests__/testUtils.js";
 import type { CacheManager } from "../cacheManager.js";
 import { ResourceManager } from "../resources.js";
 
@@ -85,7 +86,7 @@ describe("ResourceManager template branches", () => {
 			"ynab://budgets/budget-1/months/2026-07-01",
 		);
 
-		expect(JSON.parse(categories.contents[0]?.text ?? "")).toEqual({
+		expect(JSON.parse(maybeTextOf(categories.contents[0]) ?? "")).toEqual({
 			categories: [
 				expect.objectContaining({
 					id: "category-1",
@@ -93,10 +94,10 @@ describe("ResourceManager template branches", () => {
 				}),
 			],
 		});
-		expect(JSON.parse(months.contents[0]?.text ?? "")).toEqual({
+		expect(JSON.parse(maybeTextOf(months.contents[0]) ?? "")).toEqual({
 			months: [{ month: "2026-07-01" }],
 		});
-		expect(JSON.parse(month.contents[0]?.text ?? "")).toEqual({
+		expect(JSON.parse(maybeTextOf(month.contents[0]) ?? "")).toEqual({
 			month: "2026-07-01",
 			income: 2500000,
 		});
@@ -185,7 +186,7 @@ describe("ResourceManager template branches", () => {
 			mimeType: "application/json",
 		});
 		const result = await manager.readResource("ynab://custom/item-1");
-		expect(JSON.parse(result.contents[0]?.text ?? "")).toEqual({
+		expect(JSON.parse(maybeTextOf(result.contents[0]) ?? "")).toEqual({
 			item_id: "item-1",
 		});
 	});

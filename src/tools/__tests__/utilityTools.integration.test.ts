@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
-import { skipOnRateLimit } from "../../__tests__/testUtils.js";
+import { skipOnRateLimit, textOf } from "../../__tests__/testUtils.js";
 import { handleGetUser } from "../utilityTools.js";
 
 /**
@@ -27,7 +27,7 @@ describeIntegration("Utility Tools Integration Tests", () => {
 				const result = await handleGetUser(ynabAPI, {
 					response_format: "json",
 				});
-				const response = JSON.parse(result.content[0]!.text);
+				const response = JSON.parse(textOf(result.content[0]));
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (response.error) {

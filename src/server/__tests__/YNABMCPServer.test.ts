@@ -8,6 +8,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { maybeTextOf, textOf } from "../../__tests__/testUtils.js";
 
 import { cacheManager } from "../../server/cacheManager.js";
 import { AuthenticationError, ValidationError } from "../../types/index.js";
@@ -19,7 +20,7 @@ import { YNABMCPServer } from "../YNABMCPServer.js";
 function parseCallToolJson<T = Record<string, unknown>>(
 	result: CallToolResult,
 ): T {
-	const text = result.content?.[0]?.text;
+	const text = maybeTextOf(result.content?.[0]);
 	const raw =
 		typeof text === "string" ? text : (JSON.stringify(text ?? {}) ?? "{}");
 	return JSON.parse(raw) as T;
@@ -844,7 +845,7 @@ describe("YNABMCPServer", () => {
 
 			expect(result.content).toBeDefined();
 			expect(result.content[0]!.type).toBe("text");
-			expect(() => JSON.parse(result.content[0]!.text)).not.toThrow();
+			expect(() => JSON.parse(textOf(result.content[0]))).not.toThrow();
 		});
 
 		it("should use the same formatter for ErrorHandler and ToolRegistry", () => {
@@ -871,7 +872,7 @@ describe("YNABMCPServer", () => {
 			expect(payload["error"].code).toBe("VALIDATION_ERROR");
 
 			// Verify the response is properly formatted JSON
-			expect(() => JSON.parse(result.content[0]!.text)).not.toThrow();
+			expect(() => JSON.parse(textOf(result.content[0]))).not.toThrow();
 		});
 
 		it("should produce consistent error responses across ErrorHandler instances with same formatter", () => {
@@ -885,8 +886,8 @@ describe("YNABMCPServer", () => {
 
 			// Both should produce the same result structure
 			expect(result1.content[0]!.type).toBe(result2.content[0]!.type);
-			expect(() => JSON.parse(result1.content[0]!.text)).not.toThrow();
-			expect(() => JSON.parse(result2.content[0]!.text)).not.toThrow();
+			expect(() => JSON.parse(textOf(result1.content[0]))).not.toThrow();
+			expect(() => JSON.parse(textOf(result2.content[0]))).not.toThrow();
 		});
 	});
 });

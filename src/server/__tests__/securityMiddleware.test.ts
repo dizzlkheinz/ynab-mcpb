@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod/v4";
+import { textOf } from "../../__tests__/testUtils.js";
 import {
 	globalRateLimiter,
 	RateLimitError,
@@ -79,7 +80,7 @@ describe("SecurityMiddleware", () => {
 			);
 
 			expect(mockOperation).not.toHaveBeenCalled();
-			const responseText = JSON.parse(result.content[0]!.text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 		});
@@ -134,7 +135,7 @@ describe("SecurityMiddleware", () => {
 					mockOperation,
 				);
 
-				const responseText = JSON.parse(result.content[0]!.text);
+				const responseText = JSON.parse(textOf(result.content[0]));
 				expect(responseText.error.code).toBe("RATE_LIMIT_EXCEEDED");
 				expect(responseText.error.message).toContain("Rate limit exceeded");
 			} finally {
@@ -218,7 +219,7 @@ describe("SecurityMiddleware", () => {
 				mockOperation,
 			);
 
-			const responseText = JSON.parse(result.content[0]!.text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("RATE_LIMIT_EXCEEDED");
 			expect(responseText.error.details.resetTime).toBeDefined();
 			expect(responseText.error.details.remaining).toBe(0);
@@ -266,7 +267,7 @@ describe("SecurityMiddleware", () => {
 			);
 
 			expect(mockOperation).not.toHaveBeenCalled();
-			const responseText = JSON.parse(result.content[0]!.text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 		});
@@ -289,7 +290,7 @@ describe("SecurityMiddleware", () => {
 			);
 
 			expect(mockOperation).not.toHaveBeenCalled();
-			const responseText = JSON.parse(result.content[0]!.text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 		});
@@ -499,7 +500,7 @@ describe("SecurityMiddleware", () => {
 			);
 
 			expect(mockOperation).not.toHaveBeenCalled();
-			const responseText = JSON.parse(result.content[0]!.text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 		});

@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod/v4";
+import { textOf } from "../../__tests__/testUtils.js";
 import { globalRateLimiter, RateLimiter } from "../rateLimiter.js";
 import { globalRequestLogger, RequestLogger } from "../requestLogger.js";
 import { SecurityMiddleware } from "../securityMiddleware.js";
@@ -69,7 +70,7 @@ describe("Security Integration", () => {
 			});
 
 			// Verify successful result
-			expect(result.content[0]!.text).toContain("success");
+			expect(textOf(result.content[0])).toContain("success");
 
 			// Verify logging occurred
 			const logs = globalRequestLogger.getRecentLogs(1);
@@ -122,7 +123,7 @@ describe("Security Integration", () => {
 			expect(mockOperation).not.toHaveBeenCalled();
 
 			// Verify error response
-			const responseText = JSON.parse(result.content[0]!.text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 
@@ -172,7 +173,7 @@ describe("Security Integration", () => {
 			);
 
 			// Verify rate limit response
-			const responseText = JSON.parse(result.content[0]!.text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("RATE_LIMIT_EXCEEDED");
 			expect(responseText.error.message).toContain("Rate limit exceeded");
 			expect(responseText.error.details.resetTime).toBeDefined();
@@ -292,7 +293,7 @@ describe("Security Integration", () => {
 				testSchema,
 				mockOperation,
 			);
-			const user1Response = JSON.parse(user1Result.content[0]!.text);
+			const user1Response = JSON.parse(textOf(user1Result.content[0]));
 			expect(user1Response.error.code).toBe("RATE_LIMIT_EXCEEDED");
 
 			// User 2 should still be allowed
@@ -301,7 +302,7 @@ describe("Security Integration", () => {
 				testSchema,
 				mockOperation,
 			);
-			expect(user2Result.content[0]!.text).toBe("Success");
+			expect(textOf(user2Result.content[0])).toBe("Success");
 
 			// Verify independent tracking in logs
 			const logs = globalRequestLogger.getRecentLogs(5);

@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { textOf } from "../../__tests__/testUtils.js";
 import {
 	ExportTransactionsSchema,
 	handleExportTransactions,
@@ -155,7 +156,7 @@ describe("exportTransactions", () => {
 			});
 
 			// Verify response message indicates minimal export
-			const responseText = result.content[0]!.text;
+			const responseText = textOf(result.content[0]);
 			expect(responseText).toContain("(minimal fields)");
 			const responseJson = JSON.parse(responseText);
 			expect(responseJson.export_mode).toBe("minimal");
@@ -203,7 +204,7 @@ describe("exportTransactions", () => {
 			expect(firstTransaction.amount).toBe(1);
 
 			// Verify response message indicates full export
-			const responseText = result.content[0]!.text;
+			const responseText = textOf(result.content[0]);
 			expect(responseText).toContain("(full fields)");
 			const responseJson = JSON.parse(responseText);
 			expect(responseJson.export_mode).toBe("full");
@@ -218,7 +219,7 @@ describe("exportTransactions", () => {
 			});
 
 			expect(writeFileSync).not.toHaveBeenCalled();
-			const responseJson = JSON.parse(result.content[0]!.text);
+			const responseJson = JSON.parse(textOf(result.content[0]));
 			expect(responseJson.error.message).toContain(
 				"Filename must be a file name",
 			);

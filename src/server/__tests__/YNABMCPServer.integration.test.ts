@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { skipOnRateLimit } from "../../__tests__/testUtils.js";
+import {
+	maybeTextOf,
+	skipOnRateLimit,
+	textOf,
+} from "../../__tests__/testUtils.js";
 import { cacheManager } from "../../server/cacheManager.js";
 import { ValidationError } from "../../types/index.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
@@ -247,7 +251,7 @@ describeIntegration("YNABMCPServer", () => {
 					accessToken: accessToken(),
 					arguments: {},
 				});
-				const payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+				const payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (payload.error) {
@@ -268,7 +272,7 @@ describeIntegration("YNABMCPServer", () => {
 					arguments: {},
 				});
 				const budgetsPayload = JSON.parse(
-					budgetsResult.content?.[0]?.text ?? "{}",
+					maybeTextOf(budgetsResult.content?.[0]) ?? "{}",
 				);
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
@@ -291,7 +295,7 @@ describeIntegration("YNABMCPServer", () => {
 					arguments: {},
 				});
 				const defaultPayload = JSON.parse(
-					defaultResult.content?.[0]?.text ?? "{}",
+					maybeTextOf(defaultResult.content?.[0]) ?? "{}",
 				);
 				expect(defaultPayload.default_budget_id).toBe(firstBudget.id);
 				expect(defaultPayload.has_default).toBe(true);
@@ -313,7 +317,9 @@ describeIntegration("YNABMCPServer", () => {
 					response_format: "json",
 				},
 			});
-			const diagnostics = JSON.parse(diagResult.content?.[0]?.text ?? "{}");
+			const diagnostics = JSON.parse(
+				maybeTextOf(diagResult.content?.[0]) ?? "{}",
+			);
 			expect(diagnostics.timestamp).toBeDefined();
 			expect(diagnostics.server).toBeDefined();
 			expect(diagnostics.security).toBeDefined();
@@ -475,7 +481,9 @@ describeIntegration("YNABMCPServer", () => {
 					},
 				});
 
-				const diagnostics = JSON.parse(result.content?.[0]?.text ?? "{}");
+				const diagnostics = JSON.parse(
+					maybeTextOf(result.content?.[0]) ?? "{}",
+				);
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (diagnostics.error) {
@@ -515,7 +523,7 @@ describeIntegration("YNABMCPServer", () => {
 				accessToken: accessToken(),
 				arguments: {} as Record<string, unknown>,
 			});
-			const payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+			const payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 			expect(payload.error).toBeDefined();
 			expect(payload.error.code).toBe("VALIDATION_ERROR");
 		});
@@ -555,7 +563,9 @@ describeIntegration("YNABMCPServer", () => {
 					accessToken: accessToken(),
 					arguments: {},
 				});
-				const userPayload = JSON.parse(userResult.content?.[0]?.text ?? "{}");
+				const userPayload = JSON.parse(
+					maybeTextOf(userResult.content?.[0]) ?? "{}",
+				);
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (userPayload.error) {
@@ -572,7 +582,7 @@ describeIntegration("YNABMCPServer", () => {
 					arguments: {},
 				});
 				const budgetsPayload = JSON.parse(
-					budgetsResult.content?.[0]?.text ?? "{}",
+					maybeTextOf(budgetsResult.content?.[0]) ?? "{}",
 				);
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
@@ -595,7 +605,9 @@ describeIntegration("YNABMCPServer", () => {
 						include_cache: true,
 					},
 				});
-				const diagnostics = JSON.parse(diagResult.content?.[0]?.text ?? "{}");
+				const diagnostics = JSON.parse(
+					maybeTextOf(diagResult.content?.[0]) ?? "{}",
+				);
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (diagnostics.error) {
@@ -625,8 +637,8 @@ describeIntegration("YNABMCPServer", () => {
 			expect(result.content[0]).toBeDefined();
 			expect(result.content[0]!.type).toBe("text");
 			// Should contain validation error about missing budget_id
-			expect(result.content[0]!.text).toContain("VALIDATION_ERROR");
-			expect(result.content[0]!.text).toContain("budget_id");
+			expect(textOf(result.content[0])).toContain("VALIDATION_ERROR");
+			expect(textOf(result.content[0])).toContain("budget_id");
 		});
 	});
 
@@ -650,7 +662,7 @@ describeIntegration("YNABMCPServer", () => {
 				accessToken: accessToken(),
 				arguments: {},
 			});
-			const payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+			const payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 
 			// If response contains an error, throw it so skipOnRateLimit can catch it
 			if (payload.error) {
@@ -678,7 +690,7 @@ describeIntegration("YNABMCPServer", () => {
 				arguments: {},
 			});
 
-			const payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+			const payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 			expect(payload.error).toBeDefined();
 			expect(payload.error.code).toBe("VALIDATION_ERROR");
 			expect(payload.error.message).toContain(
@@ -697,7 +709,7 @@ describeIntegration("YNABMCPServer", () => {
 				arguments: { budget_id: invalidBudgetId },
 			});
 
-			const payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+			const payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 			expect(payload.error).toBeDefined();
 			expect(payload.error.code).toBe("VALIDATION_ERROR");
 			expect(payload.error.message).toContain("Invalid budget ID format");
@@ -720,7 +732,7 @@ describeIntegration("YNABMCPServer", () => {
 					arguments: {}, // No budget_id provided, should use default budget
 				});
 
-				let payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+				let payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 				expect(payload.error).toBeDefined();
 				expect(payload.error.code).toBe("VALIDATION_ERROR");
 
@@ -739,7 +751,7 @@ describeIntegration("YNABMCPServer", () => {
 					arguments: {}, // No budget_id provided, should use default budget now
 				});
 
-				payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+				payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (payload.error) {
@@ -765,7 +777,7 @@ describeIntegration("YNABMCPServer", () => {
 					arguments: { budget_id: nonExistentButValidUuid },
 				});
 
-				const payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+				const payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 				// Should get a YNAB API error (404) not a validation error
 				expect(payload.error).toBeDefined();
 				expect(payload.error.code).toBe(404); // YNAB NOT_FOUND error
@@ -809,7 +821,7 @@ describeIntegration("YNABMCPServer", () => {
 
 				// All should succeed
 				results.forEach((result) => {
-					const payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+					const payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 
 					// If response contains an error, throw it so skipOnRateLimit can catch it
 					if (payload.error) {
@@ -835,7 +847,7 @@ describeIntegration("YNABMCPServer", () => {
 					arguments: {},
 				});
 
-				const payload = JSON.parse(result.content?.[0]?.text ?? "{}");
+				const payload = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
 				expect(payload.error).toBeDefined();
 				// Should get authentication error, not budget resolution error
 				expect(payload.error.code).toBe(401);

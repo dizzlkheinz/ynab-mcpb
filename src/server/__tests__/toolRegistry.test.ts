@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import { maybeTextOf } from "../../__tests__/testUtils.js";
 import {
 	handleReconcileAccount,
 	ReconcileAccountSchema,
@@ -363,7 +364,7 @@ describe("ToolRegistry", () => {
 		});
 
 		expect(
-			result.content[0]?.text?.startsWith(
+			maybeTextOf(result.content[0])?.startsWith(
 				"validation:Invalid parameters for sample_tool:",
 			),
 		).toBe(true);
@@ -480,7 +481,7 @@ describe("ToolRegistry", () => {
 			});
 
 			expect(mockErrorHandler.createValidationError).toHaveBeenCalled();
-			expect(result.content[0]?.text).toBe("Mock validation error");
+			expect(maybeTextOf(result.content[0])).toBe("Mock validation error");
 		});
 
 		it("should use the same formatter instance for both ErrorHandler and ToolRegistry", () => {
@@ -537,8 +538,8 @@ describe("ToolRegistry", () => {
 			});
 
 			expect(handler).toHaveBeenCalledTimes(1);
-			expect(result.content[0]?.text).toContain("success");
-			expect(result.content[0]?.text).toContain("test-id");
+			expect(maybeTextOf(result.content[0])).toContain("success");
+			expect(maybeTextOf(result.content[0])).toContain("test-id");
 			expect(result.structuredContent).toEqual({
 				success: true,
 				data: { id: "test-id", value: 42 },
@@ -618,8 +619,10 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain("invalid_output_tool");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain("invalid_output_tool");
 		});
 
 		it("rejects handler output with missing required fields", async () => {
@@ -658,8 +661,10 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain("missing_field_tool");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain("missing_field_tool");
 		});
 
 		it("passes through non-JSON handler output (e.g. markdown)", async () => {
@@ -688,7 +693,7 @@ describe("ToolRegistry", () => {
 			expect(handler).toHaveBeenCalledTimes(1);
 			// Non-JSON passes through without error, no structuredContent
 			expect(result.isError).toBeFalsy();
-			expect(result.content[0]?.text).toBe(
+			expect(maybeTextOf(result.content[0])).toBe(
 				"## Markdown output\n\nThis is markdown, not JSON",
 			);
 			expect(result.structuredContent).toBeUndefined();
@@ -731,7 +736,7 @@ describe("ToolRegistry", () => {
 
 			expect(result.isError).toBeFalsy();
 			// Text content is preserved unchanged
-			expect(result.content[0]?.text).toBe("## Markdown");
+			expect(maybeTextOf(result.content[0])).toBe("## Markdown");
 			// structuredContent is the Zod-parsed result — extra field stripped
 			expect(result.structuredContent).toEqual({ id: "abc", value: 7 });
 			expect(
@@ -773,7 +778,9 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
 		});
 
 		it("validates content array even when structuredContent is present", async () => {
@@ -804,7 +811,9 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
 		});
 
 		it("rejects handler output with empty content", async () => {
@@ -832,8 +841,10 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain("empty content");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain("empty content");
 		});
 
 		it("rejects handler output with non-text content", async () => {
@@ -863,11 +874,13 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain(
 				"Handler returned invalid content items",
 			);
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
 				'Item 0: type is "image" instead of "text"',
 			);
 		});
@@ -904,18 +917,20 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain(
 				"Handler returned invalid content items",
 			);
-			expect(result.content[0]?.text).toContain("3 of 4 failed");
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain("3 of 4 failed");
+			expect(maybeTextOf(result.content[0])).toContain(
 				'Item 1: type is "image" instead of "text"',
 			);
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
 				"Item 2: text property is number instead of string",
 			);
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
 				"Item 3: text property is undefined instead of string",
 			);
 		});
@@ -938,7 +953,7 @@ describe("ToolRegistry", () => {
 			});
 
 			expect(handler).toHaveBeenCalledTimes(1);
-			expect(result.content[0]?.text).toBe("any output format");
+			expect(maybeTextOf(result.content[0])).toBe("any output format");
 			// Error handler should not be called for validation
 			expect(
 				dependencies.errorHandler.createValidationError,

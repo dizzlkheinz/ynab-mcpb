@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { textOf } from "../../__tests__/testUtils.js";
 import {
 	createErrorHandler,
 	handleToolError,
@@ -24,10 +25,10 @@ describe("ErrorHandler", () => {
 			const error = new YNABAPIError(YNABErrorCode.UNAUTHORIZED, "Test error");
 			const result = errorHandler.handleError(error, "testing");
 
-			expect(result.content[0]!.text).toContain(
+			expect(textOf(result.content[0])).toContain(
 				"Invalid or expired YNAB access token",
 			);
-			expect(JSON.parse(result.content[0]!.text).error.code).toBe(401);
+			expect(JSON.parse(textOf(result.content[0])).error.code).toBe(401);
 		});
 
 		it("should handle ValidationError correctly", () => {
@@ -35,7 +36,7 @@ describe("ErrorHandler", () => {
 			const error = new ValidationError("Invalid input", "Field is required");
 			const result = errorHandler.handleError(error, "validating");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe("VALIDATION_ERROR");
 			expect(parsed.error.message).toBe("Invalid input");
 			expect(parsed.error.details).toBe("Field is required");
@@ -46,7 +47,7 @@ describe("ErrorHandler", () => {
 			const error = new Error("Request failed with status 401 Unauthorized");
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe(401);
 			expect(parsed.error.message).toContain(
 				"Invalid or expired YNAB access token",
@@ -58,7 +59,7 @@ describe("ErrorHandler", () => {
 			const error = new Error("403 Forbidden access");
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe(403);
 			expect(parsed.error.message).toContain("Insufficient permissions");
 		});
@@ -68,7 +69,7 @@ describe("ErrorHandler", () => {
 			const error = new Error("Resource not found - 404");
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe(404);
 			expect(parsed.error.message).toContain(
 				"requested resource was not found",
@@ -80,7 +81,7 @@ describe("ErrorHandler", () => {
 			const error = new Error("Too many requests - 429");
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe(429);
 			expect(parsed.error.message).toContain("Rate limit exceeded");
 		});
@@ -90,7 +91,7 @@ describe("ErrorHandler", () => {
 			const error = new Error("Internal server error 500");
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe(500);
 			expect(parsed.error.message).toContain(
 				"YNAB service is currently unavailable",
@@ -102,7 +103,7 @@ describe("ErrorHandler", () => {
 			const error = new Error("Some unknown error");
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe("UNKNOWN_ERROR");
 			expect(parsed.error.message).toContain("An error occurred while testing");
 		});
@@ -112,7 +113,7 @@ describe("ErrorHandler", () => {
 			const error = new Error("Specific diagnostic error message");
 			const result = errorHandler.handleError(error, "testing operation");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe("UNKNOWN_ERROR");
 			expect(parsed.error.details).toBe("Specific diagnostic error message");
 			expect(parsed.error.message).toContain(
@@ -125,7 +126,7 @@ describe("ErrorHandler", () => {
 			const error = "String error";
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe("UNKNOWN_ERROR");
 		});
 	});
@@ -141,7 +142,7 @@ describe("ErrorHandler", () => {
 			);
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.details).toBeDefined();
 			expect(parsed.error.details).not.toContain("abc123xyz");
 			expect(parsed.error.details).toContain("token=***");
@@ -152,7 +153,7 @@ describe("ErrorHandler", () => {
 			const error = new ValidationError("Invalid input", "key=secret123");
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.details).toContain("key=***");
 			expect(parsed.error.details).not.toContain("secret123");
 		});
@@ -165,7 +166,7 @@ describe("ErrorHandler", () => {
 			);
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.details).toContain("password=***");
 			expect(parsed.error.details).not.toContain("mypassword123");
 		});
@@ -178,7 +179,7 @@ describe("ErrorHandler", () => {
 			);
 			const result = errorHandler.handleError(error, "testing");
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.details).toContain("authorization=***");
 			expect(parsed.error.details).not.toContain("token123");
 		});
@@ -214,7 +215,7 @@ describe("ErrorHandler", () => {
 				"Field required",
 			);
 
-			const parsed = JSON.parse(result.content[0]!.text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe("VALIDATION_ERROR");
 			expect(parsed.error.message).toBe("Invalid input");
 			expect(parsed.error.details).toBe("Field required");
@@ -247,7 +248,7 @@ describe("handleToolError", () => {
 			"testing operation",
 		);
 
-		const parsed = JSON.parse(result.content[0]!.text);
+		const parsed = JSON.parse(textOf(result.content[0]));
 		expect(parsed.error.code).toBe("UNKNOWN_ERROR");
 		expect(parsed.error.message).toContain(
 			"executing ynab:test_tool - testing operation",
@@ -269,7 +270,7 @@ describe("handleToolError", () => {
 		);
 
 		expect(mockFormatter.format).toHaveBeenCalled();
-		expect(result.content[0]!.text).toContain("CUSTOM:");
+		expect(textOf(result.content[0])).toContain("CUSTOM:");
 	});
 });
 
@@ -358,7 +359,7 @@ describe("ErrorHandler with formatter injection", () => {
 		const result = errorHandler.handleError(error, "testing");
 
 		expect(mockFormatter.format).toHaveBeenCalledOnce();
-		expect(result.content[0]!.text).toContain("CUSTOM:");
+		expect(textOf(result.content[0])).toContain("CUSTOM:");
 	});
 
 	it("should call formatter with error response object", () => {
@@ -392,8 +393,8 @@ describe("ErrorHandler with formatter injection", () => {
 		const result1 = handler1.handleError(error, "testing");
 		const result2 = handler2.handleError(error, "testing");
 
-		expect(result1.content[0]!.text).toContain("F1:");
-		expect(result2.content[0]!.text).toContain("F2:");
+		expect(textOf(result1.content[0])).toContain("F1:");
+		expect(textOf(result2.content[0])).toContain("F2:");
 	});
 });
 

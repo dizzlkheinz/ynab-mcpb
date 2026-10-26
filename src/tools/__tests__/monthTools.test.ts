@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { textOf } from "../../__tests__/testUtils.js";
 import {
 	GetMonthSchema,
 	handleGetMonth,
@@ -94,7 +95,7 @@ describe("Month Tools", () => {
 			expect(cacheManager.wrap).toHaveBeenCalled();
 			expect(mockYnabAPI.months.getPlanMonth).toHaveBeenCalledTimes(1);
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(false);
 			expect(parsedContent.cache_info).toBe(
 				"Fresh data retrieved from YNAB API",
@@ -129,7 +130,7 @@ describe("Month Tools", () => {
 				response_format: "json",
 			});
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(true);
 			expect(parsedContent.cache_info).toBe(
 				"Data retrieved from cache for improved performance",
@@ -201,7 +202,7 @@ describe("Month Tools", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.month.month).toBe("2024-01-01");
 			expect(parsedContent.month.note).toBe("January budget");
 			expect(parsedContent.month.income).toBe(500);
@@ -225,7 +226,7 @@ describe("Month Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -243,7 +244,7 @@ describe("Month Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe(
 				"Insufficient permissions to access YNAB data",
 			);
@@ -261,7 +262,7 @@ describe("Month Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe("Budget or month not found");
 		});
 
@@ -277,7 +278,7 @@ describe("Month Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe(
 				"Rate limit exceeded. Please try again later",
 			);
@@ -295,7 +296,7 @@ describe("Month Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe(
 				"YNAB service is currently unavailable",
 			);
@@ -313,7 +314,7 @@ describe("Month Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe("Failed to get month data");
 		});
 	});
@@ -347,7 +348,7 @@ describe("Month Tools", () => {
 				{ deltaFetcher: fetcher },
 			);
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toContain("delta merge applied");
 			expect(parsedContent.months).toHaveLength(1);
@@ -380,7 +381,7 @@ describe("Month Tools", () => {
 				response_format: "json",
 			});
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(true);
 			expect(parsedContent.cache_info).toBe(
 				"Data retrieved from cache for improved performance",
@@ -442,7 +443,7 @@ describe("Month Tools", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toBe(
 				"Fresh data retrieved from YNAB API",
@@ -487,7 +488,7 @@ describe("Month Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -509,7 +510,7 @@ describe("Month Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe("Budget or month not found");
 		});
 
@@ -524,7 +525,7 @@ describe("Month Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0]!.text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error.message).toBe("Failed to list months");
 		});
 	});
