@@ -6,7 +6,15 @@
 import { describe, expect, it } from "vitest";
 import type * as ynab from "ynab";
 import { analyzeReconciliation } from "../analyzer.js";
-import type { ActionableRecommendation } from "../types.js";
+import { DEFAULT_CONFIG } from "../matcher.js";
+import type { ActionableRecommendation, MatchingConfig } from "../types.js";
+
+// Only these two differ from the defaults
+const TEST_MATCHING_CONFIG: MatchingConfig = {
+	...DEFAULT_CONFIG,
+	dateToleranceDays: 2,
+	autoMatchThreshold: 90,
+};
 
 /**
  * Helper to create a mock YNAB transaction
@@ -18,7 +26,7 @@ function createYNABTransaction(
 	payeeName: string,
 	cleared: "cleared" | "uncleared" | "reconciled" = "uncleared",
 ): ynab.TransactionDetail {
-	return {
+	const transaction: ynab.TransactionDetail = {
 		id,
 		date,
 		amount,
@@ -26,23 +34,16 @@ function createYNABTransaction(
 		category_name: "Test Category",
 		cleared,
 		approved: true,
-		memo: null,
 		account_id: "test-account",
 		account_name: "Test Account",
 		deleted: false,
 		flag_color: null,
-		flag_name: null,
 		category_id: "test-category",
 		payee_id: "test-payee",
-		transfer_account_id: null,
-		transfer_transaction_id: null,
-		matched_transaction_id: null,
-		import_id: null,
-		import_payee_name: null,
-		import_payee_name_original: null,
 		debt_transaction_type: null,
 		subtransactions: [],
-	} as ynab.TransactionDetail;
+	};
+	return transaction;
 }
 
 describe("Recommendation Engine Integration", () => {
@@ -60,13 +61,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				22.22, // statement balance
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -117,13 +112,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				122.22, // statement balance
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -174,13 +163,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				10.0, // statement balance
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -229,13 +212,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				49.99,
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -269,13 +246,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				10.0,
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				// No accountId or budgetId provided
 			);
@@ -307,13 +278,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				60.0,
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				// No IDs
 			);
@@ -346,13 +311,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				75.0,
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -383,13 +342,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				47.97,
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -453,13 +406,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				75.0,
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -507,13 +454,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				130.0,
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -556,13 +497,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				2250.0, // Large statement balance
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -607,13 +542,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				10.0,
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",
@@ -642,8 +571,9 @@ describe("Recommendation Engine Integration", () => {
 				// Metadata
 				expect(rec.metadata).toBeDefined();
 				expect(rec.metadata!["version"]).toBe("1.0");
-				expect(rec.metadata!["created_at"]).toBeDefined();
-				expect(Date.parse(rec.metadata!["created_at"])).not.toBeNaN();
+				const createdAt = rec.metadata!["created_at"];
+				expect(typeof createdAt).toBe("string");
+				expect(Date.parse(createdAt as string)).not.toBeNaN();
 
 				// Action-specific fields
 				expect(rec.action_type).toMatch(
@@ -664,13 +594,7 @@ describe("Recommendation Engine Integration", () => {
 				undefined,
 				ynabTransactions,
 				25.5,
-				{
-					dateToleranceDays: 2,
-					amountToleranceCents: 1,
-					descriptionSimilarityThreshold: 0.8,
-					autoMatchThreshold: 90,
-					suggestionThreshold: 60,
-				},
+				TEST_MATCHING_CONFIG,
 				"USD",
 				"test-account-id",
 				"test-budget-id",

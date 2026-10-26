@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { toMoneyValueFromDecimal } from "../../../utils/money.js";
+import {
+	type MoneyValue,
+	toMoneyValueFromDecimal,
+} from "../../../utils/money.js";
+import { DEFAULT_CONFIG } from "../matcher.js";
 import { generateRecommendations } from "../recommendationEngine.js";
 import type {
 	BankTransaction,
 	CreateTransactionRecommendation,
 	ManualReviewRecommendation,
-	MoneyValue,
 	RecommendationContext,
 	ReconciliationAnalysis,
 	ReconciliationInsight,
@@ -27,7 +30,6 @@ const createMockContext = (
 	const defaultAnalysis: ReconciliationAnalysis = {
 		success: true,
 		phase: "analysis",
-		matches: [],
 		auto_matches: [],
 		suggested_matches: [],
 		unmatched_bank: [],
@@ -64,13 +66,7 @@ const createMockContext = (
 		account_id: "test-account-id",
 		budget_id: "test-budget-id",
 		analysis: defaultAnalysis,
-		matching_config: {
-			amountToleranceCents: 1,
-			dateToleranceDays: 2,
-			descriptionSimilarityThreshold: 0.8,
-			autoMatchThreshold: 90,
-			suggestionThreshold: 60,
-		},
+		matching_config: { ...DEFAULT_CONFIG },
 		...overrides,
 	};
 };
@@ -90,7 +86,12 @@ const createBankTransaction = (
 		amount: amountMilli,
 		payee: "Test Store",
 		memo: "Test memo",
-		original_csv_row: 1,
+		sourceRow: 1,
+		raw: {
+			date: "2024-01-15",
+			amount: String(baseAmount),
+			description: "Test Store",
+		},
 		...restOverrides,
 	};
 };
@@ -102,8 +103,8 @@ const createYNABTransaction = (
 	id: "ynab-txn-1",
 	date: "2024-01-15",
 	amount: -50000,
-	payee_name: "Test Store",
-	category_name: "Shopping",
+	payee: "Test Store",
+	categoryName: "Shopping",
 	cleared: "uncleared",
 	approved: true,
 	memo: "Test memo",
@@ -299,7 +300,7 @@ describe("recommendationEngine", () => {
 
 			it("should not include memo if not present in bank transaction", () => {
 				const bankTxn = createBankTransaction();
-				bankTxn.memo = undefined;
+				delete bankTxn.memo;
 
 				const context = createMockContext({
 					analysis: {
@@ -342,7 +343,7 @@ describe("recommendationEngine", () => {
 				const ynabTxn = createYNABTransaction({
 					id: "ynab-1",
 					cleared: "uncleared",
-					payee_name: "Restaurant",
+					payee: "Restaurant",
 				});
 
 				const context = createMockContext({
@@ -361,6 +362,7 @@ describe("recommendationEngine", () => {
 				expect(rec.confidence).toBe(0.6); // CONFIDENCE.UPDATE_CLEARED
 				expect(rec.parameters.transaction_id).toBe("ynab-1");
 				expect(rec.parameters.cleared).toBe("cleared");
+				expect(rec.message).toContain("Restaurant");
 			});
 
 			it("should not create recommendation for already cleared YNAB transaction", () => {
@@ -397,10 +399,10 @@ describe("recommendationEngine", () => {
 				expect(recommendations).toHaveLength(0);
 			});
 
-			it("should handle null payee_name in YNAB transaction", () => {
+			it("should handle a null payee in YNAB transaction", () => {
 				const ynabTxn = createYNABTransaction({
 					cleared: "uncleared",
-					payee_name: null,
+					payee: null,
 				});
 
 				const context = createMockContext({
@@ -484,12 +486,12 @@ describe("recommendationEngine", () => {
 				const ynabTxn1 = createYNABTransaction({
 					id: "y1",
 					amount: -50000,
-					payee_name: "Vendor A",
+					payee: "Vendor A",
 				});
 				const ynabTxn2 = createYNABTransaction({
 					id: "y2",
 					amount: -50000,
-					payee_name: "Vendor B",
+					payee: "Vendor B",
 				});
 
 				const suggestedMatch: TransactionMatch = {
@@ -541,10 +543,12 @@ describe("recommendationEngine", () => {
 				expect(relatedTxns[2]?.id).toBe("y2");
 
 				// Verify enhanced metadata
-				expect(rec.metadata?.["bank_transaction_amount"]).toBeDefined();
-				expect(rec.metadata?.["bank_transaction_amount"].value).toBe(-100.0);
-				expect(rec.metadata?.["candidate_total_amount"]).toBeDefined();
-				expect(rec.metadata?.["candidate_total_amount"].value).toBe(-100.0); // -50 + -50
+				expect(rec.metadata?.["bank_transaction_amount"]).toMatchObject({
+					value: -100.0,
+				});
+				expect(rec.metadata?.["candidate_total_amount"]).toMatchObject({
+					value: -100.0, // -50 + -50
+				});
 				expect(rec.metadata?.["candidate_count"]).toBe(2);
 			});
 		});
@@ -732,8 +736,9 @@ describe("recommendationEngine", () => {
 				expect(rec!.id).toBeDefined();
 				expect(rec!.account_id).toBe("test-account-id");
 				expect(rec!.metadata!["version"]).toBe("1.0");
-				expect(rec!.metadata!["created_at"]).toBeDefined();
-				expect(new Date(rec!.metadata!["created_at"]).getTime()).not.toBeNaN();
+				const createdAt = rec!.metadata!["created_at"];
+				expect(typeof createdAt).toBe("string");
+				expect(new Date(createdAt as string).getTime()).not.toBeNaN();
 			});
 
 			it("should generate unique IDs for each recommendation", () => {
@@ -796,9 +801,10 @@ describe("recommendationEngine", () => {
 				expect(rec.action_type).toBe("manual_review");
 
 				// Verify enhanced metadata fields
-				expect(rec.metadata?.["current_discrepancy"]).toBeDefined();
-				expect(rec.metadata?.["current_discrepancy"].value).toBe(-100);
-				expect(rec.metadata?.["current_discrepancy"].currency).toBe("USD");
+				expect(rec.metadata?.["current_discrepancy"]).toMatchObject({
+					value: -100,
+					currency: "USD",
+				});
 				expect(rec.metadata?.["insight_severity"]).toBe("critical");
 			});
 
@@ -827,13 +833,10 @@ describe("recommendationEngine", () => {
 					expect(rec.action_type).toBe("manual_review");
 					const manualRec = rec as ManualReviewRecommendation;
 
-					expect(manualRec.metadata?.["current_discrepancy"]).toBeDefined();
-					expect(manualRec.metadata?.["current_discrepancy"].value).toBe(
-						-250.75,
-					);
-					expect(manualRec.metadata?.["current_discrepancy"].currency).toBe(
-						"CAD",
-					);
+					expect(manualRec.metadata?.["current_discrepancy"]).toMatchObject({
+						value: -250.75,
+						currency: "CAD",
+					});
 					expect(manualRec.metadata?.["insight_severity"]).toMatch(
 						/^(info|warning|critical)$/,
 					);
@@ -879,7 +882,7 @@ describe("recommendationEngine", () => {
 
 			it("should handle missing optional fields", () => {
 				const bankTxn = createBankTransaction();
-				bankTxn.memo = undefined;
+				delete bankTxn.memo;
 
 				const context = createMockContext({
 					analysis: {
@@ -918,7 +921,7 @@ describe("recommendationEngine", () => {
 
 			it("should handle insight without evidence", () => {
 				const insight = createInsight("near_match");
-				insight.evidence = undefined;
+				delete insight.evidence;
 
 				const context = createMockContext({
 					analysis: {
