@@ -4,7 +4,7 @@
  */
 
 import type { MoneyValue } from "../../utils/money.js";
-import type { LegacyReconciliationResult } from "./executor.js";
+import type { ExecutionResult } from "./executor.js";
 import type {
 	BalanceInfo,
 	BankTransaction,
@@ -36,7 +36,7 @@ export interface ReportFormatterOptions {
 export function formatHumanReadableReport(
 	analysis: ReconciliationAnalysis,
 	options: ReportFormatterOptions = {},
-	execution?: LegacyReconciliationResult,
+	execution?: ExecutionResult,
 ): string {
 	const accountLabel = options.accountName ?? "Account";
 	const sections: string[] = [];
@@ -355,15 +355,26 @@ function formatEvidenceSummary(
 /**
  * Format the execution section
  */
-function formatExecutionSection(execution: LegacyReconciliationResult): string {
+function formatExecutionSection(execution: ExecutionResult): string {
 	const lines: string[] = [];
 	lines.push("Execution Summary");
 	lines.push(SECTION_DIVIDER);
 
 	const summary = execution.summary;
+	if (execution.errors?.length) {
+		lines.push(
+			"Execution requires review:",
+			...execution.errors.map((error) => `- ${error}`),
+		);
+	}
 	lines.push(`Transactions created:  ${summary.transactions_created}`);
 	lines.push(`Transactions updated:  ${summary.transactions_updated}`);
 	lines.push(`Date adjustments:      ${summary.dates_adjusted}`);
+	if (execution.balance_reconciliation) {
+		lines.push(
+			`${summary.dry_run ? "Projected" : "Verified"} statement balance: ${execution.balance_reconciliation.status}`,
+		);
+	}
 
 	// Show top recommendations if any
 	if (execution.recommendations.length > 0) {
@@ -392,9 +403,9 @@ function formatExecutionSection(execution: LegacyReconciliationResult): string {
 		lines.push(
 			`${totalChanges} change(s) applied to YNAB. Review structured output for action details.`,
 		);
-	} else {
+	} else if (!execution.errors?.length) {
 		lines.push(
-			"No changes were needed. All transactions are already up to date.",
+			"No changes were applied. Review unmatched transactions and enabled actions.",
 		);
 	}
 
@@ -406,7 +417,7 @@ function formatExecutionSection(execution: LegacyReconciliationResult): string {
  */
 function formatRecommendationsSection(
 	analysis: ReconciliationAnalysis,
-	execution?: LegacyReconciliationResult,
+	execution?: ExecutionResult,
 ): string {
 	const lines: string[] = [];
 	lines.push("Recommended Actions");
@@ -414,15 +425,19 @@ function formatRecommendationsSection(
 
 	// If we have execution results, recommendations are already shown
 	if (execution && !execution.summary.dry_run) {
+		if (execution.errors?.length)
+			return "Review the execution errors and check YNAB before retrying.";
 		const totalChanges =
 			execution.summary.transactions_created +
 			execution.summary.transactions_updated +
 			execution.summary.dates_adjusted;
 		if (totalChanges > 0) {
-			lines.push("All recommended actions have been applied.");
+			lines.push(
+				"Planned changes were applied. Review remaining unmatched transactions.",
+			);
 		} else {
 			lines.push(
-				"No actions were needed. Transactions are already reconciled.",
+				"No changes were applied. Review remaining unmatched transactions.",
 			);
 		}
 		return lines.join("\n");

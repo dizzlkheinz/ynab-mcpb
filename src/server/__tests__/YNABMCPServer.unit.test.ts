@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { textOf } from "../../__tests__/testUtils.js";
 import { ConfigurationError } from "../../utils/errors.js";
+import type { CacheManager } from "../cacheManager.js";
+import * as config from "../config.js";
 
 vi.mock("../config.js", () => ({
 	getRuntimeConfig: () => ({
@@ -190,5 +193,153 @@ describe("YNABMCPServer isolated behavior", () => {
 		vi.spyOn(server.getServer(), "connect").mockRejectedValue(failure);
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		await expect(server.run()).rejects.toBe(failure);
+	});
+
+	it("loads configuration independently for each server", () => {
+		const initial = config.loadConfig();
+		vi.spyOn(config, "loadConfig")
+			.mockReturnValueOnce({
+				...initial,
+				YNAB_DEFAULT_BUDGET_ID: "first-budget",
+			})
+			.mockReturnValueOnce({
+				...initial,
+				YNAB_DEFAULT_BUDGET_ID: "second-budget",
+			});
+		const first = new YNABMCPServer(false);
+		const second = new YNABMCPServer(false);
+		expect(first.getDefaultBudget()).toBe("first-budget");
+		expect(second.getDefaultBudget()).toBe("second-budget");
+	});
+
+	it.each([
+		"ynab_list_accounts",
+		"ynab_list_transactions",
+		"ynab_list_categories",
+		"ynab_list_payees",
+		"ynab_list_months",
+	])("returns a consistent missing-budget error for %s", async (name) => {
+		const result = await server.getToolRegistry().executeTool({
+			name,
+			accessToken: "unit-test-token",
+			arguments: {},
+		});
+		expect(result.isError).toBe(true);
+		expect(JSON.parse(textOf(result.content[0]))).toMatchObject({
+			error: {
+				code: "VALIDATION_ERROR",
+				message: expect.stringContaining("No budget ID provided"),
+				suggestions: expect.any(Array),
+			},
+		});
+	});
+
+	it("rejects malformed budget IDs before calling the API", async () => {
+		const request = vi.spyOn(server.getYNABAPI().accounts, "getAccounts");
+		const result = await server.getToolRegistry().executeTool({
+			name: "ynab_list_accounts",
+			accessToken: "unit-test-token",
+			arguments: { budget_id: "invalid" },
+		});
+		expect(result.isError).toBe(true);
+		expect(JSON.parse(textOf(result.content[0])).error.code).toBe(
+			"VALIDATION_ERROR",
+		);
+		expect(request).not.toHaveBeenCalled();
+	});
+
+	it("resolves the default budget and caches repeated account reads", async () => {
+		const budgetId = "00000000-0000-4000-8000-000000000001";
+		const request = vi
+			.spyOn(server.getYNABAPI().accounts, "getAccounts")
+			.mockResolvedValue({ data: { accounts: [], server_knowledge: 1 } });
+		server.setDefaultBudget(budgetId);
+		for (let i = 0; i < 2; i++) {
+			const result = await server.getToolRegistry().executeTool({
+				name: "ynab_list_accounts",
+				accessToken: "unit-test-token",
+				arguments: {},
+			});
+			expect(result.isError).not.toBe(true);
+			expect(result.structuredContent).toMatchObject({ accounts: [] });
+		}
+		expect(request).toHaveBeenCalledExactlyOnceWith(budgetId);
+	});
+
+	it.each([false, true])(
+		"setting a default budget tolerates warming failures=%s",
+		async (fail) => {
+			const budgetId = "00000000-0000-4000-8000-000000000001";
+			vi.spyOn(server.getYNABAPI().plans, "getPlanById").mockResolvedValue({
+				data: { plan: { id: budgetId, name: "Test" }, server_knowledge: 1 },
+			} as never);
+			const accounts = vi.spyOn(server.getYNABAPI().accounts, "getAccounts");
+			const categories = vi.spyOn(
+				server.getYNABAPI().categories,
+				"getCategories",
+			);
+			const payees = vi.spyOn(server.getYNABAPI().payees, "getPayees");
+			if (fail) {
+				accounts.mockRejectedValue(new Error("offline"));
+				categories.mockRejectedValue(new Error("offline"));
+				payees.mockRejectedValue(new Error("offline"));
+			} else {
+				accounts.mockResolvedValue({
+					data: { accounts: [], server_knowledge: 1 },
+				});
+				categories.mockResolvedValue({
+					data: { category_groups: [], server_knowledge: 1 },
+				});
+				payees.mockResolvedValue({ data: { payees: [], server_knowledge: 1 } });
+			}
+			const result = await server.getToolRegistry().executeTool({
+				name: "ynab_set_default_budget",
+				accessToken: "unit-test-token",
+				arguments: { budget_id: budgetId },
+			});
+			expect(result.structuredContent).toMatchObject({
+				success: true,
+				default_budget_id: budgetId,
+				cache_warm_started: true,
+			});
+			await vi.waitFor(() => {
+				expect(accounts).toHaveBeenCalledOnce();
+				expect(categories).toHaveBeenCalledOnce();
+				expect(payees).toHaveBeenCalledOnce();
+			});
+			expect(server.getDefaultBudget()).toBe(budgetId);
+		},
+	);
+
+	it("reports and clears only this server's cache", async () => {
+		const otherServer = new YNABMCPServer(false);
+		const cacheOf = (instance: YNABMCPServer) =>
+			(instance as unknown as { cacheManager: CacheManager }).cacheManager;
+		cacheOf(server).set("test:entry", 1);
+		cacheOf(server).get("test:entry");
+		cacheOf(otherServer).set("other:entry", 2);
+		const diagnostics = await server.getToolRegistry().executeTool({
+			name: "ynab_diagnostic_info",
+			accessToken: "unit-test-token",
+			arguments: {
+				include_server: false,
+				include_cache: true,
+				include_memory: false,
+				include_environment: false,
+				include_security: false,
+				response_format: "json",
+			},
+		});
+		expect(diagnostics.structuredContent).toMatchObject({
+			cache: { entries: 1, hits: 1 },
+		});
+		expect(diagnostics.structuredContent).not.toHaveProperty("memory");
+		await server.getToolRegistry().executeTool({
+			name: "ynab_clear_cache",
+			accessToken: "unit-test-token",
+			arguments: {},
+		});
+		expect(cacheOf(server).getStats().size).toBe(0);
+		expect(cacheOf(otherServer).get("other:entry")).toBe(2);
 	});
 });

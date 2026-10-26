@@ -1,3 +1,5 @@
+import type { TransactionOutput } from "../tools/transactionModel.js";
+
 /**
  * @fileoverview Markdown format functions for YNAB MCP tool responses.
  * Each function accepts the assembled data object from a tool handler and returns
@@ -181,18 +183,8 @@ export function formatAccountDetail(data: AccountDetailData): string {
 
 // ─── transaction formatters ───────────────────────────────────────────────────
 
-export interface TransactionRecord {
-	id: string;
-	date?: string;
-	amount?: number;
-	memo?: string | null | undefined;
-	cleared?: string;
-	approved?: boolean;
-	payee_name?: string | null | undefined;
-	category_name?: string | null | undefined;
-	account_id?: string;
-	deleted?: boolean;
-}
+export type TransactionRecord = Pick<TransactionOutput, "id"> &
+	Partial<Omit<TransactionOutput, "id">>;
 
 export interface TransactionsListData {
 	transactions?: TransactionRecord[];
@@ -258,27 +250,7 @@ export function formatTransactionsList(data: TransactionsListData): string {
 }
 
 export interface TransactionDetailData {
-	transaction: {
-		id: string;
-		date?: string;
-		amount?: number;
-		memo?: string | null | undefined;
-		cleared?: string;
-		approved?: boolean;
-		payee_id?: string | null | undefined;
-		payee_name?: string | null | undefined;
-		category_id?: string | null | undefined;
-		category_name?: string | null | undefined;
-		account_id?: string;
-		account_name?: string;
-		deleted?: boolean;
-		subtransactions?: Array<{
-			id?: string;
-			amount?: number;
-			memo?: string | null | undefined;
-			category_name?: string | null | undefined;
-		}>;
-	};
+	transaction: TransactionRecord;
 	cached?: boolean;
 	cache_info?: string;
 }

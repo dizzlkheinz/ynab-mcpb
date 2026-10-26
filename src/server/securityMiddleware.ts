@@ -1,12 +1,11 @@
 /**
- * Security middleware that combines rate limiting, request logging, and input validation
+ * Security middleware that combines request logging and strict input validation
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import { createErrorHandler } from "./errorHandler.js";
-import { globalRateLimiter, hashToken, RateLimitError } from "./rateLimiter.js";
 import { globalRequestLogger } from "./requestLogger.js";
 import { responseFormatter } from "./responseFormatter.js";
 
@@ -44,57 +43,30 @@ export class SecurityMiddleware {
 				context.parameters,
 			);
 
-			// 2. Rate limiting — atomically check and record
-			const tokenHash = hashToken(context.accessToken);
-			const rateLimitCheck = globalRateLimiter.tryAcquire(tokenHash);
-			if (rateLimitCheck.isLimited) {
-				throw new RateLimitError(
-					"Rate limit exceeded. Please wait before making additional requests.",
-					rateLimitCheck.resetTime,
-					rateLimitCheck.remaining,
-				);
-			}
-
-			// 3. Execute the operation
-			let result: CallToolResult;
-			try {
-				result = await operation(validatedParams);
-			} catch (opError) {
-				// Detect real YNAB 429 responses and mark limiter as exhausted
-				if (
-					opError instanceof Error &&
-					(opError.message.includes("429") ||
-						opError.message.includes("Too Many Requests"))
-				) {
-					globalRateLimiter.markExhausted(tokenHash);
-				}
-				throw opError;
-			}
-
-			// 5. Log successful request
+			const result = await operation(validatedParams);
 			const duration = Date.now() - startTime;
-			const rateLimitInfo = globalRateLimiter.getStatus(
-				hashToken(context.accessToken),
-			);
+			if (result.isError) {
+				globalRequestLogger.logError(
+					context.toolName,
+					context.operation,
+					context.parameters,
+					"Tool returned an error",
+					duration,
+				);
+				return result;
+			}
 
 			globalRequestLogger.logSuccess(
 				context.toolName,
 				context.operation,
 				context.parameters,
 				duration,
-				{
-					remaining: rateLimitInfo.remaining,
-					isLimited: rateLimitInfo.isLimited,
-				},
 			);
 
 			return result;
 		} catch (error) {
 			// Log failed request
 			const duration = Date.now() - startTime;
-			const rateLimitInfo = globalRateLimiter.getStatus(
-				hashToken(context.accessToken),
-			);
 
 			const errorMessage =
 				error instanceof Error ? error.message : "Unknown error";
@@ -105,16 +77,7 @@ export class SecurityMiddleware {
 				context.parameters,
 				errorMessage,
 				duration,
-				{
-					remaining: rateLimitInfo.remaining,
-					isLimited: rateLimitInfo.isLimited,
-				},
 			);
-
-			// Handle rate limit errors specially
-			if (error instanceof RateLimitError) {
-				return SecurityMiddleware.createRateLimitErrorResponse(error);
-			}
 
 			// Handle validation errors
 			if (
@@ -152,32 +115,6 @@ export class SecurityMiddleware {
 	}
 
 	/**
-	 * Create a rate limit error response
-	 */
-	private static createRateLimitErrorResponse(
-		error: RateLimitError,
-	): CallToolResult {
-		return {
-			isError: true,
-			content: [
-				{
-					type: "text",
-					text: responseFormatter.format({
-						error: {
-							code: "RATE_LIMIT_EXCEEDED",
-							message: error.message,
-							details: {
-								resetTime: error.resetTime.toISOString(),
-								remaining: error.remaining,
-							},
-						},
-					}),
-				},
-			],
-		};
-	}
-
-	/**
 	 * Get security statistics
 	 */
 	static getSecurityStats(): {
@@ -198,13 +135,12 @@ export class SecurityMiddleware {
 	 * Reset security state (useful for testing)
 	 */
 	static reset(): void {
-		globalRateLimiter.reset();
 		globalRequestLogger.clearLogs();
 	}
 }
 
 /**
- * Create a curried wrapper that applies validation, rate limiting, and logging to a tool handler.
+ * Create a curried wrapper that applies validation and logging to a tool handler.
  *
  * @param toolName - The name of the tool being invoked
  * @param operation - The operation or action name within the tool

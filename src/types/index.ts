@@ -40,7 +40,6 @@ export {
 
 // Re-export security modules
 export {
-	globalRateLimiter,
 	type RateLimitConfig,
 	RateLimitError,
 	RateLimiter,

@@ -12,7 +12,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { cacheManager } from "../server/cacheManager.js";
+import { CACHE_TTLS, type CacheManager } from "../server/cacheManager.js";
 import { YNABMCPServer } from "../server/YNABMCPServer.js";
 import {
 	executeConfirmedToolCall,
@@ -23,7 +23,8 @@ import {
 } from "./testUtils.js";
 
 // Mock the YNAB SDK
-vi.mock("ynab", () => {
+vi.mock("ynab", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("ynab")>();
 	const mockAPI = {
 		budgets: {
 			getBudgets: vi.fn(),
@@ -62,6 +63,7 @@ vi.mock("ynab", () => {
 	};
 
 	return {
+		...actual,
 		// biome-ignore lint: Vitest 4 requires non-arrow function for constructors
 		API: vi.fn(function () {
 			return mockAPI;
@@ -96,6 +98,7 @@ describe("YNAB utils mock", () => {
 
 describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 	let server: YNABMCPServer;
+	let cacheManager: CacheManager;
 	let mockYnabAPI: any;
 
 	beforeEach(async () => {
@@ -104,6 +107,8 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 
 		// Create server instance
 		server = new YNABMCPServer();
+		cacheManager = (server as unknown as { cacheManager: CacheManager })
+			.cacheManager;
 
 		// Get the mocked YNAB API instance
 		const { API } = await import("ynab");
@@ -381,12 +386,14 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 	});
 
 	describe("Complete Transaction Management Integration", () => {
-		// TODO: Re-enable after DeltaFetcher cache integration alignment.
-		it.skip("should handle complete transaction workflow", {
+		it("should handle complete transaction workflow", {
 			meta: { tier: "domain", domain: "workflows" },
 		}, async () => {
 			const budgetId = TEST_BUDGET_UUID;
 			const accountId = "test-account";
+			mockYnabAPI.accounts.getAccounts.mockResolvedValue({
+				data: { accounts: [{ id: accountId }] },
+			});
 
 			// Mock transactions list
 			const mockTransactions = {
@@ -399,6 +406,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 							memo: "Coffee shop",
 							cleared: "cleared",
 							approved: true,
+							deleted: false,
 							flag_color: null,
 							account_id: accountId,
 							payee_id: "payee-1",
@@ -412,6 +420,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 							memo: "Salary",
 							cleared: "cleared",
 							approved: true,
+							deleted: false,
 							flag_color: null,
 							account_id: accountId,
 							payee_id: "payee-2",
@@ -475,6 +484,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				memo: "Test transaction",
 				cleared: "uncleared",
 				approved: true,
+				deleted: false,
 				flag_color: null,
 				account_id: accountId,
 				payee_id: null,
@@ -505,7 +515,6 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 					memo: "Test transaction",
 					date: "2024-01-17",
 					cleared: "uncleared",
-					response_format: "json",
 				},
 			);
 			validateToolResult(createResult);
@@ -534,7 +543,6 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 					budget_id: budgetId,
 					transaction_id: "transaction-3",
 					memo: "Updated memo",
-					response_format: "json",
 				},
 			);
 			validateToolResult(updateResult);
@@ -563,7 +571,14 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Verify API calls
 			expect(
 				mockYnabAPI.transactions.getTransactionsByAccount,
-			).toHaveBeenCalledWith(budgetId, accountId, undefined);
+			).toHaveBeenCalledWith(
+				budgetId,
+				accountId,
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+			);
 			expect(mockYnabAPI.transactions.getTransactionById).toHaveBeenCalledWith(
 				budgetId,
 				"transaction-1",
@@ -592,6 +607,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 							memo: "Filtered transaction",
 							cleared: "cleared",
 							approved: true,
+							deleted: false,
 							account_id: "account-1",
 							category_id: "category-1",
 						},
@@ -621,6 +637,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 							memo: "Filtered transaction",
 							cleared: "cleared",
 							approved: true,
+							deleted: false,
 							account_id: "account-1",
 							category_id: "category-1",
 						},
@@ -637,11 +654,17 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 							memo: "Filtered transaction",
 							cleared: "cleared",
 							approved: true,
+							deleted: false,
 							account_id: "account-1",
 							category_id: "category-1",
 						},
 					],
 				},
+			});
+
+			// Account filters validate the account before listing its transactions
+			mockYnabAPI.accounts.getAccounts.mockResolvedValue({
+				data: { accounts: [{ id: "account-1" }] },
 			});
 
 			// Test filtering by account
@@ -934,8 +957,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			}
 		});
 
-		// TODO: Re-enable after DeltaFetcher cache integration alignment.
-		it.skip("should cache budget list requests and improve performance on subsequent calls", {
+		it("should cache budget list requests and improve performance on subsequent calls", {
 			meta: { tier: "domain", domain: "workflows" },
 		}, async () => {
 			const mockBudgets = {
@@ -1004,75 +1026,10 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			expect(finalStats.hits).toBeGreaterThan(statsBeforeFirstCall.hits);
 		});
 
-		it("should invalidate cache on write operations", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
-			const budgetId = TEST_BUDGET_UUID;
+		// Mutation invalidation is tested through the real SDK transport in
+		// serverTransport.integration.test.ts. SDK method mocks bypass that boundary.
 
-			// Mock responses
-			const mockAccounts = {
-				data: {
-					accounts: [
-						{
-							id: "account-1",
-							name: "Test Account",
-							type: "checking",
-							on_budget: true,
-							closed: false,
-							balance: 100000,
-							cleared_balance: 95000,
-							uncleared_balance: 5000,
-						},
-					],
-				},
-			};
-
-			const mockCreatedAccount = {
-				data: {
-					account: {
-						id: "account-2",
-						name: "New Account",
-						type: "savings",
-						on_budget: true,
-						closed: false,
-						balance: 0,
-						cleared_balance: 0,
-						uncleared_balance: 0,
-					},
-				},
-			};
-
-			mockYnabAPI.accounts.getAccounts.mockResolvedValue(mockAccounts);
-			mockYnabAPI.accounts.createAccount.mockResolvedValue(mockCreatedAccount);
-
-			// First, populate cache with account list
-			await executeToolCall(server, "ynab:list_accounts", {
-				budget_id: budgetId,
-			});
-
-			// Verify cache has entries
-			const statsAfterRead = cacheManager.getStats();
-			expect(statsAfterRead.size).toBeGreaterThan(0);
-
-			// Create a new account (write operation)
-			await executeConfirmedToolCall(server, "ynab:create_account", {
-				budget_id: budgetId,
-				name: "New Account",
-				type: "savings",
-			});
-
-			// Next call to list accounts should hit API again (cache was invalidated)
-			mockYnabAPI.accounts.getAccounts.mockClear();
-			await executeToolCall(server, "ynab:list_accounts", {
-				budget_id: budgetId,
-			});
-
-			// Verify API was called again after cache invalidation
-			expect(mockYnabAPI.accounts.getAccounts).toHaveBeenCalledTimes(1);
-		});
-
-		// TODO: Re-enable after DeltaFetcher cache integration alignment.
-		it.skip("should not cache filtered transaction requests", {
+		it("should cache account-filtered transactions separately from budget transactions", {
 			meta: { tier: "domain", domain: "workflows" },
 		}, async () => {
 			const budgetId = TEST_BUDGET_UUID;
@@ -1087,6 +1044,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 							memo: "Test transaction",
 							cleared: "cleared",
 							approved: true,
+							deleted: false,
 							account_id: "account-1",
 							category_id: "category-1",
 						},
@@ -1101,6 +1059,9 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				mockTransactions,
 			);
 
+			mockYnabAPI.accounts.getAccounts.mockResolvedValue({
+				data: { accounts: [{ id: "account-1" }] },
+			});
 			const statsBeforeUnfiltered = cacheManager.getStats();
 
 			// Unfiltered request - should be cached
@@ -1120,7 +1081,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				statsBeforeUnfiltered.size,
 			);
 
-			// Filtered request - should NOT be cached
+			// Account filters have a separate cache entry from the whole budget.
 			const filteredResult = await executeToolCall(
 				server,
 				"ynab:list_transactions",
@@ -1136,9 +1097,29 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				"Fresh data retrieved from YNAB API",
 			);
 
-			// Cache size should not have increased for filtered request
-			const statsAfterFiltered = cacheManager.getStats();
-			expect(statsAfterFiltered.size).toBe(statsAfterUnfiltered.size);
+			// Repeating each shape reuses its own snapshot.
+			const repeatedFiltered = await executeToolCall(
+				server,
+				"ynab:list_transactions",
+				{
+					budget_id: budgetId,
+					account_id: "account-1",
+					response_format: "json",
+				},
+			);
+			expect(parseToolResult(repeatedFiltered).data.cached).toBe(true);
+			const repeatedUnfiltered = await executeToolCall(
+				server,
+				"ynab:list_transactions",
+				{
+					budget_id: budgetId,
+					response_format: "json",
+				},
+			);
+			expect(parseToolResult(repeatedUnfiltered).data.cached).toBe(true);
+			expect(cacheManager.getStats().size).toBeGreaterThan(
+				statsAfterUnfiltered.size,
+			);
 
 			// Both API methods should have been called
 			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledTimes(1);
@@ -1218,13 +1199,9 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			expect(statsAfterClear.misses).toBe(0);
 		});
 
-		// TODO: Re-enable after DeltaFetcher cache integration alignment.
-		it.skip("should respect cache TTL and return fresh data after expiration", {
+		it("should respect cache TTL and return fresh data after expiration", {
 			meta: { tier: "domain", domain: "workflows" },
 		}, async () => {
-			// Note: This test is conceptual since TTL testing requires time manipulation
-			// In a real scenario, we would mock the Date.now() or use a test clock
-
 			const mockBudgets = {
 				data: {
 					budgets: [
@@ -1266,8 +1243,31 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			const secondParsed = parseToolResult(secondResult);
 			expect(secondParsed.data.cached).toBe(true);
 
-			// Verify API was only called once (second call used cache)
 			expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledTimes(1);
+
+			// Advance only Date.now so request timeouts remain real.
+			const now = vi
+				.spyOn(Date, "now")
+				.mockReturnValue(Date.now() + CACHE_TTLS.BUDGETS + 1);
+			try {
+				mockYnabAPI.budgets.getBudgets.mockResolvedValue({
+					data: {
+						budgets: [
+							{ ...mockBudgets.data.budgets[0], name: "Refreshed Budget" },
+						],
+					},
+				});
+				const refreshed = await executeToolCall(server, "ynab:list_budgets", {
+					response_format: "json",
+				});
+				expect(parseToolResult(refreshed).data.cached).toBe(false);
+				expect(parseToolResult(refreshed).data.budgets[0].name).toBe(
+					"Refreshed Budget",
+				);
+				expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledTimes(2);
+			} finally {
+				now.mockRestore();
+			}
 		});
 	});
 });

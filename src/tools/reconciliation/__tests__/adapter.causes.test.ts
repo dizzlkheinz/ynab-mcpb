@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LegacyReconciliationResult } from "../executor.js";
+import type { ExecutionResult } from "../executor.js";
 import { buildReconciliationPayload } from "../outputBuilder.js";
 import type { ReconciliationAnalysis } from "../types.js";
 
@@ -50,7 +50,7 @@ const baseAnalysis: ReconciliationAnalysis = {
 	insights: [],
 };
 
-const execution: LegacyReconciliationResult = {
+const execution: ExecutionResult = {
 	summary: {
 		bank_transactions_count: 1,
 		ynab_transactions_count: 1,
@@ -70,10 +70,9 @@ const execution: LegacyReconciliationResult = {
 		},
 		after: { balance: -921240, cleared_balance: -921240, uncleared_balance: 0 },
 	},
-	actions_taken: [],
 	recommendations: [],
 	balance_reconciliation: {
-		status: "DISCREPANCY_FOUND",
+		status: "unbalanced",
 		precision_calculations: {
 			bank_statement_balance_milliunits: -921240,
 			ynab_calculated_balance_milliunits: -899020,
@@ -112,35 +111,23 @@ const execution: LegacyReconciliationResult = {
 	},
 };
 
-describe("buildReconciliationPayload discrepancy causes mapping", () => {
-	it("maps legacy causes to MoneyValue entries with CAD currency", () => {
+describe("public reconciliation execution failures", () => {
+	it("keeps failed write details in both response channels", () => {
+		const failed = {
+			...execution,
+			errors: ["Write outcome uncertain: connection lost"],
+			recommendations: ["Check YNAB before retrying"],
+		};
 		const payload = buildReconciliationPayload(
 			baseAnalysis,
-			{
-				accountId: "acct-123",
-				accountName: "CAD Checking",
-				currencyCode: "CAD",
-			},
-			execution,
+			{ currencyCode: "CAD" },
+			failed,
 		);
-
-		const structured = payload.structured as Record<string, any>;
-		const discrepancyAnalysis =
-			structured["execution"]?.balance_reconciliation?.discrepancy_analysis;
-		expect(discrepancyAnalysis).toBeDefined();
-		expect(discrepancyAnalysis.likely_causes).toHaveLength(2);
-
-		for (const cause of discrepancyAnalysis.likely_causes as Record<
-			string,
-			any
-		>[]) {
-			expect(cause["amount"]).toMatchObject({ currency: "CAD" });
-			expect(typeof cause["suggested_action"]).toBe("string");
-		}
-		const [bankFee, interest] = discrepancyAnalysis.likely_causes;
-		expect(bankFee.type).toBe("bank_fee");
-		expect(interest.type).toBe("interest");
-		expect(bankFee.suggested_action).toBe("Record bank fee");
-		expect(interest.suggested_action).toBe("Record interest income");
+		expect(payload.structured.errors).toEqual(failed.errors);
+		expect(payload.human).toContain("connection lost");
+		expect(payload.human).not.toContain("already up to date");
+		expect(payload.structured.execution_summary?.balance_status).toBe(
+			"unbalanced",
+		);
 	});
 });

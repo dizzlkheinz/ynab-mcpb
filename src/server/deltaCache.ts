@@ -136,119 +136,73 @@ export class DeltaCache {
 			cacheKey,
 			options.ttl,
 		);
-
-		if (!isDeltaEnabled()) {
-			return this.fetchWithoutDelta(cacheKey, budgetId, fetcher, options);
-		}
-
-		// Always check cache, even with forceFullRefresh (which only disables delta merging)
-		const cachedEntry = this.cacheManager.get<DeltaCacheEntry<T>>(cacheKey);
-
-		// If forceFullRefresh is true but we have a fresh cache entry, return it
-		if (options.forceFullRefresh && cachedEntry) {
-			const age = Date.now() - cachedEntry.timestamp;
-			const isStale = age > cachedEntry.ttl;
-			if (!isStale) {
-				return {
-					data: cachedEntry.snapshot,
-					wasCached: true,
-					usedDelta: false,
-					serverKnowledge: cachedEntry.serverKnowledge,
-				};
-			}
-		}
-
-		const lastKnowledge = options.forceFullRefresh
-			? undefined
-			: this.knowledgeStore.get(cacheKey);
-		const canUseDelta = Boolean(
-			!options.forceFullRefresh && cachedEntry && lastKnowledge !== undefined,
-		);
-		const requestedKnowledge = canUseDelta ? lastKnowledge : undefined;
-
-		let response = await fetcher(requestedKnowledge);
-		const knowledgeGap =
-			requestedKnowledge !== undefined
-				? response.serverKnowledge - requestedKnowledge
-				: 0;
-
-		let forcedFullRefreshDueToGap = false;
-
-		if (knowledgeGap > LARGE_KNOWLEDGE_GAP_THRESHOLD) {
-			this.logger.warn("delta-cache.knowledge-gap", {
-				budgetId,
-				cacheKey,
-				lastKnowledge: requestedKnowledge,
-				serverKnowledge: response.serverKnowledge,
-				gap: knowledgeGap,
-				threshold: LARGE_KNOWLEDGE_GAP_THRESHOLD,
-				action: "full-refresh",
-				recommendation: "Consider forcing a full refresh to resync cache.",
-			});
-			forcedFullRefreshDueToGap = true;
-			this.knowledgeGapEvents++;
-			response = await fetcher(undefined);
-		}
-
-		const receivedDelta =
-			!forcedFullRefreshDueToGap &&
-			requestedKnowledge !== undefined &&
-			response.serverKnowledge > requestedKnowledge;
-
-		let finalSnapshot: T[];
+		// Snapshot and knowledge travel together. An expired snapshot can still
+		// seed a delta; it is never served as fresh after its TTL expires.
+		const previous = this.cacheManager.peek<DeltaCacheEntry<T>>(cacheKey);
+		let fetchedEntry: DeltaCacheEntry<T> | undefined;
 		let usedDelta = false;
-
-		if (receivedDelta && cachedEntry) {
-			this.mergeOperations++;
-			finalSnapshot = merger(
-				cachedEntry.snapshot,
-				response.data,
-				options.mergeOptions,
-			);
-			usedDelta = true;
-		} else if (
-			cachedEntry &&
-			requestedKnowledge !== undefined &&
-			!forcedFullRefreshDueToGap
-		) {
-			// No changes were reported, so reuse the cached snapshot
-			finalSnapshot = cachedEntry.snapshot;
-		} else {
-			finalSnapshot = this.filterDeleted(response.data);
-		}
-
-		const cacheEntry: DeltaCacheEntry<T> = {
-			snapshot: finalSnapshot,
-			serverKnowledge: response.serverKnowledge,
-			timestamp: Date.now(),
+		const entry = await this.cacheManager.wrap<DeltaCacheEntry<T>>(cacheKey, {
 			ttl: effectiveTtl,
-		};
-
-		if (options.staleWhileRevalidate !== undefined) {
-			cacheEntry.staleWhileRevalidate = options.staleWhileRevalidate;
+			...(options.staleWhileRevalidate !== undefined && {
+				staleWhileRevalidate: options.staleWhileRevalidate,
+			}),
+			loader: async () => {
+				const requestedKnowledge =
+					isDeltaEnabled() && !options.forceFullRefresh
+						? previous?.serverKnowledge
+						: undefined;
+				let response = await fetcher(requestedKnowledge);
+				let fullRefresh = requestedKnowledge === undefined;
+				if (
+					requestedKnowledge !== undefined &&
+					(response.serverKnowledge < requestedKnowledge ||
+						response.serverKnowledge - requestedKnowledge >
+							LARGE_KNOWLEDGE_GAP_THRESHOLD)
+				) {
+					this.knowledgeGapEvents++;
+					this.logger.warn("delta-cache.knowledge-gap", {
+						budgetId,
+						cacheKey,
+						lastKnowledge: requestedKnowledge,
+						serverKnowledge: response.serverKnowledge,
+					});
+					response = await fetcher(undefined);
+					fullRefresh = true;
+				}
+				let snapshot: T[];
+				if (!fullRefresh && previous) {
+					this.deltaHits++;
+					usedDelta = response.serverKnowledge !== requestedKnowledge;
+					if (usedDelta) this.mergeOperations++;
+					snapshot = usedDelta
+						? merger(previous.snapshot, response.data, options.mergeOptions)
+						: previous.snapshot;
+				} else {
+					this.deltaMisses++;
+					snapshot = this.filterDeleted(response.data);
+				}
+				fetchedEntry = {
+					snapshot,
+					serverKnowledge: response.serverKnowledge,
+					timestamp: Date.now(),
+					ttl: effectiveTtl,
+					...(options.staleWhileRevalidate !== undefined && {
+						staleWhileRevalidate: options.staleWhileRevalidate,
+					}),
+				};
+				return fetchedEntry;
+			},
+		});
+		// An invalidated load is still returned to its original caller, but must
+		// not republish either its snapshot or its knowledge for future reads.
+		if (this.cacheManager.peek(cacheKey) === entry) {
+			this.knowledgeStore.update(cacheKey, entry.serverKnowledge);
 		}
-
-		const cacheOptions: { ttl: number; staleWhileRevalidate?: number } = {
-			ttl: effectiveTtl,
-		};
-		if (options.staleWhileRevalidate !== undefined) {
-			cacheOptions.staleWhileRevalidate = options.staleWhileRevalidate;
-		}
-
-		this.cacheManager.set(cacheKey, cacheEntry, cacheOptions);
-		this.knowledgeStore.update(cacheKey, response.serverKnowledge);
-
-		if (canUseDelta) {
-			this.deltaHits++;
-		} else {
-			this.deltaMisses++;
-		}
-
 		return {
-			data: finalSnapshot,
-			wasCached: Boolean(cachedEntry),
-			usedDelta,
-			serverKnowledge: response.serverKnowledge,
+			data: entry.snapshot,
+			wasCached: entry !== fetchedEntry,
+			usedDelta: entry === fetchedEntry && usedDelta,
+			serverKnowledge: entry.serverKnowledge,
 		};
 	}
 
@@ -295,70 +249,6 @@ export class DeltaCache {
 		} else {
 			this.knowledgeStore.reset();
 		}
-	}
-
-	private async fetchWithoutDelta<T extends { deleted?: boolean }>(
-		cacheKey: string,
-		_budgetId: string,
-		fetcher: DeltaFetcher<T>,
-		options: {
-			ttl: number;
-			forceFullRefresh?: boolean;
-			staleWhileRevalidate?: number;
-		},
-	): Promise<DeltaFetchResult<T>> {
-		const effectiveTtl = this.assertFiniteTtl(
-			"fetchWithoutDelta",
-			cacheKey,
-			options.ttl,
-		);
-
-		// Always check cache, even with forceFullRefresh (which only disables delta merging)
-		const cachedEntry = this.cacheManager.get<DeltaCacheEntry<T>>(cacheKey);
-
-		// If we have a fresh cache entry, return it
-		if (cachedEntry) {
-			const age = Date.now() - cachedEntry.timestamp;
-			const isStale = age > cachedEntry.ttl;
-			if (!isStale || !options.forceFullRefresh) {
-				return {
-					data: cachedEntry.snapshot,
-					wasCached: true,
-					usedDelta: false,
-					serverKnowledge: cachedEntry.serverKnowledge,
-				};
-			}
-		}
-
-		const response = await fetcher(undefined);
-		const cleanedData = this.filterDeleted(response.data);
-		const cacheEntry: DeltaCacheEntry<T> = {
-			snapshot: cleanedData,
-			serverKnowledge: response.serverKnowledge,
-			timestamp: Date.now(),
-			ttl: effectiveTtl,
-		};
-
-		if (options.staleWhileRevalidate !== undefined) {
-			cacheEntry.staleWhileRevalidate = options.staleWhileRevalidate;
-		}
-
-		const cacheOptions: { ttl: number; staleWhileRevalidate?: number } = {
-			ttl: effectiveTtl,
-		};
-		if (options.staleWhileRevalidate !== undefined) {
-			cacheOptions.staleWhileRevalidate = options.staleWhileRevalidate;
-		}
-
-		this.cacheManager.set(cacheKey, cacheEntry, cacheOptions);
-		this.knowledgeStore.update(cacheKey, response.serverKnowledge);
-
-		return {
-			data: cleanedData,
-			wasCached: false,
-			usedDelta: false,
-			serverKnowledge: response.serverKnowledge,
-		};
 	}
 
 	private filterDeleted<T extends { deleted?: boolean }>(items: T[]): T[] {

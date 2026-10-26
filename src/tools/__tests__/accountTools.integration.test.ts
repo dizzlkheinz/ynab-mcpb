@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { handleGetAccount, handleListAccounts } from "../accountTools.js";
@@ -27,10 +28,14 @@ describeIntegration("Account Tools Integration", () => {
 	it("should successfully list accounts from real API", {
 		meta: { tier: "core", domain: "accounts" },
 	}, async () => {
-		const result = await handleListAccounts(ynabAPI, {
-			budget_id: testBudgetId,
-			response_format: "json",
-		});
+		const result = await handleListAccounts(
+			ynabAPI,
+			{
+				budget_id: testBudgetId,
+				response_format: "json",
+			},
+			createReadDeps(ynabAPI),
+		);
 
 		expect(result.content).toHaveLength(1);
 		expect(result.content[0]!.type).toBe("text");
@@ -57,10 +62,14 @@ describeIntegration("Account Tools Integration", () => {
 		meta: { tier: "domain", domain: "accounts" },
 	}, async () => {
 		// First get the list of accounts to get a valid account ID
-		const listResult = await handleListAccounts(ynabAPI, {
-			budget_id: testBudgetId,
-			response_format: "json",
-		});
+		const listResult = await handleListAccounts(
+			ynabAPI,
+			{
+				budget_id: testBudgetId,
+				response_format: "json",
+			},
+			createReadDeps(ynabAPI),
+		);
 		const parsedListContent = JSON.parse(textOf(listResult.content[0]));
 
 		if (parsedListContent.accounts.length === 0) {
@@ -72,11 +81,15 @@ describeIntegration("Account Tools Integration", () => {
 
 		const testAccountId = parsedListContent.accounts[0].id;
 
-		const result = await handleGetAccount(ynabAPI, {
-			budget_id: testBudgetId,
-			account_id: testAccountId,
-			response_format: "json",
-		});
+		const result = await handleGetAccount(
+			ynabAPI,
+			{
+				budget_id: testBudgetId,
+				account_id: testAccountId,
+				response_format: "json",
+			},
+			createReadDeps(ynabAPI),
+		);
 
 		expect(result.content).toHaveLength(1);
 		expect(result.content[0]!.type).toBe("text");
@@ -96,9 +109,13 @@ describeIntegration("Account Tools Integration", () => {
 	it("should handle invalid budget ID gracefully", {
 		meta: { tier: "domain", domain: "accounts" },
 	}, async () => {
-		const result = await handleListAccounts(ynabAPI, {
-			budget_id: "invalid-budget-id",
-		});
+		const result = await handleListAccounts(
+			ynabAPI,
+			{
+				budget_id: "invalid-budget-id",
+			},
+			createReadDeps(ynabAPI),
+		);
 
 		expect(result.content).toHaveLength(1);
 		const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -114,10 +131,14 @@ describeIntegration("Account Tools Integration", () => {
 	it("should handle invalid account ID gracefully", {
 		meta: { tier: "domain", domain: "accounts" },
 	}, async () => {
-		const result = await handleGetAccount(ynabAPI, {
-			budget_id: testBudgetId,
-			account_id: "invalid-account-id",
-		});
+		const result = await handleGetAccount(
+			ynabAPI,
+			{
+				budget_id: testBudgetId,
+				account_id: "invalid-account-id",
+			},
+			createReadDeps(ynabAPI),
+		);
 
 		expect(result.content).toHaveLength(1);
 		const parsedContent = JSON.parse(textOf(result.content[0]));

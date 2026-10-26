@@ -59,6 +59,12 @@ export function normalizeConfig(
 	}
 
 	return {
+		...(config.amountTolerance !== undefined
+			? { amountTolerance: config.amountTolerance }
+			: {}),
+		...(config.chronologyBonus !== undefined
+			? { chronologyBonus: config.chronologyBonus }
+			: {}),
 		weights: config.weights ?? DEFAULT_CONFIG.weights,
 		dateToleranceDays:
 			config.dateToleranceDays ?? DEFAULT_CONFIG.dateToleranceDays,
@@ -151,17 +157,35 @@ function findCandidates(
 		}
 
 		// Amounts must match exactly (milliunits)
-		if (bankTxn.amount !== ynabTxn.amount) {
+		const amountDifference = Math.abs(bankTxn.amount - ynabTxn.amount);
+		if (
+			amountDifference >
+			Math.abs(bankTxn.amount) * (config.amountTolerance ?? 0)
+		) {
 			continue;
 		}
+		const daysDifference =
+			Math.abs(Date.parse(bankTxn.date) - Date.parse(ynabTxn.date)) / 86400000;
+		if (daysDifference > config.dateToleranceDays) continue;
 
 		const scores = calculateScores(bankTxn, ynabTxn, config);
 
 		if (scores.combined >= config.minimumCandidateScore) {
+			const reasons = buildMatchReasons(scores, config);
+			if (config.chronologyBonus && daysDifference <= 3)
+				reasons.push(
+					`Chronological order bonus (+${daysDifference <= 1 ? 15 : 10})`,
+				);
+			if (
+				ynabTxn.memo &&
+				calculatePayeeScore(bankTxn.payee, ynabTxn.memo) >
+					calculatePayeeScore(bankTxn.payee, ynabTxn.payee)
+			)
+				reasons.push("Memo similarity");
 			candidates.push({
 				ynabTransaction: ynabTxn,
 				scores,
-				matchReasons: buildMatchReasons(scores, config),
+				matchReasons: reasons,
 			});
 		}
 	}
@@ -220,7 +244,10 @@ function calculateScores(
 	}
 
 	// Payee score using fuzzball
-	const payeeScore = calculatePayeeScore(bankTxn.payee, ynabTxn.payee);
+	const payeeScore = Math.max(
+		calculatePayeeScore(bankTxn.payee, ynabTxn.payee),
+		ynabTxn.memo ? calculatePayeeScore(bankTxn.payee, ynabTxn.memo) : 0,
+	);
 
 	// Combined score: fixed base from exact amount match + weighted date/payee
 	let combined =
@@ -231,11 +258,13 @@ function calculateScores(
 	// Apply bonuses
 	if (dateScore === 100) combined += config.exactDateBonus;
 	if (payeeScore >= 95) combined += config.exactPayeeBonus;
+	if (config.chronologyBonus)
+		combined += daysDiff <= 1 ? 15 : daysDiff <= 3 ? 10 : 0;
 
 	combined = Math.min(100, combined);
 
 	return {
-		amount: 100, // Always 100 (candidates with different amounts are filtered out)
+		amount: bankTxn.amount === ynabTxn.amount ? 100 : 90,
 		date: Math.round(dateScore),
 		payee: Math.round(payeeScore),
 		combined: Math.round(combined),
@@ -264,7 +293,11 @@ function buildMatchReasons(
 ): string[] {
 	const reasons: string[] = [];
 
-	reasons.push("Exact amount match");
+	reasons.push(
+		scores.amount === 100
+			? "Exact amount match"
+			: "Amount within configured tolerance",
+	);
 
 	if (scores.date === 100) {
 		reasons.push("Same date");

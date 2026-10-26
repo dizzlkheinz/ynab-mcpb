@@ -105,7 +105,6 @@ export {
 	finalizeResponse,
 	generateCorrelationKey,
 	handleTransactionError,
-	invalidateTransactionCaches,
 	setsEqual,
 	toCorrelationPayload,
 	toMonthKey,

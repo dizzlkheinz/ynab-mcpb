@@ -15,7 +15,7 @@ labels: release
 - [ ] Public API surface reviewed (see `docs/VERSIONING.md`)
 - [ ] Changelog entry prepared (Added/Changed/Fixed/Removed)
 - [ ] Tests and lint pass
-- [ ] Built with `npm run package:mcpb`
+- [ ] Built with `npm run build` and packaged with `npm run package:mcpb`
 - [ ] Manual sanity check in Claude Desktop (`ynab_diagnostic_info`, basic tool calls)
 
 ## Publish

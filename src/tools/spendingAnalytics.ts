@@ -3,10 +3,7 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import type {
-	HandlerDeltaDeps,
-	ToolFactory,
-} from "../types/toolRegistration.js";
+import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import { isValidISODate } from "../utils/dateUtils.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import {
@@ -15,11 +12,11 @@ import {
 	requireResolvedBudgetId,
 } from "./adapters.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
-import { requireDeltaFetcher } from "./deltaSupport.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
-
-const DELTA_FETCHER_REQUIRED =
-	"Spending analytics handlers require a DeltaFetcher via deps";
+import {
+	type TransactionModel,
+	transactionPostings,
+} from "./transactionModel.js";
 
 const dateSchema = z
 	.string()
@@ -102,7 +99,7 @@ interface Aggregate {
 	income: number;
 	spending: number;
 	net: number;
-	transactionCount: number;
+	transactionIds: Set<string>;
 }
 
 interface AnalysisData {
@@ -115,31 +112,24 @@ interface AnalysisData {
 	used_delta: boolean;
 }
 
-type AnalyticsTransaction = Pick<
-	ynab.TransactionDetail,
-	| "date"
-	| "amount"
-	| "account_id"
-	| "account_name"
-	| "payee_id"
-	| "payee_name"
-	| "category_id"
-	| "category_name"
-	| "subtransactions"
->;
+type AnalyticsTransaction = TransactionModel;
 
 function emptyAggregate(): Aggregate {
-	return { income: 0, spending: 0, net: 0, transactionCount: 0 };
+	return { income: 0, spending: 0, net: 0, transactionIds: new Set<string>() };
 }
 
-function addAmount(aggregate: Aggregate, amount: number): void {
+function addAmount(
+	aggregate: Aggregate,
+	amount: number,
+	transactionId: string,
+): void {
 	aggregate.net += amount;
 	if (amount >= 0) {
 		aggregate.income += amount;
 	} else {
 		aggregate.spending += -amount;
 	}
-	aggregate.transactionCount += 1;
+	aggregate.transactionIds.add(transactionId);
 }
 
 function formatAggregate(aggregate: Aggregate) {
@@ -150,7 +140,7 @@ function formatAggregate(aggregate: Aggregate) {
 		income_milliunits: aggregate.income,
 		spending_milliunits: aggregate.spending,
 		net_milliunits: aggregate.net,
-		transaction_count: aggregate.transactionCount,
+		transaction_count: aggregate.transactionIds.size,
 	};
 }
 
@@ -191,7 +181,7 @@ function groupIdentity(
 		case "account":
 			return {
 				key: transaction.account_id,
-				name: transaction.account_name,
+				name: transaction.account_name ?? transaction.account_id,
 			};
 		case "week": {
 			const key = weekStart(transaction.date);
@@ -202,38 +192,6 @@ function groupIdentity(
 			return { key, name: key };
 		}
 	}
-}
-
-function categoryEntries(
-	transaction: ynab.TransactionDetail,
-): AnalyticsTransaction[] {
-	if (
-		!transaction.subtransactions ||
-		transaction.subtransactions.length === 0
-	) {
-		return [transaction];
-	}
-	return transaction.subtransactions
-		.filter((subtransaction) => !subtransaction.deleted)
-		.map((subtransaction) => ({
-			date: transaction.date,
-			amount: subtransaction.amount,
-			account_id: transaction.account_id,
-			account_name: transaction.account_name,
-			subtransactions: [],
-			...(transaction.payee_id !== undefined && {
-				payee_id: transaction.payee_id,
-			}),
-			...(transaction.payee_name !== undefined && {
-				payee_name: transaction.payee_name,
-			}),
-			...(subtransaction.category_id !== undefined && {
-				category_id: subtransaction.category_id,
-			}),
-			...(subtransaction.category_name !== undefined && {
-				category_name: subtransaction.category_name,
-			}),
-		}));
 }
 
 async function analyze(
@@ -253,30 +211,28 @@ async function analyze(
 			transaction.date >= period.since_date &&
 			transaction.date <= period.until_date,
 	);
+	const postings = inRange.flatMap(transactionPostings);
 	const excludedTransferCount = includeTransfers
 		? 0
-		: inRange.filter((transaction) => transaction.transfer_account_id).length;
+		: new Set(
+				postings
+					.filter((posting) => posting.transfer_account_id)
+					.map((posting) => posting.id),
+			).size;
 	const included = includeTransfers
-		? inRange
-		: inRange.filter((transaction) => !transaction.transfer_account_id);
+		? postings
+		: postings.filter((posting) => !posting.transfer_account_id);
 	const total = emptyAggregate();
-	for (const transaction of included) {
-		addAmount(total, transaction.amount);
-	}
-
 	const groups = new Map<string, { name: string; aggregate: Aggregate }>();
-	for (const transaction of included) {
-		const entries =
-			groupBy === "category" ? categoryEntries(transaction) : [transaction];
-		for (const entry of entries) {
-			const identity = groupIdentity(entry, groupBy);
-			const existing = groups.get(identity.key) ?? {
-				name: identity.name,
-				aggregate: emptyAggregate(),
-			};
-			addAmount(existing.aggregate, entry.amount);
-			groups.set(identity.key, existing);
-		}
+	for (const posting of included) {
+		addAmount(total, posting.amount, posting.id);
+		const identity = groupIdentity(posting, groupBy);
+		const existing = groups.get(identity.key) ?? {
+			name: identity.name,
+			aggregate: emptyAggregate(),
+		};
+		addAmount(existing.aggregate, posting.amount, posting.id);
+		groups.set(identity.key, existing);
 	}
 
 	return {
@@ -306,10 +262,10 @@ function asResult(data: object): CallToolResult {
 export async function handleAnalyzeSpending(
 	_api: ynab.API,
 	params: z.infer<typeof AnalyzeSpendingSchema>,
-	deps?: HandlerDeltaDeps,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = requireDeltaFetcher(deps, DELTA_FETCHER_REQUIRED);
+	const { deltaFetcher } = deps;
 	try {
 		const data = await analyze(
 			deltaFetcher,
@@ -334,9 +290,13 @@ function difference(
 	right: ReturnType<typeof formatAggregate>,
 ) {
 	return {
-		income: right.income - left.income,
-		spending: right.spending - left.spending,
-		net: right.net - left.net,
+		income: milliunitsToAmount(
+			right.income_milliunits - left.income_milliunits,
+		),
+		spending: milliunitsToAmount(
+			right.spending_milliunits - left.spending_milliunits,
+		),
+		net: milliunitsToAmount(right.net_milliunits - left.net_milliunits),
 		income_milliunits: right.income_milliunits - left.income_milliunits,
 		spending_milliunits: right.spending_milliunits - left.spending_milliunits,
 		net_milliunits: right.net_milliunits - left.net_milliunits,
@@ -347,10 +307,10 @@ function difference(
 export async function handleCompareSpendingPeriods(
 	_api: ynab.API,
 	params: z.infer<typeof CompareSpendingPeriodsSchema>,
-	deps?: HandlerDeltaDeps,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = requireDeltaFetcher(deps, DELTA_FETCHER_REQUIRED);
+	const { deltaFetcher } = deps;
 	try {
 		const budgetId = requireResolvedBudgetId(params.budget_id);
 		const [periodA, periodB] = await Promise.all([

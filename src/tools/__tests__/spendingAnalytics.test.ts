@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { CacheManager } from "../../server/cacheManager.js";
 import type { DeltaFetcher } from "../deltaFetcher.js";
 import {
 	AnalyzeSpendingSchema,
@@ -79,7 +80,10 @@ describe("deterministic spending analytics", () => {
 					group_by: "payee",
 					include_transfers: false,
 				},
-				{ deltaFetcher: fetcher({ "2026-07-02": data }) },
+				{
+					cacheManager: new CacheManager(),
+					deltaFetcher: fetcher({ "2026-07-02": data }),
+				},
 			),
 		);
 		expect(output["totals"]).toEqual(
@@ -127,7 +131,10 @@ describe("deterministic spending analytics", () => {
 					until_date: "2026-07-31",
 					group_by: "category",
 				},
-				{ deltaFetcher: fetcher({ "2026-07-01": [split] }) },
+				{
+					cacheManager: new CacheManager(),
+					deltaFetcher: fetcher({ "2026-07-01": [split] }),
+				},
 			),
 		);
 		expect(output["totals"]).toEqual(
@@ -149,6 +156,7 @@ describe("deterministic spending analytics", () => {
 				group_by: "account",
 			},
 			{
+				cacheManager: new CacheManager(),
 				deltaFetcher: fetcher({
 					"2026-06-01": [transaction({ date: "2026-06-10", amount: -10_000 })],
 					"2026-07-01": [transaction({ date: "2026-07-10", amount: -25_000 })],
@@ -175,12 +183,119 @@ describe("deterministic spending analytics", () => {
 					until_date: "2026-07-31",
 					group_by: "week",
 				},
-				{ deltaFetcher: fetcher({ "2026-07-01": data }) },
+				{
+					cacheManager: new CacheManager(),
+					deltaFetcher: fetcher({ "2026-07-01": data }),
+				},
 			),
 		);
 		expect(weekly["groups"]).toEqual([
 			expect.objectContaining({ key: "2026-07-13" }),
 			expect.objectContaining({ key: "2026-07-06" }),
+		]);
+	});
+	it.each(["category", "payee", "account", "week", "month"] as const)(
+		"excludes split transfer postings when grouping by %s",
+		async (group_by) => {
+			const split = transaction({
+				amount: -100_000,
+				subtransactions: [
+					{
+						id: "food",
+						transaction_id: "transaction-1",
+						amount: -60_000,
+						category_id: "food",
+						category_name: "Food",
+						deleted: false,
+					},
+					{
+						id: "transfer",
+						transaction_id: "transaction-1",
+						amount: -40_000,
+						transfer_account_id: "savings",
+						deleted: false,
+					},
+				],
+			});
+			const output = structured(
+				await handleAnalyzeSpending(
+					{} as ynab.API,
+					{
+						budget_id: "budget",
+						since_date: "2026-07-01",
+						until_date: "2026-07-31",
+						group_by,
+					},
+					{
+						cacheManager: new CacheManager(),
+						deltaFetcher: fetcher({ "2026-07-01": [split] }),
+					},
+				),
+			);
+			expect(output["totals"]).toMatchObject({
+				spending: 60,
+				net: -60,
+				transaction_count: 1,
+			});
+			expect(output["excluded_transfer_count"]).toBe(1);
+			expect(output["groups"]).toEqual([
+				expect.objectContaining({ spending: 60, transaction_count: 1 }),
+			]);
+		},
+	);
+
+	it("uses split payees and keeps mixed-sign totals consistent with group totals", async () => {
+		const split = transaction({
+			amount: -50_000,
+			subtransactions: [
+				{
+					id: "purchase",
+					transaction_id: "transaction-1",
+					amount: -60_000,
+					payee_id: "shop",
+					payee_name: "Shop",
+					deleted: false,
+				},
+				{
+					id: "refund",
+					transaction_id: "transaction-1",
+					amount: 10_000,
+					payee_id: "refund",
+					payee_name: "Refund",
+					deleted: false,
+				},
+				{
+					id: "deleted",
+					transaction_id: "transaction-1",
+					amount: -999_000,
+					deleted: true,
+				},
+			],
+		});
+		const output = structured(
+			await handleAnalyzeSpending(
+				{} as ynab.API,
+				{
+					budget_id: "budget",
+					since_date: "2026-07-01",
+					until_date: "2026-07-31",
+					group_by: "payee",
+				},
+				{
+					cacheManager: new CacheManager(),
+					deltaFetcher: fetcher({ "2026-07-01": [split] }),
+				},
+			),
+		);
+		expect(output["totals"]).toMatchObject({
+			spending: 60,
+			income: 10,
+			net: -50,
+			transaction_count: 1,
+		});
+		expect(output["groups"]).toEqual([
+			expect.objectContaining({ key: "shop", spending: 60 }),
+			expect.objectContaining({ key: "refund", income: 10 }),
 		]);
 	});
 });

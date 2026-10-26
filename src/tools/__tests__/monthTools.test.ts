@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
 import {
 	GetMonthSchema,
@@ -13,16 +14,16 @@ import {
 } from "./deltaTestUtils.js";
 
 // Mock the cache manager
+const cacheManager = vi.hoisted(() => ({
+	wrap: vi.fn(),
+	has: vi.fn(),
+	delete: vi.fn(),
+	deleteMany: vi.fn(),
+	deleteByPrefix: vi.fn(),
+	deleteByBudgetId: vi.fn(),
+	clear: vi.fn(),
+}));
 vi.mock("../../server/cacheManager.js", () => ({
-	cacheManager: {
-		wrap: vi.fn(),
-		has: vi.fn(),
-		delete: vi.fn(),
-		deleteMany: vi.fn(),
-		deleteByPrefix: vi.fn(),
-		deleteByBudgetId: vi.fn(),
-		clear: vi.fn(),
-	},
 	CacheManager: {
 		generateKey: vi.fn(),
 	},
@@ -40,7 +41,7 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { cacheManager, CacheManager, CACHE_TTLS } = await import(
+const { CacheManager, CACHE_TTLS } = await import(
 	"../../server/cacheManager.js"
 );
 
@@ -85,11 +86,15 @@ describe("Month Tools", () => {
 				data: { month: mockMonth },
 			});
 
-			const result = await handleGetMonth(mockYnabAPI, {
-				budget_id: "budget-1",
-				month: "2024-01-01",
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					month: "2024-01-01",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			// Verify the mock cache was called (and bypassed to call the loader)
 			expect(cacheManager.wrap).toHaveBeenCalled();
@@ -124,11 +129,15 @@ describe("Month Tools", () => {
 			(cacheManager.wrap as any).mockResolvedValue(mockMonth);
 			(cacheManager.has as any).mockReturnValue(true);
 
-			const result = await handleGetMonth(mockYnabAPI, {
-				budget_id: "budget-1",
-				month: "2024-01-01",
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					month: "2024-01-01",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(true);
@@ -193,11 +202,15 @@ describe("Month Tools", () => {
 				data: { month: mockMonth },
 			});
 
-			const result = await handleGetMonth(mockYnabAPI, {
-				budget_id: "budget-1",
-				month: "2024-01-01",
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					month: "2024-01-01",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -219,11 +232,15 @@ describe("Month Tools", () => {
 				new Error("401 Unauthorized"),
 			);
 
-			const result = await handleGetMonth(mockYnabAPI, {
-				budget_id: "budget-1",
-				month: "2024-01-01",
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					month: "2024-01-01",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -237,11 +254,15 @@ describe("Month Tools", () => {
 				new Error("403 Forbidden"),
 			);
 
-			const result = await handleGetMonth(mockYnabAPI, {
-				budget_id: "budget-1",
-				month: "2024-01-01",
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					month: "2024-01-01",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -255,11 +276,15 @@ describe("Month Tools", () => {
 				new Error("404 Not Found"),
 			);
 
-			const result = await handleGetMonth(mockYnabAPI, {
-				budget_id: "invalid-budget",
-				month: "2024-01-01",
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				mockYnabAPI,
+				{
+					budget_id: "invalid-budget",
+					month: "2024-01-01",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -271,11 +296,15 @@ describe("Month Tools", () => {
 				new Error("429 Too Many Requests"),
 			);
 
-			const result = await handleGetMonth(mockYnabAPI, {
-				budget_id: "budget-1",
-				month: "2024-01-01",
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					month: "2024-01-01",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -289,11 +318,15 @@ describe("Month Tools", () => {
 				new Error("500 Internal Server Error"),
 			);
 
-			const result = await handleGetMonth(mockYnabAPI, {
-				budget_id: "budget-1",
-				month: "2024-01-01",
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					month: "2024-01-01",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -307,11 +340,15 @@ describe("Month Tools", () => {
 				new Error("Network error"),
 			);
 
-			const result = await handleGetMonth(mockYnabAPI, {
-				budget_id: "budget-1",
-				month: "2024-01-01",
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					month: "2024-01-01",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -345,7 +382,10 @@ describe("Month Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -376,10 +416,14 @@ describe("Month Tools", () => {
 			(cacheManager.wrap as any).mockResolvedValue(mockMonths);
 			(cacheManager.has as any).mockReturnValue(true);
 
-			const result = await handleListMonths(mockYnabAPI, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListMonths(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(true);
@@ -437,7 +481,10 @@ describe("Month Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -484,7 +531,10 @@ describe("Month Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -506,7 +556,10 @@ describe("Month Tools", () => {
 					budget_id: "invalid-budget",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -519,10 +572,14 @@ describe("Month Tools", () => {
 				new Error("Network error"),
 			);
 
-			const result = await handleListMonths(mockYnabAPI, {
-				budget_id: "budget-1",
-				response_format: "json",
-			});
+			const result = await handleListMonths(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));

@@ -2,11 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import { CacheKeys } from "../server/cacheKeys.js";
-import {
-	CACHE_TTLS,
-	CacheManager,
-	cacheManager,
-} from "../server/cacheManager.js";
+import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import {
 	formatMonthDetail,
@@ -14,7 +10,7 @@ import {
 } from "../server/markdownFormatter.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
-import type { ToolFactory } from "../types/toolRegistration.js";
+import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import { getMonthCompat } from "../utils/ynabApiCompat.js";
 import {
@@ -22,10 +18,6 @@ import {
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import {
-	type DeltaFetcherDeps,
-	resolveDeltaFetcherDeps,
-} from "./deltaSupport.js";
 import {
 	GetMonthOutputSchema,
 	ListMonthsOutputSchema,
@@ -74,8 +66,10 @@ export type ListMonthsParams = z.infer<typeof ListMonthsSchema>;
 export async function handleGetMonth(
 	ynabAPI: ynab.API,
 	params: GetMonthParams,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
+	const { cacheManager } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -167,12 +161,12 @@ export async function handleGetMonth(
  * Lists all months summary data for a budget
  */
 export async function handleListMonths(
-	ynabAPI: ynab.API,
+	_ynabAPI: ynab.API,
 	params: ListMonthsParams,
-	deps?: DeltaFetcherDeps,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
+	const { deltaFetcher } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -234,7 +228,7 @@ export async function handleListMonths(
  * Registers all month-related tools with the registry.
  */
 export const registerMonthTools: ToolFactory = (registry, context) => {
-	const { adapt, adaptWithDelta } = createAdapters(context);
+	const { adaptWithDelta } = createAdapters(context);
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
@@ -255,7 +249,7 @@ Errors:
   - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: GetMonthSchema,
 		outputSchema: GetMonthOutputSchema,
-		handler: adapt(handleGetMonth),
+		handler: adaptWithDelta(handleGetMonth),
 		defaultArgumentResolver: budgetResolver<z.infer<typeof GetMonthSchema>>(),
 		metadata: {
 			annotations: {

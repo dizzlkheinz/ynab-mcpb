@@ -1,28 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
 import {
 	GetBudgetSchema,
 	handleGetBudget,
 	handleListBudgets,
 } from "../budgetTools.js";
-import { setSharedDeltaSupport } from "../deltaSupport.js";
 import {
 	createDeltaFetcherMock,
 	createRejectingDeltaFetcherMock,
 } from "./deltaTestUtils.js";
 
 // Mock the cache manager
+const cacheManager = vi.hoisted(() => ({
+	wrap: vi.fn(),
+	has: vi.fn(),
+	delete: vi.fn(),
+	deleteMany: vi.fn(),
+	deleteByPrefix: vi.fn(),
+	deleteByBudgetId: vi.fn(),
+	clear: vi.fn(),
+}));
 vi.mock("../../server/cacheManager.js", () => ({
-	cacheManager: {
-		wrap: vi.fn(),
-		has: vi.fn(),
-		delete: vi.fn(),
-		deleteMany: vi.fn(),
-		deleteByPrefix: vi.fn(),
-		deleteByBudgetId: vi.fn(),
-		clear: vi.fn(),
-	},
 	CacheManager: {
 		generateKey: vi.fn(),
 	},
@@ -40,12 +40,10 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { cacheManager } = await import("../../server/cacheManager.js");
 
 describe("Budget Tools", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		setSharedDeltaSupport();
 		// Reset NODE_ENV to test to ensure cache bypassing in tests
 		process.env["NODE_ENV"] = "test";
 	});
@@ -74,7 +72,10 @@ describe("Budget Tools", () => {
 				{
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -113,7 +114,10 @@ describe("Budget Tools", () => {
 				{
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -125,7 +129,7 @@ describe("Budget Tools", () => {
 			);
 		});
 
-		it("respects response_format with the legacy two-argument signature", async () => {
+		it("respects response_format with explicitly injected dependencies", async () => {
 			const mockBudgets = [
 				{
 					id: "budget-1",
@@ -140,11 +144,14 @@ describe("Budget Tools", () => {
 			const { fetcher } = createDeltaFetcherMock("fetchBudgets", {
 				data: mockBudgets,
 			});
-			setSharedDeltaSupport({ deltaFetcher: fetcher });
 
-			const result = await handleListBudgets(mockYnabAPI, {
-				response_format: "json",
-			});
+			const result = await handleListBudgets(
+				mockYnabAPI,
+				{
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager, deltaFetcher: fetcher }),
+			);
 
 			expect(() => JSON.parse(textOf(result.content[0]))).not.toThrow();
 			expect(JSON.parse(textOf(result.content[0])).budgets).toHaveLength(1);
@@ -161,7 +168,10 @@ describe("Budget Tools", () => {
 				{
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);

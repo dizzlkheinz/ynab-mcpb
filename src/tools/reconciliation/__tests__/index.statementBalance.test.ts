@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { CacheManager } from "../../../server/cacheManager.js";
 import { toMoneyValue } from "../../../utils/money.js";
 import { DeltaFetcher } from "../../deltaFetcher.js";
 import type { ReconciliationAnalysis } from "../types.js";
@@ -111,7 +112,7 @@ describe("handleReconcileAccount statement balance handling", () => {
 				auto_adjust_dates: false,
 				dry_run: true,
 			}),
-			{ deltaFetcher: deltaFetcher },
+			{ cacheManager: new CacheManager(), deltaFetcher: deltaFetcher },
 		);
 
 		expect(analyzerMocks.analyzeReconciliation).toHaveBeenCalled();

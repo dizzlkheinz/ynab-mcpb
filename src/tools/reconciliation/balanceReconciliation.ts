@@ -25,10 +25,17 @@ export async function buildBalanceReconciliation(args: {
 		accountId,
 		statementDate,
 	);
+	return balanceResult(statementBalanceMilli, ynabMilli, decimalDigits);
+}
+
+/** The same balance calculation is used for projections and verified execution. */
+export function balanceResult(
+	statementBalanceMilli: number,
+	ynabMilli: number,
+	decimalDigits = 2,
+) {
 	const bankMilli = statementBalanceMilli;
 	const discrepancy = bankMilli - ynabMilli;
-	const status =
-		discrepancy === 0 ? "PERFECTLY_RECONCILED" : "DISCREPANCY_FOUND";
 
 	const precisionCalculations = {
 		bank_statement_balance_milliunits: bankMilli,
@@ -42,7 +49,7 @@ export async function buildBalanceReconciliation(args: {
 		discrepancy === 0 ? undefined : buildLikelyCauses(discrepancy);
 
 	const result: {
-		status: string;
+		status: "balanced" | "unbalanced";
 		precision_calculations: typeof precisionCalculations;
 		discrepancy_analysis?: ReturnType<typeof buildLikelyCauses>;
 		final_verification: {
@@ -52,13 +59,14 @@ export async function buildBalanceReconciliation(args: {
 			reconciliation_complete: boolean;
 		};
 	} = {
-		status,
+		status: discrepancy === 0 ? "balanced" : "unbalanced",
 		precision_calculations: precisionCalculations,
 		final_verification: {
 			balance_matches_exactly: discrepancy === 0,
-			all_transactions_accounted: discrepancy === 0,
-			audit_trail_complete: discrepancy === 0,
-			reconciliation_complete: discrepancy === 0,
+			// Equal balances alone do not prove every transaction was accounted for.
+			all_transactions_accounted: false,
+			audit_trail_complete: false,
+			reconciliation_complete: false,
 		},
 	};
 
@@ -82,6 +90,7 @@ async function clearedBalanceAsOf(
 	const asOf = new Date(dateISO);
 	const cleared = response.data.transactions.filter(
 		(txn) =>
+			!txn.deleted &&
 			(txn.cleared === "cleared" || txn.cleared === "reconciled") &&
 			new Date(txn.date) <= asOf,
 	);

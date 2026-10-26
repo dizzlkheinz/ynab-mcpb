@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod/v4";
 import { textOf } from "../../__tests__/testUtils.js";
-import { globalRateLimiter, RateLimiter } from "../rateLimiter.js";
+import { RateLimiter } from "../rateLimiter.js";
 import { globalRequestLogger, RequestLogger } from "../requestLogger.js";
 import { SecurityMiddleware } from "../securityMiddleware.js";
 
@@ -20,14 +20,6 @@ describe("Security Integration", () => {
 		// Reset all security components
 		SecurityMiddleware.reset();
 
-		// Configure rate limiter for testing
-		// No public setter; the test narrows the private limits directly
-		Reflect.set(globalRateLimiter, "config", {
-			maxRequests: 3,
-			windowMs: 1000,
-			enableLogging: false,
-		});
-
 		// Pin the logger config so console-output assertions do not depend
 		// on ambient LOG_LEVEL/NODE_ENV values
 		globalRequestLogger.setConfig({ enabled: true, logLevel: "info" });
@@ -38,9 +30,7 @@ describe("Security Integration", () => {
 	});
 
 	describe("end-to-end security flow", () => {
-		it("should handle a complete successful request flow", {
-			meta: { tier: "domain", domain: "security" },
-		}, async () => {
+		it("should handle a complete successful request flow", async () => {
 			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
 				// Mock implementation for testing
 			});
@@ -81,8 +71,8 @@ describe("Security Integration", () => {
 			expect(logs[0]!.parameters["budget_id"]).toBe("test-budget-123");
 			expect(logs[0]!.parameters["amount"]).toBe(1000);
 
-			// Verify rate limiting is tracking
-			expect(logs[0]!.rateLimitInfo!.remaining).toBe(2); // Started with 3, used 1
+			// API accounting belongs to the transport, not the tool logger.
+			expect(logs[0]!.rateLimitInfo).toBeUndefined();
 
 			// Verify console logging (should show success)
 			expect(consoleSpy).toHaveBeenCalledWith(
@@ -97,9 +87,7 @@ describe("Security Integration", () => {
 			consoleSpy.mockRestore();
 		});
 
-		it("should handle validation failures with proper logging", {
-			meta: { tier: "domain", domain: "security" },
-		}, async () => {
+		it("should handle validation failures with proper logging", async () => {
 			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
 				// Mock implementation for testing
 			});
@@ -142,69 +130,35 @@ describe("Security Integration", () => {
 			consoleSpy.mockRestore();
 		});
 
-		it("should handle rate limiting with proper responses and logging", {
-			meta: { tier: "domain", domain: "security" },
-		}, async () => {
-			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
-				// Mock implementation for testing
-			});
-
+		it("logs local requests beyond the YNAB hourly quota without blocking", async () => {
+			vi.spyOn(console, "error").mockImplementation(() => {});
 			const context = {
 				accessToken: testAccessToken,
-				toolName: "ynab:list_budgets",
-				operation: "listing budgets",
+				toolName: "ynab:get_default_budget",
+				operation: "get default budget",
 				parameters: { budget_id: "test-budget" },
 				startTime: Date.now(),
 			};
-
-			const mockOperation = vi.fn().mockResolvedValue({
+			const operation = vi.fn().mockResolvedValue({
 				content: [{ type: "text", text: "Success" }],
 			});
-
-			// Make requests up to the limit (3)
-			await SecurityMiddleware.withSecurity(context, testSchema, mockOperation);
-			await SecurityMiddleware.withSecurity(context, testSchema, mockOperation);
-			await SecurityMiddleware.withSecurity(context, testSchema, mockOperation);
-
-			// Fourth request should be rate limited
-			const result = await SecurityMiddleware.withSecurity(
-				context,
-				testSchema,
-				mockOperation,
-			);
-
-			// Verify rate limit response
-			const responseText = JSON.parse(textOf(result.content[0]));
-			expect(responseText.error.code).toBe("RATE_LIMIT_EXCEEDED");
-			expect(responseText.error.message).toContain("Rate limit exceeded");
-			expect(responseText.error.details.resetTime).toBeDefined();
-			expect(responseText.error.details.remaining).toBe(0);
-
-			// Verify all requests were logged
-			const logs = globalRequestLogger.getRecentLogs(4);
-			expect(logs).toHaveLength(4);
-
-			// First 3 should be successful
-			expect(logs[0]!.success).toBe(true);
-			expect(logs[1]!.success).toBe(true);
-			expect(logs[2]!.success).toBe(true);
-
-			// Fourth should be failed due to rate limiting
-			expect(logs[3]!.success).toBe(false);
-			expect(logs[3]!.error).toContain("Rate limit exceeded");
-
-			// Verify rate limit info progression
-			expect(logs[0]!.rateLimitInfo!.remaining).toBe(2);
-			expect(logs[1]!.rateLimitInfo!.remaining).toBe(1);
-			expect(logs[2]!.rateLimitInfo!.remaining).toBe(0);
-			expect(logs[3]!.rateLimitInfo!.isLimited).toBe(true);
-
-			consoleSpy.mockRestore();
+			for (let i = 0; i < 201; i++) {
+				const result = await SecurityMiddleware.withSecurity(
+					context,
+					testSchema,
+					operation,
+				);
+				expect(result.isError).not.toBe(true);
+			}
+			expect(operation).toHaveBeenCalledTimes(201);
+			const logs = globalRequestLogger.getRecentLogs(201);
+			expect(logs).toHaveLength(201);
+			expect(
+				logs.every((log) => log.success && log.rateLimitInfo === undefined),
+			).toBe(true);
 		});
 
-		it("should sanitize sensitive data in logs", {
-			meta: { tier: "domain", domain: "security" },
-		}, async () => {
+		it("should sanitize sensitive data in logs", async () => {
 			const context = {
 				accessToken: testAccessToken,
 				toolName: "ynab:create_transaction",
@@ -245,9 +199,7 @@ describe("Security Integration", () => {
 			expect(loggedParams["api_key"]).toBe("***"); // Sensitive parameter name sanitized
 		});
 
-		it("should handle multiple users with independent rate limits", {
-			meta: { tier: "domain", domain: "security" },
-		}, async () => {
+		it("keeps request logs for separate users without consuming API quota", async () => {
 			const token1 = "user-1-token";
 			const token2 = "user-2-token";
 
@@ -271,7 +223,7 @@ describe("Security Integration", () => {
 				content: [{ type: "text", text: "Success" }],
 			});
 
-			// Max out user 1's rate limit
+			// Exercise repeated local calls for the first user.
 			await SecurityMiddleware.withSecurity(
 				context1,
 				testSchema,
@@ -288,14 +240,13 @@ describe("Security Integration", () => {
 				mockOperation,
 			);
 
-			// User 1 should be rate limited
+			// Repeated local calls remain successful.
 			const user1Result = await SecurityMiddleware.withSecurity(
 				context1,
 				testSchema,
 				mockOperation,
 			);
-			const user1Response = JSON.parse(textOf(user1Result.content[0]));
-			expect(user1Response.error.code).toBe("RATE_LIMIT_EXCEEDED");
+			expect(textOf(user1Result.content[0])).toBe("Success");
 
 			// User 2 should still be allowed
 			const user2Result = await SecurityMiddleware.withSecurity(
@@ -314,16 +265,14 @@ describe("Security Integration", () => {
 				(log) => log.parameters["budget_id"] === "budget-2",
 			);
 
-			expect(user1Logs).toHaveLength(4); // 3 successful + 1 rate limited
+			expect(user1Logs).toHaveLength(4);
 			expect(user2Logs).toHaveLength(1); // 1 successful
 
-			// User 2 should have full rate limit remaining
-			expect(user2Logs[0]!.rateLimitInfo!.remaining).toBe(2);
+			expect(user1Logs.every((log) => log.success)).toBe(true);
+			expect(user2Logs[0]!.rateLimitInfo).toBeUndefined();
 		});
 
-		it("should provide comprehensive security statistics", {
-			meta: { tier: "domain", domain: "security" },
-		}, async () => {
+		it("should provide comprehensive security statistics", async () => {
 			const context = {
 				accessToken: testAccessToken,
 				toolName: "ynab:test",
@@ -376,9 +325,7 @@ describe("Security Integration", () => {
 	});
 
 	describe("performance under load", () => {
-		it("should handle rapid requests efficiently", {
-			meta: { tier: "domain", domain: "security" },
-		}, async () => {
+		it("should handle rapid requests efficiently", async () => {
 			const context = {
 				accessToken: testAccessToken,
 				toolName: "ynab:performance_test",
@@ -419,9 +366,7 @@ describe("Security Integration", () => {
 	});
 
 	describe("cleanup and maintenance", () => {
-		it("should clean up expired rate limit entries", {
-			meta: { tier: "domain", domain: "security" },
-		}, async () => {
+		it("should clean up expired rate limit entries", async () => {
 			// Use a very short window for testing
 			const testLimiter = new RateLimiter({
 				maxRequests: 5,
@@ -447,9 +392,7 @@ describe("Security Integration", () => {
 			expect(testLimiter.getStatus(testToken).remaining).toBe(5);
 		});
 
-		it("should maintain log size limits", {
-			meta: { tier: "domain", domain: "security" },
-		}, async () => {
+		it("should maintain log size limits", async () => {
 			const testLogger = new RequestLogger({ maxLogEntries: 2 });
 
 			// Add more logs than the limit

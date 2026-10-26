@@ -70,7 +70,6 @@ export class CacheManager {
 			}
 
 			this.cache.delete(key);
-			this.pendingFetches.delete(key);
 			this.pendingRefresh.delete(key);
 			this.misses++;
 			return null;
@@ -101,7 +100,6 @@ export class CacheManager {
 			}
 
 			this.cache.delete(key);
-			this.pendingFetches.delete(key);
 			this.pendingRefresh.delete(key);
 			return false;
 		}
@@ -183,10 +181,10 @@ export class CacheManager {
 	 */
 	delete(key: string): boolean {
 		const deleted = this.cache.delete(key);
-		if (deleted) {
-			this.pendingFetches.delete(key);
-			this.pendingRefresh.delete(key);
-		}
+		// A first load may still be pending without a cached entry. Removing its
+		// identity also prevents that older read from publishing after a write.
+		this.pendingFetches.delete(key);
+		this.pendingRefresh.delete(key);
 		return deleted;
 	}
 
@@ -219,7 +217,10 @@ export class CacheManager {
 		const prefixWithColon = `${normalizedPrefix}:`;
 
 		let removed = 0;
-		for (const key of this.cache.keys()) {
+		for (const key of new Set([
+			...this.cache.keys(),
+			...this.pendingFetches.keys(),
+		])) {
 			if (key === normalizedPrefix || key.startsWith(prefixWithColon)) {
 				this.cache.delete(key);
 				this.pendingFetches.delete(key);
@@ -242,7 +243,10 @@ export class CacheManager {
 		}
 
 		let removed = 0;
-		for (const key of this.cache.keys()) {
+		for (const key of new Set([
+			...this.cache.keys(),
+			...this.pendingFetches.keys(),
+		])) {
 			const segments = key.split(":");
 			if (segments.some((segment) => segment === budgetId)) {
 				this.cache.delete(key);
@@ -261,6 +265,11 @@ export class CacheManager {
 	 */
 	getKeys(): string[] {
 		return Array.from(this.cache.keys());
+	}
+
+	/** Retain an expired snapshot for a delta refresh without serving it as fresh. */
+	peek<T>(key: string): T | undefined {
+		return this.cache.get(key)?.data as T | undefined;
 	}
 
 	/**
@@ -366,7 +375,6 @@ export class CacheManager {
 		for (const [key, entry] of this.cache.entries()) {
 			if (now - entry.timestamp > entry.ttl) {
 				this.cache.delete(key);
-				this.pendingFetches.delete(key);
 				this.pendingRefresh.delete(key);
 				cleaned++;
 				this.evictions++;
@@ -388,13 +396,14 @@ export class CacheManager {
 	): Promise<T> {
 		const existingEntry = this.cache.get(key);
 		const cached = this.get<T>(key);
-		// Convert synchronous loader throws into rejections before registering the fetch.
-		const load = async () => options.loader();
 		if (cached !== null) {
 			if (this.pendingRefresh.has(key) && !this.pendingFetches.has(key)) {
 				const refreshOptions = this.getRefreshOptions(options, existingEntry);
-				const refreshPromise = this.loadAndCache(key, load(), refreshOptions);
-				this.pendingFetches.set(key, refreshPromise);
+				const refreshPromise = this.loadAndCache(
+					key,
+					options.loader,
+					refreshOptions,
+				);
 				void this.observeBackgroundRefresh(refreshPromise);
 			}
 			return cached;
@@ -407,9 +416,7 @@ export class CacheManager {
 			return existingFetch;
 		}
 
-		const fetchPromise = this.loadAndCache(key, load(), options);
-		this.pendingFetches.set(key, fetchPromise);
-		return fetchPromise;
+		return this.loadAndCache(key, options.loader, options);
 	}
 
 	/** Preserve the entry's TTL and stale window when refresh options omit them. */
@@ -427,19 +434,34 @@ export class CacheManager {
 	}
 
 	/** Cache only successful loads and release pending state on either outcome. */
-	private async loadAndCache<T>(
+	private loadAndCache<T>(
 		key: string,
-		loading: Promise<T>,
+		loader: () => Promise<T>,
 		options: CacheSetOptions,
 	): Promise<T> {
+		let loading: Promise<T>;
 		try {
-			const result = await loading;
-			this.set(key, result, options);
-			return result;
-		} finally {
-			this.pendingFetches.delete(key);
-			this.pendingRefresh.delete(key);
+			loading = loader();
+		} catch (error) {
+			loading = Promise.reject(error);
 		}
+		const pending = loading
+			.then((result) => {
+				if (this.pendingFetches.get(key) === pending) {
+					this.set(key, result, options);
+				}
+				return result;
+			})
+			.finally(() => {
+				// A newer read may have started after invalidation. The older read
+				// must neither publish its result nor release the newer read's lock.
+				if (this.pendingFetches.get(key) === pending) {
+					this.pendingFetches.delete(key);
+					this.pendingRefresh.delete(key);
+				}
+			});
+		this.pendingFetches.set(key, pending);
+		return pending;
 	}
 
 	/** Observe a detached refresh so its rejection cannot escape to the process. */
@@ -512,6 +534,3 @@ export const CACHE_TTLS = {
 	USER_INFO: 30 * 60 * 1000, // 30 minutes - user info rarely changes
 	MONTHS: 5 * 60 * 1000, // 5 minutes - month data changes with new transactions
 } as const;
-
-// Singleton cache manager instance
-export const cacheManager = new CacheManager();

@@ -5,11 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod/v4";
 import { textOf } from "../../__tests__/testUtils.js";
-import {
-	globalRateLimiter,
-	RateLimitError,
-	RateLimiter,
-} from "../rateLimiter.js";
+import { RateLimitError } from "../rateLimiter.js";
 import { globalRequestLogger } from "../requestLogger.js";
 import {
 	type SecurityContext,
@@ -85,65 +81,24 @@ describe("SecurityMiddleware", () => {
 			expect(responseText.error.message).toContain("Invalid parameters");
 		});
 
-		it("should enforce rate limiting", async () => {
-			// Create a test rate limiter with small limits
-			const testLimiter = new RateLimiter({
-				maxRequests: 2,
-				windowMs: 1000,
-				enableLogging: false,
-			});
-
-			// Mock the global rate limiter
-			const originalIsAllowed = globalRateLimiter.isAllowed;
-			const originalRecordRequest = globalRateLimiter.recordRequest;
-			const originalGetStatus = globalRateLimiter.getStatus;
-
-			globalRateLimiter.isAllowed = testLimiter.isAllowed.bind(testLimiter);
-			globalRateLimiter.recordRequest =
-				testLimiter.recordRequest.bind(testLimiter);
-			globalRateLimiter.getStatus = testLimiter.getStatus.bind(testLimiter);
-
+		it("does not charge local tool operations against the API quota", async () => {
 			const context: SecurityContext = {
 				accessToken: testAccessToken,
-				toolName: "ynab:test",
-				operation: "test operation",
+				toolName: "ynab:get_default_budget",
+				operation: "get default budget",
 				parameters: { budget_id: "test-budget" },
 				startTime: Date.now(),
 			};
-
-			const mockOperation = vi.fn().mockResolvedValue({
+			const operation = vi.fn().mockResolvedValue({
 				content: [{ type: "text", text: "Success" }],
 			});
-
-			try {
-				// First two requests should succeed
-				await SecurityMiddleware.withSecurity(
-					context,
-					testSchema,
-					mockOperation,
-				);
-				await SecurityMiddleware.withSecurity(
-					context,
-					testSchema,
-					mockOperation,
-				);
-
-				// Third request should be rate limited
-				const result = await SecurityMiddleware.withSecurity(
-					context,
-					testSchema,
-					mockOperation,
-				);
-
-				const responseText = JSON.parse(textOf(result.content[0]));
-				expect(responseText.error.code).toBe("RATE_LIMIT_EXCEEDED");
-				expect(responseText.error.message).toContain("Rate limit exceeded");
-			} finally {
-				// Restore original methods
-				globalRateLimiter.isAllowed = originalIsAllowed;
-				globalRateLimiter.recordRequest = originalRecordRequest;
-				globalRateLimiter.getStatus = originalGetStatus;
-			}
+			const results = await Promise.all(
+				Array.from({ length: 201 }, () =>
+					SecurityMiddleware.withSecurity(context, testSchema, operation),
+				),
+			);
+			expect(operation).toHaveBeenCalledTimes(201);
+			expect(results.every((result) => !result.isError)).toBe(true);
 		});
 
 		it("should log successful requests", async () => {
@@ -198,7 +153,7 @@ describe("SecurityMiddleware", () => {
 			expect(logs[0]!.error).toBe("Test error");
 		});
 
-		it("should handle rate limit errors specially", async () => {
+		it("logs transport rate errors and preserves them for the registry", async () => {
 			const context: SecurityContext = {
 				accessToken: testAccessToken,
 				toolName: "ynab:test",
@@ -206,26 +161,21 @@ describe("SecurityMiddleware", () => {
 				parameters: { budget_id: "test-budget" },
 				startTime: Date.now(),
 			};
-
-			const mockOperation = vi
-				.fn()
-				.mockRejectedValue(
-					new RateLimitError("Rate limit exceeded", new Date(), 0),
-				);
-
-			const result = await SecurityMiddleware.withSecurity(
-				context,
-				testSchema,
-				mockOperation,
-			);
-
-			const responseText = JSON.parse(textOf(result.content[0]));
-			expect(responseText.error.code).toBe("RATE_LIMIT_EXCEEDED");
-			expect(responseText.error.details.resetTime).toBeDefined();
-			expect(responseText.error.details.remaining).toBe(0);
+			const error = new RateLimitError("Rate limit exceeded", new Date(), 0);
+			await expect(
+				SecurityMiddleware.withSecurity(
+					context,
+					testSchema,
+					vi.fn().mockRejectedValue(error),
+				),
+			).rejects.toBe(error);
+			expect(globalRequestLogger.getRecentLogs(1)[0]).toMatchObject({
+				success: false,
+				error: "Rate limit exceeded",
+			});
 		});
 
-		it("should include rate limit info in logs", async () => {
+		it("does not invent API quota information for tool logs", async () => {
 			const context: SecurityContext = {
 				accessToken: testAccessToken,
 				toolName: "ynab:test",
@@ -242,9 +192,7 @@ describe("SecurityMiddleware", () => {
 
 			const logs = globalRequestLogger.getRecentLogs(1);
 
-			expect(logs[0]!.rateLimitInfo).toBeDefined();
-			expect(logs[0]!.rateLimitInfo!.remaining).toBeGreaterThanOrEqual(0);
-			expect(typeof logs[0]!.rateLimitInfo!.isLimited).toBe("boolean");
+			expect(logs[0]!.rateLimitInfo).toBeUndefined();
 		});
 	});
 
@@ -313,88 +261,6 @@ describe("SecurityMiddleware", () => {
 			expect(mockOperation).toHaveBeenCalledWith({
 				budget_id: "test-budget",
 			});
-		});
-	});
-
-	describe("token hashing", () => {
-		it("should use consistent hashing for the same token", async () => {
-			const context1: SecurityContext = {
-				accessToken: "same-token",
-				toolName: "ynab:test1",
-				operation: "test",
-				parameters: { budget_id: "test" },
-				startTime: Date.now(),
-			};
-
-			const context2: SecurityContext = {
-				accessToken: "same-token",
-				toolName: "ynab:test2",
-				operation: "test",
-				parameters: { budget_id: "test" },
-				startTime: Date.now(),
-			};
-
-			const mockOperation = vi.fn().mockResolvedValue({
-				content: [{ type: "text", text: "Success" }],
-			});
-
-			await SecurityMiddleware.withSecurity(
-				context1,
-				testSchema,
-				mockOperation,
-			);
-			await SecurityMiddleware.withSecurity(
-				context2,
-				testSchema,
-				mockOperation,
-			);
-
-			const logs = globalRequestLogger.getRecentLogs(2);
-
-			// Both requests should affect the same rate limit counter
-			expect(logs[0]!.rateLimitInfo!.remaining).toBe(
-				logs[1]!.rateLimitInfo!.remaining + 1,
-			);
-		});
-
-		it("should use different hashing for different tokens", async () => {
-			const context1: SecurityContext = {
-				accessToken: "token-1",
-				toolName: "ynab:test",
-				operation: "test",
-				parameters: { budget_id: "test" },
-				startTime: Date.now(),
-			};
-
-			const context2: SecurityContext = {
-				accessToken: "token-2",
-				toolName: "ynab:test",
-				operation: "test",
-				parameters: { budget_id: "test" },
-				startTime: Date.now(),
-			};
-
-			const mockOperation = vi.fn().mockResolvedValue({
-				content: [{ type: "text", text: "Success" }],
-			});
-
-			await SecurityMiddleware.withSecurity(
-				context1,
-				testSchema,
-				mockOperation,
-			);
-			await SecurityMiddleware.withSecurity(
-				context2,
-				testSchema,
-				mockOperation,
-			);
-
-			const logs = globalRequestLogger.getRecentLogs(2);
-
-			// Different tokens should have independent rate limit counters
-			expect(logs[0]!.rateLimitInfo!.remaining).toBe(
-				logs[1]!.rateLimitInfo!.remaining,
-			);
 		});
 	});
 

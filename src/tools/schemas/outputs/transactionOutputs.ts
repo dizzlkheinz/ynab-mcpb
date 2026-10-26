@@ -95,99 +95,16 @@ import {
 	PaginationMetadataSchema,
 } from "../shared/commonOutputs.js";
 
-/**
- * Schema for a complete transaction object.
- *
- * Represents full transaction data with amounts in dollars (converted from YNAB milliunits).
- */
-export const TransactionSchema = z.object({
-	/** Unique identifier for the transaction */
-	id: z.string().describe("Transaction ID"),
+export { TransactionOutputSchema as TransactionSchema } from "../../transactionModel.js";
 
-	/** Transaction date (YYYY-MM-DD format) */
-	date: z.string().describe("Transaction date"),
+import { TransactionOutputSchema as TransactionSchema } from "../../transactionModel.js";
 
-	/** Transaction amount in dollars (negative for outflows, positive for inflows) */
-	amount: z.number().describe("Transaction amount in dollars"),
-
-	/** Optional transaction memo */
-	memo: z.string().optional().describe("Transaction memo"),
-
-	/** Cleared status (uncleared, cleared, reconciled) */
-	cleared: z.string().describe("Cleared status"),
-
-	/** Whether transaction is approved */
-	approved: z.boolean().describe("Approved flag"),
-
-	/** Optional flag color */
-	flag_color: z.string().optional().describe("Flag color"),
-
-	/** Account ID for this transaction */
-	account_id: z.string().describe("Account ID"),
-
-	/** Optional payee ID */
-	payee_id: z.string().nullish().describe("Payee ID"),
-
-	/** Optional category ID */
-	category_id: z.string().nullish().describe("Category ID"),
-
-	/** Optional transfer account ID (for transfer transactions) */
-	transfer_account_id: z.string().nullish().describe("Transfer account ID"),
-
-	/** Optional transfer transaction ID (for transfer transactions) */
-	transfer_transaction_id: z
-		.string()
-		.nullish()
-		.describe("Transfer transaction ID"),
-
-	/** Optional matched transaction ID (for imported transactions) */
-	matched_transaction_id: z
-		.string()
-		.nullish()
-		.describe("Matched transaction ID"),
-
-	/** Optional import ID */
-	import_id: z.string().optional().describe("Import ID"),
-
-	/** Whether transaction is deleted */
-	deleted: z.boolean().describe("Deleted flag"),
-
-	/** Account name (enriched field, optional) */
-	account_name: z.string().optional().describe("Account name"),
-
-	/** Payee name (enriched field, optional) */
-	payee_name: z.string().optional().describe("Payee name"),
-
-	/** Category name (enriched field, optional) */
-	category_name: z.string().optional().describe("Category name"),
-});
-
-/**
- * Schema for a transaction preview object.
- *
- * Subset of transaction fields shown in preview mode for large result sets.
- */
-export const TransactionPreviewSchema = z.object({
-	/** Unique identifier for the transaction */
-	id: z.string().describe("Transaction ID"),
-
-	/** Transaction date (YYYY-MM-DD format) */
-	date: z.string().describe("Transaction date"),
-
-	/** Transaction amount in dollars */
-	amount: z.number().describe("Transaction amount in dollars"),
-
-	/** Optional transaction memo */
-	memo: z.string().optional().describe("Transaction memo"),
-
-	/** Account ID for this transaction */
-	account_id: z.string().describe("Account ID"),
-
-	/** Payee name (enriched field, optional) */
-	payee_name: z.string().optional().describe("Payee name"),
-
-	/** Category name (enriched field, optional) */
-	category_name: z.string().optional().describe("Category name"),
+/** Preview fields are a projection of the shared transaction response. */
+export const TransactionPreviewSchema = TransactionSchema.partial().required({
+	id: true,
+	date: true,
+	amount: true,
+	account_id: true,
 });
 
 /**

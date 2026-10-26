@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import {
 	isAuthError,
 	isRateLimitError,
@@ -122,15 +123,27 @@ describeIntegration("Delta-backed account tool handlers", () => {
 				budget_id: testBudgetId,
 				response_format: "json" as const,
 			};
-			const firstCall = await handleListAccounts(ynabAPI, params, {
-				deltaFetcher: deltaFetcher,
-			});
+			const firstCall = await handleListAccounts(
+				ynabAPI,
+				params,
+				createReadDeps(ynabAPI, {
+					...{
+						deltaFetcher: deltaFetcher,
+					},
+				}),
+			);
 			const firstPayload = parseResponse(firstCall);
 			expect(firstPayload.cached).toBe(false);
 
-			const secondCall = await handleListAccounts(ynabAPI, params, {
-				deltaFetcher,
-			});
+			const secondCall = await handleListAccounts(
+				ynabAPI,
+				params,
+				createReadDeps(ynabAPI, {
+					...{
+						deltaFetcher,
+					},
+				}),
+			);
 			const secondPayload = parseResponse(secondCall);
 			expect(secondPayload.cached).toBe(true);
 			expect(secondPayload.cache_info).toMatch(/cache/i);
@@ -146,9 +159,15 @@ describeIntegration("Delta-backed account tool handlers", () => {
 				account_id: testAccountId,
 				response_format: "json" as const,
 			};
-			const firstCall = await handleListTransactions(ynabAPI, params, {
-				deltaFetcher,
-			});
+			const firstCall = await handleListTransactions(
+				ynabAPI,
+				params,
+				createReadDeps(ynabAPI, {
+					...{
+						deltaFetcher,
+					},
+				}),
+			);
 			const firstPayload = parseResponse(firstCall);
 			expect(firstPayload.cached).toBe(false);
 
@@ -175,9 +194,15 @@ describeIntegration("Delta-backed account tool handlers", () => {
 			expect(createdId).toBeTruthy();
 
 			try {
-				const secondCall = await handleListTransactions(ynabAPI, params, {
-					deltaFetcher,
-				});
+				const secondCall = await handleListTransactions(
+					ynabAPI,
+					params,
+					createReadDeps(ynabAPI, {
+						...{
+							deltaFetcher,
+						},
+					}),
+				);
 				const secondPayload = parseResponse(secondCall);
 				expect(secondPayload.cached).toBe(true);
 				// Check for delta-related keywords (flexible assertion)

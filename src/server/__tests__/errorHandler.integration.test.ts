@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
 import {
 	createErrorHandler,
@@ -54,7 +55,11 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("Request failed with status 401 Unauthorized");
 			mockYnabAPI.budgets.getBudgets.mockRejectedValue(error);
 
-			const result = await handleListBudgets(mockYnabAPI);
+			const result = await handleListBudgets(
+				mockYnabAPI,
+				{},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(401);
@@ -69,9 +74,13 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("401 - Unauthorized access");
 			mockYnabAPI.accounts.getAccounts.mockRejectedValue(error);
 
-			const result = await handleListAccounts(mockYnabAPI, {
-				budget_id: "test-budget",
-			});
+			const result = await handleListAccounts(
+				mockYnabAPI,
+				{
+					budget_id: "test-budget",
+				},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(401);
@@ -86,9 +95,13 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("Unauthorized - 401");
 			mockYnabAPI.transactions.getTransactions.mockRejectedValue(error);
 
-			const result = await handleListTransactions(mockYnabAPI, {
-				budget_id: "test-budget",
-			});
+			const result = await handleListTransactions(
+				mockYnabAPI,
+				{
+					budget_id: "test-budget",
+				},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(401);
@@ -105,9 +118,13 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("403 Forbidden - insufficient permissions");
 			mockYnabAPI.categories.getCategories.mockRejectedValue(error);
 
-			const result = await handleListCategories(mockYnabAPI, {
-				budget_id: "test-budget",
-			});
+			const result = await handleListCategories(
+				mockYnabAPI,
+				{
+					budget_id: "test-budget",
+				},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(403);
@@ -120,9 +137,13 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("Request forbidden: 403");
 			mockYnabAPI.payees.getPayees.mockRejectedValue(error);
 
-			const result = await handleListPayees(mockYnabAPI, {
-				budget_id: "test-budget",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "test-budget",
+				},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(403);
@@ -137,9 +158,13 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("Budget not found - 404");
 			mockYnabAPI.months.getBudgetMonths.mockRejectedValue(error);
 
-			const result = await handleListMonths(mockYnabAPI, {
-				budget_id: "invalid-budget",
-			});
+			const result = await handleListMonths(
+				mockYnabAPI,
+				{
+					budget_id: "invalid-budget",
+				},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(404);
@@ -169,7 +194,11 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("Internal server error - 500");
 			mockYnabAPI.budgets.getBudgets.mockRejectedValue(error);
 
-			const result = await handleListBudgets(mockYnabAPI);
+			const result = await handleListBudgets(
+				mockYnabAPI,
+				{},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(500);
@@ -186,7 +215,11 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("Network timeout");
 			mockYnabAPI.budgets.getBudgets.mockRejectedValue(error);
 
-			const result = await handleListBudgets(mockYnabAPI);
+			const result = await handleListBudgets(
+				mockYnabAPI,
+				{},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe("UNKNOWN_ERROR");
@@ -199,9 +232,13 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("ECONNREFUSED: Connection refused");
 			mockYnabAPI.accounts.getAccounts.mockRejectedValue(error);
 
-			const result = await handleListAccounts(mockYnabAPI, {
-				budget_id: "test-budget",
-			});
+			const result = await handleListAccounts(
+				mockYnabAPI,
+				{
+					budget_id: "test-budget",
+				},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe("UNKNOWN_ERROR");
@@ -215,12 +252,37 @@ describe("Error Handler Integration Tests", () => {
 		}, async () => {
 			const error = new Error("Test error");
 			const tools = [
-				() => handleListBudgets(mockYnabAPI),
-				() => handleListAccounts(mockYnabAPI, { budget_id: "test" }),
-				() => handleListTransactions(mockYnabAPI, { budget_id: "test" }),
-				() => handleListCategories(mockYnabAPI, { budget_id: "test" }),
-				() => handleListPayees(mockYnabAPI, { budget_id: "test" }),
-				() => handleListMonths(mockYnabAPI, { budget_id: "test" }),
+				() => handleListBudgets(mockYnabAPI, {}, createReadDeps(mockYnabAPI)),
+				() =>
+					handleListAccounts(
+						mockYnabAPI,
+						{ budget_id: "test" },
+						createReadDeps(mockYnabAPI),
+					),
+				() =>
+					handleListTransactions(
+						mockYnabAPI,
+						{ budget_id: "test" },
+						createReadDeps(mockYnabAPI),
+					),
+				() =>
+					handleListCategories(
+						mockYnabAPI,
+						{ budget_id: "test" },
+						createReadDeps(mockYnabAPI),
+					),
+				() =>
+					handleListPayees(
+						mockYnabAPI,
+						{ budget_id: "test" },
+						createReadDeps(mockYnabAPI),
+					),
+				() =>
+					handleListMonths(
+						mockYnabAPI,
+						{ budget_id: "test" },
+						createReadDeps(mockYnabAPI),
+					),
 				() => handleGetUser(mockYnabAPI, {}),
 			];
 
@@ -264,7 +326,11 @@ describe("Error Handler Integration Tests", () => {
 			);
 			mockYnabAPI.budgets.getBudgets.mockRejectedValue(ynabError);
 
-			const result = await handleListBudgets(mockYnabAPI);
+			const result = await handleListBudgets(
+				mockYnabAPI,
+				{},
+				createReadDeps(mockYnabAPI),
+			);
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			// Should not contain the actual sensitive values

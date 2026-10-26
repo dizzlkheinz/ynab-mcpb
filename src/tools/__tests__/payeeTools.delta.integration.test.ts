@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { CacheManager } from "../../server/cacheManager.js";
 import { resetRuntimeConfig } from "../../server/config.js";
 import { DeltaCache } from "../../server/deltaCache.js";
@@ -74,15 +75,27 @@ describeIntegration("Delta-backed payee tool handler", () => {
 			budget_id: testBudgetId,
 			response_format: "json" as const,
 		};
-		const firstCall = await handleListPayees(ynabAPI, params, {
-			deltaFetcher: deltaFetcher,
-		});
+		const firstCall = await handleListPayees(
+			ynabAPI,
+			params,
+			createReadDeps(ynabAPI, {
+				...{
+					deltaFetcher: deltaFetcher,
+				},
+			}),
+		);
 		const firstPayload = parseResponse(firstCall);
 		expect(firstPayload.cached).toBe(false);
 
-		const secondCall = await handleListPayees(ynabAPI, params, {
-			deltaFetcher: deltaFetcher,
-		});
+		const secondCall = await handleListPayees(
+			ynabAPI,
+			params,
+			createReadDeps(ynabAPI, {
+				...{
+					deltaFetcher: deltaFetcher,
+				},
+			}),
+		);
 		const secondPayload = parseResponse(secondCall);
 		expectCacheHit(secondPayload);
 	});

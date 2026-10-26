@@ -3,17 +3,13 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import type {
-	HandlerDeltaDeps,
-	ToolFactory,
-} from "../types/toolRegistration.js";
-import { milliunitsToAmount } from "../utils/money.js";
+import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
+import { isValidISODate } from "../utils/dateUtils.js";
 import {
 	createAdapters,
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import { requireDeltaCache, requireDeltaFetcher } from "./deltaSupport.js";
 import {
 	amountInputShape,
 	normalizeOptionalAmount,
@@ -22,11 +18,10 @@ import {
 	validateRequiredAmount,
 } from "./schemas/monetaryInput.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
-
-const DELTA_FETCHER_REQUIRED =
-	"handleListScheduledTransactions requires a DeltaFetcher via deps";
-const DELTA_CACHE_REQUIRED =
-	"Scheduled transaction write handlers require a DeltaCache via deps";
+import {
+	TransactionOutputSchema,
+	toTransactionOutput,
+} from "./transactionModel.js";
 
 const FREQUENCIES = [
 	"never",
@@ -46,7 +41,7 @@ const FREQUENCIES = [
 
 const isoDate = z
 	.string()
-	.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must use YYYY-MM-DD");
+	.refine(isValidISODate, "Date must be a valid ISO date (YYYY-MM-DD)");
 
 export const ListScheduledTransactionsSchema = z
 	.object({
@@ -119,22 +114,14 @@ export const DeleteScheduledTransactionSchema = z
 	})
 	.strict();
 
-const ScheduledTransactionOutputSchema = z.object({
-	id: z.string(),
+const ScheduledTransactionOutputSchema = TransactionOutputSchema.omit({
+	date: true,
+	cleared: true,
+	approved: true,
+}).extend({
 	date_first: z.string(),
 	date_next: z.string(),
 	frequency: z.enum(FREQUENCIES),
-	amount: z.number(),
-	amount_milliunits: z.number().int(),
-	account_id: z.string(),
-	account_name: z.string(),
-	payee_id: z.string().nullable(),
-	payee_name: z.string().nullable(),
-	category_id: z.string().nullable(),
-	category_name: z.string().nullable(),
-	memo: z.string().nullable(),
-	flag_color: z.string().nullable(),
-	deleted: z.boolean(),
 });
 
 const ListScheduledOutputSchema = z.object({
@@ -170,28 +157,6 @@ const DeleteScheduledOutputSchema = z.union([
 	z.object({ success: z.literal(true), scheduled_transaction_id: z.string() }),
 ]);
 
-function normalizeScheduledTransaction(
-	transaction: ynab.ScheduledTransactionDetail,
-) {
-	return {
-		id: transaction.id,
-		date_first: transaction.date_first,
-		date_next: transaction.date_next,
-		frequency: transaction.frequency,
-		amount: milliunitsToAmount(transaction.amount),
-		amount_milliunits: transaction.amount,
-		account_id: transaction.account_id,
-		account_name: transaction.account_name,
-		payee_id: transaction.payee_id ?? null,
-		payee_name: transaction.payee_name ?? null,
-		category_id: transaction.category_id ?? null,
-		category_name: transaction.category_name ?? null,
-		memo: transaction.memo ?? null,
-		flag_color: transaction.flag_color ?? null,
-		deleted: transaction.deleted,
-	};
-}
-
 function asResult(data: Record<string, unknown>): CallToolResult {
 	return {
 		content: [{ type: "text", text: responseFormatter.format(data) }],
@@ -202,10 +167,10 @@ function asResult(data: Record<string, unknown>): CallToolResult {
 export async function handleListScheduledTransactions(
 	_api: ynab.API,
 	params: z.infer<typeof ListScheduledTransactionsSchema>,
-	deps?: HandlerDeltaDeps,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = requireDeltaFetcher(deps, DELTA_FETCHER_REQUIRED);
+	const { deltaFetcher } = deps;
 	try {
 		const budgetId = requireResolvedBudgetId(params.budget_id);
 		const fetched = await deltaFetcher.fetchScheduledTransactions(budgetId);
@@ -214,7 +179,7 @@ export async function handleListScheduledTransactions(
 		const limit = params.limit ?? 100;
 		const page = active.slice(offset, offset + limit);
 		const data = {
-			scheduled_transactions: page.map(normalizeScheduledTransaction),
+			scheduled_transactions: page.map(toTransactionOutput),
 			total_count: active.length,
 			returned_count: page.length,
 			offset,
@@ -248,7 +213,7 @@ export async function handleGetScheduledTransaction(
 				params.scheduled_transaction_id,
 			);
 		return asResult({
-			scheduled_transaction: normalizeScheduledTransaction(
+			scheduled_transaction: toTransactionOutput(
 				response.data.scheduled_transaction,
 			),
 		});
@@ -283,7 +248,6 @@ function saveRequest(
 export async function handleCreateScheduledTransaction(
 	api: ynab.API,
 	params: z.infer<typeof CreateScheduledTransactionSchema>,
-	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
@@ -293,18 +257,15 @@ export async function handleCreateScheduledTransaction(
 			return asResult({
 				dry_run: true,
 				action: "ynab_create_scheduled_transaction",
-				request: { ...request, amount: milliunitsToAmount(params.amount) },
+				request: toTransactionOutput(request),
 			});
 		}
-		// Resolve before writing so a missing dependency can't fail a write that succeeded
-		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		const response = await api.scheduledTransactions.createScheduledTransaction(
 			budgetId,
 			{ scheduled_transaction: request },
 		);
-		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
-			scheduled_transaction: normalizeScheduledTransaction(
+			scheduled_transaction: toTransactionOutput(
 				response.data.scheduled_transaction,
 			),
 		});
@@ -321,7 +282,6 @@ export async function handleCreateScheduledTransaction(
 export async function handleUpdateScheduledTransaction(
 	api: ynab.API,
 	params: z.infer<typeof UpdateScheduledTransactionSchema>,
-	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
@@ -346,7 +306,9 @@ export async function handleUpdateScheduledTransaction(
 			payee_id:
 				changes.payee_id !== undefined
 					? changes.payee_id
-					: (current.payee_id ?? null),
+					: changes.payee_name !== undefined
+						? null
+						: (current.payee_id ?? null),
 			category_id:
 				changes.category_id !== undefined
 					? changes.category_id
@@ -364,23 +326,16 @@ export async function handleUpdateScheduledTransaction(
 			return asResult({
 				dry_run: true,
 				action: "ynab_update_scheduled_transaction",
-				request: {
-					...request,
-					...(request.amount !== undefined && {
-						amount: milliunitsToAmount(request.amount),
-					}),
-				},
+				request: toTransactionOutput(request),
 			});
 		}
-		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		const response = await api.scheduledTransactions.updateScheduledTransaction(
 			budgetId,
 			id,
 			{ scheduled_transaction: request },
 		);
-		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
-			scheduled_transaction: normalizeScheduledTransaction(
+			scheduled_transaction: toTransactionOutput(
 				response.data.scheduled_transaction,
 			),
 		});
@@ -397,7 +352,6 @@ export async function handleUpdateScheduledTransaction(
 export async function handleDeleteScheduledTransaction(
 	api: ynab.API,
 	params: z.infer<typeof DeleteScheduledTransactionSchema>,
-	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
@@ -409,12 +363,10 @@ export async function handleDeleteScheduledTransaction(
 				request: { scheduled_transaction_id: params.scheduled_transaction_id },
 			});
 		}
-		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		await api.scheduledTransactions.deleteScheduledTransaction(
 			budgetId,
 			params.scheduled_transaction_id,
 		);
-		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			success: true,
 			scheduled_transaction_id: params.scheduled_transaction_id,
@@ -433,7 +385,7 @@ export const registerScheduledTransactionTools: ToolFactory = (
 	registry,
 	context,
 ) => {
-	const { adapt, adaptWithDelta, adaptWrite } = createAdapters(context);
+	const { adapt, adaptWithDelta } = createAdapters(context);
 	const budgetResolver = createBudgetResolver(context);
 	registry.register({
 		name: "ynab_list_scheduled_transactions",
@@ -471,7 +423,7 @@ export const registerScheduledTransactionTools: ToolFactory = (
 			"Create a recurring scheduled transaction. Prefer amount_decimal; amount_milliunits is available for already-converted values.",
 		inputSchema: CreateScheduledTransactionSchema,
 		outputSchema: ScheduledMutationOutputSchema,
-		handler: adaptWrite(handleCreateScheduledTransaction),
+		handler: adapt(handleCreateScheduledTransaction),
 		defaultArgumentResolver: budgetResolver(),
 		metadata: {
 			writeSafety: { mutation: true, preview: "dry-run" },
@@ -486,7 +438,7 @@ export const registerScheduledTransactionTools: ToolFactory = (
 		description: "Update selected fields on a scheduled transaction.",
 		inputSchema: UpdateScheduledTransactionSchema,
 		outputSchema: ScheduledMutationOutputSchema,
-		handler: adaptWrite(handleUpdateScheduledTransaction),
+		handler: adapt(handleUpdateScheduledTransaction),
 		defaultArgumentResolver: budgetResolver(),
 		metadata: {
 			writeSafety: { mutation: true, preview: "dry-run" },
@@ -501,7 +453,7 @@ export const registerScheduledTransactionTools: ToolFactory = (
 		description: "Delete a scheduled transaction.",
 		inputSchema: DeleteScheduledTransactionSchema,
 		outputSchema: DeleteScheduledOutputSchema,
-		handler: adaptWrite(handleDeleteScheduledTransaction),
+		handler: adapt(handleDeleteScheduledTransaction),
 		defaultArgumentResolver: budgetResolver(),
 		metadata: {
 			writeSafety: { mutation: true, preview: "dry-run" },

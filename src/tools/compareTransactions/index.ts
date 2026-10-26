@@ -3,7 +3,9 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { ErrorHandler } from "../../server/errorHandler.js";
 import { withToolErrorHandling } from "../../types/index.js";
-import { formatISODate } from "../../utils/dateUtils.js";
+
+const formatISODate = (date: Date): string => date.toISOString().slice(0, 10);
+
 import { requireResolvedBudgetId } from "../adapters.js";
 import { buildComparisonResult } from "./formatter.js";
 import { findMatches } from "./matcher.js";
@@ -78,7 +80,7 @@ function parseDateOnly(date: string): Date {
 		return new Date(date);
 	}
 	const [, year, month, day] = match;
-	return new Date(Number(year), Number(month) - 1, Number(day));
+	return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
 }
 
 /**
@@ -145,9 +147,9 @@ export async function handleCompareTransactions(
 			// Add tolerance to date range
 			const dateToleranceDays = parsed.date_tolerance_days ?? 0;
 			const startDate = new Date(minDate);
-			startDate.setDate(startDate.getDate() - dateToleranceDays);
+			startDate.setUTCDate(startDate.getUTCDate() - dateToleranceDays);
 			const endDate = new Date(maxDate);
-			endDate.setDate(endDate.getDate() + dateToleranceDays);
+			endDate.setUTCDate(endDate.getUTCDate() + dateToleranceDays);
 
 			// Get YNAB transactions for the account in the date range
 			const sinceDate = formatISODate(startDate);

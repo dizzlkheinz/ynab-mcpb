@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
 import {
 	listBudgetsCompat,
@@ -43,10 +44,14 @@ describeIntegration("Month Tools Integration", () => {
 		it("should successfully list months from real API", {
 			meta: { tier: "domain", domain: "months" },
 		}, async () => {
-			const result = await handleListMonths(ynabAPI, {
-				budget_id: testBudgetId,
-				response_format: "json",
-			});
+			const result = await handleListMonths(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -76,10 +81,14 @@ describeIntegration("Month Tools Integration", () => {
 		it("should handle invalid budget ID gracefully", {
 			meta: { tier: "domain", domain: "months" },
 		}, async () => {
-			const result = await handleListMonths(ynabAPI, {
-				budget_id: "invalid-budget-id",
-				response_format: "json",
-			});
+			const result = await handleListMonths(
+				ynabAPI,
+				{
+					budget_id: "invalid-budget-id",
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -98,11 +107,15 @@ describeIntegration("Month Tools Integration", () => {
 		it("should successfully get month details from real API", {
 			meta: { tier: "domain", domain: "months" },
 		}, async () => {
-			const result = await handleGetMonth(ynabAPI, {
-				budget_id: testBudgetId,
-				month: testMonth,
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					month: testMonth,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -144,11 +157,15 @@ describeIntegration("Month Tools Integration", () => {
 		it("should handle invalid budget ID gracefully", {
 			meta: { tier: "domain", domain: "months" },
 		}, async () => {
-			const result = await handleGetMonth(ynabAPI, {
-				budget_id: "invalid-budget-id",
-				month: testMonth,
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				ynabAPI,
+				{
+					budget_id: "invalid-budget-id",
+					month: testMonth,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -165,11 +182,15 @@ describeIntegration("Month Tools Integration", () => {
 		it("should handle invalid month format gracefully", {
 			meta: { tier: "domain", domain: "months" },
 		}, async () => {
-			const result = await handleGetMonth(ynabAPI, {
-				budget_id: testBudgetId,
-				month: "2024-13-01", // Invalid month
-				response_format: "json",
-			});
+			const result = await handleGetMonth(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					month: "2024-13-01", // Invalid month
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");

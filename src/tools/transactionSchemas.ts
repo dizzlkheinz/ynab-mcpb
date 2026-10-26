@@ -7,6 +7,7 @@ import {
 	validateOptionalAmount,
 	validateRequiredAmount,
 } from "./schemas/monetaryInput.js";
+import type { TransactionOutput } from "./transactionModel.js";
 
 /**
  * Transaction Schemas and Types
@@ -215,7 +216,8 @@ export interface BulkCreateResponse {
 		failed: number;
 	};
 	results: BulkTransactionResult[];
-	transactions?: ynab.TransactionDetail[];
+	results_omitted?: boolean;
+	transactions?: TransactionOutput[];
 	duplicate_import_ids?: string[];
 	message?: string;
 	mode?: "full" | "summary" | "ids_only";
@@ -499,7 +501,8 @@ export interface BulkUpdateResponse {
 		failed: number;
 	};
 	results: BulkUpdateResult[];
-	transactions?: ynab.TransactionDetail[];
+	results_omitted?: boolean;
+	transactions?: TransactionOutput[];
 	message?: string;
 	mode?: "full" | "summary" | "ids_only";
 }

@@ -922,16 +922,69 @@ describe("CacheManager", () => {
 			expect(stats.size).toBe(1);
 		});
 
-		it("should maintain singleton behavior", async () => {
-			// The imported singleton should work consistently
-			const { cacheManager } = await import("../cacheManager.js");
-
-			cacheManager.set("singleton-test", "value");
-			expect(cacheManager.get("singleton-test")).toBe("value");
-
-			const stats = cacheManager.getStats();
-			expect(stats).toHaveProperty("hits");
-			expect(stats).toHaveProperty("misses");
+		it("keeps independently owned caches isolated", () => {
+			const other = new CacheManager();
+			cache.set("same-key", "first");
+			other.set("same-key", "second");
+			cache.clear();
+			expect(other.get("same-key")).toBe("second");
 		});
 	});
+});
+
+describe("cache invalidation while reads are pending", () => {
+	it.each([
+		"delete",
+		"deleteMany",
+		"deleteByPrefix",
+		"deleteByBudgetId",
+		"clear",
+	] as const)(
+		"%s rejects late publication without disrupting a newer read",
+		async (method) => {
+			const cache = new CacheManager();
+			const key = "accounts:get:budget-a:account-a";
+			let finishOld!: (value: string) => void;
+			let finishNew!: (value: string) => void;
+			const old = cache.wrap(key, {
+				loader: () =>
+					new Promise<string>((resolve) => {
+						finishOld = resolve;
+					}),
+			});
+			switch (method) {
+				case "delete":
+					cache.delete(key);
+					break;
+				case "deleteMany":
+					cache.deleteMany([key]);
+					break;
+				case "deleteByPrefix":
+					cache.deleteByPrefix("accounts:get");
+					break;
+				case "deleteByBudgetId":
+					cache.deleteByBudgetId("budget-a");
+					break;
+				case "clear":
+					cache.clear();
+					break;
+			}
+			const fresh = cache.wrap(key, {
+				loader: () =>
+					new Promise<string>((resolve) => {
+						finishNew = resolve;
+					}),
+			});
+			finishOld("stale");
+			await old;
+			expect(cache.get(key)).toBeNull();
+			const redundantLoader = vi.fn(async () => "unexpected");
+			const joined = cache.wrap(key, { loader: redundantLoader });
+			finishNew("fresh");
+			expect(await fresh).toBe("fresh");
+			expect(await joined).toBe("fresh");
+			expect(redundantLoader).not.toHaveBeenCalled();
+			expect(cache.get(key)).toBe("fresh");
+		},
+	);
 });

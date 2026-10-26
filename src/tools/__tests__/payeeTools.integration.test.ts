@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { handleGetPayee, handleListPayees } from "../payeeTools.js";
@@ -28,10 +29,14 @@ describeIntegration("Payee Tools Integration", () => {
 		it("should successfully list payees from real API", {
 			meta: { tier: "domain", domain: "payees" },
 		}, async () => {
-			const result = await handleListPayees(ynabAPI, {
-				budget_id: testBudgetId,
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -67,10 +72,14 @@ describeIntegration("Payee Tools Integration", () => {
 		it("should handle invalid budget ID gracefully", {
 			meta: { tier: "domain", domain: "payees" },
 		}, async () => {
-			const result = await handleListPayees(ynabAPI, {
-				budget_id: "invalid-budget-id",
-				response_format: "json",
-			});
+			const result = await handleListPayees(
+				ynabAPI,
+				{
+					budget_id: "invalid-budget-id",
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -90,11 +99,15 @@ describeIntegration("Payee Tools Integration", () => {
 			meta: { tier: "domain", domain: "payees" },
 		}, async () => {
 			// Use the payee ID from the previous test
-			const result = await handleGetPayee(ynabAPI, {
-				budget_id: testBudgetId,
-				payee_id: testPayeeId,
-				response_format: "json",
-			});
+			const result = await handleGetPayee(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					payee_id: testPayeeId,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -121,11 +134,15 @@ describeIntegration("Payee Tools Integration", () => {
 		it("should handle invalid payee ID gracefully", {
 			meta: { tier: "domain", domain: "payees" },
 		}, async () => {
-			const result = await handleGetPayee(ynabAPI, {
-				budget_id: testBudgetId,
-				payee_id: "invalid-payee-id",
-				response_format: "json",
-			});
+			const result = await handleGetPayee(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					payee_id: "invalid-payee-id",
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -142,11 +159,15 @@ describeIntegration("Payee Tools Integration", () => {
 		it("should handle invalid budget ID gracefully", {
 			meta: { tier: "domain", domain: "payees" },
 		}, async () => {
-			const result = await handleGetPayee(ynabAPI, {
-				budget_id: "invalid-budget-id",
-				payee_id: testPayeeId,
-				response_format: "json",
-			});
+			const result = await handleGetPayee(
+				ynabAPI,
+				{
+					budget_id: "invalid-budget-id",
+					payee_id: testPayeeId,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");

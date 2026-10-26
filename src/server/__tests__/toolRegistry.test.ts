@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { maybeTextOf } from "../../__tests__/testUtils.js";
 import {
 	handleReconcileAccount,
@@ -268,7 +269,9 @@ describe("ToolRegistry", () => {
 			name: "ynab_reconcile_account",
 			description: "Guided reconciliation workflow with dual-channel output",
 			inputSchema: ReconcileAccountSchema,
-			handler: adapt(handleReconcileAccount),
+			handler: adapt((api, input) =>
+				handleReconcileAccount(api, input, createReadDeps(api)),
+			),
 		});
 
 		const result = await registry.executeTool({

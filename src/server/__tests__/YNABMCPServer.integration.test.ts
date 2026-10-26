@@ -4,7 +4,7 @@ import {
 	skipOnRateLimit,
 	textOf,
 } from "../../__tests__/testUtils.js";
-import { cacheManager } from "../../server/cacheManager.js";
+import type { CacheManager } from "../../server/cacheManager.js";
 import { ValidationError } from "../../types/index.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import type { ToolRegistry } from "../toolRegistry.js";
@@ -215,6 +215,7 @@ describeIntegration("YNABMCPServer", () => {
 	describe("MCP Server Functionality", () => {
 		let server: YNABMCPServer;
 		let registry: ToolRegistry;
+		let cacheManager: CacheManager;
 
 		const accessToken = () => {
 			const token = process.env["YNAB_ACCESS_TOKEN"];
@@ -228,6 +229,8 @@ describeIntegration("YNABMCPServer", () => {
 
 		beforeEach(() => {
 			server = new YNABMCPServer(false);
+			cacheManager = (server as unknown as { cacheManager: CacheManager })
+				.cacheManager;
 			registry = (server as unknown as { toolRegistry: ToolRegistry })
 				.toolRegistry;
 		});

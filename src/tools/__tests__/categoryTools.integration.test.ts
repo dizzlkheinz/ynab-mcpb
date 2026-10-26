@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import {
@@ -35,10 +36,14 @@ describeIntegration("Category Tools Integration", () => {
 		it("should successfully list categories from real API", {
 			meta: { tier: "domain", domain: "categories" },
 		}, async () => {
-			const result = await handleListCategories(ynabAPI, {
-				budget_id: testBudgetId,
-				response_format: "json",
-			});
+			const result = await handleListCategories(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -94,10 +99,14 @@ describeIntegration("Category Tools Integration", () => {
 		it("should handle invalid budget ID gracefully", {
 			meta: { tier: "domain", domain: "categories" },
 		}, async () => {
-			const result = await handleListCategories(ynabAPI, {
-				budget_id: "invalid-budget-id",
-				response_format: "json",
-			});
+			const result = await handleListCategories(
+				ynabAPI,
+				{
+					budget_id: "invalid-budget-id",
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -121,11 +130,15 @@ describeIntegration("Category Tools Integration", () => {
 				return;
 			}
 
-			const result = await handleGetCategory(ynabAPI, {
-				budget_id: testBudgetId,
-				category_id: testCategoryId,
-				response_format: "json",
-			});
+			const result = await handleGetCategory(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					category_id: testCategoryId,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -151,11 +164,15 @@ describeIntegration("Category Tools Integration", () => {
 		it("should handle invalid category ID gracefully", {
 			meta: { tier: "domain", domain: "categories" },
 		}, async () => {
-			const result = await handleGetCategory(ynabAPI, {
-				budget_id: testBudgetId,
-				category_id: "invalid-category-id",
-				response_format: "json",
-			});
+			const result = await handleGetCategory(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					category_id: "invalid-category-id",
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");

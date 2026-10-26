@@ -8,11 +8,9 @@ import {
 } from "../server/markdownFormatter.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
-import type { ToolFactory } from "../types/toolRegistration.js";
+import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import { getBudgetByIdCompat } from "../utils/ynabApiCompat.js";
 import { createAdapters } from "./adapters.js";
-import type { DeltaFetcherDeps } from "./deltaSupport.js";
-import { resolveDeltaFetcherDeps } from "./deltaSupport.js";
 import {
 	GetBudgetOutputSchema,
 	ListBudgetsOutputSchema,
@@ -53,12 +51,12 @@ export type GetBudgetParams = z.infer<typeof GetBudgetSchema>;
  * Lists all budgets associated with the user's account
  */
 export async function handleListBudgets(
-	ynabAPI: ynab.API,
-	params: Record<string, unknown> = {},
-	deps?: DeltaFetcherDeps,
+	_ynabAPI: ynab.API,
+	params: Record<string, unknown>,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
+	const { deltaFetcher } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			// Always use cache unless explicitly disabled

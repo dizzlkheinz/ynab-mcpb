@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import {
 	getTestConfig,
 	isAuthError,
@@ -96,10 +97,14 @@ describeIntegration("Transaction Tools - Live Contract Smoke", () => {
 		}
 
 		await skipOnRateLimit(async () => {
-			const listResult = await handleListTransactions(ynabAPI, {
-				budget_id: testBudgetId,
-				response_format: "json",
-			});
+			const listResult = await handleListTransactions(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 			throwIfError(listResult);
 			const listResponse = parseToolResult(listResult);
 			const transactions =
@@ -109,11 +114,15 @@ describeIntegration("Transaction Tools - Live Contract Smoke", () => {
 			const firstTransaction = transactions[0];
 			if (!firstTransaction?.id) return;
 
-			const getResult = await handleGetTransaction(ynabAPI, {
-				budget_id: testBudgetId,
-				transaction_id: firstTransaction.id,
-				response_format: "json",
-			});
+			const getResult = await handleGetTransaction(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					transaction_id: firstTransaction.id,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 			throwIfError(getResult);
 			expect(parseToolResult(getResult).transaction?.id).toBe(
 				firstTransaction.id,
@@ -171,11 +180,15 @@ describeIntegration("Transaction Tools - Live Contract Smoke", () => {
 			throwIfError(updateResult);
 			expect(parseToolResult(updateResult).summary?.updated).toBe(1);
 
-			const getResult = await handleGetTransaction(ynabAPI, {
-				budget_id: testBudgetId,
-				transaction_id: createdTransactionId!,
-				response_format: "json",
-			});
+			const getResult = await handleGetTransaction(
+				ynabAPI,
+				{
+					budget_id: testBudgetId,
+					transaction_id: createdTransactionId!,
+					response_format: "json",
+				},
+				createReadDeps(ynabAPI),
+			);
 			throwIfError(getResult);
 			expect(parseToolResult(getResult).transaction?.memo).toBe(updatedMemo);
 		}, ctx);

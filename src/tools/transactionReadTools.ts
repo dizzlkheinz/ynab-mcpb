@@ -1,11 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import type { z } from "zod/v4";
-import {
-	CACHE_TTLS,
-	CacheManager,
-	cacheManager,
-} from "../server/cacheManager.js";
+import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
 import { RESPONSE_SIZE_LIMIT_BYTES } from "../server/config.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import {
@@ -15,17 +11,12 @@ import {
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
 import { withToolErrorHandling } from "../types/index.js";
-import type { ToolContext } from "../types/toolRegistration.js";
-import { milliunitsToAmount } from "../utils/money.js";
+import type { ReadDeps, ToolContext } from "../types/toolRegistration.js";
 import {
 	createAdapters,
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import {
-	type DeltaFetcherDeps,
-	resolveDeltaFetcherDeps,
-} from "./deltaSupport.js";
 import {
 	ExportTransactionsSchema,
 	handleExportTransactions,
@@ -36,6 +27,10 @@ import {
 	ListTransactionsOutputSchema,
 } from "./schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
+import {
+	type TransactionModel,
+	toTransactionOutput,
+} from "./transactionModel.js";
 
 import type {
 	GetTransactionParams,
@@ -59,15 +54,15 @@ import {
 export async function handleListTransactions(
 	ynabAPI: ynab.API,
 	params: ListTransactionsParams,
-	deps?: DeltaFetcherDeps,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
+	const { deltaFetcher } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Always use cache
-			let transactions: (ynab.TransactionDetail | ynab.HybridTransaction)[];
+			let transactions: TransactionModel[];
 			let cacheHit = false;
 			let usedDelta = false;
 
@@ -145,15 +140,7 @@ export async function handleListTransactions(
 					showing: `Most recent ${preview.length} transactions:`,
 					total_count: transactions.length,
 					estimated_size_kb: Math.round(estimatedSize / 1024),
-					preview_transactions: preview.map((transaction) => ({
-						id: transaction.id,
-						date: transaction.date,
-						amount: milliunitsToAmount(transaction.amount),
-						memo: transaction.memo,
-						account_id: transaction.account_id,
-						payee_name: transaction.payee_name,
-						category_name: transaction.category_name,
-					})),
+					preview_transactions: preview.map(toTransactionOutput),
 				};
 				return {
 					content: [
@@ -180,23 +167,7 @@ export async function handleListTransactions(
 				cache_info: cacheHit
 					? `Data retrieved from cache for improved performance${usedDelta ? " (delta merge applied)" : ""}`
 					: "Fresh data retrieved from YNAB API",
-				transactions: paged.map((transaction) => ({
-					id: transaction.id,
-					date: transaction.date,
-					amount: milliunitsToAmount(transaction.amount),
-					memo: transaction.memo,
-					cleared: transaction.cleared,
-					approved: transaction.approved,
-					flag_color: transaction.flag_color,
-					account_id: transaction.account_id,
-					payee_id: transaction.payee_id,
-					category_id: transaction.category_id,
-					transfer_account_id: transaction.transfer_account_id,
-					transfer_transaction_id: transaction.transfer_transaction_id,
-					matched_transaction_id: transaction.matched_transaction_id,
-					import_id: transaction.import_id,
-					deleted: transaction.deleted,
-				})),
+				transactions: paged.map(toTransactionOutput),
 			};
 			return {
 				content: [
@@ -224,71 +195,36 @@ export async function handleListTransactions(
 export async function handleGetTransaction(
 	ynabAPI: ynab.API,
 	params: GetTransactionParams,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
 	try {
 		const budgetId = requireResolvedBudgetId(params.budget_id);
-		const useCache = process.env["NODE_ENV"] !== "test";
-
-		let transaction: ynab.TransactionDetail;
-		let cacheHit = false;
-
-		if (useCache) {
-			// Use enhanced CacheManager wrap method
-			const cacheKey = CacheManager.generateKey(
-				"transaction",
-				"get",
-				budgetId,
-				params.transaction_id,
-			);
-			cacheHit = cacheManager.has(cacheKey);
-			transaction = await cacheManager.wrap<ynab.TransactionDetail>(cacheKey, {
-				ttl: CACHE_TTLS.TRANSACTIONS,
-				loader: async () => {
-					const response = await ynabAPI.transactions.getTransactionById(
-						budgetId,
-						params.transaction_id,
-					);
-					return ensureTransaction(
-						response.data.transaction,
-						"Transaction not found",
-					);
-				},
-			});
-		} else {
-			// Bypass cache in test environment
-			const response = await ynabAPI.transactions.getTransactionById(
-				budgetId,
-				params.transaction_id,
-			);
-			transaction = ensureTransaction(
-				response.data.transaction,
-				"Transaction not found",
-			);
-		}
+		const { cacheManager } = deps;
+		const cacheKey = CacheManager.generateKey(
+			"transaction",
+			"get",
+			budgetId,
+			params.transaction_id,
+		);
+		const cacheHit = cacheManager.has(cacheKey);
+		const transaction = await cacheManager.wrap<TransactionModel>(cacheKey, {
+			ttl: CACHE_TTLS.TRANSACTIONS,
+			loader: async () => {
+				const response = await ynabAPI.transactions.getTransactionById(
+					budgetId,
+					params.transaction_id,
+				);
+				return ensureTransaction(
+					response.data.transaction,
+					"Transaction not found",
+				);
+			},
+		});
 
 		const fmtTx = params.response_format ?? "markdown";
 		const txData = {
-			transaction: {
-				id: transaction.id,
-				date: transaction.date,
-				amount: milliunitsToAmount(transaction.amount),
-				memo: transaction.memo,
-				cleared: transaction.cleared,
-				approved: transaction.approved,
-				flag_color: transaction.flag_color,
-				account_id: transaction.account_id,
-				payee_id: transaction.payee_id,
-				category_id: transaction.category_id,
-				transfer_account_id: transaction.transfer_account_id,
-				transfer_transaction_id: transaction.transfer_transaction_id,
-				matched_transaction_id: transaction.matched_transaction_id,
-				import_id: transaction.import_id,
-				deleted: transaction.deleted,
-				account_name: transaction.account_name,
-				payee_name: transaction.payee_name,
-				category_name: transaction.category_name,
-			},
+			transaction: toTransactionOutput(transaction),
 			cached: cacheHit,
 			cache_info: cacheHit
 				? "Data retrieved from cache for improved performance"
@@ -411,7 +347,7 @@ Errors:
   - "Transaction not found" → invalid transaction_id`,
 		inputSchema: GetTransactionSchema,
 		outputSchema: GetTransactionOutputSchema,
-		handler: adapt(handleGetTransaction),
+		handler: adaptWithDelta(handleGetTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof GetTransactionSchema>>(),
 		metadata: {

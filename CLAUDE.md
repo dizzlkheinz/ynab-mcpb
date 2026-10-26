@@ -13,59 +13,54 @@ This is a Model Context Protocol (MCP) server for YNAB (You Need A Budget) integ
 ### Build & Development
 
 ```bash
-npm run build              # Clean, compile TypeScript, and bundle
-npm run build:no-lint      # Build without running linter
-npm run build:prod         # Production build with verification
-npm run dev                # TypeScript watch mode for development
-npm run type-check         # Run TypeScript type checking without emitting files
+npm run build              # Clean, lint, compile, bundle, and verify metadata
+npm run dev                # TypeScript watch mode
+npm run type-check         # Check source and test types without emitting files
+npm start                  # Start the compiled server (requires YNAB_ACCESS_TOKEN)
 ```
 
 ### Testing
 
 ```bash
-npm test                           # Run all unit tests + filter results
-npm run test:unit                  # Unit tests only (fast, mocked dependencies)
-npm run test:integration           # Integration tests (core only)
-npm run test:integration:core      # Core integration tests
-npm run test:integration:domain    # Domain-specific integration tests
-npm run test:integration:full      # Full mocked integration suite (never contacts YNAB)
-npm run test:integration:live      # Read-only live smoke (requires explicit opt-in)
-npm run test:integration:live:delta # Live delta tests; writes (creates+deletes one transaction). Run before releases
-npm run test:integration:budgets   # Budget-specific integration tests
-npm run test:integration:accounts  # Account-specific integration tests
-npm run test:integration:transactions  # Transaction-specific integration tests
-npm run test:integration:categories    # Category-specific integration tests
-npm run test:integration:payees    # Payee-specific integration tests
-npm run test:integration:months    # Month-specific integration tests
-npm run test:integration:delta     # Delta caching integration tests
-npm run test:integration:reconciliation  # Reconciliation integration tests
-npm run test:e2e                   # E2E project; live tests require explicit opt-in
-npm run test:performance           # Performance and load tests
-npm run test:coverage              # Generate coverage report (requires 80% coverage)
-npm run test:watch                 # Watch mode for test development
-npm run test:comprehensive         # Run comprehensive test suite
-npm run test:all                   # Run all tests (unit, integration, e2e, performance)
+npm test                   # Unit tests, including performance tests; always offline
+npm run test:integration    # Complete mocked integration suite; always offline
+npm run test:all            # Unit + mocked integration tests, each once
+npm run test:coverage       # Unit tests with the existing 80% coverage thresholds
+npm run test:watch          # Watch the offline projects
+npm run test:live           # Read-only smoke; requires RUN_LIVE_YNAB_TESTS=true and token
+npm run test:live -- delta  # Explicit live delta suite; creates and deletes a transaction
 ```
+
+Filter by filename or test name with native Vitest arguments, for example
+`npm run test:integration -- transactionTools` or `npm test -- -t "receipt"`.
+Offline projects override live-test environment variables even when `.env` contains
+credentials. `SKIP_E2E_TESTS=true` blocks the live command as well.
 
 ### Code Quality
 
 ```bash
-npm run lint               # Run Biome linting
+npm run lint               # Biome linting
 npm run lint:fix           # Auto-fix Biome lint/format issues
-npm run format             # Format code with Biome
-npm run format:check       # Check formatting without modifying files
+npm run format             # Format with Biome
+npm run format:check       # Check formatting without modifications
 ```
 
 ### Packaging & Distribution
 
 ```bash
-npm run package:mcpb        # Build production MCPB package for Claude Desktop
-npm run generate:mcpb       # Generate MCPB file from built bundle
-npm run bundle              # Bundle with esbuild (development)
-npm run bundle:prod         # Bundle with minification (production)
-npm run prepare             # Prepare package for publication (runs build:prod)
-npm run prepublishOnly      # Pre-publish checks (runs tests + build)
+npm run build
+npm pack --dry-run --ignore-scripts  # Review the npm file allowlist
+npm run package:mcpb                # Package the existing bundle; no implicit rebuild
 ```
+
+MCPB packaging requires the separately installed official CLI:
+`npm install --global @anthropic-ai/mcpb`. It propagates validation and packaging
+failures and never installs dependencies automatically. Both npm and MCPB use
+explicit file allowlists. The npm package retains compiled ESM and declarations
+for its existing `main`/`types` entries; the CLI uses the self-contained CJS bundle.
+MCPB contains only that bundle, manifest, package metadata, README, and license.
+`prepare` builds before npm packing/publication; CI builds once and publishes with
+`--ignore-scripts`. Building never generates an MCPB or requires PowerShell.
 
 ## Architecture Overview
 
@@ -90,13 +85,14 @@ The architecture is modular and service-oriented:
 - **responseFormatter.ts** - JSON response formatting (pretty-print)
 - **markdownFormatter.ts** - Human-readable markdown output for all read tools (tables, detail views, pagination footers)
 - **rateLimiter.ts** - Rate limiting for YNAB API compliance
+- **ynabClient.ts** - The only YNAB network boundary: counts each HTTP request against the rate limiter and invalidates the budget's caches before and after every mutating request
 - **requestLogger.ts** - Request/response logging middleware
 - **cacheKeys.ts** - Centralized cache key generation utilities
 
 ### Tool Registration Pattern (2025-12)
 
 - `ToolContext` (`src/types/toolRegistration.ts`) centralizes shared deps (ynabAPI, deltaFetcher/cache, knowledge store, default budget accessors, cache/diagnostic managers).
-- Adapter helpers (`src/tools/adapters.ts`): `adapt`, `adaptNoInput`, `adaptWithDelta`, `adaptWrite`, and `createBudgetResolver` to inject default budget IDs; covered by unit tests in `src/tools/__tests__/adapters.test.ts`.
+- Adapter helpers (`src/tools/adapters.ts`): `adapt` (also used by write tools), `adaptNoInput`, `adaptWithDelta`, `adaptWithDeltaAndProgress`, and `createBudgetResolver` to inject default budget IDs; covered by unit tests in `src/tools/__tests__/adapters.test.ts`.
 - Domain factories (`register*Tools`) live in each tool file: budget, account, transaction, category, payee, month, utility, reconciliation. `setupToolRegistry` now delegates to these factories.
 - Shared schemas: `emptyObjectSchema`, `looseObjectSchema` in `src/tools/schemas/common.ts`.
 - Output schemas: All 35 tools have Zod output schemas registered via `outputSchema`. The registry converts to JSON Schema for `tools/list` and validates handler output for `structuredContent`.
@@ -122,7 +118,6 @@ Tools are organized by domain with some using modular sub-directories:
 - **compareTransactions.ts** - Transaction comparison tool entry point
 - **exportTransactions.ts** - Transaction export to JSON files
 - **deltaFetcher.ts** - Delta request utilities for efficient API updates
-- **deltaSupport.ts** - Delta request support utilities and helpers
 
 **Modular Tool Directories:**
 
@@ -424,7 +419,7 @@ register({
   name: 'ynab_delete_transaction',
   description: 'Delete a transaction',
   inputSchema: DeleteTransactionSchema,
-  handler: adaptWrite(handleDeleteTransaction),
+  handler: adapt(handleDeleteTransaction),
   metadata: {
     annotations: {
       ...ToolAnnotationPresets.WRITE_EXTERNAL_DELETE,
@@ -669,5 +664,5 @@ See `docs/technical/reconciliation-system-architecture.md` for detailed document
 - **Date Format**: Always use ISO format `YYYY-MM-DD` for dates
 - **Budget ID Resolution**: Most tools auto-resolve budget_id from default budget if not provided
 - **Error Responses**: All errors return consistent JSON format via `ErrorHandler`
-- **Cache Invalidation**: Write operations (create, update, delete) should invalidate related caches
+- **Cache Invalidation**: `YNABClient` (`src/server/ynabClient.ts`) invalidates caches around every mutating HTTP request; handlers must not invalidate caches themselves or call YNAB through any other client
 - **Rate Limiting**: YNAB API has rate limits - use delta caching and aggressive caching strategies

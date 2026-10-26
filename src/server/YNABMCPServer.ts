@@ -15,7 +15,7 @@ import {
 	McpError,
 	ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import * as ynab from "ynab";
+import type * as ynab from "ynab";
 import { z } from "zod";
 import { registerAccountTools } from "../tools/accountTools.js";
 import { registerBudgetTools } from "../tools/budgetTools.js";
@@ -44,7 +44,7 @@ import {
 	ValidationError as ConfigValidationError,
 } from "../utils/errors.js";
 import { getBudgetByIdCompat } from "../utils/ynabApiCompat.js";
-import { CacheManager, cacheManager } from "./cacheManager.js";
+import { CacheManager } from "./cacheManager.js";
 import { CompletionsManager } from "./completions.js";
 import { type AppConfig, loadConfig } from "./config.js";
 import { DeltaCache } from "./deltaCache.js";
@@ -55,6 +55,7 @@ import {
 	formatDiagnosticInfo,
 } from "./markdownFormatter.js";
 import { PromptManager } from "./prompts.js";
+import { hashToken, RateLimiter } from "./rateLimiter.js";
 import { globalRequestLogger } from "./requestLogger.js";
 import { ResourceManager } from "./resources.js";
 import { responseFormatter } from "./responseFormatter.js";
@@ -69,11 +70,14 @@ import {
 	ToolRegistry,
 } from "./toolRegistry.js";
 import { WriteSafetyPolicy } from "./writeSafety.js";
+import { YNABClient } from "./ynabClient.js";
 
 /**
  * YNAB MCP Server class that provides integration with You Need A Budget API
  */
 export class YNABMCPServer {
+	private readonly cacheManager = new CacheManager();
+	private readonly rateLimiter = new RateLimiter();
 	private server: Server;
 	private ynabAPI: ynab.API;
 	private exitOnError: boolean;
@@ -110,7 +114,12 @@ export class YNABMCPServer {
 		});
 
 		// Initialize YNAB API
-		this.ynabAPI = new ynab.API(this.configInstance.YNAB_ACCESS_TOKEN);
+		this.serverKnowledgeStore = new ServerKnowledgeStore();
+		this.ynabAPI = new YNABClient(this.configInstance.YNAB_ACCESS_TOKEN, {
+			cacheManager: this.cacheManager,
+			knowledgeStore: this.serverKnowledgeStore,
+			rateLimiter: this.rateLimiter,
+		});
 
 		// Determine server version (prefer package.json)
 		this.serverVersion = this.readPackageVersion() ?? "0.0.0";
@@ -163,14 +172,14 @@ export class YNABMCPServer {
 				},
 				invalidate: (key: string) => {
 					try {
-						cacheManager.delete(key);
+						this.cacheManager.delete(key);
 					} catch (error) {
 						console.error(`Failed to invalidate cache key "${key}":`, error);
 					}
 				},
 				clear: () => {
 					try {
-						cacheManager.clear();
+						this.cacheManager.clear();
 					} catch (error) {
 						console.error("Failed to clear cache:", error);
 					}
@@ -204,18 +213,27 @@ export class YNABMCPServer {
 		this.resourceManager = new ResourceManager({
 			ynabAPI: this.ynabAPI,
 			responseFormatter,
-			cacheManager,
+			cacheManager: this.cacheManager,
 		});
 
 		this.promptManager = new PromptManager();
 
-		this.serverKnowledgeStore = new ServerKnowledgeStore();
-		this.deltaCache = new DeltaCache(cacheManager, this.serverKnowledgeStore);
+		this.deltaCache = new DeltaCache(
+			this.cacheManager,
+			this.serverKnowledgeStore,
+		);
 		this.deltaFetcher = new DeltaFetcher(this.ynabAPI, this.deltaCache);
 
 		this.diagnosticManager = new DiagnosticManager({
-			securityMiddleware: SecurityMiddleware,
-			cacheManager,
+			securityMiddleware: {
+				getSecurityStats: () => ({
+					...SecurityMiddleware.getSecurityStats(),
+					rateLimitStats: this.rateLimiter.getStatus(
+						hashToken(this.configInstance.YNAB_ACCESS_TOKEN),
+					),
+				}),
+			},
+			cacheManager: this.cacheManager,
 			responseFormatter,
 			serverVersion: this.serverVersion,
 			serverKnowledgeStore: this.serverKnowledgeStore,
@@ -224,7 +242,7 @@ export class YNABMCPServer {
 
 		this.completionsManager = new CompletionsManager(
 			this.ynabAPI,
-			cacheManager,
+			this.cacheManager,
 			() => this.defaultBudgetId,
 		);
 
@@ -434,7 +452,7 @@ export class YNABMCPServer {
 			serverKnowledgeStore: this.serverKnowledgeStore,
 			getDefaultBudgetId: () => this.defaultBudgetId,
 			setDefaultBudget: (budgetId: string) => this.setDefaultBudget(budgetId),
-			cacheManager,
+			cacheManager: this.cacheManager,
 			errorHandler: this.errorHandler,
 			diagnosticManager: this.diagnosticManager,
 		};
@@ -663,7 +681,7 @@ Use when: you need fresh data after external YNAB changes, or to free memory.`,
 			inputSchema: emptyObjectSchema,
 			outputSchema: ClearCacheOutputSchema,
 			handler: async () => {
-				cacheManager.clear();
+				this.cacheManager.clear();
 				const clearCacheData = { success: true };
 				return {
 					content: [

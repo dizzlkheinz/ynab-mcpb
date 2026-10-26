@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { skipOnRateLimit } from "../../__tests__/testUtils.js";
 import { CacheManager } from "../../server/cacheManager.js";
 import { resetRuntimeConfig } from "../../server/config.js";
@@ -65,9 +66,15 @@ describeIntegration("Delta-backed budget tool handler", () => {
 	}, async (ctx) => {
 		await skipOnRateLimit(async () => {
 			const params = { response_format: "json" as const };
-			const firstCall = await handleListBudgets(ynabAPI, params, {
-				deltaFetcher: deltaFetcher,
-			});
+			const firstCall = await handleListBudgets(
+				ynabAPI,
+				params,
+				createReadDeps(ynabAPI, {
+					...{
+						deltaFetcher: deltaFetcher,
+					},
+				}),
+			);
 			const firstPayload = parseResponse(firstCall);
 
 			// If response contains an error, throw it so skipOnRateLimit can catch it
@@ -77,9 +84,15 @@ describeIntegration("Delta-backed budget tool handler", () => {
 
 			expect(firstPayload.cached).toBe(false);
 
-			const secondCall = await handleListBudgets(ynabAPI, params, {
-				deltaFetcher: deltaFetcher,
-			});
+			const secondCall = await handleListBudgets(
+				ynabAPI,
+				params,
+				createReadDeps(ynabAPI, {
+					...{
+						deltaFetcher: deltaFetcher,
+					},
+				}),
+			);
 			const secondPayload = parseResponse(secondCall);
 
 			// If response contains an error, throw it so skipOnRateLimit can catch it

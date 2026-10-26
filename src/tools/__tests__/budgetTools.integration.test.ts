@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { skipOnRateLimit, textOf } from "../../__tests__/testUtils.js";
 import { handleGetBudget, handleListBudgets } from "../budgetTools.js";
 
@@ -28,9 +29,13 @@ describeIntegration("Budget Tools Integration", () => {
 			meta: { tier: "core", domain: "budgets" },
 		}, async (ctx) => {
 			await skipOnRateLimit(async () => {
-				const result = await handleListBudgets(ynabAPI, {
-					response_format: "json",
-				});
+				const result = await handleListBudgets(
+					ynabAPI,
+					{
+						response_format: "json",
+					},
+					createReadDeps(ynabAPI),
+				);
 
 				expect(result.content).toHaveLength(1);
 				expect(result.content[0]!.type).toBe("text");
@@ -72,9 +77,13 @@ describeIntegration("Budget Tools Integration", () => {
 				// Get a budget ID if not set by previous test
 				let budgetId = testBudgetId;
 				if (!budgetId) {
-					const listResult = await handleListBudgets(ynabAPI, {
-						response_format: "json",
-					});
+					const listResult = await handleListBudgets(
+						ynabAPI,
+						{
+							response_format: "json",
+						},
+						createReadDeps(ynabAPI),
+					);
 					const listContent = JSON.parse(textOf(listResult.content[0]));
 					if (listContent.error) {
 						throw new Error(JSON.stringify(listContent.error));

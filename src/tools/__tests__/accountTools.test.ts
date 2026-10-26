@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
 import {
 	CreateAccountSchema,
@@ -15,16 +16,16 @@ import {
 } from "./deltaTestUtils.js";
 
 // Mock the cache manager
+const cacheManager = vi.hoisted(() => ({
+	wrap: vi.fn(),
+	has: vi.fn(),
+	delete: vi.fn(),
+	deleteMany: vi.fn(),
+	deleteByPrefix: vi.fn(),
+	deleteByBudgetId: vi.fn(),
+	clear: vi.fn(),
+}));
 vi.mock("../../server/cacheManager.js", () => ({
-	cacheManager: {
-		wrap: vi.fn(),
-		has: vi.fn(),
-		delete: vi.fn(),
-		deleteMany: vi.fn(),
-		deleteByPrefix: vi.fn(),
-		deleteByBudgetId: vi.fn(),
-		clear: vi.fn(),
-	},
 	CacheManager: {
 		generateKey: vi.fn(),
 	},
@@ -43,9 +44,7 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { cacheManager, CacheManager } = await import(
-	"../../server/cacheManager.js"
-);
+const { CacheManager } = await import("../../server/cacheManager.js");
 
 // Capture original NODE_ENV for restoration
 const originalNodeEnv = process.env["NODE_ENV"];
@@ -111,7 +110,10 @@ describe("Account Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			const fetchAccountsMock = fetcher.fetchAccounts as ReturnType<
@@ -166,7 +168,10 @@ describe("Account Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -206,7 +211,10 @@ describe("Account Tools", () => {
 					budget_id: "invalid-budget",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -228,7 +236,10 @@ describe("Account Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -250,7 +261,10 @@ describe("Account Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -280,11 +294,15 @@ describe("Account Tools", () => {
 				data: { account: mockAccount },
 			});
 
-			const result = await handleGetAccount(mockYnabAPI, {
-				budget_id: "budget-1",
-				account_id: "account-1",
-				response_format: "json",
-			});
+			const result = await handleGetAccount(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "account-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -331,11 +349,15 @@ describe("Account Tools", () => {
 			});
 			(cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
 
-			const result = await handleGetAccount(mockYnabAPI, {
-				budget_id: "budget-1",
-				account_id: "account-1",
-				response_format: "json",
-			});
+			const result = await handleGetAccount(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "account-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(true);
@@ -349,11 +371,15 @@ describe("Account Tools", () => {
 				new Error("404 Not Found"),
 			);
 
-			const result = await handleGetAccount(mockYnabAPI, {
-				budget_id: "budget-1",
-				account_id: "invalid-account",
-				response_format: "json",
-			});
+			const result = await handleGetAccount(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "invalid-account",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -367,11 +393,15 @@ describe("Account Tools", () => {
 				new Error("401 Unauthorized"),
 			);
 
-			const result = await handleGetAccount(mockYnabAPI, {
-				budget_id: "budget-1",
-				account_id: "account-1",
-				response_format: "json",
-			});
+			const result = await handleGetAccount(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "account-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -565,7 +595,7 @@ describe("Account Tools", () => {
 			expect(parsedContent.error.message).toBe("Failed to create account");
 		});
 
-		it("should invalidate account and resource caches on successful account creation", async () => {
+		it("returns the created account from the injected API", async () => {
 			const mockAccount = {
 				id: "account-1",
 				name: "New Account",
@@ -591,26 +621,11 @@ describe("Account Tools", () => {
 				type: "checking",
 			});
 
-			// Verify cache was invalidated for account list
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				"accounts",
-				"list",
+			expect(mockYnabAPI.accounts.createAccount).toHaveBeenCalledWith(
 				"budget-1",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"accounts:list:budget-1",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"resources:budgets:list",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"resources:budgets:get:budget-1",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"resources:accounts:list:budget-1",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"resources:accounts:get:budget-1:account-1",
+				{
+					account: { name: "New Account", type: "checking", balance: 0 },
+				},
 			);
 
 			expect(result.content).toHaveLength(1);

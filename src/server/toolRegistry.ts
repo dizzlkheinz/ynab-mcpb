@@ -3,7 +3,11 @@ import { toJSONSchema, z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import type { MCPToolAnnotations } from "../types/toolAnnotations.js";
 import { type ToolProfile, toolBelongsToProfile } from "./toolProfiles.js";
-import type { ConfirmationResult, WriteSafetyPolicy } from "./writeSafety.js";
+import type {
+	ConfirmationResult,
+	PreparedExecution,
+	WriteSafetyPolicy,
+} from "./writeSafety.js";
 
 export type SecurityWrapperFactory = <T extends Record<string, unknown>>(
 	namespace: string,
@@ -63,6 +67,8 @@ export interface ToolMetadataOptions {
 	writeSafety?: {
 		mutation: true;
 		preview: "dry-run";
+		/** Preview must capture exact operations rather than rerun mutable inputs. */
+		prepared?: boolean;
 	};
 }
 
@@ -87,6 +93,8 @@ export interface ToolExecutionContext {
 	 * Available when the client provides a progressToken in the request.
 	 */
 	sendProgress?: ProgressCallback;
+	/** Capture a prepared write during a protected preview. Never supplied by clients. */
+	prepareExecution?: (execute: PreparedExecution) => void;
 }
 
 export interface ToolExecutionPayload<TInput extends Record<string, unknown>> {
@@ -527,6 +535,10 @@ export class ToolRegistry {
 		const confirmationArguments = { ...validated, dry_run: false };
 
 		if (!confirmationToken) {
+			let preparedExecution: PreparedExecution | undefined;
+			context.prepareExecution = (execute) => {
+				preparedExecution = execute;
+			};
 			const preview = await this.invokeHandler(
 				tool,
 				{ ...validated, dry_run: true },
@@ -535,7 +547,16 @@ export class ToolRegistry {
 			if (preview.isError) {
 				return preview;
 			}
-			const issued = policy.issue(tool.name, confirmationArguments);
+			if (tool.metadata?.writeSafety?.prepared && !preparedExecution) {
+				throw new Error(
+					`${tool.name} did not capture the operations shown in its preview`,
+				);
+			}
+			const issued = policy.issue(
+				tool.name,
+				confirmationArguments,
+				preparedExecution,
+			);
 			return {
 				...preview,
 				content: [
@@ -564,7 +585,12 @@ export class ToolRegistry {
 			);
 		}
 
-		return this.executeCommittedWrite(tool, confirmationArguments, context);
+		return this.executeCommittedWrite(
+			tool,
+			confirmationArguments,
+			context,
+			confirmation.execute,
+		);
 	}
 
 	/**
@@ -576,8 +602,11 @@ export class ToolRegistry {
 		tool: AnyRegisteredTool,
 		input: Record<string, unknown>,
 		context: ToolExecutionContext,
+		preparedExecution?: PreparedExecution,
 	): Promise<CallToolResult> {
-		const handlerResult = await tool.handler({ input, context });
+		const handlerResult = preparedExecution
+			? await preparedExecution(context)
+			: await tool.handler({ input, context });
 		if (handlerResult.isError) {
 			return handlerResult;
 		}

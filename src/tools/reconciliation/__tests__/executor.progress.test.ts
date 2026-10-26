@@ -179,20 +179,38 @@ describe("Reconciliation Progress Notifications", () => {
 
 		mockYnabAPI = {
 			transactions: {
-				createTransaction: vi.fn().mockResolvedValue({
-					data: { transaction: createMockTransaction() },
-				}),
-				createTransactions: vi.fn().mockResolvedValue({
-					data: {
-						transactions: [createMockTransaction()],
-						duplicate_import_ids: [],
-					},
-				}),
-				updateTransactions: vi.fn().mockResolvedValue({
-					data: {
-						transactions: [createMockTransaction({ cleared: "cleared" })],
-					},
-				}),
+				createTransaction: vi
+					.fn()
+					.mockImplementation(async (_budget, body) => ({
+						data: {
+							transaction: { ...createMockTransaction(), ...body.transaction },
+						},
+					})),
+				createTransactions: vi
+					.fn()
+					.mockImplementation(async (_budget, body) => ({
+						data: {
+							transactions: body.transactions.map(
+								(transaction: ynab.NewTransaction, index: number) => ({
+									...createMockTransaction(),
+									...transaction,
+									id: `created-${index}`,
+								}),
+							),
+						},
+					})),
+				updateTransactions: vi
+					.fn()
+					.mockImplementation(async (_budget, body) => ({
+						data: {
+							transactions: body.transactions.map(
+								(transaction: ynab.SaveTransactionWithIdOrImportId) => ({
+									...createMockTransaction(),
+									...transaction,
+								}),
+							),
+						},
+					})),
 			} as unknown as ynab.API["transactions"],
 			accounts: {
 				getAccountById: vi.fn().mockResolvedValue({
@@ -524,7 +542,7 @@ describe("Reconciliation Progress Notifications", () => {
 			expectProgressCompleted();
 		});
 
-		it("should reach the total without repeating progress when later steps are skipped after alignment", async () => {
+		it("should complete every planned step with increasing progress", async () => {
 			const unmatchedBank: BankTransaction[] = [
 				createBankTransaction({ payee: "Payee 1", amount: -10000 }),
 				createBankTransaction({ payee: "Payee 2", amount: -20000 }),
@@ -593,12 +611,7 @@ describe("Reconciliation Progress Notifications", () => {
 			expect(result.summary.transactions_created).toBe(3);
 			expect(
 				mockYnabAPI.transactions!.updateTransactions,
-			).not.toHaveBeenCalled();
-			// The skipped steps drop out of the total when the final step settles it
-			expect(progressCalls).toEqual([
-				expect.objectContaining({ progress: 3, total: 6 }),
-				expect.objectContaining({ progress: 4, total: 4 }),
-			]);
+			).toHaveBeenCalledTimes(3);
 			expectProgressCompleted();
 		});
 
@@ -646,9 +659,25 @@ describe("Reconciliation Progress Notifications", () => {
 				sendProgress: mockProgressCallback,
 			});
 
-			const actionTypes = result.actions_taken.map((action) => action.type);
-			expect(actionTypes).toContain("batch_update_failed");
-			expect(actionTypes).not.toContain("batch_unclear_failed");
+			// The update may have committed, so it is reported as uncertain, never
+			// retried, and the later unclear is skipped rather than attempted.
+			const statuses = Object.fromEntries(
+				(result.operation_results ?? []).map((operationResult) => [
+					operationResult.operation.kind,
+					operationResult.status,
+				]),
+			);
+			expect(statuses).toEqual({
+				create: "applied",
+				update: "uncertain",
+				unclear: "skipped",
+			});
+			expect(
+				mockYnabAPI.transactions!.updateTransactions,
+			).toHaveBeenCalledTimes(1);
+			expect(result.errors).toEqual([
+				expect.stringMatching(/uncertain.*socket hang up/i),
+			]);
 			expectProgressCompleted();
 		});
 
@@ -707,7 +736,7 @@ describe("Reconciliation Progress Notifications", () => {
 				expect.objectContaining({
 					progress: 2,
 					total: 3,
-					message: expect.stringContaining("reconciled"),
+					message: expect.stringContaining("planned operations"),
 				}),
 				expect.objectContaining({ progress: 3, total: 3 }),
 			]);

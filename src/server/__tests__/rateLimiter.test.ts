@@ -3,7 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RateLimitError, RateLimiter } from "../rateLimiter.js";
+import { hashToken, RateLimitError, RateLimiter } from "../rateLimiter.js";
 
 describe("RateLimiter", () => {
 	let rateLimiter: RateLimiter;
@@ -329,5 +329,15 @@ describe("RateLimiter", () => {
 
 			consoleSpy.mockRestore();
 		});
+	});
+});
+
+describe("rate-limit token identifiers", () => {
+	it("uses a consistent identifier for the same token", () => {
+		expect(hashToken("same-token")).toBe(hashToken("same-token"));
+	});
+	it("separates different tokens without exposing their values", () => {
+		expect(hashToken("token-1")).not.toBe(hashToken("token-2"));
+		expect(hashToken("token-1")).not.toContain("token-1");
 	});
 });

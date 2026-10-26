@@ -33,6 +33,7 @@ describeIntegration("Reconciliation delta isolation", () => {
 	let testBudgetId: string;
 	let testAccountId: string;
 	let deltaFetcher: DeltaFetcher;
+	let cacheManager: CacheManager;
 	let previousNodeEnv: string | undefined;
 	let setupRateLimited = false;
 
@@ -77,7 +78,7 @@ describeIntegration("Reconciliation delta isolation", () => {
 	beforeEach(() => {
 		previousNodeEnv = process.env["NODE_ENV"];
 		process.env["NODE_ENV"] = "integration";
-		const cacheManager = new CacheManager();
+		cacheManager = new CacheManager();
 		const knowledgeStore = new ServerKnowledgeStore();
 		const deltaCache = new DeltaCache(cacheManager, knowledgeStore);
 		deltaFetcher = new DeltaFetcher(ynabAPI, deltaCache);
@@ -131,14 +132,11 @@ describeIntegration("Reconciliation delta isolation", () => {
 
 			await handleReconcileAccount(ynabAPI, params, {
 				deltaFetcher: deltaFetcher,
+				cacheManager,
 			});
 
 			expect(accountsFullSpy).toHaveBeenCalledWith(testBudgetId);
-			expect(txFullSpy).toHaveBeenCalledWith(
-				testBudgetId,
-				testAccountId,
-				expect.any(String),
-			);
+			expect(txFullSpy).toHaveBeenCalledWith(testBudgetId, testAccountId);
 			expect(txDeltaSpy).not.toHaveBeenCalled();
 		});
 	});
