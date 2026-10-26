@@ -404,6 +404,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
@@ -439,6 +440,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
@@ -475,6 +477,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
@@ -506,6 +509,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 
 			const results = correlateResults(requests, responseData, new Set());
@@ -550,6 +554,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 
 			const results = correlateResults(requests, responseData, new Set());
@@ -573,6 +578,7 @@ describe("transactionUtils", () => {
 				transactions: [],
 				duplicate_import_ids: ["YNAB:1"],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set(["YNAB:1"]);
 
@@ -607,6 +613,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
@@ -655,6 +662,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
@@ -688,6 +696,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
@@ -706,6 +715,7 @@ describe("transactionUtils", () => {
 				transactions: [],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
