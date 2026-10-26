@@ -379,7 +379,7 @@ export class DeltaCache {
 		return ttl;
 	}
 
-	private isDeltaEnabled(): boolean {
+	isDeltaEnabled(): boolean {
 		return getRuntimeConfig().YNAB_MCP_ENABLE_DELTA === "true";
 	}
 }

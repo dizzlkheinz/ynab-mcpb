@@ -87,7 +87,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
-		process.env.YNAB_MCP_ENABLE_DELTA = undefined;
+		Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
 		resetRuntimeConfig();
 	});
 

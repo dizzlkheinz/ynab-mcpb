@@ -219,7 +219,7 @@ Full reference: [docs/reference/API.md](docs/reference/API.md)
 |---|---|---|
 | `YNAB_ACCESS_TOKEN` | — | **Required.** Your YNAB personal access token. |
 | `YNAB_EXPORT_PATH` | `~/Downloads` | Directory for exported transaction files. |
-| `YNAB_MCP_ENABLE_DELTA` | `false` | Set to `true` to enable delta sync (only fetch changed data). |
+| `YNAB_MCP_ENABLE_DELTA` | `false` | Set to `true` to enable delta sync (only fetch changed data). Must be exactly `true` or `false`. |
 | `YNAB_MCP_WRITE_MODE` | `preview` | `read-only` hides YNAB mutations; `preview` requires exact confirmation; `enabled` permits direct writes. |
 | `YNAB_MCP_TOOL_PROFILE` | `full` | `core`, `read-only`, or `full` startup tool surface. |
 | `YNAB_MCP_CACHE_DEFAULT_TTL_MS` | `300000` | Cache TTL in milliseconds (5 min). |

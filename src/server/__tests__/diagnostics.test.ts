@@ -5,7 +5,6 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { resetRuntimeConfig } from "../config.js";
 import {
 	type DiagnosticDependencies,
 	DiagnosticManager,
@@ -38,6 +37,7 @@ const mockKnowledgeStore = {
 
 const mockDeltaCache = {
 	getStats: vi.fn(),
+	isDeltaEnabled: vi.fn(),
 };
 
 // Mock process functions for testing
@@ -127,6 +127,7 @@ describe("diagnostics module", () => {
 			mergeOperations: 0,
 			knowledgeGapEvents: 0,
 		});
+		mockDeltaCache.isDeltaEnabled.mockReturnValue(false);
 	});
 
 	describe("DiagnosticManager", () => {
@@ -331,7 +332,7 @@ describe("diagnostics module", () => {
 				it("should include delta metrics when include_delta is true", async () => {
 					const originalEnv = process.env.YNAB_MCP_ENABLE_DELTA;
 					process.env.YNAB_MCP_ENABLE_DELTA = "true";
-					resetRuntimeConfig();
+					mockDeltaCache.isDeltaEnabled.mockReturnValue(true);
 
 					try {
 						mockKnowledgeStore.getStats.mockReturnValue({
@@ -371,11 +372,11 @@ describe("diagnostics module", () => {
 						expect(mockDeltaCache.getStats).toHaveBeenCalled();
 					} finally {
 						if (originalEnv === undefined) {
-							process.env.YNAB_MCP_ENABLE_DELTA = undefined;
+							// Assigning undefined would store the string "undefined"
+							Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
 						} else {
 							process.env.YNAB_MCP_ENABLE_DELTA = originalEnv;
 						}
-						resetRuntimeConfig();
 					}
 				});
 
