@@ -82,7 +82,8 @@ const createBankTransaction = (
 	date,
 	amount: Math.round(amount * 1000),
 	payee,
-	original_csv_row: 1,
+	sourceRow: 1,
+	raw: { date, amount: String(amount), description: payee },
 });
 
 /**
@@ -97,8 +98,9 @@ const createYNABTransaction = (
 	id,
 	date,
 	amount,
-	payee_name: payee,
-	category_name: "General",
+	payee,
+	categoryName: "General",
+	memo: null,
 	cleared: "uncleared",
 	approved: true,
 });
@@ -127,6 +129,11 @@ const createExecutionResult = (
 	overrides?: Partial<LegacyReconciliationResult>,
 ): LegacyReconciliationResult => ({
 	summary: {
+		bank_transactions_count: 0,
+		ynab_transactions_count: 0,
+		matches_found: 0,
+		missing_in_ynab: 0,
+		missing_in_bank: 0,
 		transactions_created: 0,
 		transactions_updated: 0,
 		dates_adjusted: 0,
@@ -294,7 +301,6 @@ describe("reportFormatter", () => {
 							"Amazon",
 							"2025-10-20",
 						),
-						ynabTransaction: undefined,
 						candidates: [],
 						confidence: "medium",
 						confidenceScore: 75,
@@ -398,6 +404,11 @@ describe("reportFormatter", () => {
 			const analysis = createTestAnalysis();
 			const execution = createExecutionResult({
 				summary: {
+					bank_transactions_count: 0,
+					ynab_transactions_count: 0,
+					matches_found: 0,
+					missing_in_ynab: 0,
+					missing_in_bank: 0,
 					transactions_created: 2,
 					transactions_updated: 3,
 					dates_adjusted: 1,
@@ -418,6 +429,11 @@ describe("reportFormatter", () => {
 			const analysis = createTestAnalysis();
 			const execution = createExecutionResult({
 				summary: {
+					bank_transactions_count: 0,
+					ynab_transactions_count: 0,
+					matches_found: 0,
+					missing_in_ynab: 0,
+					missing_in_bank: 0,
 					transactions_created: 0,
 					transactions_updated: 0,
 					dates_adjusted: 0,

@@ -19,7 +19,7 @@ import { DeltaCache } from "../../../server/deltaCache.js";
 import { ServerKnowledgeStore } from "../../../server/serverKnowledgeStore.js";
 import { listBudgetsCompat } from "../../../utils/ynabApiCompat.js";
 import { DeltaFetcher } from "../../deltaFetcher.js";
-import { handleReconcileAccount } from "../index.js";
+import { handleReconcileAccount, ReconcileAccountSchema } from "../index.js";
 
 const shouldSkip = ["true", "1", "yes", "y", "on"].includes(
 	(process.env["SKIP_E2E_TESTS"] || "").toLowerCase().trim(),
@@ -115,12 +115,12 @@ describeIntegration("Reconciliation delta isolation", () => {
 			const csvData = ["Date,Amount,Description", "2024-01-01,10,Coffee"].join(
 				"\n",
 			);
-			const params = {
+			const params = ReconcileAccountSchema.parse({
 				budget_id: testBudgetId,
 				account_id: testAccountId,
 				csv_data: csvData,
 				statement_balance: 0,
-			};
+			});
 
 			const accountsFullSpy = vi.spyOn(deltaFetcher, "fetchAccountsFull");
 			const txFullSpy = vi.spyOn(

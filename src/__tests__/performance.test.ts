@@ -12,6 +12,7 @@ import {
 import { sleep as delay } from "../tools/reconciliation/executorHelpers.js";
 import type { ReconcileAccountRequest } from "../tools/reconciliation/index.js";
 import type { ReconciliationAnalysis } from "../tools/reconciliation/types.js";
+import { toMoneyValueFromDecimal } from "../utils/money.js";
 import { executeToolCall, parseToolResult } from "./testUtils.js";
 
 /**
@@ -198,13 +199,15 @@ function buildPerformanceAnalysis(
 			statement_date_range: "Performance suite",
 			bank_transactions_count: count,
 			ynab_transactions_count: 0,
+			ynab_in_range_count: 0,
+			ynab_outside_range_count: 0,
 			auto_matched: 0,
 			suggested_matches: 0,
 			unmatched_bank: count,
 			unmatched_ynab: 0,
-			current_cleared_balance: 0,
-			target_statement_balance: statementBalance,
-			discrepancy: statementBalance,
+			current_cleared_balance: toMoneyValueFromDecimal(0),
+			target_statement_balance: toMoneyValueFromDecimal(statementBalance),
+			discrepancy: toMoneyValueFromDecimal(statementBalance),
 			discrepancy_explanation: "Synthetic performance delta",
 		},
 		auto_matches: [],
@@ -217,16 +220,22 @@ function buildPerformanceAnalysis(
 				amount,
 				payee: `Performance Payee ${index}`,
 				memo: `Performance memo ${index}`,
-				original_csv_row: index + 1,
+				sourceRow: index + 1,
+				raw: {
+					date: date.toISOString().slice(0, 10),
+					amount: String(amount),
+					description: `Performance Payee ${index}`,
+				},
 			};
 		}),
 		unmatched_ynab: [],
+		ynab_outside_date_range: [],
 		balance_info: {
-			current_cleared: 0,
-			current_uncleared: 0,
-			current_total: 0,
-			target_statement: statementBalance,
-			discrepancy: statementBalance,
+			current_cleared: toMoneyValueFromDecimal(0),
+			current_uncleared: toMoneyValueFromDecimal(0),
+			current_total: toMoneyValueFromDecimal(0),
+			target_statement: toMoneyValueFromDecimal(statementBalance),
+			discrepancy: toMoneyValueFromDecimal(statementBalance),
 			on_track: false,
 		},
 		next_steps: [],
@@ -246,6 +255,8 @@ function buildPerformanceParams(
 		statement_end_date: "2025-08-31",
 		date_tolerance_days: 1,
 		match_strictness: "strict" as const,
+		sign_convention: "auto" as const,
+		max_suggestions_in_output: 20,
 		auto_create_transactions: true,
 		auto_update_cleared_status: false,
 		auto_unclear_missing: false,
@@ -256,9 +267,9 @@ function buildPerformanceParams(
 }
 
 function createPerformanceApi(options: {
-	bulkDelay?: number;
-	sequentialDelay?: number;
-	failBulk?: boolean;
+	bulkDelay?: number | undefined;
+	sequentialDelay?: number | undefined;
+	failBulk?: boolean | undefined;
 }) {
 	const createTransactions = vi
 		.fn()
@@ -355,7 +366,7 @@ async function measurePerformanceScenario(options: {
 		options.amount ?? 5,
 	);
 	const params = buildPerformanceParams(
-		analysis.summary.target_statement_balance,
+		analysis.summary.target_statement_balance.value,
 	);
 	const { api } = createPerformanceApi({
 		bulkDelay: options.bulkDelay,
@@ -373,7 +384,7 @@ async function measurePerformanceScenario(options: {
 				ynabAPI: api,
 				analysis,
 				params,
-				budgetId: params.budget_id,
+				budgetId: params.budget_id!,
 				accountId: params.account_id,
 				initialAccount: performanceInitialAccount,
 				currencyCode: "USD",
@@ -384,7 +395,7 @@ async function measurePerformanceScenario(options: {
 			ynabAPI: api,
 			analysis,
 			params,
-			budgetId: params.budget_id,
+			budgetId: params.budget_id!,
 			accountId: params.account_id,
 			initialAccount: performanceInitialAccount,
 			currencyCode: "USD",
