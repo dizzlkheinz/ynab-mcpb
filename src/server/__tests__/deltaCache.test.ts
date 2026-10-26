@@ -5,6 +5,7 @@ import {
 	DeltaCache,
 	type DeltaCacheEntry,
 	type Logger,
+	type MergeFn,
 } from "../deltaCache.js";
 import type { ServerKnowledgeStore } from "../serverKnowledgeStore.js";
 
@@ -93,7 +94,7 @@ describe("DeltaCache", () => {
 
 	const createMerger = () =>
 		vi
-			.fn<[TestEntity[], TestEntity[], unknown?], TestEntity[]>()
+			.fn<MergeFn<TestEntity>>()
 			.mockImplementation((snapshot: TestEntity[], delta: TestEntity[]) => [
 				...snapshot,
 				...delta,
@@ -164,7 +165,7 @@ describe("DeltaCache", () => {
 			);
 
 			expect(cacheManagerSpies.set).toHaveBeenCalledTimes(1);
-			const [key, entry] = cacheManagerSpies.set.mock.calls[0];
+			const [key, entry] = cacheManagerSpies.set.mock.calls[0]!;
 			expect(key).toBe("transactions:list:budget-1");
 			expect(entry.snapshot).toEqual([{ id: "full" }]);
 		});

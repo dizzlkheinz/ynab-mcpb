@@ -5,6 +5,7 @@ import {
 	DeltaCache,
 	type DeltaCacheEntry,
 	type Logger,
+	type MergeFn,
 } from "../deltaCache.js";
 import type { ServerKnowledgeStore } from "../serverKnowledgeStore.js";
 
@@ -98,7 +99,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 
 	const createMerger = () =>
 		vi
-			.fn<[TestEntity[], TestEntity[], unknown?], TestEntity[]>()
+			.fn<MergeFn<TestEntity>>()
 			.mockImplementation((snapshot: TestEntity[], delta: TestEntity[]) => [
 				...snapshot,
 				...delta,
@@ -152,7 +153,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 			},
 		);
 
-		const [, entry, options] = cacheManagerSpies.set.mock.calls[0];
+		const [, entry, options] = cacheManagerSpies.set.mock.calls[0]!;
 		expect(entry.staleWhileRevalidate).toBeUndefined();
 		expect(options).not.toHaveProperty("staleWhileRevalidate");
 	});
@@ -209,7 +210,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 			},
 		);
 
-		const [, entry] = cacheManagerSpies.set.mock.calls[0];
+		const [, entry] = cacheManagerSpies.set.mock.calls[0]!;
 		expect(entry.staleWhileRevalidate).toBe(1000);
 	});
 });

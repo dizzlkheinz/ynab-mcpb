@@ -9,40 +9,28 @@ import {
 const buildCategory = (
 	overrides: Partial<ynab.Category> = {},
 ): ynab.Category => ({
-	id: overrides.id ?? "cat-1",
-	category_group_id: overrides.category_group_id ?? "group-1",
-	category_group_name: overrides.category_group_name,
-	name: overrides.name ?? "Category 1",
-	hidden: overrides.hidden ?? false,
-	original_category_group_id: overrides.original_category_group_id ?? null,
-	note: overrides.note ?? null,
-	budgeted: overrides.budgeted ?? 0,
-	activity: overrides.activity ?? 0,
-	balance: overrides.balance ?? 0,
-	goal_type: overrides.goal_type ?? null,
-	goal_needs_whole_amount: overrides.goal_needs_whole_amount ?? null,
-	goal_day: overrides.goal_day ?? null,
-	goal_cadence: overrides.goal_cadence ?? null,
-	goal_cadence_frequency: overrides.goal_cadence_frequency ?? null,
-	goal_creation_month: overrides.goal_creation_month ?? null,
-	goal_target: overrides.goal_target ?? null,
-	goal_target_month: overrides.goal_target_month ?? null,
-	goal_percentage_complete: overrides.goal_percentage_complete ?? null,
-	goal_months_to_budget: overrides.goal_months_to_budget ?? null,
-	goal_under_funded: overrides.goal_under_funded ?? null,
-	goal_overall_funded: overrides.goal_overall_funded ?? null,
-	goal_overall_left: overrides.goal_overall_left ?? null,
-	goal_snoozed_at: overrides.goal_snoozed_at ?? null,
-	deleted: overrides.deleted ?? false,
+	id: "cat-1",
+	category_group_id: "group-1",
+	name: "Category 1",
+	hidden: false,
+	internal: false,
+	budgeted: 0,
+	activity: 0,
+	balance: 0,
+	goal_type: null,
+	deleted: false,
+	...overrides,
 });
 
 const buildCategoryGroup = (
 	overrides: Partial<ynab.CategoryGroupWithCategories> = {},
 ): ynab.CategoryGroupWithCategories => ({
-	id: overrides.id ?? "group-1",
-	name: overrides.name ?? "Group 1",
-	hidden: overrides.hidden ?? false,
-	deleted: overrides.deleted ?? false,
+	id: "group-1",
+	name: "Group 1",
+	hidden: false,
+	internal: false,
+	deleted: false,
+	...overrides,
 	categories: overrides.categories
 		? overrides.categories.map((category) => ({ ...category }))
 		: [buildCategory()],
@@ -51,44 +39,29 @@ const buildCategoryGroup = (
 const buildSubTransaction = (
 	overrides: Partial<ynab.SubTransaction> = {},
 ): ynab.SubTransaction => ({
-	id: overrides.id ?? "sub-1",
-	transaction_id: overrides.transaction_id ?? "txn-1",
-	amount: overrides.amount ?? 500,
-	memo: overrides.memo ?? null,
-	payee_id: overrides.payee_id ?? null,
-	payee_name: overrides.payee_name ?? null,
-	category_id: overrides.category_id ?? null,
-	category_name: overrides.category_name ?? null,
-	transfer_account_id: overrides.transfer_account_id ?? null,
-	transfer_transaction_id: overrides.transfer_transaction_id ?? null,
-	deleted: overrides.deleted ?? false,
+	id: "sub-1",
+	transaction_id: "txn-1",
+	amount: 500,
+	deleted: false,
+	...overrides,
 });
 
 const buildTransaction = (
 	overrides: Partial<ynab.TransactionDetail> = {},
 ): ynab.TransactionDetail => ({
-	id: overrides.id ?? "txn-1",
-	date: overrides.date ?? "2024-01-01",
-	amount: overrides.amount ?? 1000,
-	memo: overrides.memo ?? null,
-	cleared: overrides.cleared ?? ynab.TransactionClearedStatus.Cleared,
-	approved: overrides.approved ?? true,
-	flag_color: overrides.flag_color ?? null,
-	flag_name: overrides.flag_name ?? null,
-	account_id: overrides.account_id ?? "account-1",
-	payee_id: overrides.payee_id ?? null,
-	category_id: overrides.category_id ?? null,
-	transfer_account_id: overrides.transfer_account_id ?? null,
-	transfer_transaction_id: overrides.transfer_transaction_id ?? null,
-	matched_transaction_id: overrides.matched_transaction_id ?? null,
-	import_id: overrides.import_id ?? null,
-	import_payee_name: overrides.import_payee_name ?? null,
-	import_payee_name_original: overrides.import_payee_name_original ?? null,
-	debt_transaction_type: overrides.debt_transaction_type ?? null,
-	deleted: overrides.deleted ?? false,
-	account_name: overrides.account_name ?? "Checking",
-	payee_name: overrides.payee_name ?? null,
-	category_name: overrides.category_name ?? null,
+	id: "txn-1",
+	date: "2024-01-01",
+	amount: 1000,
+	cleared: ynab.TransactionClearedStatus.Cleared,
+	approved: true,
+	flag_color: null,
+	account_id: "account-1",
+	debt_transaction_type: null,
+	deleted: false,
+	account_name: "Checking",
+	payee_name: null,
+	category_name: null,
+	...overrides,
 	subtransactions: overrides.subtransactions
 		? overrides.subtransactions.map((sub) => ({ ...sub }))
 		: [],
@@ -144,12 +117,12 @@ describe("mergeFlatEntities", () => {
 	});
 
 	it("should process multiple operations in single delta batch", () => {
-		const snapshot = [
+		const snapshot: { id: string; status?: string; deleted?: boolean }[] = [
 			{ id: "1", status: "keep" },
 			{ id: "2", status: "update-me" },
 			{ id: "3", status: "delete-me" },
 		];
-		const delta = [
+		const delta: { id: string; status?: string; deleted?: boolean }[] = [
 			{ id: "2", status: "updated" },
 			{ id: "3", deleted: true },
 			{ id: "4", status: "new" },
@@ -322,6 +295,7 @@ describe("mergeCategories", () => {
 				id: "group-1",
 				name: "Updated",
 				hidden: true,
+				internal: false,
 				deleted: false,
 				categories: [],
 			},
@@ -692,17 +666,18 @@ describe("Merge Edge Cases", () => {
 
 	it("should handle null and undefined optional fields", () => {
 		const snapshot = [buildTransaction({ id: "txn-1", memo: "existing" })];
+		// YNAB sends null for a cleared memo, though the SDK types memo as
+		// an optional string
 		const delta = [
-			buildTransaction({
-				id: "txn-1",
-				memo: undefined,
-				payee_name: null,
-				subtransactions: [],
-			}),
+			{
+				...buildTransaction({ id: "txn-1", payee_name: null }),
+				memo: null,
+			} as unknown as ynab.TransactionDetail,
 		];
 
 		const result = mergeTransactions(snapshot, delta);
 		expect(result[0]!.memo).toBeNull();
+		expect(result[0]!.payee_name).toBeNull();
 	});
 
 	it("should efficiently handle large snapshots", () => {
