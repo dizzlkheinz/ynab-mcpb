@@ -1,6 +1,14 @@
+import { promises as fs } from "node:fs";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it, vi } from "vitest";
+import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import { createReadDeps } from "../../__tests__/readDeps.js";
+import {
+	handleReconcileAccount,
+	ReconcileAccountSchema,
+} from "../../tools/reconciliation/index.js";
+import { ReconcileAccountOutputSchema } from "../../tools/schemas/outputs/reconciliationOutputs.js";
 import {
 	ToolRegistry,
 	type ToolRegistryDependencies,
@@ -598,5 +606,217 @@ describe("ToolRegistry write safety enforcement", () => {
 				},
 			}),
 		).toThrow("must expose dry_run");
+	});
+});
+
+function reconciliationHarness() {
+	const transactions: ynab.TransactionDetail[] = [];
+	const account = {
+		id: "account",
+		name: "Checking",
+		type: "checking",
+		balance: 0,
+		cleared_balance: 0,
+		uncleared_balance: 0,
+		deleted: false,
+	};
+	const create = vi.fn(
+		async (_budget: string, body: { transaction: ynab.NewTransaction }) => {
+			const transaction = {
+				...body.transaction,
+				id: "created",
+				deleted: false,
+				account_name: "Checking",
+				payee_id: null,
+				payee_name: body.transaction.payee_name ?? null,
+				category_id: null,
+				category_name: null,
+				transfer_account_id: null,
+				transfer_transaction_id: null,
+				matched_transaction_id: null,
+				import_id: null,
+				import_payee_name: null,
+				import_payee_name_original: null,
+				debt_transaction_type: null,
+				flag_color: null,
+				flag_name: null,
+				subtransactions: [],
+			} as unknown as ynab.TransactionDetail;
+			transactions.push(transaction);
+			account.balance += transaction.amount;
+			account.cleared_balance += transaction.amount;
+			return { data: { transaction } };
+		},
+	);
+	const api = {
+		accounts: {
+			getAccounts: async () => ({
+				data: { accounts: [{ ...account }], server_knowledge: 1 },
+			}),
+			getAccountById: async () => ({ data: { account: { ...account } } }),
+		},
+		transactions: {
+			getTransactionsByAccount: async () => ({
+				data: {
+					transactions: structuredClone(transactions),
+					server_knowledge: 1,
+				},
+			}),
+			createTransaction: create,
+		},
+		plans: {
+			getPlanById: async () => ({
+				data: {
+					plan: { currency_format: { iso_code: "USD", decimal_digits: 2 } },
+				},
+			}),
+		},
+	} as unknown as ynab.API;
+	const deps = createReadDeps(api);
+	const registry = new ToolRegistry(
+		createDependencies(
+			new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+		),
+	);
+	registry.register({
+		name: "ynab_reconcile_account",
+		description: "Reconcile",
+		inputSchema: ReconcileAccountSchema,
+		outputSchema: ReconcileAccountOutputSchema,
+		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run", prepared: true },
+		},
+		handler: ({ input, context }) =>
+			handleReconcileAccount(
+				api,
+				input,
+				deps,
+				context.sendProgress,
+				undefined,
+				context.prepareExecution,
+			),
+	});
+	const args = {
+		budget_id: "budget",
+		account_id: "account",
+		csv_file_path: "C:/statement.csv",
+		statement_balance: -10,
+		statement_end_date: "2025-01-01",
+		auto_create_transactions: true,
+	};
+	const call = (confirmation?: string) =>
+		registry.executeTool({
+			name: "ynab_reconcile_account",
+			accessToken: "token",
+			arguments: {
+				...args,
+				...(confirmation ? { confirmation_token: confirmation } : {}),
+			},
+		});
+	return { transactions, create, call };
+}
+
+describe("prepared reconciliation confirmation", () => {
+	it("executes the previewed CSV bytes even when the file changes", async () => {
+		const read = vi
+			.spyOn(fs, "readFile")
+			.mockResolvedValue("Date,Description,Amount\n2025-01-01,Coffee,-10.00");
+		try {
+			const { call, create } = reconciliationHarness();
+			const preview = await call();
+			expect(preview.isError).not.toBe(true);
+			expect(create).not.toHaveBeenCalled();
+			expect(JSON.stringify(preview.structuredContent)).toContain(
+				'"amount_milliunits":-10000',
+			);
+			read.mockResolvedValue(
+				"Date,Description,Amount\n2025-01-01,Changed,-999.00",
+			);
+			const execution = await call(confirmationToken(preview));
+			expect(execution.isError).not.toBe(true);
+			expect(read).toHaveBeenCalledTimes(1);
+			expect(create).toHaveBeenCalledWith(
+				"budget",
+				expect.objectContaining({
+					transaction: expect.objectContaining({
+						amount: -10000,
+						payee_name: "Coffee",
+					}),
+				}),
+			);
+			expect(JSON.stringify(execution.structuredContent)).toContain(
+				'"balance_status":"balanced"',
+			);
+			expect((await call(FIXED_TOKEN)).isError).toBe(true);
+			expect(create).toHaveBeenCalledTimes(1);
+		} finally {
+			read.mockRestore();
+		}
+	});
+	it("rejects changed account data without rematching or writing", async () => {
+		const read = vi
+			.spyOn(fs, "readFile")
+			.mockResolvedValue("Date,Description,Amount\n2025-01-01,Coffee,-10.00");
+		try {
+			const { call, create, transactions } = reconciliationHarness();
+			const preview = await call();
+			transactions.push({
+				id: "imported-since-preview",
+				date: "2025-01-01",
+				amount: -10000,
+				cleared: "cleared",
+			} as ynab.TransactionDetail);
+			const execution = await call(confirmationToken(preview));
+			expect(execution.isError).toBe(true);
+			expect(JSON.stringify(execution.content)).toContain(
+				"changed since preview",
+			);
+			expect(read).toHaveBeenCalledTimes(1);
+			expect(create).not.toHaveBeenCalled();
+		} finally {
+			read.mockRestore();
+		}
+	});
+	it("returns an explicit error and operation outcome for uncertain writes", async () => {
+		const read = vi
+			.spyOn(fs, "readFile")
+			.mockResolvedValue("Date,Description,Amount\n2025-01-01,Coffee,-10.00");
+		try {
+			const { call, create } = reconciliationHarness();
+			const preview = await call();
+			create.mockRejectedValue(new Error("ECONNRESET"));
+			const execution = await call(confirmationToken(preview));
+			expect(execution.isError).toBe(true);
+			expect(JSON.stringify(execution.structuredContent)).toContain(
+				'"status":"uncertain"',
+			);
+			expect(JSON.stringify(execution.content)).not.toContain(
+				"already up to date",
+			);
+			expect(create).toHaveBeenCalledTimes(1);
+		} finally {
+			read.mockRestore();
+		}
+	});
+	it("does not issue a token when required preparation was omitted", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy()),
+		);
+		registry.register({
+			name: "ynab_missing_plan",
+			description: "Invalid prepared tool",
+			inputSchema: z.object({ dry_run: z.boolean().optional() }),
+			handler: async () => result({}),
+			metadata: {
+				writeSafety: { mutation: true, preview: "dry-run", prepared: true },
+			},
+		});
+		const response = await registry.executeTool({
+			name: "ynab_missing_plan",
+			accessToken: "token",
+			arguments: {},
+		});
+		expect(response.isError).toBe(true);
+		expect(JSON.stringify(response.content)).toContain("did not capture");
 	});
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
-import type { DeltaCache } from "../../server/deltaCache.js";
+import { CacheManager } from "../../server/cacheManager.js";
 import type { DeltaFetcher } from "../deltaFetcher.js";
 import {
 	CreateScheduledTransactionSchema,
@@ -55,12 +55,6 @@ function apiMock() {
 	} as unknown as ynab.API;
 }
 
-function cacheMock() {
-	return {
-		forceFullRefresh: vi.fn(),
-	} as unknown as DeltaCache;
-}
-
 describe("scheduled transaction tools", () => {
 	it("lists normalized scheduled transactions from the delta cache", async () => {
 		const deltaFetcher = {
@@ -78,7 +72,7 @@ describe("scheduled transaction tools", () => {
 					limit: 10,
 					offset: 0,
 				},
-				{ deltaFetcher },
+				{ deltaFetcher, cacheManager: new CacheManager() },
 			),
 		);
 		expect(output["total_count"]).toBe(1);
@@ -120,9 +114,8 @@ describe("scheduled transaction tools", () => {
 		).not.toHaveBeenCalled();
 	});
 
-	it("creates and invalidates scheduled delta state", async () => {
+	it("creates a scheduled transaction using integer milliunits", async () => {
 		const api = apiMock();
-		const cache = cacheMock();
 		const params = CreateScheduledTransactionSchema.parse({
 			budget_id: "budget-1",
 			account_id: "account-1",
@@ -130,9 +123,7 @@ describe("scheduled transaction tools", () => {
 			amount_milliunits: -20_125,
 			frequency: "monthly",
 		});
-		await handleCreateScheduledTransaction(api, params, {
-			deltaCache: cache,
-		});
+		await handleCreateScheduledTransaction(api, params);
 		expect(
 			api.scheduledTransactions.createScheduledTransaction,
 		).toHaveBeenCalledWith(
@@ -141,23 +132,16 @@ describe("scheduled transaction tools", () => {
 				scheduled_transaction: expect.objectContaining({ amount: -20_125 }),
 			}),
 		);
-		expect(cache.forceFullRefresh).toHaveBeenCalledWith(
-			"budget-1",
-			"scheduled_transactions",
-		);
 	});
 
 	it("merges partial updates with required current fields", async () => {
 		const api = apiMock();
-		const cache = cacheMock();
 		const params = UpdateScheduledTransactionSchema.parse({
 			budget_id: "budget-1",
 			scheduled_transaction_id: "scheduled-1",
 			amount_decimal: -20,
 		});
-		await handleUpdateScheduledTransaction(api, params, {
-			deltaCache: cache,
-		});
+		await handleUpdateScheduledTransaction(api, params);
 		expect(
 			api.scheduledTransactions.updateScheduledTransaction,
 		).toHaveBeenCalledWith(
@@ -183,9 +167,7 @@ describe("scheduled transaction tools", () => {
 			memo: null,
 			flag_color: null,
 		});
-		await handleUpdateScheduledTransaction(api, params, {
-			deltaCache: cacheMock(),
-		});
+		await handleUpdateScheduledTransaction(api, params);
 		expect(
 			api.scheduledTransactions.updateScheduledTransaction,
 		).toHaveBeenCalledWith(
@@ -202,35 +184,60 @@ describe("scheduled transaction tools", () => {
 		);
 	});
 
-	it("deletes and invalidates scheduled delta state", async () => {
+	it("returns confirmation after deleting a scheduled transaction", async () => {
 		const api = apiMock();
-		const cache = cacheMock();
 		const output = parse(
-			await handleDeleteScheduledTransaction(
-				api,
-				{
-					budget_id: "budget-1",
-					scheduled_transaction_id: "scheduled-1",
-				},
-				{ deltaCache: cache },
-			),
+			await handleDeleteScheduledTransaction(api, {
+				budget_id: "budget-1",
+				scheduled_transaction_id: "scheduled-1",
+			}),
 		);
 		expect(output).toEqual({
 			success: true,
 			scheduled_transaction_id: "scheduled-1",
 		});
-		expect(cache.forceFullRefresh).toHaveBeenCalled();
 	});
 
-	it("does not write to YNAB when the delta cache dependency is missing", async () => {
+	it("does not write a scheduled delete preview", async () => {
 		const api = apiMock();
 		const result = await handleDeleteScheduledTransaction(api, {
 			budget_id: "budget-1",
 			scheduled_transaction_id: "scheduled-1",
+			dry_run: true,
 		});
-		expect(result.isError).toBe(true);
+		expect(result.isError).not.toBe(true);
 		expect(
 			api.scheduledTransactions.deleteScheduledTransaction,
 		).not.toHaveBeenCalled();
+	});
+	it("clears the old payee ID when changing a scheduled payee by name", async () => {
+		const api = apiMock();
+		await handleUpdateScheduledTransaction(
+			api,
+			UpdateScheduledTransactionSchema.parse({
+				budget_id: "budget-1",
+				scheduled_transaction_id: "scheduled-1",
+				payee_name: "New provider",
+			}),
+		);
+		expect(
+			api.scheduledTransactions.updateScheduledTransaction,
+		).toHaveBeenCalledWith("budget-1", "scheduled-1", {
+			scheduled_transaction: expect.objectContaining({
+				payee_id: null,
+				payee_name: "New provider",
+			}),
+		});
+	});
+
+	it("rejects invalid calendar dates for scheduled writes", () => {
+		expect(() =>
+			CreateScheduledTransactionSchema.parse({
+				account_id: "account-1",
+				date: "2026-02-30",
+				amount_decimal: -20,
+				frequency: "monthly",
+			}),
+		).toThrow("valid ISO date");
 	});
 });

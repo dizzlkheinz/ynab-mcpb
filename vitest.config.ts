@@ -1,58 +1,30 @@
 import { defineConfig } from "vitest/config";
 
-const integrationFiles = ["src/**/*.integration.test.ts"];
-const isVerbose = !!process.env.VERBOSE_TESTS;
+const offlineEnvironment = {
+	YNAB_ACCESS_TOKEN: "test-token-for-mocked-tests",
+	RUN_LIVE_YNAB_TESTS: "false",
+	SKIP_E2E_TESTS: "true",
+};
 
 export default defineConfig({
 	test: {
 		environment: "node",
 		globals: true,
 		setupFiles: ["src/__tests__/setup.ts"],
-		exclude: ["src/__tests__/testRunner.ts"],
-		// Use projects to target unit/integration/e2e groups (Vitest v3)
 		projects: [
 			{
 				test: {
 					name: "unit",
 					include: ["src/**/*.{test,spec}.ts"],
-					exclude: [
-						"src/**/*.integration.test.ts",
-						"src/**/*.e2e.test.ts",
-						// YNABMCPServer.test.ts requires real YNAB API token and makes API calls,
-						// so it runs as part of integration tests, not unit tests
-						"src/server/__tests__/YNABMCPServer.test.ts",
-					],
+					exclude: ["src/**/*.integration.test.ts", "src/**/*.e2e.test.ts"],
+					env: offlineEnvironment,
 				},
 			},
 			{
 				test: {
-					name: "integration:core",
-					include: integrationFiles,
-					env: {
-						INTEGRATION_TEST_TIER: "core",
-					},
-					testTimeout: 30000,
-					hookTimeout: 10000,
-				},
-			},
-			{
-				test: {
-					name: "integration:domain",
-					include: integrationFiles,
-					env: {
-						INTEGRATION_TEST_TIER: "domain",
-					},
-					testTimeout: 60000,
-					hookTimeout: 15000,
-				},
-			},
-			{
-				test: {
-					name: "integration:full",
-					include: integrationFiles,
-					env: {
-						INTEGRATION_TEST_TIER: "full",
-					},
+					name: "integration",
+					include: ["src/**/*.integration.test.ts"],
+					env: offlineEnvironment,
 					testTimeout: 120000,
 					hookTimeout: 30000,
 					fileParallelism: false,
@@ -61,8 +33,12 @@ export default defineConfig({
 			},
 			{
 				test: {
-					name: "e2e",
-					include: ["src/**/*.e2e.test.ts"],
+					name: "live",
+					include: ["src/**/*.e2e.test.ts", "src/**/*.integration.test.ts"],
+					testTimeout: 60000,
+					hookTimeout: 30000,
+					fileParallelism: false,
+					maxWorkers: 1,
 				},
 			},
 		],
@@ -84,14 +60,7 @@ export default defineConfig({
 				statements: 80,
 			},
 		},
-		reporters: [
-			isVerbose ? "verbose" : "dot",
-			"html",
-			"./vitest-reporters/split-json-reporter.ts",
-		],
-		outputFile: {
-			html: "./test-results/index.html",
-		},
+		reporters: [process.env.VERBOSE_TESTS ? "verbose" : "dot"],
 	},
 	resolve: {
 		alias: {

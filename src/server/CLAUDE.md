@@ -367,12 +367,17 @@ describe('CacheManager', () => {
 
 **Impact**: Stale data returned to clients, inconsistent state.
 
-**Fix**: Always invalidate related caches after writes:
+**Fix**: Route every YNAB request through `YNABClient` (`ynabClient.ts`). Its SDK
+transport hook invalidates the budget's caches and delta knowledge before and
+after each mutating HTTP request, so tools, resources, completions and
+reconciliation share one invalidation path:
 
 ```typescript
-await updateTransaction(transactionId, updates);
-this.cacheManager.delete(`transaction:${transactionId}`);
-this.cacheManager.delete(`transactions:${budgetId}`);
+const ynabAPI = new YNABClient(accessToken, {
+  cacheManager,
+  knowledgeStore,
+  rateLimiter,
+});
 ```
 
 ### 2. Missing ErrorHandler

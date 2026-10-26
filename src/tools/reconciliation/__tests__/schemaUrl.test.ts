@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ReconcileAccountOutputSchema } from "../../schemas/outputs/reconciliationOutputs.js";
 import { buildReconciliationPayload } from "../outputBuilder.js";
 import type { ReconciliationAnalysis } from "../types.js";
 
@@ -49,16 +50,13 @@ const minimalAnalysis: ReconciliationAnalysis = {
 	insights: [],
 };
 
-describe("buildReconciliationPayload schema reference", () => {
-	it("points to the master branch schema file on raw.githubusercontent.com", () => {
-		const { structured } = buildReconciliationPayload(minimalAnalysis, {
-			accountId: "acct-id",
+describe("public reconciliation schema", () => {
+	it("validates the result actually returned to MCP clients", () => {
+		const payload = buildReconciliationPayload(minimalAnalysis, {
 			accountName: "Checking",
 			currencyCode: "USD",
 		});
-
-		const schemaUrl = (structured as Record<string, unknown>)["schema_url"];
-		expect(schemaUrl).toContain("raw.githubusercontent.com");
-		expect(schemaUrl).toContain("/docs/schemas/reconciliation-v2.json");
+		expect(ReconcileAccountOutputSchema.safeParse(payload).success).toBe(true);
+		expect(payload.human).toContain("Balances match perfectly");
 	});
 });

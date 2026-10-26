@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
 import {
 	GetPayeeSchema,
@@ -13,16 +14,16 @@ import {
 } from "./deltaTestUtils.js";
 
 // Mock the cache manager
+const cacheManager = vi.hoisted(() => ({
+	wrap: vi.fn(),
+	has: vi.fn(),
+	delete: vi.fn(),
+	deleteMany: vi.fn(),
+	deleteByPrefix: vi.fn(),
+	deleteByBudgetId: vi.fn(),
+	clear: vi.fn(),
+}));
 vi.mock("../../server/cacheManager.js", () => ({
-	cacheManager: {
-		wrap: vi.fn(),
-		has: vi.fn(),
-		delete: vi.fn(),
-		deleteMany: vi.fn(),
-		deleteByPrefix: vi.fn(),
-		deleteByBudgetId: vi.fn(),
-		clear: vi.fn(),
-	},
 	CacheManager: {
 		generateKey: vi.fn(),
 	},
@@ -40,7 +41,7 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { cacheManager, CacheManager, CACHE_TTLS } = await import(
+const { CacheManager, CACHE_TTLS } = await import(
 	"../../server/cacheManager.js"
 );
 
@@ -95,7 +96,10 @@ describe("Payee Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -122,9 +126,13 @@ describe("Payee Tools", () => {
 			(cacheManager.wrap as any).mockResolvedValue(mockPayees);
 			(cacheManager.has as any).mockReturnValue(true);
 
-			const result = await handleListPayees(mockYnabAPI, {
-				budget_id: "budget-1",
-			});
+			const result = await handleListPayees(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			// Verify cache was used
 			expect(CacheManager.generateKey).toHaveBeenCalledWith(
@@ -180,7 +188,10 @@ describe("Payee Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -218,7 +229,10 @@ describe("Payee Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -240,7 +254,10 @@ describe("Payee Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -262,7 +279,10 @@ describe("Payee Tools", () => {
 					budget_id: "invalid-budget",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -282,7 +302,10 @@ describe("Payee Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -304,7 +327,10 @@ describe("Payee Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -326,7 +352,10 @@ describe("Payee Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			expect(result.content).toHaveLength(1);
@@ -352,11 +381,15 @@ describe("Payee Tools", () => {
 			(cacheManager.wrap as any).mockResolvedValue(mockPayee);
 			(cacheManager.has as any).mockReturnValue(true);
 
-			const result = await handleGetPayee(mockYnabAPI, {
-				budget_id: "budget-1",
-				payee_id: "payee-1",
-				response_format: "json",
-			});
+			const result = await handleGetPayee(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					payee_id: "payee-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			// Verify cache was used
 			expect(CacheManager.generateKey).toHaveBeenCalledWith(
@@ -392,11 +425,15 @@ describe("Payee Tools", () => {
 				data: { payee: mockPayee },
 			});
 
-			const result = await handleGetPayee(mockYnabAPI, {
-				budget_id: "budget-1",
-				payee_id: "payee-1",
-				response_format: "json",
-			});
+			const result = await handleGetPayee(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					payee_id: "payee-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -422,11 +459,15 @@ describe("Payee Tools", () => {
 				data: { payee: mockPayee },
 			});
 
-			const result = await handleGetPayee(mockYnabAPI, {
-				budget_id: "budget-1",
-				payee_id: "payee-2",
-				response_format: "json",
-			});
+			const result = await handleGetPayee(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					payee_id: "payee-2",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -438,11 +479,15 @@ describe("Payee Tools", () => {
 				new Error("404 Not Found"),
 			);
 
-			const result = await handleGetPayee(mockYnabAPI, {
-				budget_id: "budget-1",
-				payee_id: "invalid-payee",
-				response_format: "json",
-			});
+			const result = await handleGetPayee(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					payee_id: "invalid-payee",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -454,11 +499,15 @@ describe("Payee Tools", () => {
 				new Error("401 Unauthorized"),
 			);
 
-			const result = await handleGetPayee(mockYnabAPI, {
-				budget_id: "budget-1",
-				payee_id: "payee-1",
-				response_format: "json",
-			});
+			const result = await handleGetPayee(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					payee_id: "payee-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));

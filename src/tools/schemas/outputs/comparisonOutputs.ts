@@ -1,3 +1,4 @@
+import { TransactionOutputSchema } from "../../transactionModel.js";
 /**
  * @fileoverview Transaction comparison and export output schemas for YNAB MCP server.
  * Defines Zod validation schemas for comparing bank CSV transactions with YNAB transactions
@@ -606,13 +607,10 @@ export const ExportTransactionsOutputSchema = z.object({
 	preview_count: z.number(),
 	total_count: z.number(),
 	preview_transactions: z.array(
-		z.object({
-			id: z.string(),
-			date: z.string(),
-			amount: z.number(), // Decimal currency units
-			memo: z.string().nullable().optional(),
-			payee_name: z.string().nullable().optional(),
-			category_name: z.string().nullable().optional(),
+		TransactionOutputSchema.partial().required({
+			id: true,
+			date: true,
+			amount: true,
 		}),
 	),
 });

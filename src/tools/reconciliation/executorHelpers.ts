@@ -43,10 +43,6 @@ export function truncateMemo(memo: string | null | undefined): string {
 	return `${memo.substring(0, MAX_MEMO_LENGTH - 3)}...`;
 }
 
-export function formatDisplay(amount: number, currency: string): string {
-	return toMoneyValue(amount, currency).value_display;
-}
-
 export function computeUpdateFlags(
 	match: TransactionMatch,
 	params: ReconcileAccountRequest,

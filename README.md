@@ -268,11 +268,26 @@ Profiles are selected once at server startup, so clients receive a stable `tools
 ```bash
 git clone https://github.com/dizzlkheinz/ynab-mcpb.git
 cd ynab-mcpb
-npm install
-cp .env.example .env   # add YNAB_ACCESS_TOKEN
+npm ci --ignore-scripts
 npm run build
 npm test
+npm run test:integration
 ```
+
+The build and offline tests require no YNAB credentials. `npm test` runs unit and
+performance tests; `test:integration` runs mocked integration tests. Use
+`test:all`, `test:coverage`, or `test:watch` for the combined suite, coverage, or
+watch mode. Pass file/test-name filters directly, for example
+`npm run test:integration -- transactionTools`.
+
+To start the server locally, copy `.env.example` to `.env`, add your token, and
+run `npm start`. Live smoke tests require an explicit `RUN_LIVE_YNAB_TESTS=true`
+and run through `npm run test:live`; `SKIP_E2E_TESTS=true` disables them.
+
+Builds do not package or install global tools. To create a Claude Desktop bundle,
+install the official CLI once (`npm install --global @anthropic-ai/mcpb`), then
+run `npm run build` and `npm run package:mcpb`. Review npm package contents with
+`npm pack --dry-run --ignore-scripts`.
 
 Architecture and contributor guidance: [`CLAUDE.md`](CLAUDE.md)
 

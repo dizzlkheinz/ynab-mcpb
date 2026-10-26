@@ -9,8 +9,8 @@ import { getRuntimeConfig } from "../server/config.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { ValidationError, withToolErrorHandling } from "../types/index.js";
-import { milliunitsToAmount } from "../utils/money.js";
 import { requireResolvedBudgetId } from "./adapters.js";
+import { toTransactionOutput } from "./transactionModel.js";
 
 /**
  * Schema for ynab:export_transactions tool parameters
@@ -258,38 +258,11 @@ export async function handleExportTransactions(
 					},
 				},
 				transactions: transactions.map((transaction) => {
-					if (params.minimal !== false) {
-						// Default true, only false if explicitly set
-						// Minimal export: only essential fields
-						return {
-							id: transaction.id,
-							date: transaction.date,
-							amount: milliunitsToAmount(transaction.amount),
-							payee_name: transaction.payee_name,
-							cleared: transaction.cleared,
-						};
-					}
-					// Full export: all available fields
-					return {
-						id: transaction.id,
-						date: transaction.date,
-						amount: milliunitsToAmount(transaction.amount),
-						memo: transaction.memo,
-						cleared: transaction.cleared,
-						approved: transaction.approved,
-						flag_color: transaction.flag_color,
-						account_id: transaction.account_id,
-						payee_id: transaction.payee_id,
-						category_id: transaction.category_id,
-						transfer_account_id: transaction.transfer_account_id,
-						transfer_transaction_id: transaction.transfer_transaction_id,
-						matched_transaction_id: transaction.matched_transaction_id,
-						import_id: transaction.import_id,
-						deleted: transaction.deleted,
-						account_name: transaction.account_name,
-						payee_name: transaction.payee_name,
-						category_name: transaction.category_name,
-					};
+					const output = toTransactionOutput(transaction);
+					if (params.minimal === false) return output;
+					const { id, date, amount, amount_milliunits, payee_name, cleared } =
+						output;
+					return { id, date, amount, amount_milliunits, payee_name, cleared };
 				}),
 			};
 
@@ -308,20 +281,13 @@ export async function handleExportTransactions(
 				export_mode: params.minimal !== false ? "minimal" : "full",
 				minimal_fields:
 					params.minimal !== false
-						? "id, date, amount, payee_name, cleared"
+						? "id, date, amount, amount_milliunits, payee_name, cleared"
 						: null,
 				filename_explanation:
 					"Filename format: ynab_{filters}_{count}items_{timestamp}.json - identifies what data was exported, when, and how many transactions",
 				preview_count: previewCount,
 				total_count: transactions.length,
-				preview_transactions: preview.map((transaction) => ({
-					id: transaction.id,
-					date: transaction.date,
-					amount: milliunitsToAmount(transaction.amount),
-					memo: transaction.memo,
-					payee_name: transaction.payee_name,
-					category_name: transaction.category_name,
-				})),
+				preview_transactions: preview.map(toTransactionOutput),
 			};
 			return {
 				content: [

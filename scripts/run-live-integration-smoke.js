@@ -29,6 +29,11 @@ const hasRealToken =
 	typeof accessToken === "string" &&
 	!invalidTokens.has(accessToken.toLowerCase());
 
+if ((process.env.SKIP_E2E_TESTS ?? "").trim().toLowerCase() === "true") {
+	console.error("Live YNAB tests are disabled by SKIP_E2E_TESTS=true.");
+	process.exit(1);
+}
+
 if (!liveOptIn) {
 	console.error("Live YNAB smoke tests require RUN_LIVE_YNAB_TESTS=true.");
 	process.exit(1);
@@ -40,10 +45,10 @@ if (!hasRealToken) {
 }
 
 const SUITES = {
-	smoke: ["--project", "e2e", "src/__tests__/smoke.e2e.test.ts"],
+	smoke: ["--project", "live", "src/__tests__/smoke.e2e.test.ts"],
 	delta: [
 		"--project",
-		"integration:domain",
+		"live",
 		"src/tools/__tests__/accountTools.delta.integration.test.ts",
 		"src/tools/__tests__/budgetTools.delta.integration.test.ts",
 		"src/tools/__tests__/categoryTools.delta.integration.test.ts",

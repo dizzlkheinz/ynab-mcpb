@@ -540,10 +540,14 @@ export class ErrorHandler {
 	/**
 	 * Extracts HTTP status code from various error shapes
 	 */
-	private extractHttpStatus(error: unknown): number | null {
-		if (!error || typeof error !== "object") {
+	private extractHttpStatus(
+		error: unknown,
+		seen = new Set<object>(),
+	): number | null {
+		if (!error || typeof error !== "object" || seen.has(error)) {
 			return null;
 		}
+		seen.add(error);
 
 		const directStatus = (error as { status?: unknown }).status;
 		if (
@@ -566,7 +570,8 @@ export class ErrorHandler {
 			}
 		}
 
-		return null;
+		// The SDK wraps failures from its fetch hook in FetchError.cause.
+		return this.extractHttpStatus((error as { cause?: unknown }).cause, seen);
 	}
 
 	/**

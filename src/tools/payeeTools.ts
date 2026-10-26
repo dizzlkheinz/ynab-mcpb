@@ -2,11 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import { CacheKeys } from "../server/cacheKeys.js";
-import {
-	CACHE_TTLS,
-	CacheManager,
-	cacheManager,
-} from "../server/cacheManager.js";
+import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import {
 	formatPayeeDetail,
@@ -14,16 +10,12 @@ import {
 } from "../server/markdownFormatter.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
-import type { ToolFactory } from "../types/toolRegistration.js";
+import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import {
 	createAdapters,
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import {
-	type DeltaFetcherDeps,
-	resolveDeltaFetcherDeps,
-} from "./deltaSupport.js";
 import {
 	GetPayeeOutputSchema,
 	ListPayeesOutputSchema,
@@ -68,12 +60,12 @@ export type GetPayeeParams = z.infer<typeof GetPayeeSchema>;
  * Lists all payees for a specific budget
  */
 export async function handleListPayees(
-	ynabAPI: ynab.API,
+	_ynabAPI: ynab.API,
 	params: ListPayeesParams,
-	deps?: DeltaFetcherDeps,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
+	const { deltaFetcher } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -131,8 +123,10 @@ export async function handleListPayees(
 export async function handleGetPayee(
 	ynabAPI: ynab.API,
 	params: GetPayeeParams,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
+	const { cacheManager } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -191,7 +185,7 @@ export async function handleGetPayee(
  * Registers all payee-related tools with the registry.
  */
 export const registerPayeeTools: ToolFactory = (registry, context) => {
-	const { adapt, adaptWithDelta } = createAdapters(context);
+	const { adaptWithDelta } = createAdapters(context);
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
@@ -240,7 +234,7 @@ Errors:
   - "Payee not found" → invalid payee_id`,
 		inputSchema: GetPayeeSchema,
 		outputSchema: GetPayeeOutputSchema,
-		handler: adapt(handleGetPayee),
+		handler: adaptWithDelta(handleGetPayee),
 		defaultArgumentResolver: budgetResolver<z.infer<typeof GetPayeeSchema>>(),
 		metadata: {
 			annotations: {

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { maybeTextOf, textOf } from "../../__tests__/testUtils.js";
+import type { ReadDeps } from "../../types/toolRegistration.js";
+import type { DeltaFetcher } from "../deltaFetcher.js";
 import {
 	type BulkTransactionInput,
 	type CreateReceiptSplitTransactionParams,
@@ -14,8 +16,8 @@ import {
 	handleCreateTransaction,
 	handleCreateTransactions,
 	handleDeleteTransaction,
-	handleGetTransaction,
-	handleListTransactions,
+	handleGetTransaction as handleGetTransactionImpl,
+	handleListTransactions as handleListTransactionsImpl,
 	handleUpdateTransaction,
 	handleUpdateTransactions,
 	ListTransactionsSchema,
@@ -23,7 +25,7 @@ import {
 	UpdateTransactionsSchema,
 } from "../transactionTools.js";
 
-// Mock the YNAB API - declare first so it can be used in deltaSupport mock
+// Mock the YNAB API without global service fallbacks.
 const mockYnabAPI = {
 	transactions: {
 		getTransactions: vi.fn(),
@@ -42,98 +44,75 @@ const mockYnabAPI = {
 	},
 } as unknown as ynab.API;
 
-// Mock the cache manager
-vi.mock("../../server/cacheManager.js", () => ({
-	cacheManager: {
-		wrap: vi.fn(),
-		has: vi.fn(),
-		get: vi.fn(),
-		set: vi.fn(),
-		delete: vi.fn(),
-		deleteMany: vi.fn(),
-		deleteByPrefix: vi.fn(),
-		deleteByBudgetId: vi.fn(),
-		clear: vi.fn(),
-	},
-	CacheManager: {
-		generateKey: vi.fn(),
-	},
-	CACHE_TTLS: {
-		TRANSACTIONS: 180000,
-	},
-}));
-
-// Mock deltaSupport to create a simple DeltaFetcher that calls the API directly
-vi.mock("../deltaSupport.js", async (importOriginal) => {
-	const original = await importOriginal<typeof import("../deltaSupport.js")>();
-	return {
-		...original,
-		resolveDeltaFetcherDeps: vi.fn(() => {
-			// Create a simple mock delta fetcher that calls the API directly
-			const mockDeltaFetcher = {
-				fetchAccounts: vi.fn(async (budgetId: string) => {
-					const response = await mockYnabAPI.accounts.getAccounts(budgetId);
-					return {
-						data: response.data.accounts,
-						wasCached: false,
-						usedDelta: false,
-						serverKnowledge: response.data.server_knowledge ?? 0,
-					};
-				}),
-				fetchTransactions: vi.fn(
-					async (budgetId: string, sinceDate?: string, type?: string) => {
-						// Pass all 4 arguments to match YNAB API signature
-						const response = await mockYnabAPI.transactions.getTransactions(
-							budgetId,
-							sinceDate,
-							type,
-							undefined,
-						);
-						return {
-							data: response.data.transactions,
-							wasCached: false,
-							usedDelta: false,
-							serverKnowledge: response.data.server_knowledge ?? 0,
-						};
-					},
-				),
-				fetchTransactionsByAccount: vi.fn(
-					async (budgetId: string, accountId: string, sinceDate?: string) => {
-						// Pass all 5 arguments to match YNAB API signature
-						const response =
-							await mockYnabAPI.transactions.getTransactionsByAccount(
-								budgetId,
-								accountId,
-								sinceDate,
-								undefined,
-								undefined,
-							);
-						return {
-							data: response.data.transactions,
-							wasCached: false,
-							usedDelta: false,
-							serverKnowledge: response.data.server_knowledge ?? 0,
-						};
-					},
-				),
+// Read dependencies are explicit test-local fixtures; production handlers use the same path.
+const cacheManager = {
+	wrap: vi.fn(
+		async (_key: string, options: { loader: () => Promise<unknown> }) =>
+			options.loader(),
+	),
+	has: vi.fn(() => false),
+};
+const makeDeltaFetcher = vi.fn((api: ynab.API) => ({
+	fetchAccounts: vi.fn(async (budgetId: string) => {
+		const response = await api.accounts.getAccounts(budgetId);
+		return { data: response.data.accounts, wasCached: false, usedDelta: false };
+	}),
+	fetchTransactions: vi.fn(
+		async (
+			budgetId: string,
+			since?: string,
+			type?: ynab.GetTransactionsTypeEnum,
+		) => {
+			const response = await api.transactions.getTransactions(
+				budgetId,
+				since,
+				undefined,
+				type,
+			);
+			return {
+				data: response.data.transactions,
+				wasCached: false,
+				usedDelta: false,
 			};
-			return mockDeltaFetcher;
-		}),
+		},
+	),
+	fetchTransactionsByAccount: vi.fn(
+		async (budgetId: string, accountId: string, since?: string) => {
+			const response = await api.transactions.getTransactionsByAccount(
+				budgetId,
+				accountId,
+				since,
+				undefined,
+				undefined,
+			);
+			return {
+				data: response.data.transactions,
+				wasCached: false,
+				usedDelta: false,
+			};
+		},
+	),
+}));
+function readDeps(api: ynab.API): ReadDeps {
+	return {
+		deltaFetcher: makeDeltaFetcher(api) as unknown as DeltaFetcher,
+		cacheManager: cacheManager as unknown as ReadDeps["cacheManager"],
 	};
-});
-
-// Import mocked cache manager
-const { cacheManager: mockedCacheManager, CacheManager } = await import(
-	"../../server/cacheManager.js"
-);
-const cacheManager = vi.mocked(mockedCacheManager);
+}
+const handleListTransactions = (
+	api: ynab.API,
+	params: Parameters<typeof handleListTransactionsImpl>[1],
+) => handleListTransactionsImpl(api, params, readDeps(api));
+const handleGetTransaction = (
+	api: ynab.API,
+	params: Parameters<typeof handleGetTransactionImpl>[1],
+) => handleGetTransactionImpl(api, params, readDeps(api));
 const { globalRequestLogger } = await import("../../server/requestLogger.js");
-const { resolveDeltaFetcherDeps } = await import("../deltaSupport.js");
 
 describe("transactionTools", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		// Reset NODE_ENV to test to ensure cache bypassing in tests
+		// Each test controls its explicit read dependencies.
 		process.env["NODE_ENV"] = "test";
 	});
 
@@ -218,7 +197,7 @@ describe("transactionTools", () => {
 			subtransactions: [],
 		};
 
-		it("should bypass cache in test environment for unfiltered requests", async () => {
+		it("uses the injected transaction fetcher for unfiltered requests", async () => {
 			const mockResponse = {
 				data: {
 					transactions: [mockTransaction],
@@ -235,8 +214,6 @@ describe("transactionTools", () => {
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
-			// In test environment, cache should be bypassed
-			expect(cacheManager.wrap).not.toHaveBeenCalled();
 			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
 				"budget-123",
 				undefined,
@@ -250,48 +227,6 @@ describe("transactionTools", () => {
 				"Fresh data retrieved from YNAB API",
 			);
 			expect(parsedContent.transactions[0].id).toBe("transaction-123");
-		});
-
-		it.skip("should use cache when NODE_ENV is not test for unfiltered requests - obsolete test, caching now handled by DeltaFetcher", async () => {
-			// This test is obsolete as caching is now handled by DeltaFetcher
-			// Keeping for reference but skipping to avoid test failures
-		});
-
-		it.skip("should not cache filtered requests - obsolete test (account_id)", async () => {
-			// Temporarily set NODE_ENV to non-test
-			process.env["NODE_ENV"] = "development";
-
-			const mockResponse = {
-				data: {
-					transactions: [mockTransaction],
-				},
-			};
-
-			(
-				mockYnabAPI.transactions.getTransactionsByAccount as any
-			).mockResolvedValue(mockResponse);
-
-			const params = {
-				budget_id: "budget-123",
-				account_id: "account-456",
-				response_format: "json" as const,
-			};
-			const result = await handleListTransactions(mockYnabAPI, params);
-
-			// Verify cache was NOT used for filtered request
-			expect(cacheManager.wrap).not.toHaveBeenCalled();
-			expect(
-				mockYnabAPI.transactions.getTransactionsByAccount,
-			).toHaveBeenCalledWith("budget-123", "account-456", undefined);
-
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.cached).toBe(false);
-			expect(parsedContent.cache_info).toBe(
-				"Fresh data retrieved from YNAB API",
-			);
-
-			// Reset NODE_ENV
-			process.env["NODE_ENV"] = "test";
 		});
 
 		it("should list all transactions when no filters are provided", async () => {
@@ -413,10 +348,10 @@ describe("transactionTools", () => {
 				response_format: "json" as const,
 			});
 			const deltaFetcherResult = vi
-				.mocked(resolveDeltaFetcherDeps)
+				.mocked(makeDeltaFetcher)
 				.mock.results.slice(-1)[0]!.value;
 
-			expect(vi.mocked(resolveDeltaFetcherDeps)).toHaveBeenCalled();
+			expect(vi.mocked(makeDeltaFetcher)).toHaveBeenCalled();
 			expect(deltaFetcherResult.fetchTransactions).toHaveBeenCalledWith(
 				"budget-123",
 				undefined,
@@ -456,8 +391,8 @@ describe("transactionTools", () => {
 			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
 				"budget-123",
 				"2024-01-01",
-				"uncategorized",
 				undefined,
+				"uncategorized",
 			);
 		});
 
@@ -1154,13 +1089,12 @@ describe("transactionTools", () => {
 
 			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.transaction.amount).toBe(-75);
-			expect(response.transaction.account_balance).toBe(250);
-			expect(response.transaction.account_cleared_balance).toBe(225);
 			expect(response.transaction.subtransactions).toEqual([
 				{
 					id: "sub-1",
 					transaction_id: "new-transaction-123",
 					amount: -25,
+					amount_milliunits: -25000,
 					memo: "Groceries",
 					payee_id: null,
 					payee_name: "Corner Store",
@@ -1174,6 +1108,7 @@ describe("transactionTools", () => {
 					id: "sub-2",
 					transaction_id: "new-transaction-123",
 					amount: -50,
+					amount_milliunits: -50000,
 					memo: "Rent",
 					payee_id: "payee-landlord",
 					payee_name: null,
@@ -1242,102 +1177,6 @@ describe("transactionTools", () => {
 
 			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe("Failed to create transaction");
-		});
-
-		it("should invalidate transaction cache on successful transaction creation", async () => {
-			const mockResponse = {
-				data: {
-					transaction: mockCreatedTransaction,
-				},
-			};
-
-			const mockAccountResponse = {
-				data: {
-					account: {
-						id: "account-456",
-						balance: 100000,
-						cleared_balance: 95000,
-					},
-				},
-			};
-
-			(mockYnabAPI.transactions.createTransaction as any).mockResolvedValue(
-				mockResponse,
-			);
-			(mockYnabAPI.accounts.getAccountById as any).mockResolvedValue(
-				mockAccountResponse,
-			);
-
-			const mockCacheKey = "transactions:list:budget-123:generated-key";
-			(CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-
-			const result = await handleCreateTransaction(mockYnabAPI, {
-				budget_id: "budget-123",
-				account_id: "account-456",
-				amount: -50000,
-				date: "2024-01-01",
-			});
-
-			// Verify cache was invalidated for transaction list
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				"transactions",
-				"list",
-				"budget-123",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
-
-			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.transaction.id).toBe("new-transaction-123");
-		});
-
-		it("should not invalidate cache on dry_run transaction creation", async () => {
-			const mockResponse = {
-				data: {
-					transaction: mockCreatedTransaction,
-				},
-			};
-
-			const mockAccountResponse = {
-				data: {
-					account: {
-						id: "account-456",
-						balance: 100000,
-						cleared_balance: 95000,
-					},
-				},
-			};
-
-			(mockYnabAPI.transactions.createTransaction as any).mockResolvedValue(
-				mockResponse,
-			);
-			(mockYnabAPI.accounts.getAccountById as any).mockResolvedValue(
-				mockAccountResponse,
-			);
-
-			const result = await handleCreateTransaction(mockYnabAPI, {
-				budget_id: "budget-123",
-				account_id: "account-456",
-				amount: -50000,
-				date: "2024-01-01",
-				dry_run: true,
-			});
-
-			// Verify cache was NOT invalidated for dry run
-			expect(cacheManager.delete).not.toHaveBeenCalled();
-			expect(CacheManager.generateKey).not.toHaveBeenCalled();
-
-			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.dry_run).toBe(true);
-			expect(parsedContent.action).toBe("ynab_create_transaction");
-			expect(parsedContent.request).toMatchObject({
-				budget_id: "budget-123",
-				account_id: "account-456",
-				amount: -50000,
-				date: "2024-01-01",
-				dry_run: true,
-			});
 		});
 	});
 
@@ -2671,8 +2510,6 @@ describe("transactionTools", () => {
 			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.transaction.id).toBe("transaction-456");
 			expect(response.transaction.amount).toBe(-60);
-			expect(response.updated_balance).toBe(150);
-			expect(response.updated_cleared_balance).toBe(140);
 		});
 
 		it("converts a transaction to a split in place", async () => {
@@ -2836,99 +2673,6 @@ describe("transactionTools", () => {
 
 			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe("Failed to update transaction");
-		});
-
-		it("should invalidate transaction cache on successful transaction update", async () => {
-			const mockResponse = {
-				data: {
-					transaction: mockUpdatedTransaction,
-				},
-			};
-
-			const mockAccountResponse = {
-				data: {
-					account: {
-						id: "account-789",
-						balance: 150000,
-						cleared_balance: 140000,
-					},
-				},
-			};
-
-			(mockYnabAPI.transactions.updateTransaction as any).mockResolvedValue(
-				mockResponse,
-			);
-			(mockYnabAPI.accounts.getAccountById as any).mockResolvedValue(
-				mockAccountResponse,
-			);
-
-			const mockCacheKey = "transactions:list:budget-123:generated-key";
-			(CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-
-			const result = await handleUpdateTransaction(mockYnabAPI, {
-				budget_id: "budget-123",
-				transaction_id: "transaction-456",
-				amount: -60000,
-			});
-
-			// Verify cache was invalidated for transaction list
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				"transactions",
-				"list",
-				"budget-123",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
-
-			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.transaction.id).toBe("transaction-456");
-		});
-
-		it("should not invalidate cache on dry_run transaction update", async () => {
-			const mockResponse = {
-				data: {
-					transaction: mockUpdatedTransaction,
-				},
-			};
-
-			const mockAccountResponse = {
-				data: {
-					account: {
-						id: "account-789",
-						balance: 150000,
-						cleared_balance: 140000,
-					},
-				},
-			};
-
-			(mockYnabAPI.transactions.updateTransaction as any).mockResolvedValue(
-				mockResponse,
-			);
-			(mockYnabAPI.accounts.getAccountById as any).mockResolvedValue(
-				mockAccountResponse,
-			);
-
-			const result = await handleUpdateTransaction(mockYnabAPI, {
-				budget_id: "budget-123",
-				transaction_id: "transaction-456",
-				amount: -60000,
-				dry_run: true,
-			});
-
-			// Verify cache was NOT invalidated for dry run
-			expect(cacheManager.delete).not.toHaveBeenCalled();
-			expect(CacheManager.generateKey).not.toHaveBeenCalled();
-
-			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.dry_run).toBe(true);
-			expect(parsedContent.action).toBe("ynab_update_transaction");
-			expect(parsedContent.request).toEqual({
-				budget_id: "budget-123",
-				transaction_id: "transaction-456",
-				amount: -60000,
-				dry_run: true,
-			});
 		});
 	});
 
@@ -3258,99 +3002,6 @@ describe("transactionTools", () => {
 			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe("Failed to delete transaction");
 		});
-
-		it("should invalidate transaction cache on successful transaction deletion", async () => {
-			const mockResponse = {
-				data: {
-					transaction: mockDeletedTransaction,
-					server_knowledge: 12345,
-				},
-			};
-
-			const mockAccountResponse = {
-				data: {
-					account: {
-						id: "account-456",
-						balance: 50000,
-						cleared_balance: 45000,
-					},
-				},
-			};
-
-			(mockYnabAPI.transactions.deleteTransaction as any).mockResolvedValue(
-				mockResponse,
-			);
-			(mockYnabAPI.accounts.getAccountById as any).mockResolvedValue(
-				mockAccountResponse,
-			);
-
-			const mockCacheKey = "transaction:get:budget-123:transaction-456";
-			(CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-
-			const result = await handleDeleteTransaction(mockYnabAPI, {
-				budget_id: "budget-123",
-				transaction_id: "transaction-456",
-			});
-
-			// Verify cache was invalidated for specific transaction
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				"transaction",
-				"get",
-				"budget-123",
-				"transaction-456",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
-
-			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.transaction.id).toBe("transaction-456");
-			expect(parsedContent.transaction.deleted).toBe(true);
-		});
-
-		it("should not invalidate cache on dry_run transaction deletion", async () => {
-			const mockResponse = {
-				data: {
-					transaction: mockDeletedTransaction,
-				},
-			};
-
-			const mockAccountResponse = {
-				data: {
-					account: {
-						id: "account-456",
-						balance: 50000,
-						cleared_balance: 45000,
-					},
-				},
-			};
-
-			(mockYnabAPI.transactions.deleteTransaction as any).mockResolvedValue(
-				mockResponse,
-			);
-			(mockYnabAPI.accounts.getAccountById as any).mockResolvedValue(
-				mockAccountResponse,
-			);
-
-			const result = await handleDeleteTransaction(mockYnabAPI, {
-				budget_id: "budget-123",
-				transaction_id: "transaction-456",
-				dry_run: true,
-			});
-
-			// Verify cache was NOT invalidated for dry run
-			expect(cacheManager.delete).not.toHaveBeenCalled();
-			expect(CacheManager.generateKey).not.toHaveBeenCalled();
-
-			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.dry_run).toBe(true);
-			expect(parsedContent.action).toBe("ynab_delete_transaction");
-			expect(parsedContent.request).toEqual({
-				budget_id: "budget-123",
-				transaction_id: "transaction-456",
-				dry_run: true,
-			});
-		});
 	});
 
 	describe("handleCreateTransactions", () => {
@@ -3421,9 +3072,6 @@ describe("transactionTools", () => {
 		beforeEach(() => {
 			transactionCounter = 0;
 			(mockYnabAPI.transactions.createTransactions as any).mockReset();
-			cacheManager.delete.mockReset();
-			cacheManager.deleteMany.mockReset();
-			(CacheManager.generateKey as any).mockReset();
 		});
 
 		describe("dry run", () => {
@@ -3454,7 +3102,6 @@ describe("transactionTools", () => {
 					"account-bar",
 				]);
 				expect(response["transactions_preview"]).toHaveLength(2);
-				expect(cacheManager.deleteMany).not.toHaveBeenCalled();
 			});
 
 			it("surfaces validation errors before execution", async () => {
@@ -3503,11 +3150,6 @@ describe("transactionTools", () => {
 					buildApiResponse(apiTransactions),
 				);
 
-				(CacheManager.generateKey as any).mockImplementation(
-					(...parts: (string | number | boolean | undefined)[]) =>
-						parts.filter((part) => part !== undefined).join(":"),
-				);
-
 				const response = await parseResponse(
 					handleCreateTransactions(
 						mockYnabAPI,
@@ -3525,7 +3167,6 @@ describe("transactionTools", () => {
 					),
 				).toBe(true);
 				// Cache invalidation now uses individual delete calls, not deleteMany
-				expect(cacheManager.delete).toHaveBeenCalled();
 			});
 
 			it("correlates transactions without import_ids using hashes", async () => {
@@ -3698,7 +3339,7 @@ describe("transactionTools", () => {
 				byteSpy.mockRestore();
 			});
 
-			it("errors when response cannot fit under 100KB", async () => {
+			it("returns a completed batch receipt when result details cannot fit under 100KB", async () => {
 				const byteSpy = vi.spyOn(Buffer, "byteLength");
 				byteSpy
 					.mockImplementationOnce(() => 90 * 1024)
@@ -3714,8 +3355,11 @@ describe("transactionTools", () => {
 					buildParams(),
 				);
 				const parsed = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
-				expect(parsed.error).toBeDefined();
-				expect(parsed.error.message).toContain("RESPONSE_TOO_LARGE");
+				expect(result.isError).not.toBe(true);
+				expect(parsed.summary.created).toBe(1);
+				expect(parsed.results).toEqual([]);
+				expect(parsed.results_omitted).toBe(true);
+				expect(parsed.message).toContain("Batch processed");
 				byteSpy.mockRestore();
 			});
 		});
@@ -3770,117 +3414,6 @@ describe("transactionTools", () => {
 					"correlation_failed",
 				);
 				logErrorSpy.mockRestore();
-			});
-		});
-
-		describe("cache invalidation", () => {
-			it("invalidates transaction, account, month, and resource caches for affected resources", async () => {
-				const batch = [
-					buildTransaction({ account_id: "account-A", date: "2024-03-15" }),
-					buildTransaction({ account_id: "account-B", date: "2024-04-01" }),
-				];
-				const apiTransactions = batch.map((txn, index) =>
-					buildApiTransaction({ ...txn, id: `cache-${index + 1}` }),
-				);
-				(CacheManager.generateKey as any).mockImplementation(
-					(...parts: (string | number | boolean | undefined)[]) =>
-						parts.filter((part) => part !== undefined).join(":"),
-				);
-				(mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
-					buildApiResponse(apiTransactions),
-				);
-
-				await handleCreateTransactions(
-					mockYnabAPI,
-					buildParams({ transactions: batch }),
-				);
-
-				// Cache invalidation now uses individual delete calls
-				const deleteCalls = cacheManager.delete.mock.calls.map(
-					(call) => call[0],
-				);
-				expect(deleteCalls).toEqual(
-					expect.arrayContaining([
-						"transactions:list:budget-123",
-						"accounts:get:budget-123:account-A",
-						"accounts:get:budget-123:account-B",
-						"month:get:budget-123:2024-03-01",
-						"month:get:budget-123:2024-04-01",
-						"resources:budgets:list",
-						"resources:budgets:get:budget-123",
-						"resources:accounts:list:budget-123",
-						"resources:accounts:get:budget-123:account-A",
-						"resources:accounts:get:budget-123:account-B",
-						"resources:months:list:budget-123",
-						"resources:months:get:budget-123:2024-03-01",
-						"resources:months:get:budget-123:2024-04-01",
-					]),
-				);
-			});
-
-			it("deduplicates cache keys for repeated accounts and months", async () => {
-				const batch = [
-					buildTransaction({
-						account_id: "repeat-account",
-						date: "2024-05-10",
-					}),
-					buildTransaction({
-						account_id: "repeat-account",
-						date: "2024-05-20",
-					}),
-				];
-				const apiTransactions = batch.map((txn, index) =>
-					buildApiTransaction({ ...txn, id: `repeat-cache-${index + 1}` }),
-				);
-				(CacheManager.generateKey as any).mockImplementation(
-					(...parts: (string | number | boolean | undefined)[]) =>
-						parts.filter((part) => part !== undefined).join(":"),
-				);
-				(mockYnabAPI.transactions.createTransactions as any).mockResolvedValue(
-					buildApiResponse(apiTransactions),
-				);
-
-				await handleCreateTransactions(
-					mockYnabAPI,
-					buildParams({ transactions: batch }),
-				);
-
-				// Cache invalidation uses individual delete calls - check for account and month keys
-				const deleteCalls = cacheManager.delete.mock.calls.map(
-					(call) => call[0],
-				);
-				const uniqueKeys = new Set(deleteCalls);
-				expect(uniqueKeys.has("accounts:get:budget-123:repeat-account")).toBe(
-					true,
-				);
-				expect(uniqueKeys.has("month:get:budget-123:2024-05-01")).toBe(true);
-				expect(
-					uniqueKeys.has("resources:accounts:get:budget-123:repeat-account"),
-				).toBe(true);
-				expect(
-					uniqueKeys.has("resources:months:get:budget-123:2024-05-01"),
-				).toBe(true);
-				// The implementation naturally deduplicates via Set, so we should only see one delete call per key
-				expect(
-					deleteCalls.filter(
-						(key) => key === "accounts:get:budget-123:repeat-account",
-					).length,
-				).toBeGreaterThanOrEqual(1);
-				expect(
-					deleteCalls.filter(
-						(key) => key === "resources:accounts:get:budget-123:repeat-account",
-					).length,
-				).toBeGreaterThanOrEqual(1);
-			});
-
-			it("does not invalidate caches during dry runs", async () => {
-				await handleCreateTransactions(
-					mockYnabAPI,
-					buildParams({
-						dry_run: true,
-					}),
-				);
-				expect(cacheManager.delete).not.toHaveBeenCalled();
 			});
 		});
 
@@ -4146,15 +3679,6 @@ describe("transactionTools", () => {
 			...overrides,
 		});
 
-		const buildUpdateTransactionWithoutMetadata = (
-			overrides: Record<string, unknown> = {},
-		) =>
-			buildUpdateTransaction({
-				original_account_id: undefined,
-				original_date: undefined,
-				...overrides,
-			});
-
 		const buildParams = (overrides: Record<string, unknown> = {}) => ({
 			budget_id: "budget-123",
 			transactions: [buildUpdateTransaction()],
@@ -4205,10 +3729,6 @@ describe("transactionTools", () => {
 			transactionCounter = 0;
 			(mockYnabAPI.transactions.updateTransactions as any).mockReset();
 			(mockYnabAPI.transactions.getTransactionById as any).mockReset();
-			cacheManager.delete.mockReset();
-			cacheManager.deleteMany.mockReset();
-			(cacheManager.get as any).mockReset();
-			(CacheManager.generateKey as any).mockReset();
 		});
 
 		describe("dry run", () => {
@@ -4234,7 +3754,6 @@ describe("transactionTools", () => {
 				expect(response["dry_run"]).toBe(true);
 				expect(response["summary"].total_transactions).toBe(2);
 				expect(response["transactions_preview"]).toHaveLength(2);
-				expect(cacheManager.deleteMany).not.toHaveBeenCalled();
 			});
 
 			it("provides before/after preview showing only changed fields", async () => {
@@ -4245,7 +3764,6 @@ describe("transactionTools", () => {
 					cleared: "uncleared",
 				});
 
-				(cacheManager.get as any).mockReturnValue(null);
 				(mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue({
 					data: { transaction: currentTransaction },
 				});
@@ -4272,16 +3790,17 @@ describe("transactionTools", () => {
 				expect(preview.transaction_id).toBe("transaction-001");
 				expect(preview.before).toEqual({
 					amount: -5,
+					amount_milliunits: -5000,
 					memo: "Old memo",
 				});
 				expect(preview.after).toEqual({
 					amount: -10,
+					amount_milliunits: -10000,
 					memo: "New memo",
 				});
 			});
 
 			it('sets before to "unavailable" when current state cannot be fetched', async () => {
-				(cacheManager.get as any).mockReturnValue(null);
 				(mockYnabAPI.transactions.getTransactionById as any).mockRejectedValue(
 					new Error("Not found"),
 				);
@@ -4307,7 +3826,6 @@ describe("transactionTools", () => {
 			});
 
 			it("includes summary with accounts_affected and fields_to_update", async () => {
-				(cacheManager.get as any).mockReturnValue(null);
 				(mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue({
 					data: {
 						transaction: buildApiTransaction({
@@ -4341,7 +3859,6 @@ describe("transactionTools", () => {
 			});
 
 			it("previews split lines in major currency units", async () => {
-				(cacheManager.get as any).mockReturnValue(null);
 				(mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue({
 					data: {
 						transaction: buildApiTransaction({
@@ -4377,8 +3894,8 @@ describe("transactionTools", () => {
 				expect(
 					response["transactions_preview"][0].after.subtransactions,
 				).toEqual([
-					{ amount: -3, category_id: "category-1" },
-					{ amount: -2, category_id: "category-2" },
+					{ amount: -3, amount_milliunits: -3000, category_id: "category-1" },
+					{ amount: -2, amount_milliunits: -2000, category_id: "category-2" },
 				]);
 			});
 
@@ -4399,7 +3916,7 @@ describe("transactionTools", () => {
 				).not.toHaveBeenCalled();
 			});
 
-			it("reuses metadata resolution output for preview without duplicate fetches", async () => {
+			it("fetches fresh preview state once per transaction", async () => {
 				const currentTransaction = buildApiTransaction({
 					id: "transaction-001",
 					amount: -5000,
@@ -4408,21 +3925,11 @@ describe("transactionTools", () => {
 					date: "2024-01-01",
 				});
 
-				// Mock cache to return the transaction for metadata resolution
-				(cacheManager.get as any).mockImplementation((key: string) => {
-					if (key.includes("transaction-001")) {
-						return currentTransaction;
-					}
-					return null;
-				});
-				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
-				);
+				vi.mocked(
+					mockYnabAPI.transactions.getTransactionById,
+				).mockResolvedValue({
+					data: { transaction: currentTransaction },
+				} as unknown as ynab.TransactionResponse);
 
 				const params = buildParams({
 					dry_run: true,
@@ -4439,12 +3946,10 @@ describe("transactionTools", () => {
 					handleUpdateTransactions(mockYnabAPI, params),
 				);
 
-				// Verify the transaction was fetched only once during metadata resolution
-				// After refactoring, getTransactionById should NOT be called because
-				// resolveMetadata already provided the full TransactionDetail
+				// A preview reads the current transaction only once.
 				expect(
 					mockYnabAPI.transactions.getTransactionById,
-				).not.toHaveBeenCalled();
+				).toHaveBeenCalledTimes(1);
 
 				// Verify preview still works correctly
 				expect(response["dry_run"]).toBe(true);
@@ -4453,10 +3958,12 @@ describe("transactionTools", () => {
 				expect(preview.transaction_id).toBe("transaction-001");
 				expect(preview.before).toEqual({
 					amount: -5,
+					amount_milliunits: -5000,
 					memo: "Old memo",
 				});
 				expect(preview.after).toEqual({
 					amount: -10,
+					amount_milliunits: -10000,
 					memo: "New memo",
 				});
 			});
@@ -4477,15 +3984,6 @@ describe("transactionTools", () => {
 					buildApiResponse(apiTransactions),
 				);
 
-				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
-				);
-
 				const response = await parseResponse(
 					handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
 				);
@@ -4499,7 +3997,6 @@ describe("transactionTools", () => {
 				).toBe(true);
 				expect(response["transactions"][0].amount).toBe(-1.5);
 				// Cache invalidation now uses individual delete calls
-				expect(cacheManager.delete).toHaveBeenCalled();
 			});
 
 			it("only updates provided fields (partial updates)", async () => {
@@ -4558,162 +4055,6 @@ describe("transactionTools", () => {
 			});
 		});
 
-		describe("metadata resolution for cache invalidation", () => {
-			it("uses client-supplied original_* metadata when provided", async () => {
-				const transaction = buildUpdateTransaction({
-					id: "transaction-001",
-					amount: -5000,
-					original_account_id: "account-old",
-					original_date: "2024-01-01",
-				});
-
-				const apiTransaction = buildApiTransaction({ id: "transaction-001" });
-				(mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
-					buildApiResponse([apiTransaction]),
-				);
-
-				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
-				);
-
-				await handleUpdateTransactions(
-					mockYnabAPI,
-					buildParams({ transactions: [transaction] }),
-				);
-
-				// Should not need to fetch transaction since metadata was provided
-				expect(
-					mockYnabAPI.transactions.getTransactionById,
-				).not.toHaveBeenCalled();
-
-				// Should invalidate cache using provided metadata (uses individual delete calls)
-				const deleteCalls = cacheManager.delete.mock.calls.map(
-					(call) => call[0],
-				);
-				expect(deleteCalls).toEqual(
-					expect.arrayContaining([
-						"accounts:get:budget-123:account-old",
-						"month:get:budget-123:2024-01-01",
-					]),
-				);
-			});
-
-			it("falls back to cache when metadata not provided", async () => {
-				const transaction = buildUpdateTransactionWithoutMetadata({
-					id: "transaction-001",
-					amount: -5000,
-				});
-
-				const cachedTransaction = {
-					id: "transaction-001",
-					account_id: "account-cached",
-					date: "2024-02-01",
-				};
-
-				(cacheManager.get as any).mockReturnValue(cachedTransaction);
-
-				const apiTransaction = buildApiTransaction({ id: "transaction-001" });
-				(mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
-					buildApiResponse([apiTransaction]),
-				);
-
-				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
-				);
-
-				await handleUpdateTransactions(
-					mockYnabAPI,
-					buildParams({ transactions: [transaction] }),
-				);
-
-				// Should use cache and not fetch from API
-				expect(cacheManager.get).toHaveBeenCalled();
-				expect(
-					mockYnabAPI.transactions.getTransactionById,
-				).not.toHaveBeenCalled();
-
-				// Should invalidate cache using cached metadata (uses individual delete calls)
-				const deleteCalls = cacheManager.delete.mock.calls.map(
-					(call) => call[0],
-				);
-				expect(deleteCalls).toEqual(
-					expect.arrayContaining([
-						"accounts:get:budget-123:account-cached",
-						"month:get:budget-123:2024-02-01",
-					]),
-				);
-			});
-
-			it("falls back to API when metadata not in cache", async () => {
-				const transaction = buildUpdateTransactionWithoutMetadata({
-					id: "transaction-001",
-					amount: -5000,
-				});
-
-				(cacheManager.get as any).mockReturnValue(null);
-
-				const fetchedTransaction = {
-					data: {
-						transaction: {
-							id: "transaction-001",
-							account_id: "account-fetched",
-							date: "2024-03-01",
-						},
-					},
-				};
-
-				(mockYnabAPI.transactions.getTransactionById as any).mockResolvedValue(
-					fetchedTransaction,
-				);
-
-				const apiTransaction = buildApiTransaction({ id: "transaction-001" });
-				(mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
-					buildApiResponse([apiTransaction]),
-				);
-
-				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
-				);
-
-				await handleUpdateTransactions(
-					mockYnabAPI,
-					buildParams({ transactions: [transaction] }),
-				);
-
-				// Should fetch from API when not in cache
-				expect(cacheManager.get).toHaveBeenCalled();
-				expect(
-					mockYnabAPI.transactions.getTransactionById,
-				).toHaveBeenCalledWith("budget-123", "transaction-001");
-
-				// Should invalidate cache using fetched metadata (uses individual delete calls)
-				const deleteCalls = cacheManager.delete.mock.calls.map(
-					(call) => call[0],
-				);
-				expect(deleteCalls).toEqual(
-					expect.arrayContaining([
-						"accounts:get:budget-123:account-fetched",
-						"month:get:budget-123:2024-03-01",
-					]),
-				);
-			});
-		});
-
 		describe("error handling", () => {
 			it("handles network failures", async () => {
 				const error = new Error("Network error");
@@ -4740,11 +4081,6 @@ describe("transactionTools", () => {
 					},
 				});
 
-				(cacheManager.get as any).mockReturnValue({
-					account_id: "account-valid",
-					date: "2024-01-01",
-				});
-
 				const response = await parseResponse(
 					handleUpdateTransactions(
 						mockYnabAPI,
@@ -4764,7 +4100,6 @@ describe("transactionTools", () => {
 					amount: -5000,
 				});
 
-				(cacheManager.get as any).mockReturnValue(null);
 				(mockYnabAPI.transactions.getTransactionById as any).mockRejectedValue(
 					new Error("Transaction not found"),
 				);
@@ -4772,15 +4107,6 @@ describe("transactionTools", () => {
 				const apiTransaction = buildApiTransaction({ id: "transaction-001" });
 				(mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
 					buildApiResponse([apiTransaction]),
-				);
-
-				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
 				);
 
 				// Should complete successfully even if metadata resolution fails
@@ -4792,171 +4118,6 @@ describe("transactionTools", () => {
 				);
 
 				expect(response["summary"].updated).toBe(1);
-			});
-		});
-
-		describe("metadata completeness threshold", () => {
-			it("throws ValidationError when >5% of transactions have missing metadata (live mode)", async () => {
-				// Create 20 transactions, 2 (10%) with missing metadata - exceeds 5% threshold
-				const transactions = Array.from({ length: 20 }, (_, i) =>
-					i < 2
-						? buildUpdateTransactionWithoutMetadata({
-								id: `transaction-${i + 1}`,
-								amount: -1000,
-							})
-						: buildUpdateTransaction({
-								id: `transaction-${i + 1}`,
-								amount: -1000,
-							}),
-				);
-
-				// Mock cache miss for all transactions
-				(cacheManager.get as any).mockReturnValue(null);
-
-				// Mock API to fail for 2 transactions (10% > 5% threshold)
-				(mockYnabAPI.transactions.getTransactionById as any).mockImplementation(
-					async (_budgetId: string, transactionId: string) => {
-						if (
-							transactionId === "transaction-1" ||
-							transactionId === "transaction-2"
-						) {
-							throw new Error("Transaction not found");
-						}
-						return {
-							data: {
-								transaction: {
-									id: transactionId,
-									account_id: "account-001",
-									date: "2024-01-01",
-								},
-							},
-						};
-					},
-				);
-
-				const result = await handleUpdateTransactions(
-					mockYnabAPI,
-					buildParams({ transactions }),
-				);
-				const response = JSON.parse(textOf(result.content[0]));
-
-				expect(response.error).toBeDefined();
-				expect(response.error.code).toBe("VALIDATION_ERROR");
-				expect(response.error.message).toContain("METADATA_INCOMPLETE");
-				expect(response.error.details).toContain("10.0%");
-			});
-
-			it("succeeds when <=5% of transactions have missing metadata (live mode)", async () => {
-				// Create 20 transactions, 1 (5%) with missing metadata - at threshold
-				const transactions = Array.from({ length: 20 }, (_, i) =>
-					i === 0
-						? buildUpdateTransactionWithoutMetadata({
-								id: `transaction-${i + 1}`,
-								amount: -1000,
-							})
-						: buildUpdateTransaction({
-								id: `transaction-${i + 1}`,
-								amount: -1000,
-							}),
-				);
-
-				(cacheManager.get as any).mockReturnValue(null);
-
-				// Mock API to fail for only 1 transaction (5% = threshold)
-				(mockYnabAPI.transactions.getTransactionById as any).mockImplementation(
-					async (_budgetId: string, transactionId: string) => {
-						if (transactionId === "transaction-1") {
-							throw new Error("Transaction not found");
-						}
-						return {
-							data: {
-								transaction: {
-									id: transactionId,
-									account_id: "account-001",
-									date: "2024-01-01",
-								},
-							},
-						};
-					},
-				);
-
-				const apiTransactions = transactions.map((t) =>
-					buildApiTransaction({ id: t.id }),
-				);
-				(mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
-					buildApiResponse(apiTransactions),
-				);
-
-				const response = await parseResponse(
-					handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
-				);
-
-				expect(response["summary"].updated).toBe(20);
-			});
-
-			it("returns warnings in dry_run mode when metadata is missing", async () => {
-				const transactions = [
-					buildUpdateTransactionWithoutMetadata({ id: "transaction-001" }),
-					buildUpdateTransactionWithoutMetadata({ id: "transaction-002" }),
-				];
-
-				(cacheManager.get as any).mockReturnValue(null);
-				(mockYnabAPI.transactions.getTransactionById as any).mockRejectedValue(
-					new Error("Not found"),
-				);
-
-				const response = await parseResponse(
-					handleUpdateTransactions(
-						mockYnabAPI,
-						buildParams({ transactions, dry_run: true }),
-					),
-				);
-
-				expect(response["dry_run"]).toBe(true);
-				expect(response["warnings"]).toBeDefined();
-				expect(response["warnings"]).toHaveLength(1);
-				expect(response["warnings"][0].code).toBe("metadata_unavailable");
-				expect(response["warnings"][0].count).toBe(2);
-				expect(response["warnings"][0].sample_ids).toEqual([
-					"transaction-001",
-					"transaction-002",
-				]);
-			});
-
-			it("does not return warnings in dry_run when all metadata is resolved", async () => {
-				const transactions = [
-					buildUpdateTransaction({
-						id: "transaction-001",
-						original_account_id: "account-001",
-						original_date: "2024-01-01",
-					}),
-				];
-
-				(cacheManager.get as any).mockImplementation((key: string) => {
-					if (key.includes("transaction-001")) {
-						return buildApiTransaction({ id: "transaction-001" });
-					}
-					return null;
-				});
-
-				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
-				);
-
-				const response = await parseResponse(
-					handleUpdateTransactions(
-						mockYnabAPI,
-						buildParams({ transactions, dry_run: true }),
-					),
-				);
-
-				expect(response["dry_run"]).toBe(true);
-				expect(response["warnings"]).toBeUndefined();
 			});
 		});
 
@@ -5038,12 +4199,7 @@ describe("transactionTools", () => {
 		});
 
 		describe("response size management", () => {
-			beforeEach(() => {
-				(cacheManager.get as any).mockReturnValue({
-					account_id: "account-default",
-					date: "2024-01-01",
-				});
-			});
+			beforeEach(() => {});
 
 			it("keeps full response when under 64KB", async () => {
 				const apiTransactions = [buildApiTransaction()];
@@ -5074,72 +4230,6 @@ describe("transactionTools", () => {
 				expect(response["transactions"]).toBeUndefined();
 				expect(response["mode"]).toBe("summary");
 				byteSpy.mockRestore();
-			});
-		});
-
-		describe("cache invalidation", () => {
-			it("invalidates transaction and account caches after successful updates", async () => {
-				const transaction = buildUpdateTransaction({
-					id: "transaction-001",
-					// Note: account_id is not included because account moves are not supported
-					original_account_id: "account-old",
-					original_date: "2024-01-01",
-					amount: -2000, // Include a change so the update does something
-				});
-
-				// Mock cache to return null (no cached data)
-				(cacheManager.get as any).mockReturnValue(null);
-
-				const apiTransaction = buildApiTransaction({ id: "transaction-001" });
-				(mockYnabAPI.transactions.updateTransactions as any).mockResolvedValue(
-					buildApiResponse([apiTransaction]),
-				);
-
-				(CacheManager.generateKey as any).mockImplementation(
-					(
-						scope: string,
-						action: string,
-						budgetId: string,
-						qualifier?: string,
-					) => `${scope}:${action}:${budgetId}:${qualifier ?? "all"}`,
-				);
-
-				const response = await parseResponse(
-					handleUpdateTransactions(
-						mockYnabAPI,
-						buildParams({ transactions: [transaction] }),
-					),
-				);
-
-				// Verify the update was successful
-				expect(response["error"]).toBeUndefined();
-				expect(response["summary"]).toBeDefined();
-				expect(response["summary"].updated).toBe(1);
-
-				// Cache invalidation uses individual delete calls
-				const deleteCalls = cacheManager.delete.mock.calls.map(
-					(call) => call[0],
-				);
-				expect(deleteCalls).toEqual(
-					expect.arrayContaining([
-						"transactions:list:budget-123:all",
-						"accounts:get:budget-123:account-old",
-						"month:get:budget-123:2024-01-01", // Month from original_date
-					]),
-				);
-			});
-
-			it("does not invalidate cache on dry run", async () => {
-				await handleUpdateTransactions(
-					mockYnabAPI,
-					buildParams({
-						dry_run: true,
-						transactions: [buildUpdateTransaction()],
-					}),
-				);
-
-				expect(cacheManager.deleteMany).not.toHaveBeenCalled();
-				expect(cacheManager.delete).not.toHaveBeenCalled();
 			});
 		});
 	});

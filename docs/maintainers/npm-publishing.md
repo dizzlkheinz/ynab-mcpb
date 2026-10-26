@@ -10,12 +10,28 @@ Note: `npm whoami` will still fail in CI under OIDC; authentication happens only
 
 ## Before releasing
 
-CI never contacts YNAB, so run the live suites locally with a real token first:
+Pull-request CI never contacts YNAB, so run the live suites locally with a real token first:
 
 ```bash
-RUN_LIVE_YNAB_TESTS=true npm run test:integration:live        # read-only smoke
-RUN_LIVE_YNAB_TESTS=true npm run test:integration:live:delta  # creates and deletes one $1.00 transaction in your first budget
+RUN_LIVE_YNAB_TESTS=true npm run test:live        # read-only smoke
+RUN_LIVE_YNAB_TESTS=true npm run test:live -- delta  # creates and deletes one $1.00 transaction in your first budget
 ```
+
+Build and inspect the actual artifacts before publishing:
+
+```bash
+npm run type-check
+npm run test:coverage
+npm run test:integration
+npm run build
+npm pack --dry-run --ignore-scripts
+npm run package:mcpb  # requires an installed @anthropic-ai/mcpb CLI
+```
+
+`package:mcpb` packages the existing build and fails if it is missing or invalid.
+It does not rebuild, install dependencies, or modify the manifest. npm and MCPB
+packaging use explicit allowlists; source, tests, reports, and demo GIFs stay out
+of both distributions. npm retains the existing compiled ESM entry and types.
 
 ## Common failure: `npm ERR! need auth`
 

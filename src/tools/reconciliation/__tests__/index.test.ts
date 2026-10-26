@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { CacheManager } from "../../../server/cacheManager.js";
 import type { DeltaCache } from "../../../server/deltaCache.js";
 import { DeltaFetcher } from "../../deltaFetcher.js";
 import { handleReconcileAccount, ReconcileAccountSchema } from "../index.js";
@@ -123,7 +124,10 @@ describe("handleReconcileAccount", () => {
 					csv_file_path: csvPath,
 					statement_balance: -10,
 				}),
-				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
+				{
+					cacheManager: new CacheManager(),
+					deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache),
+				},
 			);
 
 			expect(result.isError).toBe(true);
@@ -159,7 +163,10 @@ describe("handleReconcileAccount", () => {
 					csv_file_path: csvUrl,
 					statement_balance: -10,
 				}),
-				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
+				{
+					cacheManager: new CacheManager(),
+					deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache),
+				},
 			);
 
 			expect(readFile).toHaveBeenCalledTimes(2);
@@ -199,7 +206,10 @@ describe("handleReconcileAccount", () => {
 					csv_file_path: csvUrl,
 					statement_balance: -10,
 				}),
-				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
+				{
+					cacheManager: new CacheManager(),
+					deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache),
+				},
 			);
 
 			expect(readFile).toHaveBeenCalledTimes(2);
@@ -226,7 +236,7 @@ describe("handleReconcileAccount", () => {
 				statement_balance: -10,
 				auto_unclear_missing: false,
 			}),
-			{ deltaFetcher: deltaFetcher },
+			{ cacheManager: new CacheManager(), deltaFetcher: deltaFetcher },
 		);
 
 		const structured = (result.structuredContent as Record<string, unknown>)[

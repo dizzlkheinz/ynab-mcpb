@@ -63,16 +63,18 @@ describeIntegration("Reconciliation Executor - Live Contract Smoke", () => {
 				currencyCode: "USD",
 			});
 
-			for (const action of result.actions_taken) {
-				if (action.type !== "create_transaction") continue;
-				const transaction = action.transaction as { id?: string } | null;
-				if (transaction?.id) createdTransactionIds.push(transaction.id);
+			for (const operation of result.operation_results ?? []) {
+				if (operation.operation.kind === "create" && operation.transaction_id) {
+					createdTransactionIds.push(operation.transaction_id);
+				}
 			}
-
 			expect(result.summary.transactions_created).toBe(2);
-			expect(result.bulk_operation_details?.bulk_successes).toBe(1);
-			expect(result.bulk_operation_details?.chunks_processed).toBe(1);
-			expect(result.bulk_operation_details?.duplicates_detected).toBe(0);
+			expect(
+				result.operation_results?.every(
+					(operation) => operation.status === "applied",
+				),
+			).toBe(true);
+			expect(createdTransactionIds).toHaveLength(2);
 		}, ctx);
 	});
 });

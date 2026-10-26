@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
-import { CacheKeys } from "../../server/cacheKeys.js";
 import {
 	GetCategorySchema,
 	handleGetCategory,
@@ -16,16 +16,16 @@ import {
 } from "./deltaTestUtils.js";
 
 // Mock the cache manager
+const cacheManager = vi.hoisted(() => ({
+	wrap: vi.fn(),
+	has: vi.fn(),
+	delete: vi.fn(),
+	deleteMany: vi.fn(),
+	deleteByPrefix: vi.fn(),
+	deleteByBudgetId: vi.fn(),
+	clear: vi.fn(),
+}));
 vi.mock("../../server/cacheManager.js", () => ({
-	cacheManager: {
-		wrap: vi.fn(),
-		has: vi.fn(),
-		delete: vi.fn(),
-		deleteMany: vi.fn(),
-		deleteByPrefix: vi.fn(),
-		deleteByBudgetId: vi.fn(),
-		clear: vi.fn(),
-	},
 	CacheManager: {
 		generateKey: vi.fn(),
 	},
@@ -44,9 +44,7 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { cacheManager, CacheManager } = await import(
-	"../../server/cacheManager.js"
-);
+const { CacheManager } = await import("../../server/cacheManager.js");
 
 // Capture original NODE_ENV for restoration
 const originalNodeEnv = process.env["NODE_ENV"];
@@ -122,7 +120,10 @@ describe("Category Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -209,7 +210,10 @@ describe("Category Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -255,7 +259,10 @@ describe("Category Tools", () => {
 					budget_id: "budget-1",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -276,7 +283,10 @@ describe("Category Tools", () => {
 					budget_id: "invalid-budget",
 					response_format: "json",
 				},
-				{ deltaFetcher: fetcher },
+				createReadDeps(mockYnabAPI, {
+					cacheManager,
+					...{ deltaFetcher: fetcher },
+				}),
 			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -306,11 +316,15 @@ describe("Category Tools", () => {
 				data: { category: mockCategory },
 			});
 
-			const result = await handleGetCategory(mockYnabAPI, {
-				budget_id: "budget-1",
-				category_id: "category-1",
-				response_format: "json",
-			});
+			const result = await handleGetCategory(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					category_id: "category-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
@@ -361,11 +375,15 @@ describe("Category Tools", () => {
 			});
 			(cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
 
-			const result = await handleGetCategory(mockYnabAPI, {
-				budget_id: "budget-1",
-				category_id: "category-1",
-				response_format: "json",
-			});
+			const result = await handleGetCategory(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					category_id: "category-1",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.cached).toBe(true);
@@ -379,11 +397,15 @@ describe("Category Tools", () => {
 				new Error("404 Not Found"),
 			);
 
-			const result = await handleGetCategory(mockYnabAPI, {
-				budget_id: "budget-1",
-				category_id: "invalid-category",
-				response_format: "json",
-			});
+			const result = await handleGetCategory(
+				mockYnabAPI,
+				{
+					budget_id: "budget-1",
+					category_id: "invalid-category",
+					response_format: "json",
+				},
+				createReadDeps(mockYnabAPI, { cacheManager }),
+			);
 
 			expect(result.content).toHaveLength(1);
 			const parsedContent = JSON.parse(textOf(result.content[0]));
@@ -470,7 +492,7 @@ describe("Category Tools", () => {
 			);
 		});
 
-		it("should invalidate category and resource caches on successful category update", async () => {
+		it("sends the exact integer budgeted amount through the injected API", async () => {
 			const mockUpdatedCategory = {
 				id: "category-1",
 				category_group_id: "group-1",
@@ -498,56 +520,11 @@ describe("Category Tools", () => {
 				budgeted: 60000,
 			});
 
-			// Verify cache was invalidated for both category list and specific category
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				CacheKeys.CATEGORIES,
-				"list",
-				"budget-1",
-			);
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				CacheKeys.CATEGORIES,
-				"get",
-				"budget-1",
-				"category-1",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"categories:list:budget-1",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"categories:get:budget-1:category-1",
-			);
-
-			// Verify month-related caches were invalidated
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				CacheKeys.MONTHS,
-				"list",
-				"budget-1",
-			);
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				CacheKeys.MONTHS,
-				"get",
+			expect(mockYnabAPI.categories.updateMonthCategory).toHaveBeenCalledWith(
 				"budget-1",
 				expect.stringMatching(/^\d{4}-\d{2}-01$/),
-			);
-			const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
-			expect(cacheManager.delete).toHaveBeenCalledWith("months:list:budget-1");
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				`months:get:budget-1:${currentMonth}`,
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"resources:budgets:list",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"resources:budgets:get:budget-1",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"resources:categories:list:budget-1",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				"resources:months:list:budget-1",
-			);
-			expect(cacheManager.delete).toHaveBeenCalledWith(
-				`resources:months:get:budget-1:${currentMonth}`,
+				"category-1",
+				{ category: { budgeted: 60000 } },
 			);
 		});
 

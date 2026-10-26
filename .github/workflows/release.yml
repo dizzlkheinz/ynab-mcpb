@@ -29,20 +29,11 @@ concurrency:
 jobs:
   build-and-attach-mcpb:
     runs-on: ubuntu-latest
-    env:
-      # Provide a dummy token for build-time env validation.
-      # If you add a real secret YNAB token, it will override this when set at step-level.
-      YNAB_ACCESS_TOKEN: ci-build-token-1234567890
-      SKIP_ENV_VALIDATION: true
     steps:
-      - name: Checkout (default ref)
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Checkout (specified ref)
-        if: ${{ inputs.ref != '' }}
+      - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -53,41 +44,21 @@ jobs:
       - name: Install dependencies (no scripts)
         run: npm ci --ignore-scripts
 
-      - name: Set build environment
-        run: echo "YNAB_ACCESS_TOKEN=${YNAB_ACCESS_TOKEN}" >> $GITHUB_ENV
-
-      - name: Build (verification lint + bundle)
-        run: npm run build:prod
-        env:
-          # Prefer secret if configured; otherwise use the job-level default above
-          YNAB_ACCESS_TOKEN: ${{ secrets.YNAB_ACCESS_TOKEN || env.YNAB_ACCESS_TOKEN }}
-          SKIP_ENV_VALIDATION: true
+      - name: Build and verify
+        run: npm run build
 
       - name: Install MCPB CLI
-        run: npm i -g @anthropic-ai/mcpb
+        run: npm install --global @anthropic-ai/mcpb
 
-      - name: Validate manifest
-        run: mcpb validate manifest.json
-
-      - name: Compute package metadata
-        id: meta
-        run: |
-          NAME=$(node -p "require('./package.json').name")
-          VERSION=$(node -p "require('./package.json').version")
-          FILE="dist/${NAME}-${VERSION}.mcpb"
-          echo "name=$NAME" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "file=$FILE" >> $GITHUB_OUTPUT
-
-      - name: Pack MCPB
-        run: mcpb pack . "${{ steps.meta.outputs.file }}"
+      - name: Package MCPB
+        run: npm run package:mcpb
 
       - name: Upload or create release with asset
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
           name: ${{ inputs.release_tag || github.ref_name }}
-          files: ${{ steps.meta.outputs.file }}
+          files: dist/*.mcpb
           generate_release_notes: true
           fail_on_unmatched_files: true
           # Use WORKFLOW_PAT to allow triggering the publish workflow

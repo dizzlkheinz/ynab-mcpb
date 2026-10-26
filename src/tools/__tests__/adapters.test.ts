@@ -71,28 +71,33 @@ describe("createAdapters", () => {
 			{
 				a: 1,
 			},
-			{ deltaFetcher },
+			{ deltaFetcher, cacheManager: context.cacheManager },
 			context.errorHandler,
 		);
 	});
 
-	it("adaptWrite passes cache and knowledge store to handler", async () => {
-		const deltaCache = { invalidate: vi.fn() } as any;
-		const serverKnowledgeStore = { update: vi.fn() } as any;
-		const context = createMockContext({ deltaCache, serverKnowledgeStore });
-		const { adaptWrite } = createAdapters(context);
+	it("keeps read dependencies bound to their own context", async () => {
+		const first = createMockContext();
+		const second = createMockContext();
 		const handler = vi.fn().mockResolvedValue({ content: [] });
-
-		const adapted = adaptWrite(handler);
-		await adapted({ input: { a: 2 }, context: {} as any });
-
-		expect(handler).toHaveBeenCalledWith(
-			context.ynabAPI,
-			{
-				a: 2,
-			},
-			{ deltaCache, serverKnowledgeStore },
-			context.errorHandler,
+		await createAdapters(first).adaptWithDelta(handler)({
+			input: {},
+			context: {} as any,
+		});
+		await createAdapters(second).adaptWithDelta(handler)({
+			input: {},
+			context: {} as any,
+		});
+		expect(handler.mock.calls[0]?.[2]).toEqual({
+			deltaFetcher: first.deltaFetcher,
+			cacheManager: first.cacheManager,
+		});
+		expect(handler.mock.calls[1]?.[2]).toEqual({
+			deltaFetcher: second.deltaFetcher,
+			cacheManager: second.cacheManager,
+		});
+		expect(handler.mock.calls[0]?.[2].cacheManager).not.toBe(
+			handler.mock.calls[1]?.[2].cacheManager,
 		);
 	});
 });

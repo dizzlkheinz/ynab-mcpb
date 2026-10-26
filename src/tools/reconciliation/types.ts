@@ -174,6 +174,9 @@ export interface MatchingConfig {
 	exactPayeeBonus: number; // Default: 10
 	/** Lower threshold used when date is exact and only one candidate exists. Default: 65 */
 	exactDateAutoMatchThreshold?: number;
+	/** Relative amount tolerance, used only by read-only comparison. */
+	amountTolerance?: number;
+	chronologyBonus?: boolean;
 }
 
 /**

@@ -9,9 +9,12 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { ErrorHandler } from "../../server/errorHandler.js";
 import { responseFormatter } from "../../server/responseFormatter.js";
-import type { ProgressCallback } from "../../server/toolRegistry.js";
+import type {
+	ProgressCallback,
+	ToolExecutionContext,
+} from "../../server/toolRegistry.js";
 import { withToolErrorHandling } from "../../types/index.js";
-import type { ToolFactory } from "../../types/toolRegistration.js";
+import type { ReadDeps, ToolFactory } from "../../types/toolRegistration.js";
 import { getBudgetByIdCompat } from "../../utils/ynabApiCompat.js";
 import {
 	createAdapters,
@@ -23,10 +26,7 @@ import {
 	handleCompareTransactions,
 } from "../compareTransactions/index.js";
 import { resolveCsvPathCandidates } from "../csvFilePath.js";
-import {
-	type DeltaFetcherDeps,
-	resolveDeltaFetcherDeps,
-} from "../deltaSupport.js";
+
 import {
 	CompareTransactionsOutputSchema,
 	ReconcileAccountOutputSchema,
@@ -40,14 +40,13 @@ import {
 } from "./csvParser.js";
 import {
 	type AccountSnapshot,
-	executeReconciliation,
-	type LegacyReconciliationResult,
+	type ExecutionOptions,
+	type ExecutionResult,
+	executeReconciliationPlan,
 } from "./executor.js";
 import type { MatchingConfig } from "./matcher.js";
-import {
-	buildReconciliationPayload,
-	type DualChannelPayload,
-} from "./outputBuilder.js";
+import { buildReconciliationPayload } from "./outputBuilder.js";
+import { buildReconciliationPlan, freezeSnapshot } from "./plan.js";
 import { detectSignInversion } from "./signDetector.js";
 import {
 	clampCSVToStatementWindow,
@@ -121,6 +120,7 @@ export const ReconcileAccountSchema = z
 		// Response options
 		max_suggestions_in_output: z.number().int().min(1).optional().default(20),
 	})
+	.strict()
 	.refine((data) => data.csv_file_path || data.csv_data, {
 		message:
 			"csv_data or csv_file_path is required. " +
@@ -142,11 +142,12 @@ export type ReconcileAccountRequest = z.infer<typeof ReconcileAccountSchema>;
 export async function handleReconcileAccount(
 	ynabAPI: ynab.API,
 	params: ReconcileAccountRequest,
-	deps?: DeltaFetcherDeps,
+	deps: ReadDeps,
 	sendProgress?: ProgressCallback,
 	errorHandler?: ErrorHandler,
+	prepareExecution?: ToolExecutionContext["prepareExecution"],
 ): Promise<CallToolResult> {
-	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
+	const deltaFetcher = deps.deltaFetcher;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -203,18 +204,11 @@ export async function handleReconcileAccount(
 				);
 			}
 
-			// Fetch YNAB transactions for the account using inferred date window
-			const { sinceDate, dateWindowSource } = resolveSinceDate(
-				rawCsvResult.transactions,
-				narrativeNotes,
-			);
-
-			const sinceDateString = sinceDate.toISOString().split("T")[0];
+			// Fetch the full account once so statement balances and snapshot checks agree.
 			const transactionsResult =
 				await deltaFetcher.fetchTransactionsByAccountFull(
 					budgetId,
 					params.account_id,
-					sinceDateString,
 				);
 
 			const ynabTransactions = transactionsResult.data;
@@ -240,39 +234,28 @@ export async function handleReconcileAccount(
 					}
 				: rawCsvResult;
 
-			const auditMetadata = {
-				data_freshness: "guaranteed_fresh",
-				data_source: "full_api_fetch_no_delta",
-				server_knowledge: transactionsResult.serverKnowledge,
-				fetched_at: new Date().toISOString(),
-				accounts_count: accountResult.data.length,
-				transactions_count: transactionsResult.data.length,
-				cache_status: {
-					accounts_cached: accountResult.wasCached,
-					transactions_cached: transactionsResult.wasCached,
-					delta_merge_applied: transactionsResult.usedDelta,
-				},
-				csv: {
-					rows: parseResult.meta.totalRows,
-					transactions: parseResult.transactions.length,
-					errors: parseResult.errors.length,
-					warnings: parseResult.warnings.length,
-					delimiter: parseResult.meta.detectedDelimiter,
-				},
-				date_window: {
-					since_date: sinceDateString,
-					source: dateWindowSource,
-				},
-				sign_detection: {
-					default_invert: shouldInvertBankAmounts,
-					final_invert: finalInvertAmounts,
-				},
-			};
-
 			const initialAccount: AccountSnapshot = {
 				balance: accountData.balance,
 				cleared_balance: accountData.cleared_balance,
 				uncleared_balance: accountData.uncleared_balance,
+			};
+
+			const statementTransactions = ynabTransactions.filter(
+				(transaction) =>
+					!transaction.deleted &&
+					(!effectiveStatementEndDate ||
+						transaction.date <= effectiveStatementEndDate),
+			);
+			const statementClearedBalanceMilli = statementTransactions
+				.filter((transaction) => transaction.cleared !== "uncleared")
+				.reduce((total, transaction) => total + transaction.amount, 0);
+			const statementUnclearedBalanceMilli = statementTransactions
+				.filter((transaction) => transaction.cleared === "uncleared")
+				.reduce((total, transaction) => total + transaction.amount, 0);
+			const statementAccount = {
+				balance: statementClearedBalanceMilli + statementUnclearedBalanceMilli,
+				cleared_balance: statementClearedBalanceMilli,
+				uncleared_balance: statementUnclearedBalanceMilli,
 			};
 
 			// Perform analysis
@@ -287,7 +270,7 @@ export async function handleReconcileAccount(
 				budgetId,
 				finalInvertAmounts, // Use smart-detected value
 				csvOptions,
-				initialAccount,
+				statementAccount,
 				effectiveStatementEndDate,
 			);
 
@@ -299,82 +282,56 @@ export async function handleReconcileAccount(
 						}
 					: params;
 
-			let executionData: LegacyReconciliationResult | undefined;
-			const wantsBalanceVerification = Boolean(
-				effectiveParams.statement_end_date,
+			const captured = freezeSnapshot(
+				structuredClone({ analysis, params: effectiveParams, initialAccount }),
 			);
-			const shouldExecute =
-				params.auto_create_transactions ||
-				params.auto_update_cleared_status ||
-				params.auto_unclear_missing ||
-				params.auto_adjust_dates ||
-				wantsBalanceVerification;
-
-			if (shouldExecute) {
-				executionData = await executeReconciliation({
-					ynabAPI,
-					analysis,
-					params: effectiveParams,
-					budgetId,
-					accountId: params.account_id,
-					initialAccount,
-					currencyCode,
-					decimalDigits,
-					...(sendProgress !== undefined && { sendProgress }),
-				});
-			}
-
-			const csvFormatForPayload = mapCsvFormatForPayload(params.csv_format);
+			const executionOptions: ExecutionOptions = {
+				ynabAPI,
+				...captured,
+				budgetId,
+				accountId: params.account_id,
+				currencyCode,
+				decimalDigits,
+				sourceTransactions: ynabTransactions,
+				statementClearedBalanceMilli,
+			};
+			const plan = buildReconciliationPlan(executionOptions);
 
 			const adapterOptions: Parameters<typeof buildReconciliationPayload>[1] = {
 				accountName,
 				accountId: params.account_id,
 				accountIsLiability,
 				currencyCode,
-				auditMetadata,
 				maxSuggestionsInOutput: params.max_suggestions_in_output,
 			};
-			if (csvFormatForPayload !== undefined) {
-				adapterOptions.csvFormat = csvFormatForPayload;
-			}
 			if (narrativeNotes.length > 0) {
 				adapterOptions.notes = narrativeNotes;
 			}
 
-			const payload: DualChannelPayload = buildReconciliationPayload(
-				analysis,
-				adapterOptions,
-				executionData,
+			const renderExecution = async (
+				dryRun: boolean,
+				progress?: ProgressCallback,
+			) => {
+				const execution = await executeReconciliationPlan(plan, {
+					...executionOptions,
+					params: { ...captured.params, dry_run: dryRun },
+					...(progress ? { sendProgress: progress } : {}),
+				});
+				return renderReconciliationResult(
+					captured.analysis,
+					adapterOptions,
+					execution,
+				);
+			};
+			prepareExecution?.((executionContext) =>
+				withToolErrorHandling(
+					() => renderExecution(false, executionContext.sendProgress),
+					"ynab:reconcile_account",
+					"executing prepared reconciliation",
+					errorHandler,
+				),
 			);
-
-			// Build response payload matching ReconcileAccountOutputSchema
-			// Always includes unmatched_only structured data for agent consumption.
-			// Include execution summary when reconciliation actions were performed.
-			const executionSummary = executionData
-				? buildExecutionSummary(executionData, wantsBalanceVerification)
-				: undefined;
-			const structured = {
-				unmatched_bank: payload.structured.unmatched.bank,
-				unmatched_ynab: payload.structured.unmatched.ynab,
-				suggestions: payload.structured.matches.suggested,
-				...(executionSummary !== undefined && {
-					execution_summary: executionSummary,
-				}),
-			};
-			const responseData = {
-				human: payload.human,
-				structured,
-			};
-
-			return {
-				content: [
-					{
-						type: "text",
-						text: responseFormatter.format(responseData),
-					},
-				],
-				structuredContent: responseData,
-			};
+			return renderExecution(params.dry_run, sendProgress);
 		},
 		"ynab:reconcile_account",
 		"analyzing account reconciliation",
@@ -382,11 +339,28 @@ export async function handleReconcileAccount(
 	);
 }
 
+function renderReconciliationResult(
+	analysis: Parameters<typeof buildReconciliationPayload>[0],
+	adapterOptions: Parameters<typeof buildReconciliationPayload>[1],
+	executionData: ExecutionResult,
+): CallToolResult {
+	const responseData = buildReconciliationPayload(
+		analysis,
+		adapterOptions,
+		executionData,
+	);
+	return {
+		...(executionData.errors?.length ? { isError: true } : {}),
+		content: [{ type: "text", text: responseFormatter.format(responseData) }],
+		structuredContent: responseData,
+	};
+}
+
 /**
  * Registers reconciliation-domain tools (compare + reconcile) with the registry.
  */
 export const registerReconciliationTools: ToolFactory = (registry, context) => {
-	const { adapt, adaptWithDeltaAndProgress } = createAdapters(context);
+	const { adapt } = createAdapters(context);
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
@@ -440,11 +414,22 @@ Examples:
   - Execute: set dry_run=false and explicitly enable the write flags you want, e.g. auto_update_cleared_status=true`,
 		inputSchema: ReconcileAccountSchema,
 		outputSchema: ReconcileAccountOutputSchema,
-		handler: adaptWithDeltaAndProgress(handleReconcileAccount),
+		handler: ({ input, context: executionContext }) =>
+			handleReconcileAccount(
+				context.ynabAPI,
+				input,
+				{
+					deltaFetcher: context.deltaFetcher,
+					cacheManager: context.cacheManager,
+				},
+				executionContext.sendProgress,
+				context.errorHandler,
+				executionContext.prepareExecution,
+			),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof ReconcileAccountSchema>>(),
 		metadata: {
-			writeSafety: { mutation: true, preview: "dry-run" },
+			writeSafety: { mutation: true, preview: "dry-run", prepared: true },
 			annotations: {
 				...ToolAnnotationPresets.WRITE_EXTERNAL_UPDATE,
 				title: "YNAB: Reconcile Account",
@@ -474,15 +459,6 @@ const LIABILITY_ACCOUNT_TYPES: ReadonlySet<ynab.AccountType> =
 	]);
 
 type SignConvention = "auto" | "invert" | "as_is";
-
-interface ReconcileExecutionSummary {
-	transactions_created: number;
-	transactions_updated: number;
-	dates_adjusted: number;
-	dry_run: boolean;
-	balance_status: "balanced" | "unbalanced" | "not_verified";
-	recommendations: string[];
-}
 
 /**
  * Build matching configuration from parameters (V2 Format)
@@ -647,10 +623,18 @@ function parseCsvOrThrow(
 	csvOptions: ParseCSVOptions,
 ): CSVParseResult {
 	try {
-		return parseCSV(csvContent, {
+		const result = parseCSV(csvContent, {
 			...csvOptions,
 			invertAmounts: false,
 		});
+		if (result.errors.length) {
+			throw new Error(
+				result.errors
+					.map((error) => `Row ${error.row}: ${error.message}`)
+					.join("; "),
+			);
+		}
+		return result;
 	} catch (error) {
 		const message =
 			error instanceof Error && error.message
@@ -693,29 +677,6 @@ function applyStatementWindow(
 	}
 
 	return clampedCsv.parseResult;
-}
-
-function resolveSinceDate(
-	transactions: BankTransaction[],
-	narrativeNotes: string[],
-): {
-	sinceDate: Date;
-	dateWindowSource: "csv_min_date_with_buffer" | "fallback_90_days";
-} {
-	if (transactions.length > 0) {
-		return {
-			sinceDate: inferSinceDateFromTransactions(transactions),
-			dateWindowSource: "csv_min_date_with_buffer",
-		};
-	}
-
-	narrativeNotes.push(
-		"CSV contained no parsable transactions for date detection; fetched the last 90 days from YNAB.",
-	);
-	return {
-		sinceDate: fallbackSinceDate(),
-		dateWindowSource: "fallback_90_days",
-	};
 }
 
 /**
@@ -761,28 +722,6 @@ function resolveSignInversion(
 	return needsInversion;
 }
 
-function buildExecutionSummary(
-	executionData: LegacyReconciliationResult,
-	wantsBalanceVerification: boolean,
-): ReconcileExecutionSummary {
-	const balanceRecon = executionData.balance_reconciliation;
-	const balanceStatus: ReconcileExecutionSummary["balance_status"] =
-		!wantsBalanceVerification
-			? "not_verified"
-			: balanceRecon?.status === "balanced"
-				? "balanced"
-				: "unbalanced";
-
-	return {
-		transactions_created: executionData.summary.transactions_created,
-		transactions_updated: executionData.summary.transactions_updated,
-		dates_adjusted: executionData.summary.dates_adjusted,
-		dry_run: executionData.summary.dry_run,
-		balance_status: balanceStatus,
-		recommendations: executionData.recommendations,
-	};
-}
-
 function mapCsvDateFormatToHint(
 	format: string | undefined,
 ): ParseCSVOptions["dateFormat"] | undefined {
@@ -821,73 +760,4 @@ function inferLatestTransactionDate(
 	}
 
 	return latestDate;
-}
-
-function mapCsvFormatForPayload(
-	format: ReconcileAccountRequest["csv_format"] | undefined,
-):
-	| {
-			delimiter: string;
-			decimal_separator: string;
-			thousands_separator: string | null;
-			date_format: string;
-			header_row: boolean;
-			date_column: string | null;
-			amount_column: string | null;
-			payee_column: string | null;
-	  }
-	| undefined {
-	if (!format) {
-		return undefined;
-	}
-
-	const coerceString = (
-		value: string | number | undefined | null,
-		fallback?: string,
-	) => {
-		if (value === undefined || value === null) {
-			return fallback ?? null;
-		}
-		return String(value);
-	};
-
-	const delimiter = coerceString(format.delimiter, ",");
-	const decimalSeparator = "."; // Default decimal separator
-	const thousandsSeparator = ","; // Default thousands separator
-	const dateFormat = coerceString(format.date_format, "MM/DD/YYYY");
-
-	return {
-		delimiter: delimiter ?? ",",
-		decimal_separator: decimalSeparator,
-		thousands_separator: thousandsSeparator,
-		date_format: dateFormat ?? "MM/DD/YYYY",
-		header_row: format.has_header ?? true,
-		date_column: coerceString(format.date_column, "") ?? null,
-		amount_column: coerceString(format.amount_column, "") ?? null,
-		payee_column: coerceString(format.description_column, "") ?? null,
-	};
-}
-
-function fallbackSinceDate(): Date {
-	const date = new Date();
-	date.setDate(date.getDate() - 90);
-	return date;
-}
-
-function inferSinceDateFromTransactions(transactions: BankTransaction[]): Date {
-	if (transactions.length === 0) {
-		return fallbackSinceDate();
-	}
-
-	const timestamps = transactions
-		.map((t) => new Date(t.date).getTime())
-		.filter((time) => !Number.isNaN(time));
-
-	if (timestamps.length === 0) {
-		return fallbackSinceDate();
-	}
-
-	const minDate = new Date(Math.min(...timestamps));
-	minDate.setDate(minDate.getDate() - 7); // Add a small buffer
-	return minDate;
 }

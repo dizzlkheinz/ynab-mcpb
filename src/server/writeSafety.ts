@@ -1,4 +1,11 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { ToolExecutionContext } from "./toolRegistry.js";
+
+/** In-memory execution of the immutable operations shown in a preview. */
+export type PreparedExecution = (
+	context: ToolExecutionContext,
+) => Promise<CallToolResult>;
 
 export const WRITE_MODES = ["read-only", "preview", "enabled"] as const;
 
@@ -10,10 +17,11 @@ export const DEFAULT_CONFIRMATION_TTL_MS = 2 * 60 * 1000;
 interface ConfirmationRecord {
 	digest: Buffer;
 	expiresAt: number;
+	execute?: PreparedExecution;
 }
 
 export type ConfirmationResult =
-	| { ok: true }
+	| { ok: true; execute?: PreparedExecution }
 	| { ok: false; reason: "expired" | "invalid" | "reused" };
 
 export interface WriteSafetyPolicyOptions {
@@ -66,6 +74,7 @@ export class WriteSafetyPolicy {
 	issue(
 		toolName: string,
 		validatedArguments: Record<string, unknown>,
+		execute?: PreparedExecution,
 	): IssuedConfirmation {
 		this.prune();
 		const token = this.tokenFactory();
@@ -73,6 +82,7 @@ export class WriteSafetyPolicy {
 		this.confirmations.set(token, {
 			digest: this.digest(toolName, validatedArguments),
 			expiresAt,
+			...(execute ? { execute } : {}),
 		});
 		return { token, expiresAt: new Date(expiresAt).toISOString() };
 	}
@@ -113,7 +123,7 @@ export class WriteSafetyPolicy {
 			return { ok: false, reason: "invalid" };
 		}
 
-		return { ok: true };
+		return { ok: true, ...(record.execute ? { execute: record.execute } : {}) };
 	}
 
 	private digest(

@@ -79,7 +79,7 @@ describe("compareTransactions index (main handler)", () => {
 	describe("handleCompareTransactions orchestration", () => {
 		const mockBankTransactions = [
 			{
-				date: new Date(2024, 0, 1),
+				date: new Date("2024-01-01T00:00:00Z"),
 				amount: 100000,
 				description: "Test Transaction",
 				raw_amount: "100.00",
@@ -91,7 +91,7 @@ describe("compareTransactions index (main handler)", () => {
 		const mockYnabTransactions = [
 			{
 				id: "ynab-1",
-				date: new Date(2024, 0, 1),
+				date: new Date("2024-01-01T00:00:00Z"),
 				amount: 100000,
 				payee_name: "Test Payee",
 				memo: null,
@@ -278,18 +278,13 @@ describe("compareTransactions index (main handler)", () => {
 			);
 		});
 
-		test("uses local date-only formatting for the YNAB sinceDate", async () => {
+		test("uses canonical UTC dates for the YNAB sinceDate", async () => {
 			mockParseBankCSV.mockReturnValue([
 				{
 					...mockBankTransactions[0],
-					date: new Date(2024, 0, 1),
+					date: new Date("2024-01-01T00:00:00Z"),
 				},
 			]);
-			const toISOString = vi
-				.spyOn(Date.prototype, "toISOString")
-				.mockImplementation(() => {
-					throw new Error("toISOString should not be used for sinceDate");
-				});
 			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
@@ -297,11 +292,7 @@ describe("compareTransactions index (main handler)", () => {
 				date_tolerance_days: 0,
 			});
 
-			try {
-				await handleCompareTransactions(mockYnabAPI, params);
-			} finally {
-				toISOString.mockRestore();
-			}
+			await handleCompareTransactions(mockYnabAPI, params);
 
 			expect(
 				mockYnabAPI.transactions.getTransactionsByAccount,

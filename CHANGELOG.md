@@ -10,11 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `confirmation_token` is now rejected on tools that do not require write confirmation (read tools, or any tool when `YNAB_MCP_WRITE_MODE=enabled`) instead of being silently ignored; `null` and `""` are treated as absent
+- Reconciliation executes the exact operations shown in its preview instead of re-reading the CSV and recomputing matches, and stops without writing if the account's transactions changed since the preview
+- A reconciliation write that fails mid-run is reported as uncertain and stops the run; it is no longer retried row by row, which could create duplicates when the failed request had committed
+- `ynab_compare_transactions` uses the reconciliation CSV parser and matcher
+- Rate limiting counts actual YNAB HTTP requests; cached reads and local tools no longer consume the allowance
+- `ynab_list_transactions` with `account_id` verifies the account exists and caches each account separately
+- MCPB packaging is an explicit `npm run package:mcpb` step that requires the separately installed `@anthropic-ai/mcpb` CLI; the build no longer generates an MCPB or requires PowerShell
+- The npm package uses a `files` allowlist (about 520 KB, down from 8.4 MB) and no longer ships tests, reports, or demo GIFs
+- Test commands are reduced to `test`, `test:integration`, `test:all`, `test:coverage`, `test:watch`, and `test:live`
 
 ### Fixed
 
 - When runtime settings are read without starting the server (tests, tooling, embedding), an invalid env value (e.g. `RATE_LIMIT_LOGGING=yes`) now falls back to its own default instead of resetting every runtime setting, including `YNAB_MCP_ENABLE_DELTA` and `LOG_LEVEL`. The server itself still refuses to start on an invalid value
 - A write whose output fails schema validation after YNAB committed it (confirmed in `preview` mode, or direct in `enabled` mode) is now reported as committed, instead of as a plain failure that invited a duplicate retry
+- Transaction lists keep payee and category names, and transaction details keep split lines, in both text and structured output
+- A read that started before a write can no longer repopulate the cache with stale data after the write; caches are also invalidated when a write times out
+- MCPB packaging failures now exit non-zero instead of reporting success
 
 ## [0.29.1] - 2026-10-20
 

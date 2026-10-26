@@ -33,7 +33,7 @@ src/tools/
 ├── compareTransactions.ts      # CSV comparison re-export facade
 ├── exportTransactions.ts       # Transaction export to JSON files
 ├── deltaFetcher.ts             # Delta request utilities
-├── deltaSupport.ts             # Delta request support utilities
+├── transactionModel.ts         # Shared transaction model and output conversion
 ├── compareTransactions/        # CSV comparison modular components
 │   ├── index.ts                # Main entry point (schemas, handlers)
 │   ├── parser.ts               # CSV parsing
@@ -101,7 +101,7 @@ Use `createAdapters(context)` from `adapters.ts` to get adapter functions bound 
 import { createAdapters } from './adapters.js';
 
 // In tool factory function
-const { adapt, adaptNoInput, adaptWithDelta, adaptWithDeltaAndProgress, adaptWrite } = createAdapters(context);
+const { adapt, adaptNoInput, adaptWithDelta, adaptWithDeltaAndProgress } = createAdapters(context);
 
 // Read-only tool with input
 handler: adapt(handleGetBudget),
@@ -115,17 +115,16 @@ handler: adaptWithDelta(handleListTransactions),
 // Delta-aware tool with progress notifications
 handler: adaptWithDeltaAndProgress(handleReconcileAccount),
 
-// Write tool (invalidates cache)
-handler: adaptWrite(handleUpdateTransaction),
+// Write tool (the API client invalidates caches; see Cache Invalidation)
+handler: adapt(handleUpdateTransaction),
 ```
 
-**Adapter Types** (5 total):
+**Adapter Types** (4 total):
 
-- `adapt` - Standard read-only handler with input → injects `(ynabAPI, input, errorHandler)`
+- `adapt` - Handler with input, including write tools → injects `(ynabAPI, input, errorHandler)`
 - `adaptNoInput` - Handler with no input parameters → injects `(ynabAPI, errorHandler)`
-- `adaptWithDelta` - Delta-aware handler → injects `(ynabAPI, deltaFetcher, input, errorHandler)`
-- `adaptWithDeltaAndProgress` - Delta + progress callback → injects `(ynabAPI, deltaFetcher, input, sendProgress?, errorHandler)`
-- `adaptWrite` - Write handler → injects `(ynabAPI, deltaCache, serverKnowledgeStore, input, errorHandler)`
+- `adaptWithDelta` - Cached read handler → injects `(ynabAPI, input, { deltaFetcher, cacheManager }, errorHandler)`
+- `adaptWithDeltaAndProgress` - Cached read + progress callback → injects `(ynabAPI, input, { deltaFetcher, cacheManager }, sendProgress?, errorHandler)`
 
 **Why Critical**: Adapters bind ToolContext dependencies at registration time, so handlers receive only what they need.
 
@@ -225,21 +224,16 @@ async function handleReconcileAccount(
 
 ### 6. Cache Invalidation
 
-Write operations must invalidate related caches:
-
-```typescript
-// After creating/updating/deleting a transaction
-await updateTransaction(transactionId, updates);
-
-// Invalidate related caches
-context.cacheManager.delete(`transaction:${transactionId}`);
-context.cacheManager.delete(`transactions:${budgetId}`);
-context.cacheManager.delete(`account:${accountId}`); // Account balance changed
-```
+Handlers do not invalidate caches. `YNABClient` (`src/server/ynabClient.ts`) is the
+only network boundary: before and after every mutating HTTP request it clears that
+budget's cache entries and delta knowledge, including after timeouts (the write may
+have committed). Clearing before the request also prevents an older pending read
+from repopulating stale data.
 
 **Why Critical**: Stale cache → users see outdated data, inconsistent state.
 
-**What Breaks**: Missing invalidation → stale data persists until TTL expires (2-10 minutes).
+**What Breaks**: Calling YNAB through anything except `ynabAPI` from the context
+(e.g. `new ynab.API(token)`) bypasses invalidation and rate accounting.
 
 ### 7. Response Format (Markdown / JSON)
 
@@ -397,7 +391,7 @@ The `create_receipt_split_transaction` tool uses smart itemization logic:
    ```
 3. **Update handler** with new logic
 4. **Update tests** to cover new behavior
-5. **Invalidate caches** if it's a write operation
+5. **Call YNAB through `ynabAPI`** for writes; the API client invalidates caches
 
 ### Adding Progress Notifications
 
@@ -409,7 +403,7 @@ The `create_receipt_split_transaction` tool uses smart itemization logic:
    ): Promise<MyOutput>
    ```
 
-2. **Use `adaptWithDeltaAndProgress` or `adaptWrite` adapter**:
+2. **Use the `adaptWithDeltaAndProgress` adapter**:
    ```typescript
    const { adaptWithDeltaAndProgress } = createAdapters(context);
    handler: adaptWithDeltaAndProgress(handleMyTool),
@@ -524,22 +518,15 @@ const MySchema = z
   .strict(); // Rejects unknown fields
 ```
 
-### 3. Missing Cache Invalidation
+### 3. Bypassing the API Client Boundary
 
-**Problem**: Write operations without cache invalidation.
+**Problem**: Writing to YNAB through a client other than the context's `ynabAPI`.
 
-**Impact**: Users see stale data for 2-10 minutes (until TTL expires).
+**Impact**: Users see stale data for 2-10 minutes (until TTL expires), and the
+request is not counted against the rate limit.
 
-**Fix**: Invalidate related caches after writes:
-
-```typescript
-await updateTransaction(id, updates);
-
-// Invalidate all related caches
-context.cacheManager.delete(`transaction:${id}`);
-context.cacheManager.delete(`transactions:${budgetId}`);
-context.cacheManager.delete(`account:${accountId}`);
-```
+**Fix**: Always call YNAB through the injected `ynabAPI`; `YNABClient` invalidates
+caches around every mutating request, so handlers need no invalidation code.
 
 ### 4. Missing `.js` Extensions in Imports
 

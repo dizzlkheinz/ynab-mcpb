@@ -829,12 +829,12 @@ git commit -m "refactor: update transactionTools to use extracted modules"
 
 **Step 1: Run unit tests**
 
-Run: `npm run test:unit`
+Run: `npm test`
 Expected: All tests pass
 
 **Step 2: Run integration tests**
 
-Run: `npm run test:integration:transactions`
+Run: `npm run test:integration -- transactionTools`
 Expected: All tests pass
 
 **Step 3: Run full test suite**

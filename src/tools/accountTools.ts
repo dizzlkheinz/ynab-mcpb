@@ -2,32 +2,21 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import { CacheKeys } from "../server/cacheKeys.js";
-import {
-	CACHE_TTLS,
-	CacheManager,
-	cacheManager,
-} from "../server/cacheManager.js";
+import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import {
 	formatAccountDetail,
 	formatAccountsList,
 } from "../server/markdownFormatter.js";
-import { invalidateBudgetResourceCaches } from "../server/resourceCacheInvalidation.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
-import type { ToolFactory } from "../types/toolRegistration.js";
+import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import { amountToMilliunits, milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import {
-	type DeltaFetcherDeps,
-	type DeltaWriteDeps,
-	resolveDeltaFetcherDeps,
-	resolveDeltaWriteDeps,
-} from "./deltaSupport.js";
 import {
 	CreateAccountOutputSchema,
 	GetAccountOutputSchema,
@@ -96,12 +85,12 @@ export type CreateAccountParams = z.infer<typeof CreateAccountSchema>;
  * Lists all accounts for a specific budget
  */
 export async function handleListAccounts(
-	ynabAPI: ynab.API,
+	_ynabAPI: ynab.API,
 	params: ListAccountsParams,
-	deps?: DeltaFetcherDeps,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
+	const { deltaFetcher } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -167,8 +156,10 @@ export async function handleListAccounts(
 export async function handleGetAccount(
 	ynabAPI: ynab.API,
 	params: GetAccountParams,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
+	const { cacheManager } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -238,10 +229,8 @@ export async function handleGetAccount(
 export async function handleCreateAccount(
 	ynabAPI: ynab.API,
 	params: CreateAccountParams,
-	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache } = resolveDeltaWriteDeps(deps);
 	return await withToolErrorHandling(
 		async () => {
 			if (params.dry_run) {
@@ -279,20 +268,6 @@ export async function handleCreateAccount(
 
 			const account = response.data.account;
 
-			// Invalidate accounts list cache after successful account creation
-			const accountsListCacheKey = CacheManager.generateKey(
-				CacheKeys.ACCOUNTS,
-				"list",
-				budgetId,
-			);
-			cacheManager.delete(accountsListCacheKey);
-			invalidateBudgetResourceCaches(budgetId, {
-				invalidateAccountsList: true,
-				accountIds: [account.id],
-			});
-
-			deltaCache.invalidate(budgetId, CacheKeys.ACCOUNTS);
-
 			const createdAccountData = {
 				account: {
 					id: account.id,
@@ -329,7 +304,7 @@ export async function handleCreateAccount(
  * Registers all account-related tools with the registry.
  */
 export const registerAccountTools: ToolFactory = (registry, context) => {
-	const { adapt, adaptWithDelta, adaptWrite } = createAdapters(context);
+	const { adapt, adaptWithDelta } = createAdapters(context);
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
@@ -380,7 +355,7 @@ Errors:
   - "Account not found" → invalid account_id`,
 		inputSchema: GetAccountSchema,
 		outputSchema: GetAccountOutputSchema,
-		handler: adapt(handleGetAccount),
+		handler: adaptWithDelta(handleGetAccount),
 		defaultArgumentResolver: budgetResolver<z.infer<typeof GetAccountSchema>>(),
 		metadata: {
 			annotations: {
@@ -408,7 +383,7 @@ Examples:
   - Dry run: set dry_run=true to preview without saving`,
 		inputSchema: CreateAccountSchema,
 		outputSchema: CreateAccountOutputSchema,
-		handler: adaptWrite(handleCreateAccount),
+		handler: adapt(handleCreateAccount),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateAccountSchema>>(),
 		metadata: {

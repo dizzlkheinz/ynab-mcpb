@@ -58,7 +58,8 @@ Full response: ${JSON.stringify(parsed, null, 2)}`,
 }
 
 // Mock the YNAB SDK for performance tests
-vi.mock("ynab", () => {
+vi.mock("ynab", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("ynab")>();
 	const mockAPI = {
 		plans: {
 			getPlans: vi.fn(),
@@ -82,6 +83,7 @@ vi.mock("ynab", () => {
 	};
 
 	return {
+		...actual,
 		// biome-ignore lint: Vitest 4 requires non-arrow function for constructors
 		API: vi.fn(function () {
 			return mockAPI;
@@ -89,23 +91,32 @@ vi.mock("ynab", () => {
 	};
 });
 
-// NOTE: These performance tests need updated mocking for the reconciliation executor
-// Skipping temporarily - reconciliation functionality is covered by integration tests
+/** Count the planned operations YNAB acknowledged. */
+function appliedCount(
+	result: Awaited<ReturnType<typeof executeReconciliation>>,
+): number {
+	return (result.operation_results ?? []).filter(
+		(operationResult) => operationResult.status === "applied",
+	).length;
+}
+
+// Benchmarks are slow and timing-sensitive; correctness is covered by executor tests.
 describe.skip("Reconciliation Performance - Bulk vs Sequential", () => {
 	it("processes 20 transactions in bulk mode in under 8 seconds", async () => {
-		const { duration, result } = await measurePerformanceScenario({
+		const { duration, result, mocks } = await measurePerformanceScenario({
 			transactionCount: 20,
 			bulkDelay: 50,
 		});
 		console.log(`Bulk benchmark (20 txns): ${duration}ms`);
 		expect(duration).toBeLessThan(8000);
 		expect(result.summary.transactions_created).toBe(20);
-		expect(result.bulk_operation_details?.bulk_successes).toBe(1);
+		expect(appliedCount(result)).toBe(20);
+		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
 	}, 60000);
 
 	it("pure sequential mode (single transaction) takes longer than 20 seconds", async () => {
 		// Pure sequential baseline: only 1 transaction per "unmatched_bank" to avoid bulk mode
-		const { duration, result } = await measurePerformanceScenario({
+		const { duration, result, mocks } = await measurePerformanceScenario({
 			transactionCount: 1, // This ensures bulk mode is never entered
 			bulkDelay: 50,
 			sequentialDelay: 1050,
@@ -116,21 +127,8 @@ describe.skip("Reconciliation Performance - Bulk vs Sequential", () => {
 		);
 		expect(duration).toBeGreaterThan(20000);
 		expect(result.summary.transactions_created).toBe(1);
-		expect(result.bulk_operation_details).toBeUndefined(); // No bulk operations at all
-	}, 90000);
-
-	it("sequential fallback takes longer than 20 seconds for 20 transactions", async () => {
-		const { duration, result } = await measurePerformanceScenario({
-			transactionCount: 20,
-			bulkDelay: 50,
-			sequentialDelay: 1050,
-			forceSequential: true,
-		});
-		console.log(`Sequential fallback (20 txns): ${duration}ms`);
-		expect(duration).toBeGreaterThan(20000);
-		expect(result.summary.transactions_created).toBe(20);
-		expect(result.bulk_operation_details?.sequential_fallbacks).toBe(1);
-		expect(result.bulk_operation_details?.bulk_successes).toBe(0);
+		expect(appliedCount(result)).toBe(1);
+		expect(mocks.createTransactions).not.toHaveBeenCalled(); // No bulk operations at all
 	}, 90000);
 
 	it("achieves at least a 3x speedup over pure sequential mode", async () => {
@@ -153,16 +151,16 @@ describe.skip("Reconciliation Performance - Bulk vs Sequential", () => {
 	}, 120000);
 
 	it("handles 150-transaction chunking without significant overhead", async () => {
-		const { duration, result } = await measurePerformanceScenario({
+		const { duration, result, mocks } = await measurePerformanceScenario({
 			transactionCount: 150,
 			bulkDelay: 60,
 		});
 		console.log(`Chunking benchmark (150 txns): ${duration}ms`);
 		expect(duration).toBeLessThan(15000);
 		expect(result.summary.transactions_created).toBe(150);
-		expect(
-			result.bulk_operation_details?.chunks_processed,
-		).toBeGreaterThanOrEqual(2);
+		expect(appliedCount(result)).toBe(150);
+		// YNAB accepts at most 100 transactions per bulk request.
+		expect(mocks.createTransactions).toHaveBeenCalledTimes(2);
 	}, 60000);
 
 	it("stays within 10MB of heap growth for 100 bulk transactions", async () => {
@@ -269,25 +267,18 @@ function buildPerformanceParams(
 function createPerformanceApi(options: {
 	bulkDelay?: number | undefined;
 	sequentialDelay?: number | undefined;
-	failBulk?: boolean | undefined;
 }) {
 	const createTransactions = vi
 		.fn()
 		.mockImplementation(async (_budgetId, body: any) => {
-			if (options.failBulk) {
-				throw new Error("bulk failure");
-			}
 			if (options.bulkDelay) {
 				await delay(options.bulkDelay);
 			}
 			const transactions = (body.transactions ?? []).map(
 				(txn: any, index: number) => ({
+					...txn,
 					id: `bulk-${index}-${Date.now()}`,
-					account_id: txn.account_id,
-					amount: txn.amount,
-					date: txn.date,
-					cleared: "cleared",
-					approved: true,
+					deleted: false,
 				}),
 			);
 			return { data: { transactions } };
@@ -308,11 +299,9 @@ function createPerformanceApi(options: {
 			return {
 				data: {
 					transaction: {
+						...body.transaction,
 						id: `seq-${Date.now()}`,
-						amount: body.transaction?.amount ?? 0,
-						date: body.transaction?.date ?? "2025-09-01",
-						cleared: "cleared",
-						approved: true,
+						deleted: false,
 					},
 				},
 			};
@@ -355,11 +344,11 @@ async function measurePerformanceScenario(options: {
 	amount?: number;
 	bulkDelay?: number;
 	sequentialDelay?: number;
-	forceSequential?: boolean;
 	multipleRuns?: number;
 }): Promise<{
 	duration: number;
 	result: Awaited<ReturnType<typeof executeReconciliation>>;
+	mocks: ReturnType<typeof createPerformanceApi>["mocks"];
 }> {
 	const analysis = buildPerformanceAnalysis(
 		options.transactionCount,
@@ -368,10 +357,9 @@ async function measurePerformanceScenario(options: {
 	const params = buildPerformanceParams(
 		analysis.summary.target_statement_balance.value,
 	);
-	const { api } = createPerformanceApi({
+	const { api, mocks } = createPerformanceApi({
 		bulkDelay: options.bulkDelay,
 		sequentialDelay: options.sequentialDelay,
-		failBulk: options.forceSequential,
 	});
 
 	const start = Date.now();
@@ -402,7 +390,7 @@ async function measurePerformanceScenario(options: {
 		});
 	}
 	const duration = Date.now() - start;
-	return { duration, result: result! };
+	return { duration, result: result!, mocks };
 }
 
 describe("YNAB MCP Server - Performance Tests", () => {

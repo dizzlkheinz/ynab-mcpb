@@ -13,6 +13,11 @@ export interface CSVParseResult {
 		totalRows: number;
 		validRows: number;
 		skippedRows: number;
+		format?: {
+			columns: ColumnMapping;
+			header: boolean;
+			dateFormat?: "YMD" | "MDY" | "DMY";
+		};
 	};
 }
 
@@ -169,6 +174,8 @@ function autoDetectFormat(
 	const rows = preview.data as string[][];
 	const firstRow = rows[0];
 	if (!firstRow) return undefined;
+	// A header must never be inferred from the majority of subsequent data rows.
+	if (firstRow.some((value) => /date/i.test(value))) return { header: true };
 
 	// 1. Check for known headers (RBC, etc.)
 	const headerMatch = detectPreset(firstRow);
@@ -188,6 +195,12 @@ function autoDetectFormat(
 	if (checkTDPattern(rows)) {
 		return { preset: "td", header: false };
 	}
+	if (
+		firstRow.length >= 3 &&
+		parseDate(firstRow[0] ?? "") &&
+		parseAmount(firstRow[1] ?? "").valid
+	)
+		return { header: false };
 
 	return undefined;
 }
@@ -231,6 +244,9 @@ export function parseCSV(
 	content: string,
 	options: ParseCSVOptions = {},
 ): CSVParseResult {
+	// Some bank exports omit quotes around a leading month-name date containing
+	// a comma. Repair that narrowly recognized field before the common parser.
+	content = content.replace(/^([A-Za-z]{3}\s+\d{1,2},\s*\d{4})(?=,)/gm, '"$1"');
 	const errors: ParseError[] = [];
 	const warnings: ParseWarning[] = [];
 
@@ -316,6 +332,11 @@ export function parseCSV(
 			totalRows: rows.length,
 			validRows: transactions.length,
 			skippedRows: rows.length - transactions.length,
+			format: {
+				columns: mapping,
+				header: hasHeader,
+				...(rowContext.dateFormat ? { dateFormat: rowContext.dateFormat } : {}),
+			},
 		},
 	};
 }
@@ -423,20 +444,27 @@ function resolveColumnMapping(
 ): ColumnMapping {
 	const dateCandidates = options.columns?.date
 		? [options.columns.date]
-		: (preset?.dateColumn ?? ["Date", "Transaction Date", "Posted Date"]);
+		: (preset?.dateColumn ??
+			(hasHeader
+				? ["Date", "Transaction Date", "Posted Date", "Post Date"]
+				: ["0"]));
 	const descCandidates = options.columns?.description
 		? [options.columns.description]
-		: (preset?.descriptionColumn ?? [
-				"Description",
-				"Details",
-				"Transaction Details",
-				"Payee",
-				"Merchant",
-				"Name",
-				"Memo",
-				"Narration",
-				"Reference",
-			]);
+		: (preset?.descriptionColumn ??
+			(!hasHeader
+				? ["2"]
+				: [
+						"Description",
+						"Details",
+						"Transaction Details",
+						"Payee",
+						"Merchant",
+						"Name",
+						"Memo",
+						"Narration",
+						"Reference",
+						"Desc",
+					]));
 
 	return {
 		dateCol: findColumn(columns, dateCandidates, !hasHeader),
@@ -478,9 +506,16 @@ function resolveAmountColumns(
 
 	const amountCandidates = options.columns?.amount
 		? [options.columns.amount]
-		: (preset?.amountColumn ?? ["Amount", "CAD$", "Value"]);
+		: (preset?.amountColumn ??
+			(hasHeader ? ["Amount", "CAD$", "Value", "Amt"] : ["1"]));
+	const amountCol = findColumn(columns, amountCandidates, !hasHeader);
+	if (!amountCol && hasHeader && !options.columns?.amount) {
+		const debitCol = findColumn(columns, ["Debit", "Withdrawal", "Outflow"]);
+		const creditCol = findColumn(columns, ["Credit", "Deposit", "Inflow"]);
+		if (debitCol && creditCol) return { amountCol: null, debitCol, creditCol };
+	}
 	return {
-		amountCol: findColumn(columns, amountCandidates, !hasHeader),
+		amountCol,
 		debitCol: null,
 		creditCol: null,
 	};
@@ -675,6 +710,8 @@ function parseSplitAmount(
 		amountMilliunits = -Math.abs(debitMilliunits); // Debits are outflows (negative)
 	} else if (Math.abs(creditMilliunits) > 0) {
 		amountMilliunits = Math.abs(creditMilliunits); // Credits are inflows (positive)
+	} else if ((debit && parsedDebit.valid) || (credit && parsedCredit.valid)) {
+		amountMilliunits = 0;
 	} else {
 		return {
 			status: "error",
@@ -717,7 +754,7 @@ function sanitizeDescription(rawDesc: string): string {
 	);
 }
 
-function parseDate(
+export function parseDate(
 	raw: string,
 	formatHint?: "YMD" | "MDY" | "DMY",
 ): Date | null {

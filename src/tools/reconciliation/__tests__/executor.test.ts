@@ -4,7 +4,10 @@ import { type MoneyValue, toMoneyValue } from "../../../utils/money.js";
 import type { NormalizedYnabError } from "../executor.js";
 import {
 	type AccountSnapshot,
+	buildReconciliationPlan,
+	type ExecutionOptions,
 	executeReconciliation,
+	executeReconciliationPlan,
 	normalizeYnabError,
 	shouldPropagateYnabError,
 } from "../executor.js";
@@ -235,1159 +238,281 @@ describe("error normalization helpers", () => {
 	});
 });
 
-describe("executeReconciliation (dry run)", () => {
-	it("produces action plan without calling YNAB APIs when dry_run=true", async () => {
-		const analysis = buildAnalysis();
-		const params = {
-			budget_id: "budget-1",
-			account_id: "account-1",
-			csv_data: "Date,Description,Amount",
-			statement_balance: -921.24,
-			date_tolerance_days: 2,
-			match_strictness: "strict" as const,
-			sign_convention: "auto" as const,
-			max_suggestions_in_output: 20,
-			auto_create_transactions: true,
-			auto_update_cleared_status: true,
-			auto_unclear_missing: true,
-			auto_adjust_dates: true,
-			dry_run: true,
-		} satisfies any;
+function optionsFor(
+	count = 3,
+	overrides: Partial<ReconcileAccountRequest> = {},
+) {
+	const analysis = buildBulkAnalysis(count);
+	const { api, mocks } = createMockYnabAPI();
+	mocks.createTransactions.mockImplementation(async (_budget, body) => ({
+		data: {
+			transactions: body.transactions.map(
+				(transaction: ynab.NewTransaction, index: number) => ({
+					...transaction,
+					id: `created-${transaction.date}-${index}`,
+				}),
+			),
+		},
+	}));
+	mocks.createTransaction.mockImplementation(async (_budget, body) => ({
+		data: { transaction: { ...body.transaction, id: "created" } },
+	}));
+	const options: ExecutionOptions = {
+		ynabAPI: api,
+		analysis,
+		params: buildBulkParams(analysis.balance_info.target_statement, overrides),
+		budgetId: "budget-bulk",
+		accountId: "account-bulk",
+		initialAccount: defaultAccountSnapshot,
+		currencyCode: "USD",
+	};
+	return { options, mocks };
+}
 
-		const initialAccount: AccountSnapshot = {
-			balance: -899020,
-			cleared_balance: -899020,
-			uncleared_balance: 0,
-		};
-
-		const result = await executeReconciliation({
-			ynabAPI: {} as ynab.API,
-			analysis,
-			params,
-			budgetId: "budget-1",
-			accountId: "account-1",
-			initialAccount,
-			currencyCode: "USD",
+describe("immutable reconciliation plans", () => {
+	it("previews exact payloads without calling YNAB", async () => {
+		const { options, mocks } = optionsFor(3, { dry_run: true });
+		const result = await executeReconciliation(options);
+		expect(result.summary.transactions_created).toBe(3);
+		expect(
+			result.operation_results?.every((result) => result.status === "planned"),
+		).toBe(true);
+		expect(result.balance_reconciliation?.status).toBe("balanced");
+		for (const mock of Object.values(mocks))
+			expect(mock).not.toHaveBeenCalled();
+	});
+	it("freezes both the plan and each financial payload", () => {
+		const { options } = optionsFor();
+		const plan = buildReconciliationPlan(options);
+		expect(Object.isFrozen(plan)).toBe(true);
+		expect(Object.isFrozen(plan.operations[0]?.payload)).toBe(true);
+		options.analysis.unmatched_bank[0]!.amount = 999;
+		expect(
+			plan.operations.every(
+				(operation) =>
+					(operation.payload as ynab.NewTransaction).amount === 10000,
+			),
+		).toBe(true);
+	});
+	it("executes stored operations without recomputing a mutated analysis", async () => {
+		const { options, mocks } = optionsFor();
+		const plan = buildReconciliationPlan(options);
+		options.analysis.unmatched_bank = [];
+		const result = await executeReconciliationPlan(plan, options);
+		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
+		expect(
+			mocks.createTransactions.mock.calls[0]?.[1].transactions,
+		).toHaveLength(3);
+		expect(result.summary.transactions_created).toBe(3);
+	});
+	it("rejects stale account snapshots before any write", async () => {
+		const { options, mocks } = optionsFor();
+		options.sourceTransactions = [];
+		const plan = buildReconciliationPlan(options);
+		mocks.getTransactionsByAccount.mockResolvedValue({
+			data: { transactions: [{ id: "new", amount: 1 }] },
 		});
-
-		expect(result.summary.transactions_created).toBe(1);
-		expect(result.summary.transactions_updated).toBe(2);
-		expect(result.summary.dates_adjusted).toBe(1);
-		// 3 original actions + 2 diagnostic actions (diagnostic_step3_entry + diagnostic_unmatched_ynab)
-		expect(result.actions_taken).toHaveLength(5);
-		expect(result.recommendations).toContain(
-			"Dry run only — re-run with dry_run=false to apply these changes",
+		await expect(executeReconciliationPlan(plan, options)).rejects.toThrow(
+			"changed since preview",
 		);
+		expect(mocks.createTransactions).not.toHaveBeenCalled();
 	});
-});
-
-describe("executeReconciliation (apply mode)", () => {
-	it("creates, updates, and adjusts when dry_run=false", async () => {
-		const analysis = buildAnalysis();
-		const params = {
-			budget_id: "budget-apply",
-			account_id: "account-apply",
-			csv_data: "Date,Description,Amount",
-			statement_balance: -921.24,
-			statement_end_date: "2025-10-31",
-			date_tolerance_days: 2,
-			match_strictness: "strict" as const,
-			sign_convention: "auto" as const,
-			max_suggestions_in_output: 20,
-			auto_create_transactions: true,
-			auto_update_cleared_status: true,
-			auto_unclear_missing: true,
-			auto_adjust_dates: true,
-			dry_run: false,
-		} satisfies any;
-
-		const initialAccount: AccountSnapshot = {
-			balance: -899020,
-			cleared_balance: -899020,
-			uncleared_balance: 0,
-		};
-
-		const mockCreate = vi
-			.fn()
-			.mockResolvedValue({ data: { transaction: { id: "created-1" } } });
-		const mockUpdate = vi
-			.fn()
-			.mockResolvedValue({ data: { transaction: { id: "updated-1" } } });
-		const mockBatchUpdate = vi.fn().mockResolvedValue({
-			data: { transactions: [{ id: "updated-1" }, { id: "updated-2" }] },
+	it("normalizes deleted tombstones consistently between preview and confirmation", async () => {
+		const { options, mocks } = optionsFor();
+		options.sourceTransactions = [];
+		const plan = buildReconciliationPlan(options);
+		mocks.getTransactionsByAccount.mockResolvedValue({
+			data: { transactions: [{ id: "deleted", deleted: true, amount: 1000 }] },
 		});
-		const mockGetAccount = vi.fn().mockResolvedValue({
-			data: {
-				account: {
-					balance: -921240,
-					cleared_balance: -921240,
-					uncleared_balance: 0,
-				},
-			},
-		});
-
-		const mockTransactionsApi = {
-			createTransaction: mockCreate,
-			updateTransaction: mockUpdate,
-			updateTransactions: mockBatchUpdate,
-			getTransactionsByAccount: vi
-				.fn()
-				.mockResolvedValue({ data: { transactions: [] } }),
-		} satisfies Partial<ynab.TransactionsApi>;
-
-		const mockAccountsApi = {
-			getAccountById: mockGetAccount,
-		} satisfies Partial<ynab.AccountsApi>;
-
-		const ynabAPI = {
-			transactions: mockTransactionsApi,
-			accounts: mockAccountsApi,
-		} as unknown as ynab.API;
-
-		const result = await executeReconciliation({
-			ynabAPI,
-			analysis,
-			params,
-			budgetId: "budget-apply",
-			accountId: "account-apply",
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		expect(mockCreate).toHaveBeenCalledTimes(1);
-		expect(mockBatchUpdate).toHaveBeenCalled();
-		expect(mockGetAccount).toHaveBeenCalled();
-		expect(result.summary.transactions_created).toBe(1);
-		expect(result.summary.transactions_updated).toBeGreaterThanOrEqual(2);
-		expect(result.summary.dates_adjusted).toBe(1);
-		expect(result.actions_taken.length).toBeGreaterThanOrEqual(3);
-		expect(result.summary.dry_run).toBe(false);
+		const result = await executeReconciliationPlan(plan, options);
+		expect(result.summary.transactions_created).toBe(3);
+		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
 	});
-});
-
-describe("executeReconciliation (swallowed chunk failures)", () => {
-	const failureAccount: AccountSnapshot = {
-		balance: -944250,
-		cleared_balance: -899020,
-		uncleared_balance: -45230,
-	};
-
-	// Clearing the single match (-45.23) is exactly what aligns the balance
-	const buildAligningAnalysis = (): ReconciliationAnalysis => {
-		const analysis = buildAnalysis();
-		analysis.unmatched_bank = [];
-		analysis.unmatched_ynab = [];
-		analysis.balance_info.target_statement = toMoneyValue(-944250, "USD");
-		return analysis;
-	};
-
-	const buildFailureParams = (
-		overrides: Partial<ReconcileAccountRequest> = {},
-	): ReconcileAccountRequest => ({
-		budget_id: "budget-fail",
-		account_id: "account-fail",
-		csv_data: "Date,Description,Amount",
-		statement_balance: -944.25,
-		statement_end_date: "2025-10-31",
-		date_tolerance_days: 2,
-		match_strictness: "strict" as const,
-		sign_convention: "auto" as const,
-		max_suggestions_in_output: 20,
-		auto_create_transactions: false,
-		auto_update_cleared_status: true,
-		auto_unclear_missing: false,
-		auto_adjust_dates: true,
-		dry_run: false,
-		...overrides,
+	it("retains two missing offsetting transactions even when the balance matches", async () => {
+		const { options } = optionsFor(2, { dry_run: true });
+		options.analysis.unmatched_bank[0]!.amount = -10000;
+		options.analysis.balance_info.target_statement = toMoneyValue(0, "USD");
+		const result = await executeReconciliation(options);
+		expect(result.summary.transactions_created).toBe(2);
+		expect(result.balance_reconciliation?.status).toBe("balanced");
 	});
-
-	it("withdraws balance alignment when the clearing update never reaches YNAB", async () => {
-		const analysis = buildAligningAnalysis();
-		const params = buildFailureParams();
-
-		const { api, mocks } = createMockYnabAPI(failureAccount);
-		// Network error: no HTTP status, so it is recorded but not propagated
-		mocks.updateTransactions.mockRejectedValue(new Error("socket hang up"));
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: "budget-fail",
-			accountId: "account-fail",
-			initialAccount: failureAccount,
-			currencyCode: "USD",
-		});
-
-		const actionTypes = result.actions_taken.map((action) => action.type);
-		expect(actionTypes).toContain("batch_update_failed");
-		expect(actionTypes).not.toContain("reconciliation_complete");
+	it("chunks a large plan into requests no larger than 100", async () => {
+		const { options, mocks } = optionsFor(205);
+		const result = await executeReconciliation(options);
 		expect(
-			result.actions_taken.some(
-				(action) =>
-					action.type === "balance_checkpoint" &&
-					action.reason.includes("no longer aligned"),
+			mocks.createTransactions.mock.calls.map(
+				(call) => call[1].transactions.length,
+			),
+		).toEqual([100, 100, 5]);
+		expect(result.summary.transactions_created).toBe(205);
+	});
+	it("preserves bank import matching by omitting import IDs", async () => {
+		const { options, mocks } = optionsFor();
+		await executeReconciliation(options);
+		expect(
+			mocks.createTransactions.mock.calls[0]?.[1].transactions.every(
+				(transaction: ynab.NewTransaction) =>
+					transaction.import_id === undefined,
 			),
 		).toBe(true);
-		// STEP 4 must not try to mark anything reconciled
-		expect(mocks.updateTransactions).toHaveBeenCalledTimes(1);
-		expect(result.summary.transactions_updated).toBe(0);
-		expect(result.summary.dates_adjusted).toBe(0);
 	});
-
-	it("does not unclear missing transactions to compensate for a failed clearing update", async () => {
-		// Keep the default cleared, in-window unmatched YNAB transaction (ynab-2)
-		const analysis = buildAligningAnalysis();
-		analysis.unmatched_ynab = buildAnalysis().unmatched_ynab;
-		const params = buildFailureParams({ auto_unclear_missing: true });
-
-		const { api, mocks } = createMockYnabAPI(failureAccount);
-		mocks.updateTransactions.mockRejectedValue(new Error("socket hang up"));
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: "budget-fail",
-			accountId: "account-fail",
-			initialAccount: failureAccount,
-			currencyCode: "USD",
-		});
-
-		// Only the failed STEP 2 update was attempted; STEP 3 sent nothing
-		expect(mocks.updateTransactions).toHaveBeenCalledTimes(1);
+	it("never replays an uncertain bulk create as sequential writes", async () => {
+		const { options, mocks } = optionsFor();
+		mocks.createTransactions.mockRejectedValue(new Error("ECONNRESET"));
+		const result = await executeReconciliation(options);
+		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
+		expect(mocks.createTransaction).not.toHaveBeenCalled();
+		expect(result.summary.transactions_created).toBe(0);
+		expect(result.errors?.[0]).toContain("uncertain");
 		expect(
-			result.actions_taken.some(
-				(action) =>
-					action.type === "balance_checkpoint" &&
-					action.reason.includes("Skipped marking missing transactions"),
+			result.operation_results?.every(
+				(result) => result.status === "uncertain",
 			),
 		).toBe(true);
-		expect(
-			result.actions_taken.some(
-				(action) =>
-					action.type === "update_transaction" &&
-					action.reason.includes("uncleared"),
-			),
-		).toBe(false);
 	});
-
-	it("keeps applied updates when the progress callback throws after a chunk succeeds", async () => {
-		const analysis = buildAligningAnalysis();
-		const params = buildFailureParams();
-
-		const { api, mocks } = createMockYnabAPI(failureAccount);
-		mocks.updateTransactions.mockImplementation(async (_budgetId, body) => ({
-			data: {
-				transactions: (
-					body as { transactions: { id: string; cleared: string }[] }
-				).transactions.map((txn) => ({
-					id: txn.id,
-					amount: -45230,
-					cleared: txn.cleared,
-				})),
-			},
-		}));
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: "budget-fail",
-			accountId: "account-fail",
-			initialAccount: failureAccount,
-			currencyCode: "USD",
-			sendProgress: vi.fn().mockRejectedValue(new Error("client went away")),
+	it("returns per-operation failures for SDK errors instead of hiding them", async () => {
+		const { options, mocks } = optionsFor(1);
+		mocks.createTransaction.mockRejectedValue({
+			error: { id: "429", detail: "Too many requests" },
 		});
-
-		const actionTypes = result.actions_taken.map((action) => action.type);
-		expect(actionTypes).not.toContain("batch_update_failed");
-		expect(actionTypes).toContain("reconciliation_complete");
-		expect(result.summary.dates_adjusted).toBe(1);
-		// STEP 2 clear + STEP 4 reconcile
-		expect(mocks.updateTransactions).toHaveBeenCalledTimes(2);
+		const result = await executeReconciliation(options);
+		expect(result.errors?.join()).toContain("Too many requests");
+		expect(result.operation_results?.[0]?.status).toBe("uncertain");
 	});
-
-	it("counts only successful chunks in the reconciliation_complete message", async () => {
-		// 101 already-cleared matches with the balance aligned up front, so
-		// STEP 4 sends two reconcile chunks (100 + 1)
-		const template = buildAnalysis().auto_matches[0]!;
-		const analysis = buildAligningAnalysis();
-		analysis.auto_matches = Array.from({ length: 101 }, (_, index) => ({
-			...template,
-			bankTransaction: { ...template.bankTransaction, id: `bank-${index}` },
-			ynabTransaction: {
-				...template.ynabTransaction!,
-				id: `ynab-${index}`,
-				cleared: "cleared",
-			},
-		}));
-		const params = buildFailureParams({ auto_adjust_dates: false });
-		const alignedAccount: AccountSnapshot = {
-			...failureAccount,
-			cleared_balance: -944250,
-		};
-
-		const { api, mocks } = createMockYnabAPI(alignedAccount);
-		mocks.updateTransactions
-			.mockImplementationOnce(async (_budgetId, body) => ({
+	it("keeps earlier committed chunks and skips later chunks after failure", async () => {
+		const { options, mocks } = optionsFor(205);
+		mocks.createTransactions
+			.mockImplementationOnce(async (_budget, body) => ({
 				data: {
-					transactions: (
-						body as { transactions: { id: string }[] }
-					).transactions.map((txn) => ({
-						id: txn.id,
-						amount: -45230,
-						cleared: "reconciled",
-					})),
+					transactions: body.transactions.map(
+						(transaction: ynab.NewTransaction, index: number) => ({
+							...transaction,
+							id: `first-${index}`,
+						}),
+					),
 				},
 			}))
-			.mockRejectedValueOnce(new Error("socket hang up"));
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: "budget-fail",
-			accountId: "account-fail",
-			initialAccount: alignedAccount,
-			currencyCode: "USD",
-		});
-
-		expect(mocks.updateTransactions).toHaveBeenCalledTimes(2);
-		const complete = result.actions_taken.find(
-			(action) => action.type === "reconciliation_complete",
-		);
-		expect(complete?.reason).toMatch(/^Marked 100 of 101 matched/);
-		expect(complete?.reason).toContain("1 could not be reconciled");
-		expect(result.summary.transactions_updated).toBe(100);
-	});
-
-	it("reports only the transactions that were actually reconciled", async () => {
-		const analysis = buildAligningAnalysis();
-		const params = buildFailureParams();
-
-		const { api, mocks } = createMockYnabAPI(failureAccount);
-		mocks.updateTransactions
-			.mockResolvedValueOnce({
-				data: {
-					transactions: [{ id: "ynab-1", amount: -45230, cleared: "cleared" }],
-				},
-			})
-			.mockRejectedValueOnce(new Error("socket hang up"));
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: "budget-fail",
-			accountId: "account-fail",
-			initialAccount: failureAccount,
-			currencyCode: "USD",
-		});
-
-		const actionTypes = result.actions_taken.map((action) => action.type);
-		expect(actionTypes).toContain("batch_reconcile_failed");
-		expect(actionTypes).not.toContain("reconciliation_complete");
-	});
-});
-
-describe("executeReconciliation (ordered halting)", () => {
-	it("processes newest auto matches first and stops once balances align", async () => {
-		const analysis: ReconciliationAnalysis = {
-			success: true,
-			phase: "analysis",
-			summary: {
-				statement_date_range: "2025-09-01 to 2025-10-31",
-				bank_transactions_count: 2,
-				ynab_transactions_count: 2,
-				ynab_in_range_count: 2,
-				ynab_outside_range_count: 0,
-				auto_matched: 2,
-				suggested_matches: 0,
-				unmatched_bank: 0,
-				unmatched_ynab: 0,
-				current_cleared_balance: toMoneyValue(90000, "USD"),
-				target_statement_balance: toMoneyValue(100000, "USD"),
-				discrepancy: toMoneyValue(-10000, "USD"),
-				discrepancy_explanation: "Awaiting cleared transactions",
-			},
-			auto_matches: [
-				{
-					bankTransaction: {
-						id: "bank-older",
-						date: "2025-09-15",
-						amount: 5000,
-						payee: "Older",
-						sourceRow: 2,
-						raw: { date: "2025-09-15", amount: "5.00", description: "Older" },
-					},
-					ynabTransaction: {
-						id: "ynab-older",
-						date: "2025-09-14",
-						amount: 5000,
-						payee: "Older",
-						categoryName: null,
-						cleared: "uncleared",
-						approved: true,
-						memo: null,
-					},
-					candidates: [],
-					confidence: "high",
-					confidenceScore: 95,
-					matchReason: "Exact match",
-				},
-				{
-					bankTransaction: {
-						id: "bank-newer",
-						date: "2025-10-25",
-						amount: 10000,
-						payee: "Newer",
-						sourceRow: 1,
-						raw: { date: "2025-10-25", amount: "10.00", description: "Newer" },
-					},
-					ynabTransaction: {
-						id: "ynab-newer",
-						date: "2025-10-24",
-						amount: 10000,
-						payee: "Newer",
-						categoryName: null,
-						cleared: "uncleared",
-						approved: true,
-						memo: null,
-					},
-					candidates: [],
-					confidence: "high",
-					confidenceScore: 99,
-					matchReason: "Exact match",
-				},
-			],
-			suggested_matches: [],
-			unmatched_bank: [],
-			unmatched_ynab: [],
-			ynab_outside_date_range: [],
-			balance_info: {
-				current_cleared: toMoneyValue(90000, "USD"),
-				current_uncleared: toMoneyValue(0, "USD"),
-				current_total: toMoneyValue(90000, "USD"),
-				target_statement: toMoneyValue(100000, "USD"),
-				discrepancy: toMoneyValue(-10000, "USD"),
-				on_track: false,
-			},
-			next_steps: [],
-			insights: [],
-		};
-
-		const params = {
-			budget_id: "budget-ordered",
-			account_id: "account-ordered",
-			csv_data: "Date,Description,Amount",
-			statement_balance: 100,
-			date_tolerance_days: 2,
-			match_strictness: "strict" as const,
-			sign_convention: "auto" as const,
-			max_suggestions_in_output: 20,
-			auto_create_transactions: false,
-			auto_update_cleared_status: true,
-			auto_unclear_missing: false,
-			auto_adjust_dates: false,
-			dry_run: true,
-		} satisfies any;
-
-		const initialAccount: AccountSnapshot = {
-			balance: 90000,
-			cleared_balance: 90000,
-			uncleared_balance: 0,
-		};
-
-		const result = await executeReconciliation({
-			ynabAPI: {} as ynab.API,
-			analysis,
-			params,
-			budgetId: "budget-ordered",
-			accountId: "account-ordered",
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		const updateActions = result.actions_taken.filter(
-			(action) => action.type === "update_transaction",
-		);
-		expect(updateActions).toHaveLength(1);
-		expect((updateActions[0]?.transaction as any)?.transaction_id).toBe(
-			"ynab-newer",
-		);
-		expect(
-			result.actions_taken.some(
-				(action) => action.type === "balance_checkpoint",
-			),
-		).toBe(true);
-		expect(result.summary.transactions_updated).toBe(1);
-		expect(result.summary.dates_adjusted).toBe(0);
-	});
-
-	it("only reconciles matched transactions that were actually cleared before halting", async () => {
-		const analysis: ReconciliationAnalysis = {
-			success: true,
-			phase: "analysis",
-			summary: {
-				statement_date_range: "2025-09-01 to 2025-10-31",
-				bank_transactions_count: 2,
-				ynab_transactions_count: 2,
-				ynab_in_range_count: 2,
-				ynab_outside_range_count: 0,
-				auto_matched: 2,
-				suggested_matches: 0,
-				unmatched_bank: 0,
-				unmatched_ynab: 0,
-				current_cleared_balance: toMoneyValue(90000, "USD"),
-				target_statement_balance: toMoneyValue(100000, "USD"),
-				discrepancy: toMoneyValue(-10000, "USD"),
-				discrepancy_explanation: "Awaiting cleared transactions",
-			},
-			auto_matches: [
-				{
-					bankTransaction: {
-						id: "bank-older",
-						date: "2025-09-15",
-						amount: 5000,
-						payee: "Older",
-						sourceRow: 2,
-						raw: { date: "2025-09-15", amount: "5.00", description: "Older" },
-					},
-					ynabTransaction: {
-						id: "ynab-older",
-						date: "2025-09-14",
-						amount: 5000,
-						payee: "Older",
-						categoryName: null,
-						cleared: "uncleared",
-						approved: true,
-						memo: null,
-					},
-					candidates: [],
-					confidence: "high",
-					confidenceScore: 95,
-					matchReason: "Exact match",
-				},
-				{
-					bankTransaction: {
-						id: "bank-newer",
-						date: "2025-10-25",
-						amount: 10000,
-						payee: "Newer",
-						sourceRow: 1,
-						raw: { date: "2025-10-25", amount: "10.00", description: "Newer" },
-					},
-					ynabTransaction: {
-						id: "ynab-newer",
-						date: "2025-10-24",
-						amount: 10000,
-						payee: "Newer",
-						categoryName: null,
-						cleared: "uncleared",
-						approved: true,
-						memo: null,
-					},
-					candidates: [],
-					confidence: "high",
-					confidenceScore: 99,
-					matchReason: "Exact match",
-				},
-			],
-			suggested_matches: [],
-			unmatched_bank: [],
-			unmatched_ynab: [],
-			ynab_outside_date_range: [],
-			balance_info: {
-				current_cleared: toMoneyValue(90000, "USD"),
-				current_uncleared: toMoneyValue(0, "USD"),
-				current_total: toMoneyValue(90000, "USD"),
-				target_statement: toMoneyValue(100000, "USD"),
-				discrepancy: toMoneyValue(-10000, "USD"),
-				on_track: false,
-			},
-			next_steps: [],
-			insights: [],
-		};
-
-		const params = {
-			budget_id: "budget-ordered",
-			account_id: "account-ordered",
-			csv_data: "Date,Description,Amount",
-			statement_balance: 100,
-			date_tolerance_days: 2,
-			match_strictness: "strict" as const,
-			sign_convention: "auto" as const,
-			max_suggestions_in_output: 20,
-			auto_create_transactions: false,
-			auto_update_cleared_status: true,
-			auto_unclear_missing: false,
-			auto_adjust_dates: false,
-			dry_run: false,
-		} satisfies any;
-
-		const initialAccount: AccountSnapshot = {
-			balance: 90000,
-			cleared_balance: 90000,
-			uncleared_balance: 0,
-		};
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-		mocks.updateTransactions.mockImplementation(
-			async (_budgetId, body: any) => ({
-				data: {
-					transactions: (body.transactions ?? []).map((txn: any) => ({
-						id: txn.id,
-						amount: txn.id === "ynab-newer" ? 10000 : 5000,
-						date: txn.id === "ynab-newer" ? "2025-10-25" : "2025-09-15",
-						cleared: txn.cleared,
-						approved: true,
-					})),
-				},
-			}),
-		);
-
-		await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: "budget-ordered",
-			accountId: "account-ordered",
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		expect(mocks.updateTransactions).toHaveBeenCalledTimes(2);
-		const clearPayload = mocks.updateTransactions.mock.calls[0]?.[1];
-		const reconcilePayload = mocks.updateTransactions.mock.calls[1]?.[1];
-		expect(clearPayload?.transactions).toEqual([
-			{ id: "ynab-newer", cleared: "cleared" },
-		]);
-		expect(reconcilePayload?.transactions).toEqual([
-			{ id: "ynab-newer", cleared: "reconciled" },
-		]);
-	});
-});
-
-describe("executeReconciliation - bulk create mode", () => {
-	it("does not re-create a bulk chunk when the progress callback throws", async () => {
-		const analysis = buildBulkAnalysis(3, 12);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		mocks.createTransactions.mockImplementation(async (_budgetId, body) => {
-			const requested = (body as { transactions: ynab.NewTransaction[] })
-				.transactions;
-			return {
-				data: {
-					transactions: requested.map((txn, index) => ({
-						...txn,
-						id: `bulk-${index}`,
-						cleared: "cleared",
-						approved: true,
-					})),
-					duplicate_import_ids: [],
-				},
-			};
-		});
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
-			sendProgress: vi.fn().mockRejectedValue(new Error("client went away")),
-		});
-
-		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
-		expect(mocks.createTransaction).not.toHaveBeenCalled();
-		expect(result.summary.transactions_created).toBe(3);
-		expect(result.bulk_operation_details).toEqual(
-			expect.objectContaining({ bulk_successes: 1, sequential_fallbacks: 0 }),
-		);
-	});
-
-	it("uses bulk create API for batches with multiple transactions", async () => {
-		const analysis = buildBulkAnalysis(5, 12);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		mocks.createTransactions.mockImplementation(
-			async (_budgetId, body: any) => {
-				const transactions = (body.transactions ?? []).map(
-					(txn: any, index: number) => ({
-						id: `bulk-${index}`,
-						account_id: txn.account_id,
-						amount: txn.amount,
-						date: txn.date,
-						payee_name: txn.payee_name,
-						memo: txn.memo,
-						cleared: "cleared",
-						approved: true,
-					}),
-				);
-				return { data: { transactions, duplicate_import_ids: [] } };
-			},
-		);
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
-		const payload = mocks.createTransactions.mock.calls[0]?.[1];
-		expect(payload?.transactions).toHaveLength(5);
-		const createActions = result.actions_taken.filter(
-			(action) => action.type === "create_transaction",
-		);
-		expect(createActions).toHaveLength(5);
-		expect(createActions.every((action) => action.correlation_key)).toBe(true);
-		expect(result.summary.transactions_created).toBe(5);
-		expect(result.bulk_operation_details).toEqual(
-			expect.objectContaining({
-				chunks_processed: 1,
-				bulk_successes: 1,
-				sequential_fallbacks: 0,
-				bulk_chunk_failures: 0,
-				transaction_failures: 0,
-			}),
-		);
-	});
-
-	it("falls back to sequential mode for single transaction scenarios", async () => {
-		const analysis = buildBulkAnalysis(1, 15);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		mocks.createTransaction.mockResolvedValue({
-			data: {
-				transaction: {
-					id: "single-txn",
-					amount: 15000,
-					date: analysis.unmatched_bank[0]?.date ?? "2025-10-01",
-				},
-			},
-		});
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		expect(mocks.createTransactions).not.toHaveBeenCalled();
-		expect(mocks.createTransaction).toHaveBeenCalledTimes(1);
-		expect(result.summary.transactions_created).toBe(1);
-		expect(result.bulk_operation_details).toBeUndefined();
-	});
-
-	it("does not record a sequential create as failed when recording it throws", async () => {
-		const analysis = buildBulkAnalysis(1, 15);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		mocks.createTransaction.mockResolvedValue({
-			data: { transaction: { id: "single-txn", amount: 15000 } },
-		});
-
-		// An invalid currency code makes formatting the create action throw
-		// after YNAB has already created the transaction
-		await expect(
-			executeReconciliation({
-				ynabAPI: api,
-				analysis,
-				params,
-				budgetId: params.budget_id!,
-				accountId: params.account_id,
-				initialAccount,
-				currencyCode: "NOT-A-CURRENCY",
-			}),
-		).rejects.toThrow(RangeError);
-		expect(mocks.createTransaction).toHaveBeenCalledTimes(1);
-	});
-
-	it("records an uncorrelatable bulk chunk as created instead of aborting", async () => {
-		const analysis = buildBulkAnalysis(3, 12);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		// A malformed response entry makes correlation throw
-		mocks.createTransactions.mockResolvedValue({
-			data: { transactions: [null], duplicate_import_ids: [] },
-		});
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
-		expect(mocks.createTransaction).not.toHaveBeenCalled();
-		expect(result.summary.transactions_created).toBe(3);
-		const creates = result.actions_taken.filter(
-			(action) => action.type === "create_transaction",
-		);
-		expect(creates).toHaveLength(3);
-		for (const action of creates) {
-			expect(action.reason).toContain("response could not be matched");
-		}
-		expect(result.bulk_operation_details).toEqual(
-			expect.objectContaining({ bulk_successes: 1, transaction_failures: 0 }),
-		);
-	});
-
-	it("falls back to sequential creation when bulk request fails", async () => {
-		const analysis = buildBulkAnalysis(3, 1000);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		mocks.createTransactions.mockRejectedValue(new Error("500 error"));
-		mocks.createTransaction.mockImplementation(async (_budgetId, body: any) => {
-			return {
-				data: {
-					transaction: {
-						id: `seq-${body.transaction?.date}`,
-						amount: body.transaction?.amount ?? 0,
-						date: body.transaction?.date ?? "2025-11-01",
-						cleared: "cleared",
-						approved: true,
-					},
-				},
-			};
-		});
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
-		expect(mocks.createTransaction).toHaveBeenCalledTimes(3);
-		expect(
-			result.actions_taken.some(
-				(action) => action.type === "bulk_create_fallback",
-			),
-		).toBe(true);
-		expect(result.summary.transactions_created).toBe(3);
-		expect(result.bulk_operation_details).toEqual(
-			expect.objectContaining({
-				chunks_processed: 1,
-				bulk_successes: 0,
-				sequential_fallbacks: 1,
-				bulk_chunk_failures: 1,
-				transaction_failures: 0,
-			}),
-		);
-	});
-
-	it("propagates rate-limit error payloads with status codes from bulk create", async () => {
-		const analysis = buildBulkAnalysis(3, 7);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		mocks.createTransactions.mockRejectedValue({
-			error: {
-				id: "429",
-				name: "too_many_requests",
-				detail: "Too many requests",
-			},
-		});
-
-		await expect(
-			executeReconciliation({
-				ynabAPI: api,
-				analysis,
-				params,
-				budgetId: params.budget_id!,
-				accountId: params.account_id,
-				initialAccount,
-				currencyCode: "USD",
-			}),
-		).rejects.toMatchObject({ status: 429 });
-	});
-
-	it("splits large batches into 100-transaction chunks", async () => {
-		const analysis = buildBulkAnalysis(150, 1000);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		let chunkCall = 0;
-		mocks.createTransactions.mockImplementation(
-			async (_budgetId, body: any) => {
-				chunkCall += 1;
-				const transactions = (body.transactions ?? []).map(
-					(txn: any, index: number) => ({
-						id: `chunk-${chunkCall}-${index}`,
-						account_id: txn.account_id,
-						amount: txn.amount,
-						date: txn.date,
-						payee_name: txn.payee_name,
-						memo: txn.memo,
-						cleared: "cleared",
-						approved: true,
-					}),
-				);
-				return { data: { transactions, duplicate_import_ids: [] } };
-			},
-		);
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
-		});
-
+			.mockRejectedValueOnce(new Error("network error"));
+		const result = await executeReconciliation(options);
 		expect(mocks.createTransactions).toHaveBeenCalledTimes(2);
-		expect(result.summary.transactions_created).toBe(150);
-		expect(result.bulk_operation_details).toEqual(
-			expect.objectContaining({
-				chunks_processed: 2,
-				bulk_successes: 2,
-				bulk_chunk_failures: 0,
-				transaction_failures: 0,
-			}),
-		);
+		expect(result.summary.transactions_created).toBe(100);
+		expect(
+			result.operation_results?.filter(
+				(result) => result.status === "uncertain",
+			),
+		).toHaveLength(100);
+		expect(
+			result.operation_results?.filter((result) => result.status === "skipped"),
+		).toHaveLength(5);
 	});
-
-	it("throws on fatal sequential creation errors surfaced as objects", async () => {
-		const analysis = buildBulkAnalysis(1, 1000);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		mocks.createTransaction.mockRejectedValue({
-			error: { id: "404", name: "not_found", detail: "Account not found" },
-		});
-
-		await expect(
-			executeReconciliation({
-				ynabAPI: api,
-				analysis,
-				params,
-				budgetId: params.budget_id!,
-				accountId: params.account_id,
-				initialAccount,
-				currencyCode: "USD",
-			}),
-		).rejects.toMatchObject({ status: 404 });
-	});
-
-	it("creates all transactions without import_id (no YNAB-side duplicate detection)", async () => {
-		// Note: import_id is intentionally omitted from reconciliation-created transactions
-		// so they can match with bank-imported transactions. This means YNAB won't detect
-		// duplicates via import_id - the reconciliation matcher is responsible for that.
-		// Use amount of 100 to avoid early balance halting (tolerance is 10 milliunits)
-		const analysis = buildBulkAnalysis(3, 100);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		mocks.createTransactions.mockImplementation(
-			async (_budgetId, body: any) => {
-				const transactions = (body.transactions ?? []).map(
-					(txn: any, index: number) => ({
-						id: `created-${index}`,
-						account_id: txn.account_id,
-						amount: txn.amount,
-						date: txn.date,
-						payee_name: txn.payee_name,
-						memo: txn.memo,
-						cleared: "cleared",
-						approved: true,
-					}),
-				);
-				// Verify no import_id is being sent
-				for (const txn of body.transactions ?? []) {
-					expect(txn.import_id).toBeUndefined();
-				}
-				return {
-					data: {
-						transactions,
-						duplicate_import_ids: [],
-					},
-				};
+	it("correlates out-of-order partial create responses without inventing success", async () => {
+		const { options, mocks } = optionsFor(3);
+		mocks.createTransactions.mockImplementationOnce(async (_budget, body) => ({
+			data: {
+				transactions: [
+					{ ...body.transactions[2], id: "last" },
+					{ ...body.transactions[0], id: "first" },
+				],
 			},
-		);
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		// Without import_id, YNAB creates all transactions (no duplicate detection)
-		expect(result.bulk_operation_details?.duplicates_detected).toBe(0);
-		expect(result.summary.transactions_created).toBe(3);
+		}));
+		const result = await executeReconciliation(options);
+		expect(result.summary.transactions_created).toBe(2);
+		expect(
+			result.operation_results?.map((result) => [
+				result.status,
+				result.transaction_id,
+			]),
+		).toEqual([
+			["applied", "first"],
+			["uncertain", undefined],
+			["applied", "last"],
+		]);
+		expect(result.errors?.join()).toContain("did not acknowledge");
 	});
-
-	it("honors halting logic when balance aligns mid-batch", async () => {
-		const analysis = buildBulkAnalysis(10, 1000, 5);
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		mocks.createTransactions.mockImplementation(
-			async (_budgetId, body: any) => {
-				const transactions = (body.transactions ?? []).map(
-					(txn: any, index: number) => ({
-						id: `halt-${index}`,
-						account_id: txn.account_id,
-						amount: txn.amount,
-						date: txn.date,
-						payee_name: txn.payee_name,
-						memo: txn.memo,
-						cleared: "cleared",
-						approved: true,
+	it("requires an acknowledged single create instead of trusting an empty response", async () => {
+		const { options, mocks } = optionsFor(1);
+		mocks.createTransaction.mockResolvedValueOnce({ data: {} });
+		const result = await executeReconciliation(options);
+		expect(result.summary.transactions_created).toBe(0);
+		expect(result.operation_results?.[0]?.status).toBe("uncertain");
+	});
+	it("does not count duplicate response IDs as distinct created transactions", async () => {
+		const { options, mocks } = optionsFor(2);
+		mocks.createTransactions.mockImplementationOnce(async (_budget, body) => ({
+			data: {
+				transactions: body.transactions.map(
+					(transaction: ynab.NewTransaction) => ({
+						...transaction,
+						id: "same",
 					}),
-				);
-				return { data: { transactions, duplicate_import_ids: [] } };
+				),
 			},
-		);
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
+		}));
+		const result = await executeReconciliation(options);
+		expect(result.summary.transactions_created).toBe(1);
+		expect(result.operation_results?.[1]?.status).toBe("uncertain");
+	});
+	it("requires updates to acknowledge the requested fields and skips dependent changes", async () => {
+		const { options, mocks } = optionsFor(0, {
+			auto_create_transactions: false,
+			auto_update_cleared_status: true,
+			auto_unclear_missing: true,
 		});
-
-		expect(result.summary.transactions_created).toBe(5);
+		options.analysis = buildAnalysis();
+		mocks.updateTransactions.mockResolvedValueOnce({
+			data: { transactions: [] },
+		});
+		const result = await executeReconciliation(options);
+		expect(result.summary.transactions_updated).toBe(0);
+		expect(result.operation_results?.[0]?.status).toBe("uncertain");
+		expect(mocks.updateTransactions).toHaveBeenCalledTimes(1);
+	});
+	it("does not compensate for failed clearing updates by unclearing other rows", async () => {
+		const { options, mocks } = optionsFor(0, {
+			auto_create_transactions: false,
+			auto_update_cleared_status: true,
+			auto_unclear_missing: true,
+		});
+		options.analysis = buildAnalysis();
+		mocks.updateTransactions.mockRejectedValue(new Error("write failed"));
+		const result = await executeReconciliation(options);
+		expect(mocks.updateTransactions).toHaveBeenCalledTimes(1);
+		expect(
+			result.operation_results
+				?.filter((result) => result.operation.kind === "unclear")
+				.every((result) => result.status === "skipped"),
+		).toBe(true);
+	});
+	it("counts successful writes even if progress delivery fails", async () => {
+		const { options, mocks } = optionsFor();
+		options.sendProgress = vi
+			.fn()
+			.mockRejectedValue(new Error("client disconnected"));
+		const result = await executeReconciliation(options);
 		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
-		const payload = mocks.createTransactions.mock.calls[0]?.[1];
-		expect(payload?.transactions).toHaveLength(5);
-		expect(
-			result.actions_taken.some(
-				(action) => action.type === "balance_checkpoint",
-			),
-		).toBe(true);
+		expect(result.summary.transactions_created).toBe(3);
+		expect(result.errors).toEqual([]);
 	});
-
-	it("processes multiple chunks and halts at chunk boundaries when balance aligns", async () => {
-		// Create 120 unmatched bank transactions of $10 each = $1200 total available
-		// Set target balance to $500 (50 transactions worth)
-		// This verifies that when >100 transactions exist but balance aligns after ~50,
-		// the batch-building loop stops early and only processes one chunk (not two)
-		const count = 120;
-		const amountPerTxn = 10;
-		const analysis = buildBulkAnalysis(count, amountPerTxn, 50); // statement multiplier = 50
-		// This sets target to $500 (50 transactions * $10)
-		const initialAccount = { ...defaultAccountSnapshot };
-		const params = buildBulkParams(analysis.summary.target_statement_balance);
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		let chunkCallCount = 0;
-		mocks.createTransactions.mockImplementation(
-			async (_budgetId, body: any) => {
-				chunkCallCount += 1;
-				const transactions = (body.transactions ?? []).map(
-					(txn: any, index: number) => ({
-						id: `multi-chunk-halt-${chunkCallCount}-${index}`,
-						account_id: txn.account_id,
-						amount: txn.amount,
-						date: txn.date,
-						payee_name: txn.payee_name,
-						memo: txn.memo,
-						cleared: "cleared",
-						approved: true,
-					}),
-				);
-				return { data: { transactions, duplicate_import_ids: [] } };
-			},
-		);
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		// Verify that only ~50 transactions were created (not all 120)
-		expect(result.summary.transactions_created).toBeLessThan(count);
-		expect(result.summary.transactions_created).toBeGreaterThan(0);
-		// Only 1 chunk should be processed (not 2), since balance aligns before second chunk
-		expect(chunkCallCount).toBe(1);
-		expect(
-			result.actions_taken.some(
-				(action) => action.type === "balance_checkpoint",
-			),
-		).toBe(true);
-		expect(result.bulk_operation_details).toEqual(
-			expect.objectContaining({
-				chunks_processed: 1,
-				bulk_successes: 1,
-			}),
-		);
+	it("reports verification failure separately from committed writes", async () => {
+		const { options, mocks } = optionsFor();
+		mocks.getTransactionsByAccount.mockRejectedValue(new Error("read failed"));
+		const result = await executeReconciliation(options);
+		expect(result.summary.transactions_created).toBe(3);
+		expect(result.errors?.join()).toContain("final verification failed");
+		expect(result.balance_reconciliation).toBeUndefined();
 	});
-
-	it("simulates bulk preview during dry-run mode", async () => {
-		const analysis = buildBulkAnalysis(5, 100);
-		const params = buildBulkParams(analysis.summary.target_statement_balance, {
+	it("plans date changes even if the account balance already matches", async () => {
+		const { options } = optionsFor(0, {
+			auto_adjust_dates: true,
 			dry_run: true,
 		});
-		const initialAccount = { ...defaultAccountSnapshot };
-		const { api, mocks } = createMockYnabAPI(initialAccount);
-
-		const result = await executeReconciliation({
-			ynabAPI: api,
-			analysis,
-			params,
-			budgetId: params.budget_id!,
-			accountId: params.account_id,
-			initialAccount,
-			currencyCode: "USD",
-		});
-
-		expect(mocks.createTransactions).not.toHaveBeenCalled();
-		const createActions = result.actions_taken.filter(
-			(action) => action.type === "create_transaction",
-		);
-		expect(createActions).toHaveLength(5);
-		expect(result.summary.transactions_created).toBe(5);
-		expect(result.bulk_operation_details).toBeUndefined();
+		options.analysis = buildAnalysis();
+		options.initialAccount = {
+			balance: -921240,
+			cleared_balance: -921240,
+			uncleared_balance: 0,
+		};
+		const result = await executeReconciliation(options);
+		expect(result.summary.dates_adjusted).toBe(1);
 	});
 });

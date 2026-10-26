@@ -2,15 +2,9 @@ import { createHash } from "node:crypto";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import type { SaveTransactionsResponseData } from "ynab/dist/models/SaveTransactionsResponseData.js";
-import { CacheKeys } from "../server/cacheKeys.js";
-import { CacheManager, cacheManager } from "../server/cacheManager.js";
-import type { DeltaCache } from "../server/deltaCache.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import { globalRequestLogger } from "../server/requestLogger.js";
-import { invalidateBudgetResourceCaches } from "../server/resourceCacheInvalidation.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
-import { ValidationError } from "../types/index.js";
 import type {
 	BulkCreateResponse,
 	BulkTransactionInput,
@@ -19,7 +13,6 @@ import type {
 	CategorySource,
 	CorrelationPayload,
 	CorrelationPayloadInput,
-	TransactionCacheInvalidationOptions,
 } from "./transactionSchemas.js";
 
 /**
@@ -116,104 +109,6 @@ export function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
  * Converts a date string to a month key
  */
 export const toMonthKey = (date: string): string => `${date.slice(0, 7)}-01`;
-
-/**
- * Invalidates transaction-related caches after write operations
- */
-export function invalidateTransactionCaches(
-	deltaCache: DeltaCache,
-	knowledgeStore: ServerKnowledgeStore,
-	budgetId: string,
-	serverKnowledge: number | undefined,
-	affectedAccountIds: Set<string>,
-	affectedMonths: Set<string>,
-	options: TransactionCacheInvalidationOptions = {},
-): void {
-	deltaCache.invalidate(budgetId, "transactions");
-	cacheManager.delete(
-		CacheManager.generateKey("transactions", "list", budgetId),
-	);
-
-	for (const accountId of affectedAccountIds) {
-		const accountPrefix = CacheManager.generateKey(
-			"transactions",
-			"account",
-			budgetId,
-			accountId,
-		);
-		cacheManager.deleteByPrefix(accountPrefix);
-	}
-
-	const invalidateAccountsList = options.accountTotalsChanged ?? true;
-	if (invalidateAccountsList) {
-		cacheManager.delete(
-			CacheManager.generateKey(CacheKeys.ACCOUNTS, "list", budgetId),
-		);
-	}
-	for (const accountId of affectedAccountIds) {
-		cacheManager.delete(
-			CacheManager.generateKey(CacheKeys.ACCOUNTS, "get", budgetId, accountId),
-		);
-	}
-
-	const affectedCategoryIds = options.affectedCategoryIds ?? new Set<string>();
-	const shouldInvalidateCategories =
-		options.invalidateAllCategories || affectedCategoryIds.size > 0;
-	if (shouldInvalidateCategories) {
-		cacheManager.delete(
-			CacheManager.generateKey("categories", "list", budgetId),
-		);
-		for (const categoryId of affectedCategoryIds) {
-			cacheManager.delete(
-				CacheManager.generateKey("category", "get", budgetId, categoryId),
-			);
-		}
-	}
-
-	const shouldInvalidateMonths =
-		options.invalidateMonths ?? affectedMonths.size > 0;
-	if (shouldInvalidateMonths) {
-		cacheManager.delete(CacheManager.generateKey("months", "list", budgetId));
-		deltaCache.invalidate(budgetId, "months");
-		for (const month of affectedMonths) {
-			cacheManager.delete(
-				CacheManager.generateKey("month", "get", budgetId, month),
-			);
-		}
-	}
-	invalidateBudgetResourceCaches(budgetId, {
-		accountIds: affectedAccountIds,
-		invalidateAccountsList,
-		invalidateCategoriesList: shouldInvalidateCategories,
-		invalidateMonthsList: shouldInvalidateMonths,
-		...(shouldInvalidateMonths ? { monthKeys: affectedMonths } : {}),
-	});
-
-	if (serverKnowledge !== undefined) {
-		const transactionCacheKey = CacheManager.generateKey(
-			"transactions",
-			"list",
-			budgetId,
-		);
-		knowledgeStore.update(transactionCacheKey, serverKnowledge);
-		if (invalidateAccountsList) {
-			const accountsCacheKey = CacheManager.generateKey(
-				"accounts",
-				"list",
-				budgetId,
-			);
-			knowledgeStore.update(accountsCacheKey, serverKnowledge);
-		}
-		if (shouldInvalidateMonths && affectedMonths.size > 0) {
-			const monthsCacheKey = CacheManager.generateKey(
-				"months",
-				"list",
-				budgetId,
-			);
-			knowledgeStore.update(monthsCacheKey, serverKnowledge);
-		}
-	}
-}
 
 // ============================================================================
 // Correlation Utilities
@@ -479,150 +374,72 @@ export function estimatePayloadSize(
 	return Buffer.byteLength(JSON.stringify(payload), "utf8");
 }
 
-/**
- * Finalizes bulk create response based on size constraints
- */
+/** Keep a truthful mutation receipt even when optional result details are too large. */
+function finalizeBulkResponse<
+	T extends BulkCreateResponse | BulkUpdateResponse,
+>(response: T): T {
+	const full = { ...response, mode: "full" as const };
+	if (estimatePayloadSize(full) <= FULL_RESPONSE_THRESHOLD) return full;
+	const { transactions: _transactions, ...fields } = response;
+	const summary = {
+		...fields,
+		mode: "summary" as const,
+		message: [
+			response.message,
+			"Response downgraded to summary to stay under size limits.",
+		]
+			.filter(Boolean)
+			.join(" "),
+	} as T;
+	if (estimatePayloadSize(summary) <= SUMMARY_RESPONSE_THRESHOLD)
+		return summary;
+	const compact = {
+		...summary,
+		mode: "ids_only" as const,
+		results: response.results.map((result) => ({
+			request_index: result.request_index,
+			status: result.status,
+			correlation_key: result.correlation_key,
+			...(result.transaction_id === undefined
+				? {}
+				: { transaction_id: result.transaction_id }),
+			...(result.error ? { error: result.error } : {}),
+			...(result.error_code ? { error_code: result.error_code } : {}),
+		})),
+		message: [
+			response.message,
+			"Response downgraded to ids_only to meet 100KB limit.",
+		]
+			.filter(Boolean)
+			.join(" "),
+	} as T;
+	if (estimatePayloadSize(compact) <= MAX_RESPONSE_BYTES) return compact;
+	// Execution already completed. An oversized report must never suggest retrying
+	// the entire mutation by turning its successful API response into a tool error.
+	return {
+		success: response.success,
+		summary: response.summary,
+		results: [],
+		results_omitted: true,
+		mode: "summary",
+		...(response.server_knowledge === undefined
+			? {}
+			: { server_knowledge: response.server_knowledge }),
+		message:
+			"Batch processed. Individual result details exceeded the response limit and were omitted. Check the summary and fetch transactions before retrying any failed items.",
+	} as unknown as T;
+}
+
 export function finalizeResponse(
 	response: BulkCreateResponse,
 ): BulkCreateResponse {
-	const appendMessage = (
-		message: string | undefined,
-		addition: string,
-	): string => {
-		if (!message) {
-			return addition;
-		}
-		if (message.includes(addition)) {
-			return message;
-		}
-		return `${message} ${addition}`;
-	};
-
-	const fullSize = estimatePayloadSize({ ...response, mode: "full" });
-	if (fullSize <= FULL_RESPONSE_THRESHOLD) {
-		return { ...response, mode: "full" };
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	const { transactions, ...summaryResponse } = response;
-	const summaryPayload: BulkCreateResponse = {
-		...summaryResponse,
-		message: appendMessage(
-			response.message,
-			"Response downgraded to summary to stay under size limits.",
-		),
-		mode: "summary",
-	};
-
-	if (estimatePayloadSize(summaryPayload) <= SUMMARY_RESPONSE_THRESHOLD) {
-		return summaryPayload;
-	}
-
-	const idsOnlyPayload: BulkCreateResponse = {
-		...summaryPayload,
-		results: summaryResponse.results.map((result) => ({
-			request_index: result.request_index,
-			status: result.status,
-			transaction_id: result.transaction_id,
-			correlation_key: result.correlation_key,
-			error: result.error,
-		})),
-		message: appendMessage(
-			summaryResponse.message,
-			"Response downgraded to ids_only to meet 100KB limit.",
-		),
-		mode: "ids_only",
-	};
-
-	if (estimatePayloadSize(idsOnlyPayload) <= MAX_RESPONSE_BYTES) {
-		return idsOnlyPayload;
-	}
-
-	throw new ValidationError(
-		"RESPONSE_TOO_LARGE: Unable to format bulk create response within 100KB limit",
-		`Batch size: ${response.summary.total_requested} transactions`,
-		[
-			"Reduce the batch size and retry",
-			"Consider splitting into multiple smaller batches",
-		],
-	);
+	return finalizeBulkResponse(response);
 }
 
-/**
- * Finalizes bulk update response based on size constraints
- */
 export function finalizeBulkUpdateResponse(
 	response: BulkUpdateResponse,
 ): BulkUpdateResponse {
-	const appendMessage = (
-		message: string | undefined,
-		addition: string,
-	): string => {
-		if (!message) {
-			return addition;
-		}
-		if (message.includes(addition)) {
-			return message;
-		}
-		return `${message} ${addition}`;
-	};
-
-	const fullSize = estimatePayloadSize(response);
-	if (fullSize <= FULL_RESPONSE_THRESHOLD) {
-		return { ...response, mode: "full" };
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	const { transactions, ...summaryResponse } = response;
-	const summaryPayload: BulkUpdateResponse = {
-		...summaryResponse,
-		message: appendMessage(
-			response.message,
-			"Response downgraded to summary to stay under size limits.",
-		),
-		mode: "summary",
-	};
-
-	if (estimatePayloadSize(summaryPayload) <= SUMMARY_RESPONSE_THRESHOLD) {
-		return summaryPayload;
-	}
-
-	const idsOnlyPayload: BulkUpdateResponse = {
-		...summaryPayload,
-		results: summaryResponse.results.map((result) => {
-			const simplified: BulkUpdateResponse["results"][number] = {
-				request_index: result.request_index,
-				status: result.status,
-				transaction_id: result.transaction_id,
-				correlation_key: result.correlation_key,
-			};
-			if (result.error) {
-				simplified.error = result.error;
-			}
-			if (result.error_code) {
-				simplified.error_code = result.error_code;
-			}
-			return simplified;
-		}),
-		message: appendMessage(
-			summaryResponse.message,
-			"Response downgraded to ids_only to meet 100KB limit.",
-		),
-		mode: "ids_only",
-	};
-
-	if (estimatePayloadSize(idsOnlyPayload) <= MAX_RESPONSE_BYTES) {
-		return idsOnlyPayload;
-	}
-
-	throw new ValidationError(
-		"RESPONSE_TOO_LARGE: Unable to format bulk update response within 100KB limit",
-		`Batch size: ${response.summary.total_requested} transactions`,
-		[
-			"Reduce the batch size and retry",
-			"Consider splitting into multiple smaller batches",
-		],
-	);
+	return finalizeBulkResponse(response);
 }
 
 // ============================================================================

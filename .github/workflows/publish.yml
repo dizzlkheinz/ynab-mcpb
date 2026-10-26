@@ -20,8 +20,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    env:
-      YNAB_ACCESS_TOKEN: ${{ secrets.YNAB_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -38,9 +36,10 @@ jobs:
 
       - name: Verify and build package once
         run: |
-          npm run test:unit
+          npm run type-check
           npm run test:coverage
-          npm run build:prod
+          npm run test:integration
+          npm run build
 
       - name: Publish to npm
         run: npm publish --ignore-scripts --provenance --access public

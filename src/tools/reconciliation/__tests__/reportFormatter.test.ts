@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LegacyReconciliationResult } from "../executor.js";
+import type { ExecutionResult } from "../executor.js";
 import {
 	formatBalanceInfo,
 	formatHumanReadableReport,
@@ -126,8 +126,8 @@ const createInsight = (
  * Create test execution result
  */
 const createExecutionResult = (
-	overrides?: Partial<LegacyReconciliationResult>,
-): LegacyReconciliationResult => ({
+	overrides?: Partial<ExecutionResult>,
+): ExecutionResult => ({
 	summary: {
 		bank_transactions_count: 0,
 		ynab_transactions_count: 0,
@@ -151,7 +151,6 @@ const createExecutionResult = (
 			uncleared_balance: 0,
 		},
 	},
-	actions_taken: [],
 	recommendations: [],
 	...overrides,
 });

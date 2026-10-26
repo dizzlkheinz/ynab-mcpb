@@ -150,6 +150,7 @@ describe("exportTransactions", () => {
 				"id",
 				"date",
 				"amount",
+				"amount_milliunits",
 				"payee_name",
 				"cleared",
 			]);
@@ -158,6 +159,7 @@ describe("exportTransactions", () => {
 				id: "txn-1",
 				date: "2024-01-01",
 				amount: 1,
+				amount_milliunits: 1000,
 				payee_name: "Test Payee 1",
 				cleared: "cleared",
 			});
@@ -168,7 +170,7 @@ describe("exportTransactions", () => {
 			const responseJson = JSON.parse(responseText);
 			expect(responseJson.export_mode).toBe("minimal");
 			expect(responseJson.minimal_fields).toBe(
-				"id, date, amount, payee_name, cleared",
+				"id, date, amount, amount_milliunits, payee_name, cleared",
 			);
 		});
 
@@ -188,26 +190,29 @@ describe("exportTransactions", () => {
 			expect(exportData.transactions).toHaveLength(2);
 
 			const firstTransaction = exportData.transactions[0];
-			expect(Object.keys(firstTransaction)).toEqual([
-				"id",
-				"date",
-				"amount",
-				"memo",
-				"cleared",
-				"approved",
-				"flag_color",
-				"account_id",
-				"payee_id",
-				"category_id",
-				"transfer_account_id",
-				"transfer_transaction_id",
-				"matched_transaction_id",
-				"import_id",
-				"deleted",
-				"account_name",
-				"payee_name",
-				"category_name",
-			]);
+			expect(Object.keys(firstTransaction).sort()).toEqual(
+				[
+					"id",
+					"date",
+					"amount",
+					"amount_milliunits",
+					"memo",
+					"cleared",
+					"approved",
+					"flag_color",
+					"account_id",
+					"payee_id",
+					"category_id",
+					"transfer_account_id",
+					"transfer_transaction_id",
+					"matched_transaction_id",
+					"import_id",
+					"deleted",
+					"account_name",
+					"payee_name",
+					"category_name",
+				].sort(),
+			);
 			expect(firstTransaction.amount).toBe(1);
 
 			// Verify response message indicates full export

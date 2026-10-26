@@ -2,32 +2,21 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import { CacheKeys } from "../server/cacheKeys.js";
-import {
-	CACHE_TTLS,
-	CacheManager,
-	cacheManager,
-} from "../server/cacheManager.js";
+import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import {
 	formatCategoriesList,
 	formatCategoryDetail,
 } from "../server/markdownFormatter.js";
-import { invalidateBudgetResourceCaches } from "../server/resourceCacheInvalidation.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
-import type { ToolFactory } from "../types/toolRegistration.js";
+import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import {
-	type DeltaFetcherDeps,
-	type DeltaWriteDeps,
-	resolveDeltaFetcherDeps,
-	resolveDeltaWriteDeps,
-} from "./deltaSupport.js";
 import {
 	budgetedInputShape,
 	normalizeRequiredBudgeted,
@@ -119,12 +108,12 @@ function convertGoalFields(category: ynab.Category) {
  * Lists all categories for a specific budget
  */
 export async function handleListCategories(
-	ynabAPI: ynab.API,
+	_ynabAPI: ynab.API,
 	params: ListCategoriesParams,
-	deps?: DeltaFetcherDeps,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = resolveDeltaFetcherDeps(ynabAPI, deps);
+	const { deltaFetcher } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -204,8 +193,10 @@ export async function handleListCategories(
 export async function handleGetCategory(
 	ynabAPI: ynab.API,
 	params: GetCategoryParams,
+	deps: ReadDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
+	const { cacheManager } = deps;
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
@@ -277,10 +268,8 @@ export async function handleGetCategory(
 export async function handleUpdateCategory(
 	ynabAPI: ynab.API,
 	params: UpdateCategoryParams,
-	deps?: DeltaWriteDeps,
 	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	try {
 		if (params.dry_run) {
 			const currentDate = new Date();
@@ -319,49 +308,6 @@ export async function handleUpdateCategory(
 
 		const category = response.data.category;
 
-		// Invalidate category-related caches after successful update
-		const categoriesListCacheKey = CacheManager.generateKey(
-			CacheKeys.CATEGORIES,
-			"list",
-			budgetId,
-		);
-		const specificCategoryCacheKey = CacheManager.generateKey(
-			CacheKeys.CATEGORIES,
-			"get",
-			budgetId,
-			params.category_id,
-		);
-		cacheManager.delete(categoriesListCacheKey);
-		cacheManager.delete(specificCategoryCacheKey);
-
-		// Invalidate month-related caches as category budget changes affect month data
-		const monthsListCacheKey = CacheManager.generateKey(
-			CacheKeys.MONTHS,
-			"list",
-			budgetId,
-		);
-		const currentMonthCacheKey = CacheManager.generateKey(
-			CacheKeys.MONTHS,
-			"get",
-			budgetId,
-			currentMonth,
-		);
-		cacheManager.delete(monthsListCacheKey);
-		cacheManager.delete(currentMonthCacheKey);
-		invalidateBudgetResourceCaches(budgetId, {
-			invalidateCategoriesList: true,
-			invalidateMonthsList: true,
-			monthKeys: [currentMonth],
-		});
-
-		deltaCache.invalidate(budgetId, CacheKeys.CATEGORIES);
-		deltaCache.invalidate(budgetId, CacheKeys.MONTHS);
-		const serverKnowledge = response.data.server_knowledge;
-		if (typeof serverKnowledge === "number") {
-			knowledgeStore.update(categoriesListCacheKey, serverKnowledge);
-			knowledgeStore.update(monthsListCacheKey, serverKnowledge);
-		}
-
 		const updatedCategoryData = {
 			category: {
 				id: category.id,
@@ -399,7 +345,7 @@ export async function handleUpdateCategory(
  * Registers all category-related tools with the registry.
  */
 export const registerCategoryTools: ToolFactory = (registry, context) => {
-	const { adapt, adaptWithDelta, adaptWrite } = createAdapters(context);
+	const { adapt, adaptWithDelta } = createAdapters(context);
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
@@ -448,7 +394,7 @@ Errors:
   - "Category not found" → invalid category_id`,
 		inputSchema: GetCategorySchema,
 		outputSchema: GetCategoryOutputSchema,
-		handler: adapt(handleGetCategory),
+		handler: adaptWithDelta(handleGetCategory),
 		defaultArgumentResolver: budgetResolver<GetCategoryParams>(),
 		metadata: {
 			annotations: {
@@ -481,7 +427,7 @@ Errors:
   - "No default budget set" → run ynab_set_default_budget first`,
 		inputSchema: UpdateCategorySchema,
 		outputSchema: UpdateCategoryOutputSchema,
-		handler: adaptWrite(handleUpdateCategory),
+		handler: adapt(handleUpdateCategory),
 		defaultArgumentResolver: budgetResolver<UpdateCategoryParams>(),
 		metadata: {
 			writeSafety: { mutation: true, preview: "dry-run" },

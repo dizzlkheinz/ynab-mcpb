@@ -498,7 +498,7 @@ These fields help users understand why certain YNAB transactions weren't matched
 ### With Server (`src/server/`)
 
 - **toolRegistry.ts**: Progress notification support
-- **cacheManager.ts**: Cache invalidation after bulk operations
+- **ynabClient.ts**: Invalidates caches around every bulk write request
 
 ### With Utils (`src/utils/`)
 

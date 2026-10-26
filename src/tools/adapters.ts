@@ -24,7 +24,6 @@ import type {
 	HandlerDeltaDeps,
 	NoInputHandler,
 	ToolContext,
-	WriteHandler,
 } from "../types/toolRegistration.js";
 
 /**
@@ -33,7 +32,7 @@ import type {
  * dependencies to handlers.
  */
 export function createAdapters(context: ToolContext) {
-	const { ynabAPI, deltaFetcher, deltaCache, serverKnowledgeStore } = context;
+	const { ynabAPI, deltaFetcher, cacheManager } = context;
 
 	const { errorHandler } = context;
 
@@ -57,7 +56,7 @@ export function createAdapters(context: ToolContext) {
 			async ({
 				input,
 			}: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
-				handler(ynabAPI, input, { deltaFetcher }, errorHandler),
+				handler(ynabAPI, input, { deltaFetcher, cacheManager }, errorHandler),
 
 		/**
 		 * Adapter for delta operations that may emit progress notifications.
@@ -68,7 +67,7 @@ export function createAdapters(context: ToolContext) {
 				handler: (
 					api: typeof ynabAPI,
 					params: TInput,
-					deps?: HandlerDeltaDeps,
+					deps: HandlerDeltaDeps,
 					sendProgress?: ProgressCallback,
 					errorHandler?: ErrorHandler,
 				) => Promise<CallToolResult>,
@@ -80,20 +79,8 @@ export function createAdapters(context: ToolContext) {
 				handler(
 					ynabAPI,
 					input,
-					{ deltaFetcher },
+					{ deltaFetcher, cacheManager },
 					execContext.sendProgress,
-					errorHandler,
-				),
-
-		adaptWrite:
-			<TInput extends Record<string, unknown>>(handler: WriteHandler<TInput>) =>
-			async ({
-				input,
-			}: ToolExecutionPayload<TInput>): Promise<CallToolResult> =>
-				handler(
-					ynabAPI,
-					input,
-					{ deltaCache, serverKnowledgeStore },
 					errorHandler,
 				),
 	};

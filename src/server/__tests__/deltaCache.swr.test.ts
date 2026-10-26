@@ -1,216 +1,230 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CacheManager } from "../cacheManager.js";
+import { CacheManager } from "../cacheManager.js";
 import { resetRuntimeConfig } from "../config.js";
-import {
-	DeltaCache,
-	type DeltaCacheEntry,
-	type Logger,
-	type MergeFn,
-} from "../deltaCache.js";
-import type { ServerKnowledgeStore } from "../serverKnowledgeStore.js";
+import { DeltaCache } from "../deltaCache.js";
+import { mergeFlatEntities } from "../deltaCache.merge.js";
+import { ServerKnowledgeStore } from "../serverKnowledgeStore.js";
 
-interface TestEntity {
+interface Entity {
 	id: string;
-	name?: string;
 	deleted?: boolean;
 }
+interface Response {
+	data: Entity[];
+	serverKnowledge: number;
+}
+const key = "accounts:list:budget-1";
+const budget = "budget-1";
+const options = { ttl: 100, staleWhileRevalidate: 200 };
+let cache: CacheManager;
+let knowledge: ServerKnowledgeStore;
+let delta: DeltaCache;
 
-interface CacheManagerSpies {
-	get: ReturnType<typeof vi.fn>;
-	set: ReturnType<typeof vi.fn>;
-	deleteByPrefix: ReturnType<typeof vi.fn>;
-	deleteByBudgetId: ReturnType<typeof vi.fn>;
-	clear: ReturnType<typeof vi.fn>;
+beforeEach(() => {
+	vi.useFakeTimers({ now: 1000 });
+	vi.stubEnv("YNAB_MCP_ENABLE_DELTA", "true");
+	resetRuntimeConfig();
+	cache = new CacheManager();
+	knowledge = new ServerKnowledgeStore();
+	delta = new DeltaCache(cache, knowledge, {
+		info: vi.fn(),
+		warn: vi.fn(),
+		error: vi.fn(),
+	});
+});
+
+afterEach(() => {
+	vi.useRealTimers();
+	vi.unstubAllEnvs();
+	resetRuntimeConfig();
+});
+
+async function seed(stale = true) {
+	await delta.fetchWithDelta<Entity>(
+		key,
+		budget,
+		async () => ({ data: [{ id: "original" }], serverKnowledge: 1000 }),
+		mergeFlatEntities,
+		stale ? options : { ttl: options.ttl },
+	);
 }
 
-interface KnowledgeStoreSpies {
-	get: ReturnType<typeof vi.fn>;
-	update: ReturnType<typeof vi.fn>;
-	reset: ReturnType<typeof vi.fn>;
-	resetByBudgetId: ReturnType<typeof vi.fn>;
+function deferred() {
+	let resolve!: (value: Response) => void;
+	const promise = new Promise<Response>((complete) => {
+		resolve = complete;
+	});
+	return { promise, resolve };
 }
 
-const createCacheEntry = (
-	snapshot: TestEntity[] = [{ id: "snap-1" }],
-	serverKnowledge = 1000,
-	ttl = 5000,
-	staleWhileRevalidate?: number,
-): DeltaCacheEntry<TestEntity> => {
-	const entry: DeltaCacheEntry<TestEntity> = {
-		snapshot,
-		serverKnowledge,
-		timestamp: Date.now(),
-		ttl,
-	};
-	if (staleWhileRevalidate !== undefined) {
-		entry.staleWhileRevalidate = staleWhileRevalidate;
-	}
-	return entry;
-};
+describe("DeltaCache stale-while-revalidate with real caching", () => {
+	it.each([true, false])(
+		"serves stale data and performs one background refresh with delta enabled=%s",
+		async (enabled) => {
+			vi.stubEnv("YNAB_MCP_ENABLE_DELTA", String(enabled));
+			resetRuntimeConfig();
+			await seed();
+			vi.advanceTimersByTime(101);
+			const refresh = deferred();
+			const fetcher = vi.fn(() => refresh.promise);
+			const stale = await delta.fetchWithDelta<Entity>(
+				key,
+				budget,
+				fetcher,
+				mergeFlatEntities,
+				options,
+			);
+			const concurrent = await delta.fetchWithDelta<Entity>(
+				key,
+				budget,
+				fetcher,
+				mergeFlatEntities,
+				options,
+			);
+			expect(stale).toMatchObject({
+				data: [{ id: "original" }],
+				wasCached: true,
+				usedDelta: false,
+			});
+			expect(concurrent.data).toEqual(stale.data);
+			expect(fetcher).toHaveBeenCalledExactlyOnceWith(
+				enabled ? 1000 : undefined,
+			);
+			refresh.resolve({ data: [{ id: "updated" }], serverKnowledge: 1001 });
+			await vi.advanceTimersByTimeAsync(0);
+			const fresh = await delta.fetchWithDelta<Entity>(
+				key,
+				budget,
+				fetcher,
+				mergeFlatEntities,
+				options,
+			);
+			expect(fresh.data).toEqual(
+				enabled ? [{ id: "original" }, { id: "updated" }] : [{ id: "updated" }],
+			);
+			expect(fresh).toMatchObject({
+				wasCached: true,
+				serverKnowledge: 1001,
+				usedDelta: false,
+			});
+			expect(fetcher).toHaveBeenCalledTimes(1);
+			expect(knowledge.get(key)).toBe(1001);
+		},
+	);
 
-describe("DeltaCache stale-while-revalidate", () => {
-	let cacheManagerSpies: CacheManagerSpies;
-	let knowledgeStoreSpies: KnowledgeStoreSpies;
-	let loggerSpies: Logger;
-	let cacheManagerMock: CacheManager;
-	let knowledgeStoreMock: ServerKnowledgeStore;
-	let deltaCache: DeltaCache;
-
-	beforeEach(() => {
-		vi.useFakeTimers({ now: 0 });
-		cacheManagerSpies = {
-			get: vi.fn(),
-			set: vi.fn(),
-			deleteByPrefix: vi.fn(),
-			deleteByBudgetId: vi.fn(),
-			clear: vi.fn(),
-		};
-		knowledgeStoreSpies = {
-			get: vi.fn(),
-			update: vi.fn(),
-			reset: vi.fn(),
-			resetByBudgetId: vi.fn(),
-		};
-		loggerSpies = {
-			info: vi.fn(),
-			warn: vi.fn(),
-			error: vi.fn(),
-		};
-		cacheManagerMock = cacheManagerSpies as unknown as CacheManager;
-		knowledgeStoreMock = knowledgeStoreSpies as unknown as ServerKnowledgeStore;
-		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
-		deltaCache = new DeltaCache(
-			cacheManagerMock,
-			knowledgeStoreMock,
-			loggerSpies,
-		);
-	});
-
-	afterEach(() => {
-		vi.useRealTimers();
-		Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
-		resetRuntimeConfig();
-	});
-
-	const createFetcher = (response: {
-		data: TestEntity[];
-		serverKnowledge: number;
-	}) => vi.fn().mockResolvedValue(response);
-
-	const createMerger = () =>
-		vi
-			.fn<MergeFn<TestEntity>>()
-			.mockImplementation((snapshot: TestEntity[], delta: TestEntity[]) => [
-				...snapshot,
-				...delta,
-			]);
-
-	it("should pass staleWhileRevalidate to cache entry when set", async () => {
-		const fetcher = createFetcher({
-			data: [{ id: "test-1" }],
-			serverKnowledge: 1000,
+	it("waits for fresh data when the stale window has expired", async () => {
+		await seed();
+		vi.advanceTimersByTime(301);
+		const refresh = deferred();
+		const fetcher = vi.fn(() => refresh.promise);
+		let settled = false;
+		const result = delta
+			.fetchWithDelta<Entity>(key, budget, fetcher, mergeFlatEntities, options)
+			.then((value) => {
+				settled = true;
+				return value;
+			});
+		await Promise.resolve();
+		expect(settled).toBe(false);
+		expect(fetcher).toHaveBeenCalledExactlyOnceWith(1000);
+		refresh.resolve({ data: [{ id: "updated" }], serverKnowledge: 1001 });
+		expect(await result).toMatchObject({
+			wasCached: false,
+			usedDelta: true,
+			data: [{ id: "original" }, { id: "updated" }],
 		});
-		cacheManagerSpies.get.mockReturnValue(null);
-
-		await deltaCache.fetchWithDelta(
-			"accounts:list:budget-1",
-			"budget-1",
-			fetcher,
-			createMerger(),
-			{
-				ttl: 5000,
-				staleWhileRevalidate: 2000,
-			},
-		);
-
-		expect(cacheManagerSpies.set).toHaveBeenCalledWith(
-			"accounts:list:budget-1",
-			expect.objectContaining({
-				snapshot: [{ id: "test-1" }],
-				staleWhileRevalidate: 2000,
-			}),
-			{
-				ttl: 5000,
-				staleWhileRevalidate: 2000,
-			},
-		);
 	});
 
-	it("should not set staleWhileRevalidate when omitted", async () => {
-		const fetcher = createFetcher({
-			data: [{ id: "test-1" }],
-			serverKnowledge: 1000,
+	it("waits for fresh data when no stale window was configured", async () => {
+		await seed(false);
+		vi.advanceTimersByTime(101);
+		const refresh = deferred();
+		const fetcher = vi.fn(() => refresh.promise);
+		let settled = false;
+		const result = delta
+			.fetchWithDelta<Entity>(key, budget, fetcher, mergeFlatEntities, {
+				ttl: 100,
+			})
+			.then((value) => {
+				settled = true;
+				return value;
+			});
+		await Promise.resolve();
+		expect(settled).toBe(false);
+		refresh.resolve({ data: [], serverKnowledge: 1000 });
+		expect(await result).toMatchObject({
+			wasCached: false,
+			data: [{ id: "original" }],
 		});
-		cacheManagerSpies.get.mockReturnValue(null);
-
-		await deltaCache.fetchWithDelta(
-			"accounts:list:budget-1",
-			"budget-1",
-			fetcher,
-			createMerger(),
-			{
-				ttl: 5000,
-			},
-		);
-
-		const [, entry, options] = cacheManagerSpies.set.mock.calls[0]!;
-		expect(entry.staleWhileRevalidate).toBeUndefined();
-		expect(options).not.toHaveProperty("staleWhileRevalidate");
 	});
 
-	it("should pass staleWhileRevalidate when delta is disabled", async () => {
-		process.env["YNAB_MCP_ENABLE_DELTA"] = "false";
-		const fetcher = createFetcher({
-			data: [{ id: "test-1" }],
-			serverKnowledge: 1000,
-		});
-		cacheManagerSpies.get.mockReturnValue(null);
-
-		await deltaCache.fetchWithDelta(
-			"accounts:list:budget-1",
-			"budget-1",
+	it("retains stale data after a background error and permits a later refresh", async () => {
+		await seed();
+		vi.advanceTimersByTime(101);
+		const fetcher = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValueOnce({
+				data: [{ id: "recovered" }],
+				serverKnowledge: 1001,
+			});
+		const stale = await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
 			fetcher,
-			createMerger(),
-			{
-				ttl: 5000,
-				staleWhileRevalidate: 3000,
-			},
+			mergeFlatEntities,
+			options,
 		);
-
-		expect(cacheManagerSpies.set).toHaveBeenCalledWith(
-			"accounts:list:budget-1",
-			expect.objectContaining({
-				staleWhileRevalidate: 3000,
-			}),
-			{
-				ttl: 5000,
-				staleWhileRevalidate: 3000,
-			},
+		expect(stale.data).toEqual([{ id: "original" }]);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(cache.peek(key)).toBeDefined();
+		expect(knowledge.get(key)).toBe(1000);
+		await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			fetcher,
+			mergeFlatEntities,
+			options,
 		);
+		await vi.advanceTimersByTimeAsync(0);
+		const recovered = await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			fetcher,
+			mergeFlatEntities,
+			options,
+		);
+		expect(recovered.data).toEqual([{ id: "original" }, { id: "recovered" }]);
+		expect(fetcher).toHaveBeenCalledTimes(2);
 	});
 
-	it("should include staleWhileRevalidate in entry after delta merge", async () => {
-		cacheManagerSpies.get.mockReturnValue(
-			createCacheEntry([{ id: "snap-1" }], 1000),
+	it("does not resurrect invalidated background data or knowledge", async () => {
+		await seed();
+		vi.advanceTimersByTime(101);
+		const refresh = deferred();
+		await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			() => refresh.promise,
+			mergeFlatEntities,
+			options,
 		);
-		knowledgeStoreSpies.get.mockReturnValue(1000);
-		const fetcher = createFetcher({
-			data: [{ id: "delta-1" }],
-			serverKnowledge: 1010,
-		});
-
-		await deltaCache.fetchWithDelta(
-			"transactions:list:budget-1",
-			"budget-1",
+		delta.forceFullRefresh(budget);
+		refresh.resolve({ data: [{ id: "stale-update" }], serverKnowledge: 1001 });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(cache.peek(key)).toBeUndefined();
+		expect(knowledge.get(key)).toBeUndefined();
+		const fetcher = vi
+			.fn()
+			.mockResolvedValue({ data: [{ id: "complete" }], serverKnowledge: 1002 });
+		const fresh = await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
 			fetcher,
-			createMerger(),
-			{
-				ttl: 5000,
-				staleWhileRevalidate: 1000,
-			},
+			mergeFlatEntities,
+			options,
 		);
-
-		const [, entry] = cacheManagerSpies.set.mock.calls[0]!;
-		expect(entry.staleWhileRevalidate).toBe(1000);
+		expect(fetcher).toHaveBeenCalledExactlyOnceWith(undefined);
+		expect(fresh.data).toEqual([{ id: "complete" }]);
 	});
 });

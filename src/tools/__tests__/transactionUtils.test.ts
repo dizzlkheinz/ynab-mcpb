@@ -10,7 +10,6 @@ import {
 	YNABErrorCode,
 } from "../../server/errorHandler.js";
 import { responseFormatter } from "../../server/responseFormatter.js";
-import { ValidationError } from "../../types/index.js";
 import type {
 	BulkCreateResponse,
 	BulkTransactionInput,
@@ -876,7 +875,7 @@ describe("transactionUtils", () => {
 			}
 		});
 
-		it("should throw ValidationError when response is too large", () => {
+		it("should preserve execution status when response details are too large", () => {
 			// Create an extremely large response that cannot fit even with ids_only
 			const results = [];
 			for (let i = 0; i < 10000; i++) {
@@ -899,8 +898,12 @@ describe("transactionUtils", () => {
 				results,
 			};
 
-			expect(() => finalizeResponse(response)).toThrow(ValidationError);
-			expect(() => finalizeResponse(response)).toThrow(/RESPONSE_TOO_LARGE/);
+			expect(finalizeResponse(response)).toMatchObject({
+				success: response.success,
+				summary: response.summary,
+				results: [],
+				mode: "summary",
+			});
 		});
 
 		it("should preserve existing message and not duplicate", () => {
@@ -1027,7 +1030,7 @@ describe("transactionUtils", () => {
 			expect(result.results[0]!.error).toBeDefined();
 		});
 
-		it("should throw ValidationError when response is too large", () => {
+		it("should preserve execution status when response details are too large", () => {
 			const results = [];
 			for (let i = 0; i < 10000; i++) {
 				results.push({
@@ -1048,13 +1051,44 @@ describe("transactionUtils", () => {
 				results,
 			};
 
-			expect(() => finalizeBulkUpdateResponse(response)).toThrow(
-				ValidationError,
-			);
-			expect(() => finalizeBulkUpdateResponse(response)).toThrow(
-				/RESPONSE_TOO_LARGE/,
-			);
+			expect(finalizeBulkUpdateResponse(response)).toMatchObject({
+				success: response.success,
+				summary: response.summary,
+				results: [],
+				mode: "summary",
+			});
 		});
+	});
+
+	it("preserves partial failure counts when completed result details must be omitted", () => {
+		const response: BulkUpdateResponse = {
+			success: false,
+			summary: { total_requested: 2, updated: 1, failed: 1 },
+			results: [
+				{
+					request_index: 0,
+					status: "updated",
+					transaction_id: "saved",
+					correlation_key: "saved",
+				},
+				{
+					request_index: 1,
+					status: "failed",
+					transaction_id: "failed",
+					correlation_key: "failed",
+					error: "x".repeat(110 * 1024),
+				},
+			],
+		};
+		const receipt = finalizeBulkUpdateResponse(response);
+		expect(receipt).toMatchObject({
+			success: false,
+			summary: { total_requested: 2, updated: 1, failed: 1 },
+			results: [],
+			results_omitted: true,
+		});
+		expect(Buffer.byteLength(JSON.stringify(receipt))).toBeLessThan(1024);
+		expect(receipt.message).toContain("before retrying any failed items");
 	});
 
 	describe("handleTransactionError", () => {

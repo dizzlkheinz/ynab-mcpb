@@ -31,5 +31,5 @@ export function normalizeYNABTransaction(
 export function normalizeYNABTransactions(
 	txns: ynab.TransactionDetail[],
 ): NormalizedYNABTransaction[] {
-	return txns.map(normalizeYNABTransaction);
+	return txns.filter((txn) => !txn.deleted).map(normalizeYNABTransaction);
 }

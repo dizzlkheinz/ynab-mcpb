@@ -1,7 +1,4 @@
-import { createRequire } from "node:module";
 import * as esbuild from "esbuild";
-
-const _require = createRequire(import.meta.url);
 
 // Plugin to ignore Zod locale imports (except English)
 const ignoreZodLocalesPlugin = {
@@ -26,8 +23,6 @@ const ignoreZodLocalesPlugin = {
 	},
 };
 
-const isProduction = process.argv.includes("--production");
-
 const buildOptions = {
 	entryPoints: ["dist/index.js"],
 	bundle: true,
@@ -36,10 +31,10 @@ const buildOptions = {
 	outfile: "dist/bundle/index.cjs",
 	plugins: [ignoreZodLocalesPlugin],
 	treeShaking: true,
-	minify: isProduction,
-	sourcemap: !isProduction,
+	minify: true,
+	sourcemap: false,
 	// Match the declared package and MCPB runtime floor.
-	target: "node20",
+	target: "node24",
 	// Mark packages that Node.js will load at runtime as external
 	external: [],
 	banner: {
@@ -56,12 +51,6 @@ try {
 	const stats = fs.statSync("dist/bundle/index.cjs");
 	const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
 	console.log(`\n✓ Bundle created: ${sizeMB} MB`);
-
-	if (isProduction) {
-		console.log("✓ Production build (minified)");
-	} else {
-		console.log("✓ Development build (with sourcemap)");
-	}
 
 	process.exit(0);
 } catch (error) {

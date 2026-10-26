@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LegacyReconciliationResult } from "../executor.js";
+import type { ExecutionResult } from "../executor.js";
 import { buildReconciliationPayload } from "../outputBuilder.js";
 import type { ReconciliationAnalysis } from "../types.js";
 
@@ -152,21 +152,17 @@ describe("buildReconciliationPayload", () => {
 		expect(payload.human).toContain("K TD FCT VISA Reconciliation Report");
 		expect(payload.human.toUpperCase()).toContain("DISCREPANCY");
 
-		const structured = payload.structured as Record<string, any>;
-		expect(structured["version"]).toBe("2.0");
-		expect(structured["summary"].current_cleared_balance.value_display).toBe(
-			"-$899.02",
+		expect(payload.structured.unmatched_bank[0]?.amount_money.currency).toBe(
+			"USD",
 		);
-		expect(structured["summary"].current_cleared_balance.currency).toBe("USD");
-		expect(structured["balance"].discrepancy.direction).toBeDefined();
 		expect(
-			structured["matches"].auto[0].bank_transaction.amount_money
+			payload.structured.suggestions[0]?.bank_transaction.amount_money
 				.value_milliunits,
-		).toBe(-45230);
+		).toBe(-60000);
 	});
 
 	it("includes execution data when provided", () => {
-		const execution: LegacyReconciliationResult = {
+		const execution: ExecutionResult = {
 			summary: {
 				bank_transactions_count: 3,
 				ynab_transactions_count: 4,
@@ -190,16 +186,10 @@ describe("buildReconciliationPayload", () => {
 					uncleared_balance: 0,
 				},
 			},
-			actions_taken: [
-				{
-					type: "create_transaction",
-					transaction: { id: "txn-1" },
-					reason: "Created missing transaction",
-				},
-			],
+
 			recommendations: ["Review EvoCarShare discrepancy"],
 			balance_reconciliation: {
-				status: "DISCREPANCY_FOUND",
+				status: "unbalanced",
 				precision_calculations: {
 					bank_statement_balance_milliunits: -921240,
 					ynab_calculated_balance_milliunits: -899020,
@@ -240,20 +230,13 @@ describe("buildReconciliationPayload", () => {
 			execution,
 		);
 
-		const structured = payload.structured as Record<string, any>;
-		expect(structured["execution"]).toBeDefined();
-		expect(structured["execution"].summary.transactions_created).toBe(1);
-		expect(
-			structured["execution"].account_balance.after.cleared_balance
-				.value_milliunits,
-		).toBe(-921240);
-		expect(
-			structured["execution"].account_balance.after.cleared_balance.currency,
-		).toBe("CAD");
-		expect(
-			structured["execution"].balance_reconciliation?.precision_calculations
-				?.discrepancy.value_display,
-		).toBe("-CA$22.22");
+		expect(payload.structured.execution_summary?.transactions_created).toBe(1);
+		expect(payload.structured.execution_summary?.balance_status).toBe(
+			"unbalanced",
+		);
+		expect(payload.structured.unmatched_bank[0]?.amount_money.currency).toBe(
+			"CAD",
+		);
 		expect(payload.human).toContain("change(s) applied to YNAB");
 	});
 

@@ -4,9 +4,7 @@ import type { ExistingTransaction, NewTransaction } from "ynab";
 import type { SaveSubTransaction } from "ynab/dist/models/SaveSubTransaction.js";
 import type { SaveTransactionWithIdOrImportId } from "ynab/dist/models/SaveTransactionWithIdOrImportId.js";
 import type { z } from "zod/v4";
-import { CacheManager, cacheManager } from "../server/cacheManager.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
-import { globalRequestLogger } from "../server/requestLogger.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
 import { ValidationError, withToolErrorHandling } from "../types/index.js";
@@ -17,7 +15,6 @@ import {
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import { type DeltaWriteDeps, resolveDeltaWriteDeps } from "./deltaSupport.js";
 import { applySmartCollapseLogic } from "./receiptSplit/collapseLogic.js";
 import {
 	CreateReceiptSplitTransactionOutputSchema,
@@ -28,6 +25,11 @@ import {
 	UpdateTransactionsOutputSchema,
 } from "./schemas/outputs/index.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
+import {
+	type TransactionFields,
+	type TransactionModel,
+	toTransactionOutput,
+} from "./transactionModel.js";
 
 import {
 	type BulkCreateResponse,
@@ -43,7 +45,6 @@ import {
 	type DeleteTransactionParams,
 	DeleteTransactionSchema,
 	type ReceiptCategoryCalculation,
-	type TransactionCacheInvalidationOptions,
 	type UpdateTransactionParams,
 	UpdateTransactionSchema,
 	type UpdateTransactionsParams,
@@ -51,30 +52,12 @@ import {
 } from "./transactionSchemas.js";
 
 import {
-	appendCategoryIds,
-	collectCategoryIdsFromSources,
 	correlateResults,
 	ensureTransaction,
 	finalizeBulkUpdateResponse,
 	finalizeResponse,
 	handleTransactionError,
-	invalidateTransactionCaches,
-	setsEqual,
-	toMonthKey,
 } from "./transactionUtils.js";
-
-function toMajorUnitTransaction(transaction: ynab.TransactionDetail) {
-	return {
-		...transaction,
-		amount: milliunitsToAmount(transaction.amount),
-		subtransactions: (transaction.subtransactions ?? []).map(
-			(subtransaction) => ({
-				...subtransaction,
-				amount: milliunitsToAmount(subtransaction.amount),
-			}),
-		),
-	};
-}
 
 type SubtransactionPayload = {
 	amount: number;
@@ -107,51 +90,14 @@ function toSaveSubtransactions(
 	});
 }
 
-function toSubtransactionPreview(subtransaction: SubtransactionPayload) {
-	const preview: {
-		amount: number;
-		payee_name?: string;
-		payee_id?: string;
-		category_id?: string;
-		memo?: string;
-	} = {
-		amount: milliunitsToAmount(subtransaction.amount),
-	};
-	if (subtransaction.payee_name) {
-		preview.payee_name = subtransaction.payee_name;
-	}
-	if (subtransaction.payee_id) {
-		preview.payee_id = subtransaction.payee_id;
-	}
-	if (subtransaction.category_id) {
-		preview.category_id = subtransaction.category_id;
-	}
-	if (subtransaction.memo) {
-		preview.memo = subtransaction.memo;
-	}
-	return preview;
-}
-
 function toUnavailableUpdatePreview(transaction: BulkUpdateTransactionInput) {
 	const {
 		id: _id,
-		original_account_id: _originalAccountId,
-		original_date: _originalDate,
-		...preview
+		original_account_id: _account,
+		original_date: _date,
+		...changes
 	} = transaction;
-	return {
-		...preview,
-		...(transaction.amount === undefined
-			? {}
-			: { amount: milliunitsToAmount(transaction.amount) }),
-		...(transaction.subtransactions === undefined
-			? {}
-			: {
-					subtransactions: transaction.subtransactions.map(
-						toSubtransactionPreview,
-					),
-				}),
-	};
+	return toTransactionOutput(changes);
 }
 
 /**
@@ -161,16 +107,14 @@ function toUnavailableUpdatePreview(transaction: BulkUpdateTransactionInput) {
 export async function handleCreateTransaction(
 	ynabAPI: ynab.API,
 	params: CreateTransactionParams,
-	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	try {
 		if (params.dry_run) {
 			const dryRunData = {
 				dry_run: true as const,
 				action: "ynab_create_transaction" as const,
-				request: params as Record<string, unknown>,
+				request: toTransactionOutput(params),
 			};
 			return {
 				content: [
@@ -217,64 +161,7 @@ export async function handleCreateTransaction(
 			"Transaction creation failed",
 		);
 
-		const affectedAccountIds = new Set<string>([transaction.account_id]);
-		const affectedMonths = new Set<string>([toMonthKey(transaction.date)]);
-		const affectedCategoryIds = collectCategoryIdsFromSources(transaction);
-		invalidateTransactionCaches(
-			deltaCache,
-			knowledgeStore,
-			budgetId,
-			response.data.server_knowledge,
-			affectedAccountIds,
-			affectedMonths,
-			{
-				affectedCategoryIds,
-				accountTotalsChanged: true,
-				invalidateMonths: true,
-			},
-		);
-
-		// Get the updated account balance
-		const accountResponse = await ynabAPI.accounts.getAccountById(
-			budgetId,
-			transaction.account_id,
-		);
-		const account = accountResponse.data.account;
-
-		const createdTxData = {
-			transaction: {
-				id: transaction.id,
-				date: transaction.date,
-				amount: milliunitsToAmount(transaction.amount),
-				memo: transaction.memo,
-				cleared: transaction.cleared,
-				approved: transaction.approved,
-				flag_color: transaction.flag_color,
-				account_id: transaction.account_id,
-				payee_id: transaction.payee_id,
-				category_id: transaction.category_id,
-				transfer_account_id: transaction.transfer_account_id,
-				transfer_transaction_id: transaction.transfer_transaction_id,
-				matched_transaction_id: transaction.matched_transaction_id,
-				import_id: transaction.import_id,
-				deleted: transaction.deleted,
-				account_balance: milliunitsToAmount(account.balance),
-				account_cleared_balance: milliunitsToAmount(account.cleared_balance),
-				subtransactions: transaction.subtransactions?.map((subtransaction) => ({
-					id: subtransaction.id,
-					transaction_id: subtransaction.transaction_id,
-					amount: milliunitsToAmount(subtransaction.amount),
-					memo: subtransaction.memo,
-					payee_id: subtransaction.payee_id,
-					payee_name: subtransaction.payee_name,
-					category_id: subtransaction.category_id,
-					category_name: subtransaction.category_name,
-					transfer_account_id: subtransaction.transfer_account_id,
-					transfer_transaction_id: subtransaction.transfer_transaction_id,
-					deleted: subtransaction.deleted,
-				})),
-			},
-		};
+		const createdTxData = { transaction: toTransactionOutput(transaction) };
 		return {
 			content: [
 				{
@@ -297,10 +184,8 @@ export async function handleCreateTransaction(
 export async function handleCreateReceiptSplitTransaction(
 	ynabAPI: ynab.API,
 	params: CreateReceiptSplitTransactionParams,
-	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	const date = params.date ?? new Date().toISOString().slice(0, 10);
 
 	const categoryCalculations: ReceiptCategoryCalculation[] =
@@ -407,19 +292,15 @@ export async function handleCreateReceiptSplitTransaction(
 		const receiptDryRunData = {
 			dry_run: true as const,
 			action: "ynab_create_receipt_split_transaction" as const,
-			transaction_preview: {
+			transaction_preview: toTransactionOutput({
 				account_id: params.account_id,
 				payee_name: params.payee_name,
 				date,
-				amount: milliunitsToAmount(-totalMilliunits),
+				amount: -totalMilliunits,
 				cleared: params.cleared ?? "uncleared",
-			},
+			}),
 			receipt_summary: receiptSummary,
-			subtransactions: subtransactions.map((subtransaction) => ({
-				amount: milliunitsToAmount(subtransaction.amount),
-				category_id: subtransaction.category_id,
-				memo: subtransaction.memo,
-			})),
+			subtransactions: subtransactions.map(toTransactionOutput),
 		};
 		return {
 			content: [
@@ -451,33 +332,18 @@ export async function handleCreateReceiptSplitTransaction(
 	const baseResult = await handleCreateTransaction(
 		ynabAPI,
 		createTransactionParams,
-		{ deltaCache, knowledgeStore },
 		errorHandler,
 	);
 
-	const firstContent = baseResult.content?.[0];
-	if (firstContent?.type !== "text") {
-		return baseResult;
-	}
-
-	try {
-		const parsed = JSON.parse(firstContent.text) as Record<string, unknown>;
-		parsed["receipt_summary"] = receiptSummary;
-		firstContent.text = responseFormatter.format(parsed);
-		// Also update structuredContent with receipt_summary
-		const updatedStructured = {
-			...(baseResult.structuredContent as Record<string, unknown>),
-			receipt_summary: receiptSummary,
-		};
-		return {
-			...baseResult,
-			structuredContent: updatedStructured,
-		};
-	} catch {
-		// If parsing fails, return the original result without augmentation.
-	}
-
-	return baseResult;
+	if (baseResult.isError || !baseResult.structuredContent) return baseResult;
+	const data = {
+		...baseResult.structuredContent,
+		receipt_summary: receiptSummary,
+	};
+	return {
+		content: [{ type: "text", text: responseFormatter.format(data) }],
+		structuredContent: data,
+	};
 }
 
 /**
@@ -487,16 +353,14 @@ export async function handleCreateReceiptSplitTransaction(
 export async function handleUpdateTransaction(
 	ynabAPI: ynab.API,
 	params: UpdateTransactionParams,
-	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	try {
 		if (params.dry_run) {
 			const updateDryRunData = {
 				dry_run: true as const,
 				action: "ynab_update_transaction" as const,
-				request: params as Record<string, unknown>,
+				request: toTransactionOutput(params),
 			};
 			return {
 				content: [
@@ -509,17 +373,6 @@ export async function handleUpdateTransaction(
 			};
 		}
 		const budgetId = requireResolvedBudgetId(params.budget_id);
-
-		// Get the original transaction before updating to capture the original account_id
-		const originalTransactionResponse =
-			await ynabAPI.transactions.getTransactionById(
-				budgetId,
-				params.transaction_id,
-			);
-		const originalTransaction = ensureTransaction(
-			originalTransactionResponse.data.transaction,
-			"Original transaction not found",
-		);
 
 		// Prepare transaction update data - only include fields that are provided
 		const transactionData: ExistingTransaction = {};
@@ -575,103 +428,7 @@ export async function handleUpdateTransaction(
 			"Transaction update failed",
 		);
 
-		const specificTransactionCacheKey = CacheManager.generateKey(
-			"transaction",
-			"get",
-			budgetId,
-			params.transaction_id,
-		);
-		cacheManager.delete(specificTransactionCacheKey);
-
-		const affectedAccountIds = new Set<string>([
-			originalTransaction.account_id,
-			transaction.account_id,
-		]);
-
-		if (originalTransaction.transfer_account_id) {
-			affectedAccountIds.add(originalTransaction.transfer_account_id);
-		}
-		if (transaction.transfer_account_id) {
-			affectedAccountIds.add(transaction.transfer_account_id);
-		}
-
-		const affectedMonths = new Set<string>([
-			toMonthKey(originalTransaction.date),
-			toMonthKey(transaction.date),
-		]);
-		const originalCategoryIds =
-			collectCategoryIdsFromSources(originalTransaction);
-		const updatedCategoryIds = collectCategoryIdsFromSources(transaction);
-		const affectedCategoryIds = new Set<string>([
-			...originalCategoryIds,
-			...updatedCategoryIds,
-		]);
-		const categoryChanged = !setsEqual(originalCategoryIds, updatedCategoryIds);
-		const amountChanged = transaction.amount !== originalTransaction.amount;
-		const accountChanged =
-			transaction.account_id !== originalTransaction.account_id;
-		const clearedChanged = transaction.cleared !== originalTransaction.cleared;
-		const transferAccountChanged =
-			transaction.transfer_account_id !==
-			originalTransaction.transfer_account_id;
-		const transferLinkChanged =
-			transaction.transfer_transaction_id !==
-			originalTransaction.transfer_transaction_id;
-		const dateChanged = transaction.date !== originalTransaction.date;
-
-		invalidateTransactionCaches(
-			deltaCache,
-			knowledgeStore,
-			budgetId,
-			response.data.server_knowledge,
-			affectedAccountIds,
-			affectedMonths,
-			{
-				affectedCategoryIds,
-				accountTotalsChanged:
-					amountChanged ||
-					accountChanged ||
-					clearedChanged ||
-					transferAccountChanged ||
-					transferLinkChanged,
-				invalidateMonths: amountChanged || categoryChanged || dateChanged,
-			},
-		);
-
-		// Get the updated account balance
-		const accountResponse = await ynabAPI.accounts.getAccountById(
-			budgetId,
-			transaction.account_id,
-		);
-		const account = accountResponse.data.account;
-
-		const updatedTxData = {
-			transaction: {
-				id: transaction.id,
-				date: transaction.date,
-				amount: milliunitsToAmount(transaction.amount),
-				memo: transaction.memo,
-				cleared: transaction.cleared,
-				approved: transaction.approved,
-				flag_color: transaction.flag_color,
-				account_id: transaction.account_id,
-				payee_id: transaction.payee_id,
-				category_id: transaction.category_id,
-				transfer_account_id: transaction.transfer_account_id,
-				transfer_transaction_id: transaction.transfer_transaction_id,
-				matched_transaction_id: transaction.matched_transaction_id,
-				import_id: transaction.import_id,
-				deleted: transaction.deleted,
-				subtransactions: (transaction.subtransactions ?? []).map(
-					(subtransaction) => ({
-						...subtransaction,
-						amount: milliunitsToAmount(subtransaction.amount),
-					}),
-				),
-			},
-			updated_balance: milliunitsToAmount(account.balance),
-			updated_cleared_balance: milliunitsToAmount(account.cleared_balance),
-		};
+		const updatedTxData = { transaction: toTransactionOutput(transaction) };
 		return {
 			content: [
 				{
@@ -698,16 +455,14 @@ export async function handleUpdateTransaction(
 export async function handleDeleteTransaction(
 	ynabAPI: ynab.API,
 	params: DeleteTransactionParams,
-	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	try {
 		if (params.dry_run) {
 			const deleteDryRunData = {
 				dry_run: true as const,
 				action: "ynab_delete_transaction" as const,
-				request: params as Record<string, unknown>,
+				request: params,
 			};
 			return {
 				content: [
@@ -730,50 +485,9 @@ export async function handleDeleteTransaction(
 			"Transaction deletion failed",
 		);
 
-		const specificTransactionCacheKey = CacheManager.generateKey(
-			"transaction",
-			"get",
-			budgetId,
-			params.transaction_id,
-		);
-		cacheManager.delete(specificTransactionCacheKey);
-
-		const affectedAccountIds = new Set<string>([transaction.account_id]);
-		if (transaction.transfer_account_id) {
-			affectedAccountIds.add(transaction.transfer_account_id);
-		}
-
-		const affectedMonths = new Set<string>([toMonthKey(transaction.date)]);
-		const affectedCategoryIds = collectCategoryIdsFromSources(transaction);
-		invalidateTransactionCaches(
-			deltaCache,
-			knowledgeStore,
-			budgetId,
-			response.data.server_knowledge,
-			affectedAccountIds,
-			affectedMonths,
-			{
-				affectedCategoryIds,
-				accountTotalsChanged: true,
-				invalidateMonths: true,
-			},
-		);
-
-		// Get the updated account balance
-		const accountResponse = await ynabAPI.accounts.getAccountById(
-			budgetId,
-			transaction.account_id,
-		);
-		const account = accountResponse.data.account;
-
 		const deletedTxData = {
 			message: "Transaction deleted successfully",
-			transaction: {
-				id: transaction.id,
-				deleted: transaction.deleted,
-			},
-			updated_balance: milliunitsToAmount(account.balance),
-			updated_cleared_balance: milliunitsToAmount(account.cleared_balance),
+			transaction: toTransactionOutput(transaction),
 		};
 		return {
 			content: [
@@ -797,10 +511,8 @@ export async function handleDeleteTransaction(
 export async function handleCreateTransactions(
 	ynabAPI: ynab.API,
 	params: CreateTransactionsParams,
-	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	return (await withToolErrorHandling(
 		async () => {
 			const validationResult = CreateTransactionsSchema.safeParse(params);
@@ -903,14 +615,7 @@ export async function handleCreateTransactions(
 					.slice(0, 10)
 					.map((transaction, index) => ({
 						request_index: index,
-						account_id: transaction.account_id,
-						date: transaction.date,
-						amount: milliunitsToAmount(transaction.amount),
-						memo: transaction.memo,
-						payee_id: transaction.payee_id,
-						payee_name: transaction.payee_name,
-						category_id: transaction.category_id,
-						import_id: transaction.import_id,
+						...toTransactionOutput(transaction),
 					}));
 
 				const bulkCreateDryRunData = {
@@ -994,35 +699,11 @@ export async function handleCreateTransactions(
 				summary,
 				results,
 				transactions: (responseData.transactions ?? []).map(
-					toMajorUnitTransaction,
+					toTransactionOutput,
 				),
 				duplicate_import_ids: responseData.duplicate_import_ids ?? [],
 				message: `Processed ${summary.total_requested} transactions: ${summary.created} created, ${summary.duplicates} duplicates, ${summary.failed} failed.`,
 			};
-
-			const accountIds = new Set<string>(
-				transactions.map((transaction) => transaction.account_id),
-			);
-			const affectedMonths = new Set<string>(
-				transactions.map((transaction) => toMonthKey(transaction.date)),
-			);
-			const affectedCategoryIds = new Set<string>();
-			for (const created of responseData.transactions ?? []) {
-				appendCategoryIds(created, affectedCategoryIds);
-			}
-			invalidateTransactionCaches(
-				deltaCache,
-				knowledgeStore,
-				budgetId,
-				responseData.server_knowledge,
-				accountIds,
-				affectedMonths,
-				{
-					affectedCategoryIds,
-					accountTotalsChanged: true,
-					invalidateMonths: true,
-				},
-			);
 
 			const finalizedResponse = finalizeResponse(baseResponse);
 
@@ -1045,146 +726,30 @@ export async function handleCreateTransactions(
 	)) as CallToolResult;
 }
 
-/**
- * Interface for transaction metadata needed for cache invalidation
- */
-interface TransactionMetadata {
-	account_id: string;
-	date: string;
-}
-
-/**
- * Result of metadata resolution including both resolved metadata and unresolved IDs
- */
-interface MetadataResolutionResult {
-	metadata: Map<string, TransactionMetadata>;
-	unresolvedIds: string[];
-	previewDetails: Map<string, ynab.TransactionDetail>;
-}
-
-interface ResolveMetadataOptions {
-	previewTransactionIds?: string[];
-}
-
-/**
- * Resolves metadata for bulk update transactions
- * Uses a multi-tier approach: request metadata -> cache -> limited API calls
- * Returns both the resolved metadata and a list of IDs that could not be resolved
- */
-async function resolveMetadata(
-	ynabAPI: ynab.API,
+/** Fetch only the transactions displayed by the preview, with bounded concurrency. */
+async function fetchPreviewTransactions(
+	api: ynab.API,
 	budgetId: string,
-	transactions: BulkUpdateTransactionInput[],
-	options: ResolveMetadataOptions = {},
-): Promise<MetadataResolutionResult> {
-	const metadata = new Map<string, TransactionMetadata>();
-	const needsResolution: string[] = [];
-	const previewIds = new Set(options.previewTransactionIds ?? []);
-	const previewDetails = new Map<string, ynab.TransactionDetail>();
-	const previewIdsNeedingFetch = new Set(previewIds);
-
-	// First pass: Use provided metadata
-	for (const transaction of transactions) {
-		if (transaction.original_account_id && transaction.original_date) {
-			metadata.set(transaction.id, {
-				account_id: transaction.original_account_id,
-				date: transaction.original_date,
-			});
-		} else {
-			needsResolution.push(transaction.id);
-		}
-	}
-
-	if (previewIds.size === 0 && needsResolution.length === 0) {
-		return { metadata, unresolvedIds: [], previewDetails };
-	}
-
-	// Second pass: hydrate from cache for both metadata needs and preview requests
-	const needsResolutionSet = new Set(needsResolution);
-	const cacheLookupIds = new Set<string>([...needsResolution, ...previewIds]);
-	for (const transactionId of cacheLookupIds) {
-		const cacheKey = CacheManager.generateKey(
-			"transaction",
-			"get",
-			budgetId,
-			transactionId,
-		);
-		const cached = cacheManager.get<ynab.TransactionDetail>(cacheKey);
-		if (!cached) {
-			continue;
-		}
-
-		if (needsResolutionSet.has(transactionId)) {
-			metadata.set(transactionId, {
-				account_id: cached.account_id,
-				date: cached.date,
-			});
-			needsResolutionSet.delete(transactionId);
-		}
-		if (previewIds.has(transactionId) && !previewDetails.has(transactionId)) {
-			previewDetails.set(transactionId, cached);
-			previewIdsNeedingFetch.delete(transactionId);
-		}
-	}
-
-	const stillNeedsResolution = Array.from(needsResolutionSet);
-	if (stillNeedsResolution.length === 0 && previewIdsNeedingFetch.size === 0) {
-		return { metadata, unresolvedIds: [], previewDetails };
-	}
-
-	// Third pass: Limited API calls with concurrency limit
-	const MAX_CONCURRENT_FETCHES = 5;
-	const fetchPromises: Promise<void>[] = [];
-	const metadataAwaitingResolution = new Set(stillNeedsResolution);
-	const idsNeedingApiFetch = Array.from(
-		new Set([...stillNeedsResolution, ...previewIdsNeedingFetch]),
-	);
-
-	for (let i = 0; i < idsNeedingApiFetch.length; i += MAX_CONCURRENT_FETCHES) {
-		const batch = idsNeedingApiFetch.slice(i, i + MAX_CONCURRENT_FETCHES);
-		const batchPromises = batch.map(async (transactionId) => {
-			try {
-				const response = await ynabAPI.transactions.getTransactionById(
-					budgetId,
-					transactionId,
-				);
-				const transaction = response.data.transaction;
-				if (transaction) {
-					if (metadataAwaitingResolution.has(transactionId)) {
-						metadata.set(transactionId, {
-							account_id: transaction.account_id,
-							date: transaction.date,
-						});
-						metadataAwaitingResolution.delete(transactionId);
-					}
-					if (
-						previewIdsNeedingFetch.has(transactionId) &&
-						!previewDetails.has(transactionId)
-					) {
-						previewDetails.set(transactionId, transaction);
-						previewIdsNeedingFetch.delete(transactionId);
-					}
-				}
-			} catch {
-				if (metadataAwaitingResolution.has(transactionId)) {
-					globalRequestLogger.logError(
-						"ynab:update_transactions",
-						"resolve_metadata",
-						{ transaction_id: transactionId },
-						"Failed to resolve transaction metadata",
+	ids: string[],
+) {
+	const details = new Map<string, TransactionModel>();
+	for (let offset = 0; offset < ids.length; offset += 5) {
+		await Promise.all(
+			ids.slice(offset, offset + 5).map(async (id) => {
+				try {
+					const response = await api.transactions.getTransactionById(
+						budgetId,
+						id,
 					);
+					if (response.data.transaction)
+						details.set(id, response.data.transaction);
+				} catch {
+					/* The preview reports unavailable before values without issuing writes. */
 				}
-			}
-		});
-		fetchPromises.push(...batchPromises);
+			}),
+		);
 	}
-
-	await Promise.all(fetchPromises);
-	return {
-		metadata,
-		unresolvedIds: Array.from(metadataAwaitingResolution),
-		previewDetails,
-	};
+	return details;
 }
 
 /**
@@ -1266,14 +831,10 @@ async function previewBulkUpdate(
 		(transaction) => transaction.id,
 	);
 	const budgetId = requireResolvedBudgetId(budget_id);
-	// Resolve metadata once and reuse any transaction details for preview rendering
-	const { metadata, unresolvedIds, previewDetails } = await resolveMetadata(
+	const previewDetails = await fetchPreviewTransactions(
 		ynabAPI,
 		budgetId,
-		transactions,
-		{
-			previewTransactionIds,
-		},
+		previewTransactionIds,
 	);
 
 	const transactionsPreview = [];
@@ -1297,11 +858,11 @@ async function previewBulkUpdate(
 		});
 	}
 
-	const warnings = buildMetadataWarnings(unavailablePreviewIds, unresolvedIds);
+	const warnings = buildPreviewWarnings(unavailablePreviewIds);
 
 	// Collect summary statistics
 	const accountsAffected = Array.from(
-		new Set(Array.from(metadata.values()).map((m) => m.account_id)),
+		new Set(Array.from(previewDetails.values()).map((m) => m.account_id)),
 	);
 
 	const response: Record<string, unknown> = {
@@ -1337,17 +898,17 @@ async function previewBulkUpdate(
  */
 function buildUpdateDiff(
 	transaction: BulkUpdateTransactionInput,
-	currentState: ynab.TransactionDetail,
+	currentState: TransactionModel,
 ): { before: Record<string, unknown>; after: Record<string, unknown> } {
-	const before: Record<string, unknown> = {};
-	const after: Record<string, unknown> = {};
+	const before: TransactionFields & Record<string, unknown> = {};
+	const after: TransactionFields & Record<string, unknown> = {};
 
 	if (
 		transaction.amount !== undefined &&
 		transaction.amount !== currentState.amount
 	) {
-		before["amount"] = milliunitsToAmount(currentState.amount);
-		after["amount"] = milliunitsToAmount(transaction.amount);
+		before["amount"] = currentState.amount;
+		after["amount"] = transaction.amount;
 	}
 	for (const field of PREVIEW_SCALAR_FIELDS) {
 		const nextValue = transaction[field];
@@ -1357,38 +918,26 @@ function buildUpdateDiff(
 		}
 	}
 	if (transaction.subtransactions !== undefined) {
-		before["subtransactions"] = (currentState.subtransactions ?? [])
-			.filter((subtransaction) => !subtransaction.deleted)
-			.map(toSubtransactionPreview);
-		after["subtransactions"] = transaction.subtransactions.map(
-			toSubtransactionPreview,
+		before["subtransactions"] = (currentState.subtransactions ?? []).filter(
+			(subtransaction) => !subtransaction.deleted,
 		);
+		after["subtransactions"] = transaction.subtransactions;
 	}
 
-	return { before, after };
+	return {
+		before: toTransactionOutput(before),
+		after: toTransactionOutput(after),
+	};
 }
 
-function buildMetadataWarnings(
-	unavailablePreviewIds: string[],
-	unresolvedIds: string[],
-): MetadataWarning[] {
-	if (unavailablePreviewIds.length === 0 && unresolvedIds.length === 0) {
-		return [];
-	}
-	const totalMissing = Math.max(
-		unavailablePreviewIds.length,
-		unresolvedIds.length,
-	);
-	const sampleIds =
-		unresolvedIds.length > 0
-			? unresolvedIds.slice(0, 10)
-			: unavailablePreviewIds.slice(0, 10);
+function buildPreviewWarnings(unavailableIds: string[]): MetadataWarning[] {
+	if (!unavailableIds.length) return [];
 	return [
 		{
 			code: "metadata_unavailable",
-			count: totalMissing,
-			message: `Unable to fetch prior state for ${totalMissing} transactions`,
-			sample_ids: sampleIds,
+			count: unavailableIds.length,
+			message: `Unable to fetch prior state for ${unavailableIds.length} transactions`,
+			sample_ids: unavailableIds.slice(0, 10),
 		},
 	];
 }
@@ -1403,54 +952,6 @@ function collectFieldsToUpdate(
 		}
 	}
 	return Array.from(fieldsToUpdate);
-}
-
-/**
- * Rejects the batch when more than 5% of transactions lack metadata needed for
- * cache invalidation, and logs a warning above 1%
- */
-function assertMetadataComplete(
-	unresolvedIds: string[],
-	totalTransactions: number,
-): void {
-	const missingMetadataRatio = unresolvedIds.length / totalTransactions;
-	const METADATA_THRESHOLD = 0.05; // 5%
-
-	if (missingMetadataRatio > METADATA_THRESHOLD) {
-		throw new ValidationError(
-			`METADATA_INCOMPLETE: ${(missingMetadataRatio * 100).toFixed(1)}% of transactions have missing metadata (threshold: ${(METADATA_THRESHOLD * 100).toFixed(0)}%)`,
-			JSON.stringify(
-				{
-					unresolved_count: unresolvedIds.length,
-					total_transactions: totalTransactions,
-					ratio: `${(missingMetadataRatio * 100).toFixed(1)}%`,
-					threshold: `${(METADATA_THRESHOLD * 100).toFixed(0)}%`,
-					sample_unresolved_ids: unresolvedIds.slice(0, 5),
-				},
-				null,
-				2,
-			),
-			[
-				"Provide original_account_id and original_date for all transactions being updated",
-				"Ensure transactions exist in YNAB before updating them",
-			],
-		);
-	}
-
-	if (missingMetadataRatio > 0.01) {
-		globalRequestLogger.logRequest(
-			"ynab:update_transactions",
-			"metadata_resolution_warning",
-			{
-				unresolved_count: unresolvedIds.length,
-				total_transactions: totalTransactions,
-				ratio: missingMetadataRatio.toFixed(3),
-				sample_ids: unresolvedIds.slice(0, 5),
-				message: "Metadata resolution incomplete for some transactions",
-			},
-			true,
-		);
-	}
 }
 
 /**
@@ -1535,73 +1036,6 @@ function buildBulkUpdateResults(
 /**
  * Determines which accounts, months, and categories a bulk update touched
  */
-function collectBulkUpdateInvalidationScope(
-	transactions: BulkUpdateTransactionInput[],
-	metadata: Map<string, TransactionMetadata>,
-): {
-	affectedAccountIds: Set<string>;
-	affectedMonthKeys: Set<string>;
-	options: TransactionCacheInvalidationOptions;
-} {
-	const affectedAccountIds = new Set<string>();
-	const affectedMonthKeys = new Set<string>();
-	const affectedCategoryIds = new Set<string>();
-	let invalidateAllCategories = false;
-	let accountTotalsChanged = false;
-	let monthsImpacted = false;
-
-	for (const transaction of transactions) {
-		const meta = metadata.get(transaction.id);
-		const amountChanged = transaction.amount !== undefined;
-		const clearedChanged = transaction.cleared !== undefined;
-		const categoryChanged =
-			transaction.category_id !== undefined ||
-			transaction.subtransactions !== undefined;
-		const dateChanged = transaction.date !== undefined;
-
-		if ((amountChanged || clearedChanged) && meta) {
-			affectedAccountIds.add(meta.account_id);
-		}
-
-		if (amountChanged) {
-			monthsImpacted = true;
-			accountTotalsChanged = true;
-			invalidateAllCategories = true;
-			if (meta) {
-				affectedMonthKeys.add(toMonthKey(meta.date));
-			}
-		}
-
-		if (categoryChanged) {
-			monthsImpacted = true;
-			invalidateAllCategories = true;
-			appendCategoryIds(transaction, affectedCategoryIds);
-			if (meta) {
-				affectedMonthKeys.add(toMonthKey(meta.date));
-			}
-		}
-
-		if (dateChanged && meta) {
-			monthsImpacted = true;
-			affectedMonthKeys.add(toMonthKey(meta.date));
-		}
-		if (dateChanged && transaction.date) {
-			affectedMonthKeys.add(toMonthKey(transaction.date));
-		}
-	}
-
-	return {
-		affectedAccountIds,
-		affectedMonthKeys,
-		options: {
-			affectedCategoryIds,
-			invalidateAllCategories,
-			accountTotalsChanged,
-			invalidateMonths: monthsImpacted,
-		},
-	};
-}
-
 /**
  * Handles the ynab:update_transactions tool call
  * Updates multiple transactions in a single batch operation
@@ -1609,10 +1043,8 @@ function collectBulkUpdateInvalidationScope(
 export async function handleUpdateTransactions(
 	ynabAPI: ynab.API,
 	params: UpdateTransactionsParams,
-	deps?: DeltaWriteDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const { deltaCache, knowledgeStore } = resolveDeltaWriteDeps(deps);
 	return (await withToolErrorHandling(
 		async () => {
 			const validationResult = UpdateTransactionsSchema.safeParse(params);
@@ -1626,15 +1058,6 @@ export async function handleUpdateTransactions(
 				return previewBulkUpdate(ynabAPI, budget_id, transactions);
 			}
 			const budgetId = requireResolvedBudgetId(budget_id);
-
-			// Resolve metadata for cache invalidation before making updates
-			const { metadata, unresolvedIds } = await resolveMetadata(
-				ynabAPI,
-				budgetId,
-				transactions,
-			);
-
-			assertMetadataComplete(unresolvedIds, transactions.length);
 
 			// Execute bulk update
 			const response = await ynabAPI.transactions.updateTransactions(budgetId, {
@@ -1656,31 +1079,9 @@ export async function handleUpdateTransactions(
 				server_knowledge: responseData.server_knowledge,
 				summary,
 				results,
-				transactions: updatedTransactions.map(toMajorUnitTransaction),
+				transactions: updatedTransactions.map(toTransactionOutput),
 				message: `Processed ${summary.total_requested} transactions: ${summary.updated} updated, ${summary.failed} failed.`,
 			};
-
-			for (const transaction of transactions) {
-				cacheManager.delete(
-					CacheManager.generateKey(
-						"transaction",
-						"get",
-						budgetId,
-						transaction.id,
-					),
-				);
-			}
-
-			const scope = collectBulkUpdateInvalidationScope(transactions, metadata);
-			invalidateTransactionCaches(
-				deltaCache,
-				knowledgeStore,
-				budgetId,
-				responseData.server_knowledge,
-				scope.affectedAccountIds,
-				scope.affectedMonthKeys,
-				scope.options,
-			);
 
 			const finalizedResponse = finalizeBulkUpdateResponse(baseResponse);
 
@@ -1710,7 +1111,7 @@ export function registerTransactionWriteTools(
 	registry: ToolRegistry,
 	context: ToolContext,
 ): void {
-	const { adaptWrite } = createAdapters(context);
+	const { adapt } = createAdapters(context);
 	const budgetResolver = createBudgetResolver(context);
 
 	registry.register({
@@ -1737,14 +1138,14 @@ Args:
 Use "subtransactions" for manual split transactions. Use "ynab_create_receipt_split_transaction" when you have itemized receipt data and want proportional tax allocation handled for you.
 Advanced: "import_id" is supported, but it is intentionally not part of normal guidance. Usually omit it if you want the transaction to remain eligible for later bank-import matching.
 
-Returns: created transaction with account_balance.
+Returns: the created transaction, including split lines and explicit amount_milliunits.
 
 Examples:
   - $50 expense: set amount_decimal=-50.00
   - Already-converted data: set amount_milliunits=-50000`,
 		inputSchema: CreateTransactionSchema,
 		outputSchema: CreateTransactionOutputSchema,
-		handler: adaptWrite(handleCreateTransaction),
+		handler: adapt(handleCreateTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionSchema>>(),
 		metadata: {
@@ -1772,7 +1173,7 @@ Examples:
   - If you explicitly want YNAB-side duplicate import detection, set import_id on each transaction`,
 		inputSchema: CreateTransactionsSchema,
 		outputSchema: CreateTransactionsOutputSchema,
-		handler: adaptWrite(handleCreateTransactions),
+		handler: adapt(handleCreateTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionsSchema>>(),
 		metadata: {
@@ -1808,7 +1209,7 @@ Use this helper when you have receipt line items and want tax allocated across c
 Returns: transaction with subtransactions and receipt_summary.`,
 		inputSchema: CreateReceiptSplitTransactionSchema,
 		outputSchema: CreateReceiptSplitTransactionOutputSchema,
-		handler: adaptWrite(handleCreateReceiptSplitTransaction),
+		handler: adapt(handleCreateReceiptSplitTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
 		metadata: {
@@ -1839,10 +1240,10 @@ Args:
   - subtransactions (array, optional): Convert a non-split transaction into a split. Supply the parent amount and split lines using amount_decimal, amount_milliunits, or deprecated amount; split amounts must sum to the parent and category_id must be omitted on the parent. YNAB does not support replacing lines on an existing split.
   - dry_run (boolean, optional): Preview without saving.
 
-Returns: updated transaction with updated_balance.`,
+Returns: the updated transaction, including split lines and explicit amount_milliunits.`,
 		inputSchema: UpdateTransactionSchema,
 		outputSchema: UpdateTransactionOutputSchema,
-		handler: adaptWrite(handleUpdateTransaction),
+		handler: adapt(handleUpdateTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionSchema>>(),
 		metadata: {
@@ -1869,7 +1270,7 @@ Examples:
   - Dry run: set dry_run=true to preview before/after for first 10 items`,
 		inputSchema: UpdateTransactionsSchema,
 		outputSchema: UpdateTransactionsOutputSchema,
-		handler: adaptWrite(handleUpdateTransactions),
+		handler: adapt(handleUpdateTransactions),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionsSchema>>(),
 		metadata: {
@@ -1890,13 +1291,13 @@ Args:
   - transaction_id (string, required): Transaction UUID to delete.
   - dry_run (boolean, optional): Preview without deleting. Default: false.
 
-Returns: deleted transaction id and updated account balance.
+Returns: the deleted transaction with its ID and deletion status.
 
 Errors:
   - "Transaction not found" → invalid transaction_id`,
 		inputSchema: DeleteTransactionSchema,
 		outputSchema: DeleteTransactionOutputSchema,
-		handler: adaptWrite(handleDeleteTransaction),
+		handler: adapt(handleDeleteTransaction),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof DeleteTransactionSchema>>(),
 		metadata: {

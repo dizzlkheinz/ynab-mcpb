@@ -38,6 +38,7 @@
  */
 
 import { z } from "zod";
+import { TransactionLineOutputSchema } from "../../transactionModel.js";
 import { AccountSchema } from "./accountOutputs.js";
 import { CategorySchema } from "./categoryOutputs.js";
 import { TransactionSchema } from "./transactionOutputs.js";
@@ -53,18 +54,10 @@ import { TransactionSchema } from "./transactionOutputs.js";
  * @see src/tools/transactionTools.ts:950-1094 - create_transaction handler
  * @see src/tools/transactionTools.ts:1160-1335 - create_receipt_split_transaction handler
  */
-export const SubtransactionSchema = z.object({
-	id: z.string(),
-	transaction_id: z.string(),
-	amount: z.number(),
-	memo: z.string().optional(),
-	payee_id: z.string().optional(),
-	payee_name: z.string().optional(),
-	category_id: z.string().optional(),
-	category_name: z.string().optional(),
-	transfer_account_id: z.string().optional(),
-	transfer_transaction_id: z.string().optional(),
-	deleted: z.boolean(),
+export const SubtransactionSchema = TransactionLineOutputSchema.required({
+	id: true,
+	transaction_id: true,
+	deleted: true,
 });
 
 export type Subtransaction = z.infer<typeof SubtransactionSchema>;
@@ -189,40 +182,36 @@ export const BulkResultSchema = z
 
 export type BulkResult = z.infer<typeof BulkResultSchema>;
 
-const UpdateSubtransactionPreviewSchema = z
-	.object({
-		amount: z.number(),
-		payee_name: z.string().optional(),
-		payee_id: z.string().optional(),
-		category_id: z.string().optional(),
-		memo: z.string().optional(),
-	})
-	.strict();
-
 /**
  * Transaction diff fields for bulk update dry-run before/after comparison.
  * Contains only the fields that changed between current and updated state.
  *
  * @see src/tools/transactionTools.ts:2139-2192 - update_transactions dry-run diff building
  */
-export const TransactionDiffFieldsSchema = z.object({
-	amount: z.number().optional(),
-	date: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/)
-		.optional(),
-	memo: z.string().optional(),
-	payee_id: z.string().nullable().optional(),
-	payee_name: z.string().nullable().optional(),
-	category_id: z.string().nullable().optional(),
-	cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional(),
-	approved: z.boolean().optional(),
-	flag_color: z
-		.enum(["red", "orange", "yellow", "green", "blue", "purple"])
-		.nullable()
-		.optional(),
-	subtransactions: z.array(UpdateSubtransactionPreviewSchema).optional(),
-});
+export const TransactionDiffFieldsSchema = TransactionSchema.pick({
+	amount: true,
+	amount_milliunits: true,
+	date: true,
+	memo: true,
+	payee_id: true,
+	payee_name: true,
+	category_id: true,
+	cleared: true,
+	approved: true,
+	flag_color: true,
+	subtransactions: true,
+})
+	.partial()
+	.extend({
+		date: z
+			.string()
+			.regex(/^\d{4}-\d{2}-\d{2}$/)
+			.optional(),
+		cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional(),
+		flag_color: z
+			.enum(["red", "orange", "yellow", "green", "blue", "purple"])
+			.nullish(),
+	});
 
 export type TransactionDiffFields = z.infer<typeof TransactionDiffFieldsSchema>;
 
@@ -306,17 +295,16 @@ export type CreateTransactionOutput = z.infer<
  *
  * @see src/tools/transactionTools.ts:1742-1752 - create_transactions dry-run preview
  */
-export const CreateTransactionPreviewSchema = z.object({
-	request_index: z.number(),
-	account_id: z.string(),
-	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-	amount: z.number(),
-	memo: z.string().optional(),
-	payee_id: z.string().optional(),
-	payee_name: z.string().optional(),
-	category_id: z.string().optional(),
-	import_id: z.string().optional(),
-});
+export const CreateTransactionPreviewSchema = TransactionSchema.partial()
+	.required({
+		account_id: true,
+		date: true,
+		amount: true,
+	})
+	.extend({
+		request_index: z.number(),
+		date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+	});
 
 export type CreateTransactionPreview = z.infer<
 	typeof CreateTransactionPreviewSchema
@@ -390,6 +378,7 @@ export const CreateTransactionsOutputSchema = z.union([
 			server_knowledge: z.number().optional(),
 			summary: BulkOperationSummarySchema,
 			results: z.array(BulkResultSchema),
+			results_omitted: z.boolean().optional(),
 			transactions: z.array(TransactionSchema).optional(),
 			duplicate_import_ids: z.array(z.string()).optional(),
 			message: z.string().optional(),
@@ -432,8 +421,8 @@ export const UpdateTransactionOutputSchema = z.union([
 	}),
 	z.object({
 		transaction: TransactionWithBalanceSchema,
-		updated_balance: z.number(),
-		updated_cleared_balance: z.number(),
+		updated_balance: z.number().optional(),
+		updated_cleared_balance: z.number().optional(),
 	}),
 ]);
 
@@ -507,6 +496,7 @@ export const UpdateTransactionsOutputSchema = z.union([
 			server_knowledge: z.number().optional(),
 			summary: BulkOperationSummarySchema,
 			results: z.array(BulkResultSchema),
+			results_omitted: z.boolean().optional(),
 			transactions: z.array(TransactionSchema).optional(),
 			message: z.string().optional(),
 			mode: z.enum(["full", "summary", "ids_only"]).optional(),
@@ -549,12 +539,12 @@ export const DeleteTransactionOutputSchema = z.union([
 	}),
 	z.object({
 		message: z.string(),
-		transaction: z.object({
-			id: z.string(),
-			deleted: z.boolean(),
+		transaction: TransactionSchema.partial().required({
+			id: true,
+			deleted: true,
 		}),
-		updated_balance: z.number(),
-		updated_cleared_balance: z.number(),
+		updated_balance: z.number().optional(),
+		updated_cleared_balance: z.number().optional(),
 	}),
 ]);
 
@@ -577,22 +567,21 @@ export type DeleteTransactionOutput = z.infer<
  *
  * @see CreateReceiptSplitTransactionOutputSchema - Used in dry-run branch for transaction preview
  */
-export const TransactionDryRunPreviewSchema = z.object({
-	account_id: z.string(),
-	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-	amount: z.number(),
-	memo: z.string().optional().nullable(),
-	cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional(),
-	approved: z.boolean().optional(),
-	flag_color: z
-		.enum(["red", "orange", "yellow", "green", "blue", "purple"])
-		.optional()
-		.nullable(),
-	payee_id: z.string().optional().nullable(),
-	payee_name: z.string().optional().nullable(),
-	category_id: z.string().optional().nullable(),
-	import_id: z.string().optional().nullable(),
-});
+export const TransactionDryRunPreviewSchema = TransactionSchema.omit({
+	id: true,
+	deleted: true,
+	account_name: true,
+	matched_transaction_id: true,
+})
+	.partial()
+	.required({ account_id: true, date: true, amount: true })
+	.extend({
+		date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+		cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional(),
+		flag_color: z
+			.enum(["red", "orange", "yellow", "green", "blue", "purple"])
+			.nullish(),
+	});
 
 export type TransactionDryRunPreview = z.infer<
 	typeof TransactionDryRunPreviewSchema
