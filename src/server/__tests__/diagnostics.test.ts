@@ -5,6 +5,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetRuntimeConfig } from "../config.js";
 import {
 	type DiagnosticDependencies,
 	DiagnosticManager,
@@ -204,7 +205,11 @@ describe("diagnostics module", () => {
 							}),
 						);
 					} finally {
-						process.env.NODE_ENV = originalEnv;
+						if (originalEnv === undefined) {
+							Reflect.deleteProperty(process.env, "NODE_ENV");
+						} else {
+							process.env.NODE_ENV = originalEnv;
+						}
 					}
 				});
 			});
@@ -330,6 +335,7 @@ describe("diagnostics module", () => {
 				it("should include delta metrics when include_delta is true", async () => {
 					const originalEnv = process.env.YNAB_MCP_ENABLE_DELTA;
 					process.env.YNAB_MCP_ENABLE_DELTA = "true";
+					resetRuntimeConfig();
 
 					try {
 						mockKnowledgeStore.getStats.mockReturnValue({
@@ -369,10 +375,71 @@ describe("diagnostics module", () => {
 						expect(mockDeltaCache.getStats).toHaveBeenCalled();
 					} finally {
 						if (originalEnv === undefined) {
-							process.env.YNAB_MCP_ENABLE_DELTA = undefined;
+							// Assigning undefined would store the string "undefined"
+							Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
 						} else {
 							process.env.YNAB_MCP_ENABLE_DELTA = originalEnv;
 						}
+						resetRuntimeConfig();
+					}
+				});
+
+				it("should keep delta enabled when a sibling runtime key is invalid", async () => {
+					const originalDelta = process.env.YNAB_MCP_ENABLE_DELTA;
+					const originalRateLimitLogging = process.env.RATE_LIMIT_LOGGING;
+					process.env.YNAB_MCP_ENABLE_DELTA = "true";
+					process.env.RATE_LIMIT_LOGGING = "yes";
+					resetRuntimeConfig();
+
+					try {
+						await diagnosticManager.collectDiagnostics({ include_delta: true });
+
+						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
+							expect.objectContaining({
+								delta: expect.objectContaining({
+									enabled: true,
+									feature_flag: "true",
+								}),
+							}),
+						);
+					} finally {
+						for (const [key, value] of [
+							["YNAB_MCP_ENABLE_DELTA", originalDelta],
+							["RATE_LIMIT_LOGGING", originalRateLimitLogging],
+						] as const) {
+							if (value === undefined) {
+								Reflect.deleteProperty(process.env, key);
+							} else {
+								process.env[key] = value;
+							}
+						}
+						resetRuntimeConfig();
+					}
+				});
+
+				it("should show a malformed delta flag verbatim next to enabled:false", async () => {
+					const originalDelta = process.env.YNAB_MCP_ENABLE_DELTA;
+					process.env.YNAB_MCP_ENABLE_DELTA = "TRUE";
+					resetRuntimeConfig();
+
+					try {
+						await diagnosticManager.collectDiagnostics({ include_delta: true });
+
+						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
+							expect.objectContaining({
+								delta: expect.objectContaining({
+									enabled: false,
+									feature_flag: "TRUE",
+								}),
+							}),
+						);
+					} finally {
+						if (originalDelta === undefined) {
+							Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
+						} else {
+							process.env.YNAB_MCP_ENABLE_DELTA = originalDelta;
+						}
+						resetRuntimeConfig();
 					}
 				});
 

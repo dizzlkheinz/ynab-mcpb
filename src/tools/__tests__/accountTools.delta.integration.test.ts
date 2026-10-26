@@ -7,6 +7,7 @@ import {
 	skipOnRateLimit,
 } from "../../__tests__/testUtils.js";
 import { CacheManager } from "../../server/cacheManager.js";
+import { resetRuntimeConfig } from "../../server/config.js";
 import { DeltaCache } from "../../server/deltaCache.js";
 import { ServerKnowledgeStore } from "../../server/serverKnowledgeStore.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
@@ -73,12 +74,14 @@ describeIntegration("Delta-backed account tool handlers", () => {
 		const deltaCache = new DeltaCache(cacheManager, knowledgeStore);
 		deltaFetcher = new DeltaFetcher(ynabAPI, deltaCache);
 		process.env.YNAB_MCP_ENABLE_DELTA = "true";
+		resetRuntimeConfig();
 	});
 
 	afterEach(() => {
-		process.env.YNAB_MCP_ENABLE_DELTA = undefined;
+		Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
+		resetRuntimeConfig();
 		if (previousNodeEnv === undefined) {
-			process.env.NODE_ENV = undefined;
+			Reflect.deleteProperty(process.env, "NODE_ENV");
 		} else {
 			process.env.NODE_ENV = previousNodeEnv;
 		}
@@ -125,11 +128,9 @@ describeIntegration("Delta-backed account tool handlers", () => {
 			const firstPayload = parseResponse(firstCall);
 			expect(firstPayload.cached).toBe(false);
 
-			const secondCall = await handleListAccounts(
-				ynabAPI,
+			const secondCall = await handleListAccounts(ynabAPI, params, {
 				deltaFetcher,
-				params,
-			);
+			});
 			const secondPayload = parseResponse(secondCall);
 			expect(secondPayload.cached).toBe(true);
 			expect(secondPayload.cache_info).toMatch(/cache/i);
@@ -145,11 +146,9 @@ describeIntegration("Delta-backed account tool handlers", () => {
 				account_id: testAccountId,
 				response_format: "json" as const,
 			};
-			const firstCall = await handleListTransactions(
-				ynabAPI,
+			const firstCall = await handleListTransactions(ynabAPI, params, {
 				deltaFetcher,
-				params,
-			);
+			});
 			const firstPayload = parseResponse(firstCall);
 			expect(firstPayload.cached).toBe(false);
 
@@ -176,11 +175,9 @@ describeIntegration("Delta-backed account tool handlers", () => {
 			expect(createdId).toBeTruthy();
 
 			try {
-				const secondCall = await handleListTransactions(
-					ynabAPI,
+				const secondCall = await handleListTransactions(ynabAPI, params, {
 					deltaFetcher,
-					params,
-				);
+				});
 				const secondPayload = parseResponse(secondCall);
 				expect(secondPayload.cached).toBe(true);
 				// Check for delta-related keywords (flexible assertion)

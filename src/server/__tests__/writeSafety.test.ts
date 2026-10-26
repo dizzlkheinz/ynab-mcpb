@@ -84,6 +84,28 @@ function registerMutation(
 	return handler;
 }
 
+/** Dry runs return valid output; real writes return output that fails the schema. */
+function registerMutationWithInvalidWriteOutput(registry: ToolRegistry) {
+	const handler = vi.fn(
+		async ({ input }: { input: Record<string, unknown> }) =>
+			input["dry_run"] ? result({ id: "txn-1" }) : result({ id: 42 }),
+	);
+	registry.register({
+		name: "ynab_create_transaction",
+		description: "Protected mutation",
+		inputSchema: z
+			.object({ id: z.string(), dry_run: z.boolean().optional() })
+			.strict(),
+		outputSchema: z.object({ id: z.string() }),
+		handler,
+		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
+			annotations: { readOnlyHint: false },
+		},
+	});
+	return handler;
+}
+
 function confirmationToken(response: CallToolResult): string {
 	const text = response.content
 		.filter((item) => item.type === "text")
@@ -155,6 +177,47 @@ describe("ToolRegistry write safety enforcement", () => {
 		expect(registry.hasTool("ynab_delete_transaction")).toBe(false);
 	});
 
+	it("treats a truthy non-boolean mutation flag as a protected mutation", async () => {
+		const handler = vi.fn(
+			async ({ input }: { input: Record<string, unknown> }) =>
+				result({ received: input }),
+		);
+		const definition = {
+			name: "ynab_loose_mutation",
+			description: "Loosely flagged mutation",
+			inputSchema: z
+				.object({ id: z.string(), dry_run: z.boolean().optional() })
+				.strict(),
+			handler,
+			metadata: {
+				// Simulates an untyped caller passing a non-literal flag
+				writeSafety: { mutation: "yes", preview: "dry-run" },
+			},
+		} as unknown as Parameters<ToolRegistry["register"]>[0];
+
+		const readOnly = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "read-only" })),
+		);
+		readOnly.register(definition);
+		expect(readOnly.hasTool("ynab_loose_mutation")).toBe(false);
+
+		const preview = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+			),
+		);
+		preview.register(definition);
+		const response = await preview.executeTool({
+			name: "ynab_loose_mutation",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(handler).toHaveBeenCalledWith(
+			expect.objectContaining({ input: { id: "txn-1", dry_run: true } }),
+		);
+		expect(confirmationToken(response)).toBe(FIXED_TOKEN);
+	});
+
 	it("preserves direct mutation behavior in enabled mode", async () => {
 		const registry = new ToolRegistry(
 			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
@@ -219,7 +282,256 @@ describe("ToolRegistry write safety enforcement", () => {
 			},
 		});
 		expect(reused.isError).toBe(true);
+		expect(JSON.stringify(reused.content)).toContain("already used");
 		expect(handler).toHaveBeenCalledTimes(2);
+	});
+
+	it("rejects an expired confirmation token without calling the handler", async () => {
+		let now = 1_000;
+		const registry = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({
+					ttlMs: 100,
+					now: () => now,
+					tokenFactory: () => FIXED_TOKEN,
+				}),
+			),
+		);
+		const handler = registerMutation(registry, "ynab_create_transaction");
+		const preview = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1", amount: 10 },
+		});
+
+		now = 1_101;
+		const expired = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: {
+				id: "txn-1",
+				amount: 10,
+				confirmation_token: confirmationToken(preview),
+			},
+		});
+		expect(expired.isError).toBe(true);
+		expect(JSON.stringify(expired.content)).toContain("expired");
+		expect(handler).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects malformed confirmation tokens before default resolution and validation", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy()),
+		);
+		const handler = vi.fn(async () => result({}));
+		const defaultArgumentResolver = vi.fn(async () => ({}));
+		registry.register({
+			name: "ynab_create_transaction",
+			description: "Protected mutation",
+			inputSchema: z
+				.object({ id: z.string(), dry_run: z.boolean().optional() })
+				.strict(),
+			handler,
+			defaultArgumentResolver,
+			metadata: {
+				writeSafety: { mutation: true, preview: "dry-run" },
+			},
+		});
+		// Missing id would fail schema validation if the token check ran later
+		const malformed = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { confirmation_token: "short" },
+		});
+		expect(malformed.isError).toBe(true);
+		expect(JSON.stringify(malformed.content)).toContain(
+			"confirmation_token must be the full token string returned by the preview call",
+		);
+		expect(defaultArgumentResolver).not.toHaveBeenCalled();
+		expect(handler).not.toHaveBeenCalled();
+	});
+
+	it("rejects confirmation tokens on tools that do not require confirmation", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
+		);
+		const mutationHandler = registerMutation(
+			registry,
+			"ynab_update_transaction",
+		);
+		const readHandler = vi.fn(async () => result({}));
+		registry.register({
+			name: "ynab_get_transaction",
+			description: "Read tool",
+			inputSchema: z.object({ id: z.string() }).strict(),
+			handler: readHandler,
+		});
+
+		for (const name of ["ynab_update_transaction", "ynab_get_transaction"]) {
+			const rejected = await registry.executeTool({
+				name,
+				accessToken: "token",
+				arguments: { id: "txn-1", confirmation_token: FIXED_TOKEN },
+			});
+			expect(rejected.isError).toBe(true);
+			expect(JSON.stringify(rejected.content)).toContain(
+				`confirmation_token is not accepted: ${name} does not require write confirmation`,
+			);
+		}
+		expect(mutationHandler).not.toHaveBeenCalled();
+		expect(readHandler).not.toHaveBeenCalled();
+	});
+
+	it("treats a null or empty confirmation_token as absent", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+			),
+		);
+		const mutationHandler = registerMutation(
+			registry,
+			"ynab_create_transaction",
+		);
+		const readHandler = vi.fn(async () => result({}));
+		registry.register({
+			name: "ynab_get_transaction",
+			description: "Read tool",
+			inputSchema: z.object({ id: z.string() }).strict(),
+			handler: readHandler,
+		});
+
+		for (const empty of [null, ""]) {
+			const preview = await registry.executeTool({
+				name: "ynab_create_transaction",
+				accessToken: "token",
+				arguments: { id: "txn-1", confirmation_token: empty },
+			});
+			expect(preview.isError).not.toBe(true);
+			expect(confirmationToken(preview)).toBe(FIXED_TOKEN);
+			expect(mutationHandler).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					input: { id: "txn-1", dry_run: true },
+				}),
+			);
+
+			const read = await registry.executeTool({
+				name: "ynab_get_transaction",
+				accessToken: "token",
+				arguments: { id: "txn-1", confirmation_token: empty },
+			});
+			expect(read.isError).not.toBe(true);
+		}
+		expect(readHandler).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not issue a confirmation token when the preview handler errors", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+			),
+		);
+		registerMutation(
+			registry,
+			"ynab_create_transaction",
+			vi.fn(async () => ({
+				isError: true,
+				content: [{ type: "text" as const, text: "preview failed" }],
+			})),
+		);
+		const preview = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(preview.isError).toBe(true);
+		expect(JSON.stringify(preview.content)).not.toContain(FIXED_TOKEN);
+	});
+
+	it("reports a confirmed write as committed when its output fails validation", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+			),
+		);
+		const handler = registerMutationWithInvalidWriteOutput(registry);
+
+		const preview = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(preview.isError).not.toBe(true);
+
+		const confirmed = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: {
+				id: "txn-1",
+				confirmation_token: confirmationToken(preview),
+			},
+		});
+		expect(confirmed.isError).toBe(true);
+		expect(confirmed.structuredContent).toBeUndefined();
+		const text = JSON.stringify(confirmed.content);
+		expect(text).toContain("was committed to YNAB");
+		expect(text).toContain("Do not retry");
+		expect(text).toContain("Output validation failed");
+		expect(text).toContain('\\"id\\":42');
+
+		const reused = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1", confirmation_token: FIXED_TOKEN },
+		});
+		expect(reused.isError).toBe(true);
+		expect(JSON.stringify(reused.content)).toContain("already used");
+		expect(handler).toHaveBeenCalledTimes(2);
+	});
+
+	it("reports a direct write in enabled mode as committed when its output fails validation", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
+		);
+		registerMutationWithInvalidWriteOutput(registry);
+
+		const written = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(written.isError).toBe(true);
+		const text = JSON.stringify(written.content);
+		expect(text).toContain("was committed to YNAB");
+		expect(text).toContain("Output validation failed");
+
+		const dryRun = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1", dry_run: true },
+		});
+		expect(dryRun.isError).not.toBe(true);
+	});
+
+	it("routes handler exceptions through handleError with execution context", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
+		);
+		registerMutation(
+			registry,
+			"ynab_update_transaction",
+			vi.fn(async () => {
+				throw new Error("boom");
+			}),
+		);
+		const failed = await registry.executeTool({
+			name: "ynab_update_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(failed.isError).toBe(true);
+		expect(JSON.stringify(failed.content)).toContain(
+			"executing ynab_update_transaction - ynab_update_transaction: boom",
+		);
 	});
 
 	it("rejects altered arguments and consumes the token", async () => {
@@ -245,6 +557,9 @@ describe("ToolRegistry write safety enforcement", () => {
 			},
 		});
 		expect(altered.isError).toBe(true);
+		expect(JSON.stringify(altered.content)).toContain(
+			"does not match this tool and validated request",
+		);
 		expect(handler).toHaveBeenCalledTimes(1);
 	});
 

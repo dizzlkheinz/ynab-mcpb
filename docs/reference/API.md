@@ -46,7 +46,7 @@ YNAB_ACCESS_TOKEN=your_personal_access_token_here
 - `preview`: the first mutation call runs a dry-run preview and returns a two-minute, single-use `confirmation_token`. Repeating the identical validated request with that token executes it.
 - `enabled`: direct writes remain available for users who explicitly opt into the legacy behavior.
 
-Tokens are bound to the canonical tool name and normalized validated arguments. A changed field, different tool, expired token, or reused token is rejected. Bulk and deletion tools use the same central enforcement.
+Tokens are bound to the canonical tool name and normalized validated arguments. A changed field, different tool, expired token, or reused token is rejected. Passing `confirmation_token` to a tool that does not require confirmation (any read tool, or any tool in `enabled` mode) is rejected rather than ignored; a `null` or empty-string `confirmation_token` counts as not passed. Bulk and deletion tools use the same central enforcement.
 
 `YNAB_MCP_TOOL_PROFILE` selects a stable startup surface: `core`, `read-only`, or `full` (default). Profiles do not use runtime list-change notifications.
 

@@ -928,7 +928,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 		afterAll(() => {
 			// Restore NODE_ENV after all caching tests complete
 			if (previousNodeEnv === undefined) {
-				process.env.NODE_ENV = undefined;
+				Reflect.deleteProperty(process.env, "NODE_ENV");
 			} else {
 				process.env.NODE_ENV = previousNodeEnv;
 			}

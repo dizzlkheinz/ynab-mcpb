@@ -556,7 +556,7 @@ Optional (Caching):
 
 Optional (Delta):
 
-- `YNAB_MCP_ENABLE_DELTA` (default: `"true"`) - Enable delta request caching (`"true"` or `"false"`)
+- `YNAB_MCP_ENABLE_DELTA` (default: `"false"`) - Enable delta request caching; must be exactly `"true"` or `"false"` (any other value fails startup validation)
 
 Optional (Export):
 
