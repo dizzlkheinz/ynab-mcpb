@@ -72,6 +72,18 @@ describe("Reconciliation Progress Notifications", () => {
 		},
 	});
 
+	/** MCP progress must increase on every report and should end at the total */
+	const expectProgressCompleted = () => {
+		expect(progressCalls.length).toBeGreaterThan(0);
+		for (let i = 1; i < progressCalls.length; i++) {
+			expect(progressCalls[i]!.progress).toBeGreaterThan(
+				progressCalls[i - 1]!.progress,
+			);
+		}
+		const lastCall = progressCalls[progressCalls.length - 1]!;
+		expect(lastCall.progress).toBe(lastCall.total);
+	};
+
 	beforeEach(() => {
 		progressCalls = [];
 		mockProgressCallback = vi.fn().mockImplementation(async (params) => {
@@ -381,12 +393,12 @@ describe("Reconciliation Progress Notifications", () => {
 
 			await executeReconciliation(options);
 
-			// The total should only count the match that needs updating (1), not both (2)
-			if (progressCalls.length > 0) {
-				const lastCall = progressCalls[progressCalls.length - 1]!;
-				// Total should be 1 (only the uncleared transaction needs updating)
-				expect(lastCall.total).toBe(1);
-			}
+			// The total counts only the match that needs updating (1), not both
+			// (2), plus the final result step
+			expect(progressCalls).toEqual([
+				expect.objectContaining({ progress: 1, total: 2 }),
+				expect.objectContaining({ progress: 2, total: 2 }),
+			]);
 		});
 
 		it("should include all operation types in total count", async () => {
@@ -445,11 +457,285 @@ describe("Reconciliation Progress Notifications", () => {
 
 			await executeReconciliation(options);
 
-			// Total should be: 1 (create) + 1 (update match) + 1 (unclear) = 3
-			if (progressCalls.length > 0) {
-				const anyCall = progressCalls.find((c) => c.total !== undefined);
-				expect(anyCall?.total).toBe(3);
-			}
+			// Total should be: 1 (create) + 1 (update match) + 1 (unclear) + 1 (final step) = 4
+			expect(progressCalls[0]?.total).toBe(4);
+			expectProgressCompleted();
+		});
+
+		it("should reach the total when unclearing stops early or skips uncleared transactions", async () => {
+			const unmatchedYnab = [
+				createMockTransaction({ id: "cleared-1", cleared: "cleared" }),
+				createMockTransaction({ id: "cleared-2", cleared: "cleared" }),
+				createMockTransaction({ id: "cleared-3", cleared: "cleared" }),
+				createMockTransaction({ id: "uncleared-1", cleared: "uncleared" }),
+				createMockTransaction({ id: "uncleared-2", cleared: "uncleared" }),
+			];
+
+			const analysis: ReconciliationAnalysis = {
+				summary: {
+					bank_transactions_count: 0,
+					ynab_transactions_count: 5,
+					matches: 0,
+					unmatched_bank: 0,
+					unmatched_ynab: 5,
+					match_rate: 0,
+					statement_date_range: "2024-01-01 to 2024-01-31",
+				},
+				auto_matches: [],
+				unmatched_bank: [],
+				unmatched_ynab: unmatchedYnab,
+				// Unclearing one -25.00 transaction aligns the balance (plain
+				// numbers here are dollars, unlike the milliunit account snapshot)
+				balance_info: {
+					current_cleared: 75,
+					target_statement: 100,
+				},
+			};
+
+			const params: ReconcileAccountRequest = {
+				account_id: "acc-1",
+				csv_data: "date,amount,payee\n2024-01-15,-25,Test",
+				dry_run: false,
+				auto_unclear_missing: true,
+			};
+
+			await executeReconciliation({
+				ynabAPI: mockYnabAPI as ynab.API,
+				analysis,
+				params,
+				budgetId: "budget-1",
+				accountId: "acc-1",
+				initialAccount: {
+					balance: 100000,
+					cleared_balance: 75000,
+					uncleared_balance: 25000,
+				},
+				currencyCode: "USD",
+				sendProgress: mockProgressCallback,
+			});
+
+			// One unclear plus the final step
+			expect(progressCalls[progressCalls.length - 1]).toEqual(
+				expect.objectContaining({ progress: 2, total: 2 }),
+			);
+			expectProgressCompleted();
+		});
+
+		it("should reach the total without repeating progress when later steps are skipped after alignment", async () => {
+			const unmatchedBank: BankTransaction[] = [
+				createBankTransaction({ payee: "Payee 1", amount: -10000 }),
+				createBankTransaction({ payee: "Payee 2", amount: -20000 }),
+				createBankTransaction({ payee: "Payee 3", amount: -30000 }),
+			];
+			const matchNeedsUpdate = createMatch(
+				createBankTransaction(),
+				createMockTransaction({ id: "txn-update", cleared: "uncleared" }),
+			);
+
+			const analysis: ReconciliationAnalysis = {
+				summary: {
+					bank_transactions_count: 4,
+					ynab_transactions_count: 2,
+					matches: 1,
+					unmatched_bank: 3,
+					unmatched_ynab: 1,
+					match_rate: 0.25,
+					statement_date_range: "2024-01-01 to 2024-01-31",
+				},
+				auto_matches: [matchNeedsUpdate],
+				unmatched_bank: unmatchedBank,
+				unmatched_ynab: [
+					createMockTransaction({ id: "unmatched-ynab", cleared: "cleared" }),
+				],
+				// Creating all three bank transactions aligns the balance, so the
+				// planned update and unclear operations never run (dollars)
+				balance_info: {
+					current_cleared: 100,
+					target_statement: 40,
+				},
+			};
+
+			const params: ReconcileAccountRequest = {
+				account_id: "acc-1",
+				csv_data: "date,amount,payee\n2024-01-15,-10,Payee 1",
+				dry_run: false,
+				auto_create_transactions: true,
+				auto_update_cleared_status: true,
+				auto_unclear_missing: true,
+			};
+
+			// Echo the created transactions so bulk correlation succeeds
+			vi.mocked(
+				mockYnabAPI.transactions!.createTransactions,
+			).mockImplementation(async (_budgetId, body) => ({
+				data: {
+					transactions: (body.transactions ?? []).map((txn, index) =>
+						createMockTransaction({
+							payee_id: null,
+							category_id: null,
+							...txn,
+							id: `created-${index}`,
+							cleared: "cleared" as ynab.TransactionClearedStatus,
+						} as Partial<ynab.TransactionDetail>),
+					),
+					duplicate_import_ids: [],
+				},
+			}));
+
+			const result = await executeReconciliation({
+				ynabAPI: mockYnabAPI as ynab.API,
+				analysis,
+				params,
+				budgetId: "budget-1",
+				accountId: "acc-1",
+				initialAccount: {
+					balance: 100000,
+					cleared_balance: 100000,
+					uncleared_balance: 0,
+				},
+				currencyCode: "USD",
+				sendProgress: mockProgressCallback,
+			});
+
+			expect(result.summary.transactions_created).toBe(3);
+			expect(
+				mockYnabAPI.transactions!.updateTransactions,
+			).not.toHaveBeenCalled();
+			// The skipped steps drop out of the total when the final step settles it
+			expect(progressCalls).toEqual([
+				expect.objectContaining({ progress: 3, total: 6 }),
+				expect.objectContaining({ progress: 4, total: 4 }),
+			]);
+			expectProgressCompleted();
+		});
+
+		it("should reach the total when an update chunk fails and STEP 3 is skipped", async () => {
+			const matchNeedsUpdate = createMatch(
+				createBankTransaction(),
+				createMockTransaction({ id: "txn-update", cleared: "uncleared" }),
+			);
+
+			const analysis: ReconciliationAnalysis = {
+				summary: {
+					bank_transactions_count: 2,
+					ynab_transactions_count: 2,
+					matches: 1,
+					unmatched_bank: 1,
+					unmatched_ynab: 1,
+					match_rate: 0.5,
+					statement_date_range: "2024-01-01 to 2024-01-31",
+				},
+				auto_matches: [matchNeedsUpdate],
+				// The create reports progress first, giving the client a bar to finish
+				unmatched_bank: [createBankTransaction({ payee: "New Payee" })],
+				unmatched_ynab: [
+					createMockTransaction({ id: "unmatched-ynab", cleared: "cleared" }),
+				],
+				// Aligning takes the create, the update, and the unclear (dollars)
+				balance_info: { current_cleared: 100, target_statement: 25 },
+			};
+
+			// A network error has no status, so the failed chunk is not fatal
+			vi.mocked(mockYnabAPI.transactions!.updateTransactions).mockRejectedValue(
+				new Error("socket hang up"),
+			);
+
+			const result = await executeReconciliation({
+				ynabAPI: mockYnabAPI as ynab.API,
+				analysis,
+				params: {
+					account_id: "acc-1",
+					csv_data: "date,amount,payee\n2024-01-15,-25,Test",
+					dry_run: false,
+					auto_create_transactions: true,
+					auto_update_cleared_status: true,
+					auto_unclear_missing: true,
+				},
+				budgetId: "budget-1",
+				accountId: "acc-1",
+				initialAccount: {
+					balance: 100000,
+					cleared_balance: 100000,
+					uncleared_balance: 0,
+				},
+				currencyCode: "USD",
+				sendProgress: mockProgressCallback,
+			});
+
+			const actionTypes = result.actions_taken.map((action) => action.type);
+			expect(actionTypes).toContain("batch_update_failed");
+			expect(actionTypes).not.toContain("batch_unclear_failed");
+			expectProgressCompleted();
+		});
+
+		it("should report progress while marking matched transactions reconciled", async () => {
+			const matches = Array.from({ length: 2 }, (_, index) =>
+				createMatch(
+					createBankTransaction({ payee: `Payee ${index}` }),
+					createMockTransaction({ id: `txn-${index}`, cleared: "cleared" }),
+				),
+			);
+
+			const analysis: ReconciliationAnalysis = {
+				summary: {
+					bank_transactions_count: 2,
+					ynab_transactions_count: 2,
+					matches: 2,
+					unmatched_bank: 0,
+					unmatched_ynab: 0,
+					match_rate: 1,
+					statement_date_range: "2024-01-01 to 2024-01-31",
+				},
+				auto_matches: matches,
+				unmatched_bank: [],
+				unmatched_ynab: [],
+				// Already aligned, so only STEP 4 runs (dollars)
+				balance_info: { current_cleared: 100, target_statement: 100 },
+			};
+
+			vi.mocked(
+				mockYnabAPI.transactions!.updateTransactions,
+			).mockImplementation(async (_budgetId, body) => ({
+				data: {
+					transactions: (body.transactions ?? []).map((txn) =>
+						createMockTransaction({
+							id: txn.id ?? "unknown",
+							cleared: "reconciled" as ynab.TransactionClearedStatus,
+						}),
+					),
+					transaction_ids: [],
+					server_knowledge: 0,
+				},
+			}));
+
+			await executeReconciliation({
+				ynabAPI: mockYnabAPI as ynab.API,
+				analysis,
+				params: {
+					account_id: "acc-1",
+					csv_data: "date,amount,payee\n2024-01-15,-25,Test",
+					dry_run: false,
+					auto_update_cleared_status: true,
+				},
+				budgetId: "budget-1",
+				accountId: "acc-1",
+				initialAccount: {
+					balance: 100000,
+					cleared_balance: 100000,
+					uncleared_balance: 0,
+				},
+				currencyCode: "USD",
+				sendProgress: mockProgressCallback,
+			});
+
+			expect(progressCalls).toEqual([
+				expect.objectContaining({
+					progress: 2,
+					total: 3,
+					message: expect.stringContaining("reconciled"),
+				}),
+				expect.objectContaining({ progress: 3, total: 3 }),
+			]);
 		});
 	});
 

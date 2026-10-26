@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	formatISODate,
 	formatYNABMonth,
@@ -28,6 +28,22 @@ describe("dateUtils", () => {
 		it("should format date as YYYY-MM-DD", () => {
 			const date = new Date("2024-03-15T10:30:00.000Z");
 			expect(formatISODate(date)).toBe("2024-03-15");
+		});
+
+		it("should use local date components, not UTC serialization", () => {
+			const toISOString = vi
+				.spyOn(Date.prototype, "toISOString")
+				.mockImplementation(() => {
+					throw new Error(
+						"toISOString should not be used for date-only output",
+					);
+				});
+
+			try {
+				expect(formatISODate(new Date(2024, 0, 1))).toBe("2024-01-01");
+			} finally {
+				toISOString.mockRestore();
+			}
 		});
 	});
 

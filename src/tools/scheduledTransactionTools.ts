@@ -1,37 +1,19 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import type { DeltaCache } from "../server/deltaCache.js";
-import type { HandlerDeltaDeps } from "../types/toolRegistration.js";
-
-function requireDeltaFetcher(deps?: HandlerDeltaDeps): DeltaFetcher {
-	if (!deps?.deltaFetcher) {
-		throw new Error(
-			"handleListScheduledTransactions requires a DeltaFetcher via deps",
-		);
-	}
-	return deps.deltaFetcher;
-}
-
-function requireDeltaCache(deps?: HandlerDeltaDeps): DeltaCache {
-	if (!deps?.deltaCache) {
-		throw new Error(
-			"Scheduled transaction write handlers require a DeltaCache via deps",
-		);
-	}
-	return deps.deltaCache;
-}
-
 import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
-import type { ToolFactory } from "../types/toolRegistration.js";
+import type {
+	HandlerDeltaDeps,
+	ToolFactory,
+} from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import type { DeltaFetcher } from "./deltaFetcher.js";
+import { requireDeltaCache, requireDeltaFetcher } from "./deltaSupport.js";
 import {
 	amountInputShape,
 	normalizeOptionalAmount,
@@ -40,6 +22,11 @@ import {
 	validateRequiredAmount,
 } from "./schemas/monetaryInput.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
+
+const DELTA_FETCHER_REQUIRED =
+	"handleListScheduledTransactions requires a DeltaFetcher via deps";
+const DELTA_CACHE_REQUIRED =
+	"Scheduled transaction write handlers require a DeltaCache via deps";
 
 const FREQUENCIES = [
 	"never",
@@ -218,7 +205,7 @@ export async function handleListScheduledTransactions(
 	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = requireDeltaFetcher(deps);
+	const deltaFetcher = requireDeltaFetcher(deps, DELTA_FETCHER_REQUIRED);
 	try {
 		const budgetId = requireResolvedBudgetId(params.budget_id);
 		const fetched = await deltaFetcher.fetchScheduledTransactions(budgetId);
@@ -309,11 +296,12 @@ export async function handleCreateScheduledTransaction(
 				request: { ...request, amount: milliunitsToAmount(params.amount) },
 			});
 		}
+		// Resolve before writing so a missing dependency can't fail a write that succeeded
+		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		const response = await api.scheduledTransactions.createScheduledTransaction(
 			budgetId,
 			{ scheduled_transaction: request },
 		);
-		const deltaCache = requireDeltaCache(deps);
 		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			scheduled_transaction: normalizeScheduledTransaction(
@@ -384,12 +372,12 @@ export async function handleUpdateScheduledTransaction(
 				},
 			});
 		}
+		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		const response = await api.scheduledTransactions.updateScheduledTransaction(
 			budgetId,
 			id,
 			{ scheduled_transaction: request },
 		);
-		const deltaCache = requireDeltaCache(deps);
 		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			scheduled_transaction: normalizeScheduledTransaction(
@@ -421,11 +409,11 @@ export async function handleDeleteScheduledTransaction(
 				request: { scheduled_transaction_id: params.scheduled_transaction_id },
 			});
 		}
+		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		await api.scheduledTransactions.deleteScheduledTransaction(
 			budgetId,
 			params.scheduled_transaction_id,
 		);
-		const deltaCache = requireDeltaCache(deps);
 		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			success: true,

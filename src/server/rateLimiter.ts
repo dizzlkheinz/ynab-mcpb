@@ -54,7 +54,7 @@ export class RateLimiter {
 
 		if (this.config.enableLogging) {
 			console.error(
-				`Rate limit check for ${this.hashIdentifier(identifier)}: ${requests.length}/${this.config.maxRequests} requests, remaining: ${remaining}, limited: ${isLimited}`,
+				`Rate limit check for ${hashToken(identifier)}: ${requests.length}/${this.config.maxRequests} requests, remaining: ${remaining}, limited: ${isLimited}`,
 			);
 		}
 
@@ -77,7 +77,7 @@ export class RateLimiter {
 
 		if (this.config.enableLogging) {
 			console.error(
-				`Recorded request for ${this.hashIdentifier(identifier)}: ${requests.length}/${this.config.maxRequests} requests`,
+				`Recorded request for ${hashToken(identifier)}: ${requests.length}/${this.config.maxRequests} requests`,
 			);
 		}
 	}
@@ -115,9 +115,7 @@ export class RateLimiter {
 		);
 		this.requests.set(identifier, timestamps);
 		if (this.config.enableLogging) {
-			console.error(
-				`Rate limit marked exhausted for ${this.hashIdentifier(identifier)}`,
-			);
+			console.error(`Rate limit marked exhausted for ${hashToken(identifier)}`);
 		}
 	}
 
@@ -151,20 +149,20 @@ export class RateLimiter {
 			}
 		}
 	}
+}
 
-	/**
-	 * Hash identifier for logging (to avoid exposing sensitive tokens)
-	 */
-	private hashIdentifier(identifier: string): string {
-		// Simple hash for logging purposes - not cryptographically secure
-		let hash = 0;
-		for (let i = 0; i < identifier.length; i++) {
-			const char = identifier.charCodeAt(i);
-			hash = (hash << 5) - hash + char;
-			hash = hash & hash; // Convert to 32-bit integer
-		}
-		return `token_${Math.abs(hash).toString(16)}`;
+/**
+ * Hash an access token for rate limiting and logging (to avoid exposing sensitive tokens)
+ */
+export function hashToken(token: string): string {
+	// Simple hash for logging purposes - not cryptographically secure
+	let hash = 0;
+	for (let i = 0; i < token.length; i++) {
+		const char = token.charCodeAt(i);
+		hash = (hash << 5) - hash + char;
+		hash = hash & hash; // Convert to 32-bit integer
 	}
+	return `token_${Math.abs(hash).toString(16)}`;
 }
 
 /**

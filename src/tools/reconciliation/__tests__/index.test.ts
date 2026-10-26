@@ -1,7 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { promises as fsPromises } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import type { DeltaCache } from "../../../server/deltaCache.js";
 import { DeltaFetcher } from "../../deltaFetcher.js";
 import { handleReconcileAccount, ReconcileAccountSchema } from "../index.js";
+
+// These tests stub ynabAPI directly, so the fetcher's delta cache is never used
+const unusedDeltaCache = {} as unknown as DeltaCache;
 
 describe("ReconcileAccountSchema", () => {
 	it("parses params and respects max_suggestions_in_output", () => {
@@ -57,49 +66,156 @@ describe("ReconcileAccountSchema", () => {
 	});
 });
 
-describe("handleReconcileAccount", () => {
-	it("always returns unmatched_only structured content", async () => {
-		const ynabAPI = {
-			accounts: {
-				getAccounts: async () => ({
-					data: {
-						accounts: [
-							{
-								id: "account-1",
-								name: "Checking",
-								type: "checking",
-								balance: 0,
-								cleared_balance: 0,
-								uncleared_balance: 0,
-								deleted: false,
-							},
-						],
-						server_knowledge: 1,
-					},
-				}),
-			},
-			transactions: {
-				getTransactionsByAccount: async () => ({
-					data: {
-						transactions: [],
-						server_knowledge: 1,
-					},
-				}),
-			},
-			plans: {
-				getPlanById: async () => ({
-					data: {
-						plan: {
-							currency_format: {
-								iso_code: "USD",
-							},
+const buildEmptyAccountAPI = () =>
+	({
+		accounts: {
+			getAccounts: async () => ({
+				data: {
+					accounts: [
+						{
+							id: "account-1",
+							name: "Checking",
+							type: "checking",
+							balance: 0,
+							cleared_balance: 0,
+							uncleared_balance: 0,
+							deleted: false,
+						},
+					],
+					server_knowledge: 1,
+				},
+			}),
+		},
+		transactions: {
+			getTransactionsByAccount: async () => ({
+				data: {
+					transactions: [],
+					server_knowledge: 1,
+				},
+			}),
+		},
+		plans: {
+			getPlanById: async () => ({
+				data: {
+					plan: {
+						currency_format: {
+							iso_code: "USD",
 						},
 					},
-				}),
-			},
-		} as unknown as ynab.API;
+				},
+			}),
+		},
+	}) as unknown as ynab.API;
 
-		const deltaFetcher = new DeltaFetcher(ynabAPI, {} as any);
+describe("handleReconcileAccount", () => {
+	it("reports an empty CSV file as empty rather than as a read failure", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "reconcile-empty-"));
+		const csvPath = join(dir, "statement.csv");
+		await writeFile(csvPath, "");
+		const ynabAPI = buildEmptyAccountAPI();
+
+		try {
+			const result = await handleReconcileAccount(
+				ynabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "account-1",
+					csv_file_path: csvPath,
+					statement_balance: -10,
+				},
+				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
+			);
+
+			expect(result.isError).toBe(true);
+			const text = JSON.stringify(result.content);
+			expect(text).toMatch(/CSV content is empty/);
+			expect(text).not.toMatch(/Failed to read CSV file/);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("reports a real read error instead of an empty candidate path", async () => {
+		// A file:// URL yields two candidates: the literal URL and its path
+		const csvPath = join(tmpdir(), "statement.csv");
+		const csvUrl = pathToFileURL(csvPath).href;
+		const accessDenied = Object.assign(new Error("EACCES: permission denied"), {
+			code: "EACCES",
+		});
+		const readFile = vi
+			.spyOn(fsPromises, "readFile")
+			.mockImplementation(async (path) => {
+				if (String(path) === csvUrl) return "";
+				throw accessDenied;
+			});
+		const ynabAPI = buildEmptyAccountAPI();
+
+		try {
+			const result = await handleReconcileAccount(
+				ynabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "account-1",
+					csv_file_path: csvUrl,
+					statement_balance: -10,
+				},
+				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
+			);
+
+			expect(readFile).toHaveBeenCalledTimes(2);
+			expect(result.isError).toBe(true);
+			const text = JSON.stringify(result.content);
+			expect(text).toMatch(/Failed to read CSV file/);
+			expect(text).toMatch(/EACCES/);
+			expect(text).not.toMatch(/CSV content is empty/);
+		} finally {
+			readFile.mockRestore();
+		}
+	});
+
+	it("reports the missing user path rather than an error from a translated candidate", async () => {
+		const csvPath = join(tmpdir(), "statement.csv");
+		const csvUrl = pathToFileURL(csvPath).href;
+		const readFile = vi
+			.spyOn(fsPromises, "readFile")
+			.mockImplementation(async (path) => {
+				if (String(path) === csvUrl) {
+					throw Object.assign(new Error("ENOENT: no such file or directory"), {
+						code: "ENOENT",
+					});
+				}
+				throw Object.assign(new Error("EINVAL: invalid argument"), {
+					code: "EINVAL",
+				});
+			});
+		const ynabAPI = buildEmptyAccountAPI();
+
+		try {
+			const result = await handleReconcileAccount(
+				ynabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "account-1",
+					csv_file_path: csvUrl,
+					statement_balance: -10,
+				},
+				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
+			);
+
+			expect(readFile).toHaveBeenCalledTimes(2);
+			expect(result.isError).toBe(true);
+			const text = JSON.stringify(result.content);
+			expect(text).toMatch(/ENOENT/);
+			expect(text).not.toMatch(/EINVAL/);
+		} finally {
+			readFile.mockRestore();
+		}
+	});
+
+	it("always returns unmatched_only structured content", async () => {
+		const ynabAPI = buildEmptyAccountAPI();
+
+		const deltaFetcher = new DeltaFetcher(ynabAPI, unusedDeltaCache);
 
 		const result = await handleReconcileAccount(
 			ynabAPI,

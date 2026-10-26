@@ -43,6 +43,7 @@ import {
 	type DeleteTransactionParams,
 	DeleteTransactionSchema,
 	type ReceiptCategoryCalculation,
+	type TransactionCacheInvalidationOptions,
 	type UpdateTransactionParams,
 	UpdateTransactionSchema,
 	type UpdateTransactionsParams,
@@ -1187,6 +1188,421 @@ async function resolveMetadata(
 }
 
 /**
+ * Throws a ValidationError grouping schema issues by transaction index
+ */
+function throwBulkUpdateValidationError(error: z.ZodError): never {
+	type TransactionIssueIndex = number | null;
+	const issuesByIndex = new Map<TransactionIssueIndex, string[]>();
+	const validationIssues = error.issues ?? [];
+	for (const issue of validationIssues) {
+		const transactionIndex = issue.path.find(
+			(segment): segment is number => typeof segment === "number",
+		);
+		const message = issue.message;
+		const issueIndex: TransactionIssueIndex =
+			transactionIndex !== undefined ? transactionIndex : null;
+		const existing = issuesByIndex.get(issueIndex) ?? [];
+		existing.push(message);
+		issuesByIndex.set(issueIndex, existing);
+	}
+
+	const details = Array.from(issuesByIndex.entries()).map(
+		([index, errors]) => ({
+			transaction_index: index,
+			errors,
+		}),
+	);
+
+	throw new ValidationError(
+		"Bulk transaction update validation failed",
+		JSON.stringify(details, null, 2),
+		[
+			"Ensure each transaction includes an id field",
+			"Limit batches to 100 items",
+		],
+	);
+}
+
+/**
+ * Scalar fields compared one-to-one between the update and the current state
+ */
+const PREVIEW_SCALAR_FIELDS = [
+	"date",
+	"memo",
+	"payee_id",
+	"payee_name",
+	"category_id",
+	"cleared",
+	"approved",
+	"flag_color",
+] as const;
+
+/**
+ * Every updatable field, in the order reported by dry-run summaries
+ */
+const UPDATABLE_FIELDS = [
+	"amount",
+	...PREVIEW_SCALAR_FIELDS,
+	"subtransactions",
+] as const;
+
+interface MetadataWarning {
+	code: string;
+	count: number;
+	message: string;
+	sample_ids?: string[];
+}
+
+/**
+ * Builds the dry-run response for ynab:update_transactions without writing anything
+ */
+async function previewBulkUpdate(
+	ynabAPI: ynab.API,
+	budget_id: UpdateTransactionsParams["budget_id"],
+	transactions: BulkUpdateTransactionInput[],
+): Promise<CallToolResult> {
+	const previewTransactions = transactions.slice(0, 10);
+	const previewTransactionIds = previewTransactions.map(
+		(transaction) => transaction.id,
+	);
+	const budgetId = requireResolvedBudgetId(budget_id);
+	// Resolve metadata once and reuse any transaction details for preview rendering
+	const { metadata, unresolvedIds, previewDetails } = await resolveMetadata(
+		ynabAPI,
+		budgetId,
+		transactions,
+		{
+			previewTransactionIds,
+		},
+	);
+
+	const transactionsPreview = [];
+	const unavailablePreviewIds: string[] = [];
+
+	for (const transaction of previewTransactions) {
+		const currentState = previewDetails.get(transaction.id);
+		if (!currentState) {
+			unavailablePreviewIds.push(transaction.id);
+			transactionsPreview.push({
+				transaction_id: transaction.id,
+				before: "unavailable",
+				after: toUnavailableUpdatePreview(transaction),
+			});
+			continue;
+		}
+
+		transactionsPreview.push({
+			transaction_id: transaction.id,
+			...buildUpdateDiff(transaction, currentState),
+		});
+	}
+
+	const warnings = buildMetadataWarnings(unavailablePreviewIds, unresolvedIds);
+
+	// Collect summary statistics
+	const accountsAffected = Array.from(
+		new Set(Array.from(metadata.values()).map((m) => m.account_id)),
+	);
+
+	const response: Record<string, unknown> = {
+		dry_run: true,
+		action: "ynab_update_transactions",
+		validation: "passed",
+		summary: {
+			total_transactions: transactions.length,
+			accounts_affected: accountsAffected,
+			fields_to_update: collectFieldsToUpdate(transactions),
+		},
+		transactions_preview: transactionsPreview,
+		note: "Dry run complete. No transactions updated. No caches invalidated. No server_knowledge updated.",
+	};
+
+	if (warnings.length > 0) {
+		response["warnings"] = warnings;
+	}
+
+	return {
+		content: [
+			{
+				type: "text",
+				text: responseFormatter.format(response),
+			},
+		],
+		structuredContent: response,
+	};
+}
+
+/**
+ * Returns before/after values for each field the update would actually change
+ */
+function buildUpdateDiff(
+	transaction: BulkUpdateTransactionInput,
+	currentState: ynab.TransactionDetail,
+): { before: Record<string, unknown>; after: Record<string, unknown> } {
+	const before: Record<string, unknown> = {};
+	const after: Record<string, unknown> = {};
+
+	if (
+		transaction.amount !== undefined &&
+		transaction.amount !== currentState.amount
+	) {
+		before["amount"] = milliunitsToAmount(currentState.amount);
+		after["amount"] = milliunitsToAmount(transaction.amount);
+	}
+	for (const field of PREVIEW_SCALAR_FIELDS) {
+		const nextValue = transaction[field];
+		if (nextValue !== undefined && nextValue !== currentState[field]) {
+			before[field] = currentState[field];
+			after[field] = nextValue;
+		}
+	}
+	if (transaction.subtransactions !== undefined) {
+		before["subtransactions"] = (currentState.subtransactions ?? [])
+			.filter((subtransaction) => !subtransaction.deleted)
+			.map(toSubtransactionPreview);
+		after["subtransactions"] = transaction.subtransactions.map(
+			toSubtransactionPreview,
+		);
+	}
+
+	return { before, after };
+}
+
+function buildMetadataWarnings(
+	unavailablePreviewIds: string[],
+	unresolvedIds: string[],
+): MetadataWarning[] {
+	if (unavailablePreviewIds.length === 0 && unresolvedIds.length === 0) {
+		return [];
+	}
+	const totalMissing = Math.max(
+		unavailablePreviewIds.length,
+		unresolvedIds.length,
+	);
+	const sampleIds =
+		unresolvedIds.length > 0
+			? unresolvedIds.slice(0, 10)
+			: unavailablePreviewIds.slice(0, 10);
+	return [
+		{
+			code: "metadata_unavailable",
+			count: totalMissing,
+			message: `Unable to fetch prior state for ${totalMissing} transactions`,
+			sample_ids: sampleIds,
+		},
+	];
+}
+
+function collectFieldsToUpdate(
+	transactions: BulkUpdateTransactionInput[],
+): string[] {
+	const fieldsToUpdate = new Set<string>();
+	for (const transaction of transactions) {
+		for (const field of UPDATABLE_FIELDS) {
+			if (transaction[field] !== undefined) fieldsToUpdate.add(field);
+		}
+	}
+	return Array.from(fieldsToUpdate);
+}
+
+/**
+ * Rejects the batch when more than 5% of transactions lack metadata needed for
+ * cache invalidation, and logs a warning above 1%
+ */
+function assertMetadataComplete(
+	unresolvedIds: string[],
+	totalTransactions: number,
+): void {
+	const missingMetadataRatio = unresolvedIds.length / totalTransactions;
+	const METADATA_THRESHOLD = 0.05; // 5%
+
+	if (missingMetadataRatio > METADATA_THRESHOLD) {
+		throw new ValidationError(
+			`METADATA_INCOMPLETE: ${(missingMetadataRatio * 100).toFixed(1)}% of transactions have missing metadata (threshold: ${(METADATA_THRESHOLD * 100).toFixed(0)}%)`,
+			JSON.stringify(
+				{
+					unresolved_count: unresolvedIds.length,
+					total_transactions: totalTransactions,
+					ratio: `${(missingMetadataRatio * 100).toFixed(1)}%`,
+					threshold: `${(METADATA_THRESHOLD * 100).toFixed(0)}%`,
+					sample_unresolved_ids: unresolvedIds.slice(0, 5),
+				},
+				null,
+				2,
+			),
+			[
+				"Provide original_account_id and original_date for all transactions being updated",
+				"Ensure transactions exist in YNAB before updating them",
+			],
+		);
+	}
+
+	if (missingMetadataRatio > 0.01) {
+		globalRequestLogger.logRequest(
+			"ynab:update_transactions",
+			"metadata_resolution_warning",
+			{
+				unresolved_count: unresolvedIds.length,
+				total_transactions: totalTransactions,
+				ratio: missingMetadataRatio.toFixed(3),
+				sample_ids: unresolvedIds.slice(0, 5),
+				message: "Metadata resolution incomplete for some transactions",
+			},
+			true,
+		);
+	}
+}
+
+/**
+ * Prepares a bulk update entry for the YNAB API, including only provided fields
+ */
+function toSaveTransactionUpdate(
+	transaction: BulkUpdateTransactionInput,
+): SaveTransactionWithIdOrImportId {
+	const transactionData: SaveTransactionWithIdOrImportId = {
+		id: transaction.id,
+	};
+
+	// Note: account_id is intentionally excluded as account moves are not supported
+	if (transaction.amount !== undefined) {
+		transactionData.amount = transaction.amount;
+	}
+	if (transaction.date !== undefined) {
+		transactionData.date = transaction.date;
+	}
+	if (transaction.payee_name !== undefined) {
+		transactionData.payee_name = transaction.payee_name;
+	}
+	if (transaction.payee_id !== undefined) {
+		transactionData.payee_id = transaction.payee_id;
+	}
+	if (transaction.category_id !== undefined) {
+		transactionData.category_id = transaction.category_id;
+	}
+	if (transaction.memo !== undefined) {
+		transactionData.memo = transaction.memo;
+	}
+	if (transaction.cleared !== undefined) {
+		transactionData.cleared =
+			transaction.cleared as ynab.TransactionClearedStatus;
+	}
+	if (transaction.approved !== undefined) {
+		transactionData.approved = transaction.approved;
+	}
+	if (transaction.flag_color !== undefined) {
+		transactionData.flag_color =
+			transaction.flag_color as ynab.TransactionFlagColor;
+	}
+	if (transaction.subtransactions && transaction.subtransactions.length > 0) {
+		transactionData.subtransactions = toSaveSubtransactions(
+			transaction.subtransactions,
+		);
+	}
+
+	return transactionData;
+}
+
+function buildBulkUpdateResults(
+	transactions: BulkUpdateTransactionInput[],
+	updatedTransactions: ynab.TransactionDetail[],
+): BulkUpdateResult[] {
+	const results: BulkUpdateResult[] = [];
+	const updatedIds = new Set(updatedTransactions.map((t) => t.id));
+
+	for (const [index, transaction] of transactions.entries()) {
+		if (updatedIds.has(transaction.id)) {
+			results.push({
+				request_index: index,
+				status: "updated",
+				transaction_id: transaction.id,
+				correlation_key: transaction.id,
+			});
+		} else {
+			results.push({
+				request_index: index,
+				status: "failed",
+				transaction_id: transaction.id,
+				correlation_key: transaction.id,
+				error_code: "update_failed",
+				error: "Transaction was not updated by YNAB API",
+			});
+		}
+	}
+
+	return results;
+}
+
+/**
+ * Determines which accounts, months, and categories a bulk update touched
+ */
+function collectBulkUpdateInvalidationScope(
+	transactions: BulkUpdateTransactionInput[],
+	metadata: Map<string, TransactionMetadata>,
+): {
+	affectedAccountIds: Set<string>;
+	affectedMonthKeys: Set<string>;
+	options: TransactionCacheInvalidationOptions;
+} {
+	const affectedAccountIds = new Set<string>();
+	const affectedMonthKeys = new Set<string>();
+	const affectedCategoryIds = new Set<string>();
+	let invalidateAllCategories = false;
+	let accountTotalsChanged = false;
+	let monthsImpacted = false;
+
+	for (const transaction of transactions) {
+		const meta = metadata.get(transaction.id);
+		const amountChanged = transaction.amount !== undefined;
+		const clearedChanged = transaction.cleared !== undefined;
+		const categoryChanged =
+			transaction.category_id !== undefined ||
+			transaction.subtransactions !== undefined;
+		const dateChanged = transaction.date !== undefined;
+
+		if ((amountChanged || clearedChanged) && meta) {
+			affectedAccountIds.add(meta.account_id);
+		}
+
+		if (amountChanged) {
+			monthsImpacted = true;
+			accountTotalsChanged = true;
+			invalidateAllCategories = true;
+			if (meta) {
+				affectedMonthKeys.add(toMonthKey(meta.date));
+			}
+		}
+
+		if (categoryChanged) {
+			monthsImpacted = true;
+			invalidateAllCategories = true;
+			appendCategoryIds(transaction, affectedCategoryIds);
+			if (meta) {
+				affectedMonthKeys.add(toMonthKey(meta.date));
+			}
+		}
+
+		if (dateChanged && meta) {
+			monthsImpacted = true;
+			affectedMonthKeys.add(toMonthKey(meta.date));
+		}
+		if (dateChanged && transaction.date) {
+			affectedMonthKeys.add(toMonthKey(transaction.date));
+		}
+	}
+
+	return {
+		affectedAccountIds,
+		affectedMonthKeys,
+		options: {
+			affectedCategoryIds,
+			invalidateAllCategories,
+			accountTotalsChanged,
+			invalidateMonths: monthsImpacted,
+		},
+	};
+}
+
+/**
  * Handles the ynab:update_transactions tool call
  * Updates multiple transactions in a single batch operation
  */
@@ -1201,223 +1617,13 @@ export async function handleUpdateTransactions(
 		async () => {
 			const validationResult = UpdateTransactionsSchema.safeParse(params);
 			if (!validationResult.success) {
-				type TransactionIssueIndex = number | null;
-				const issuesByIndex = new Map<TransactionIssueIndex, string[]>();
-				const validationIssues = validationResult.error.issues ?? [];
-				for (const issue of validationIssues) {
-					const transactionIndex = issue.path.find(
-						(segment): segment is number => typeof segment === "number",
-					);
-					const message = issue.message;
-					const issueIndex: TransactionIssueIndex =
-						transactionIndex !== undefined ? transactionIndex : null;
-					const existing = issuesByIndex.get(issueIndex) ?? [];
-					existing.push(message);
-					issuesByIndex.set(issueIndex, existing);
-				}
-
-				const details = Array.from(issuesByIndex.entries()).map(
-					([index, errors]) => ({
-						transaction_index: index,
-						errors,
-					}),
-				);
-
-				throw new ValidationError(
-					"Bulk transaction update validation failed",
-					JSON.stringify(details, null, 2),
-					[
-						"Ensure each transaction includes an id field",
-						"Limit batches to 100 items",
-					],
-				);
+				throwBulkUpdateValidationError(validationResult.error);
 			}
 
 			const { budget_id, transactions, dry_run } = validationResult.data;
 
 			if (dry_run) {
-				const previewTransactions = transactions.slice(0, 10);
-				const previewTransactionIds = previewTransactions.map(
-					(transaction) => transaction.id,
-				);
-				const budgetId = requireResolvedBudgetId(budget_id);
-				// Resolve metadata once and reuse any transaction details for preview rendering
-				const { metadata, unresolvedIds, previewDetails } =
-					await resolveMetadata(ynabAPI, budgetId, transactions, {
-						previewTransactionIds,
-					});
-
-				const transactionsPreview = [];
-				const unavailablePreviewIds: string[] = [];
-
-				for (const transaction of previewTransactions) {
-					const currentState = previewDetails.get(transaction.id);
-					if (!currentState) {
-						unavailablePreviewIds.push(transaction.id);
-						transactionsPreview.push({
-							transaction_id: transaction.id,
-							before: "unavailable",
-							after: toUnavailableUpdatePreview(transaction),
-						});
-						continue;
-					}
-
-					const before: Record<string, unknown> = {};
-					const after: Record<string, unknown> = {};
-
-					if (
-						transaction.amount !== undefined &&
-						transaction.amount !== currentState.amount
-					) {
-						before["amount"] = milliunitsToAmount(currentState.amount);
-						after["amount"] = milliunitsToAmount(transaction.amount);
-					}
-					if (
-						transaction.date !== undefined &&
-						transaction.date !== currentState.date
-					) {
-						before["date"] = currentState.date;
-						after["date"] = transaction.date;
-					}
-					if (
-						transaction.memo !== undefined &&
-						transaction.memo !== currentState.memo
-					) {
-						before["memo"] = currentState.memo;
-						after["memo"] = transaction.memo;
-					}
-					if (
-						transaction.payee_id !== undefined &&
-						transaction.payee_id !== currentState.payee_id
-					) {
-						before["payee_id"] = currentState.payee_id;
-						after["payee_id"] = transaction.payee_id;
-					}
-					if (
-						transaction.payee_name !== undefined &&
-						transaction.payee_name !== currentState.payee_name
-					) {
-						before["payee_name"] = currentState.payee_name;
-						after["payee_name"] = transaction.payee_name;
-					}
-					if (
-						transaction.category_id !== undefined &&
-						transaction.category_id !== currentState.category_id
-					) {
-						before["category_id"] = currentState.category_id;
-						after["category_id"] = transaction.category_id;
-					}
-					if (
-						transaction.cleared !== undefined &&
-						transaction.cleared !== currentState.cleared
-					) {
-						before["cleared"] = currentState.cleared;
-						after["cleared"] = transaction.cleared;
-					}
-					if (
-						transaction.approved !== undefined &&
-						transaction.approved !== currentState.approved
-					) {
-						before["approved"] = currentState.approved;
-						after["approved"] = transaction.approved;
-					}
-					if (
-						transaction.flag_color !== undefined &&
-						transaction.flag_color !== currentState.flag_color
-					) {
-						before["flag_color"] = currentState.flag_color;
-						after["flag_color"] = transaction.flag_color;
-					}
-					if (transaction.subtransactions !== undefined) {
-						before["subtransactions"] = (currentState.subtransactions ?? [])
-							.filter((subtransaction) => !subtransaction.deleted)
-							.map(toSubtransactionPreview);
-						after["subtransactions"] = transaction.subtransactions.map(
-							toSubtransactionPreview,
-						);
-					}
-
-					transactionsPreview.push({
-						transaction_id: transaction.id,
-						before,
-						after,
-					});
-				}
-
-				// Build warnings array
-				const warnings: {
-					code: string;
-					count: number;
-					message: string;
-					sample_ids?: string[];
-				}[] = [];
-				if (unavailablePreviewIds.length > 0 || unresolvedIds.length > 0) {
-					const totalMissing = Math.max(
-						unavailablePreviewIds.length,
-						unresolvedIds.length,
-					);
-					const sampleIds =
-						unresolvedIds.length > 0
-							? unresolvedIds.slice(0, 10)
-							: unavailablePreviewIds.slice(0, 10);
-					warnings.push({
-						code: "metadata_unavailable",
-						count: totalMissing,
-						message: `Unable to fetch prior state for ${totalMissing} transactions`,
-						sample_ids: sampleIds,
-					});
-				}
-
-				// Collect summary statistics
-				const accountsAffected = Array.from(
-					new Set(Array.from(metadata.values()).map((m) => m.account_id)),
-				);
-				const fieldsToUpdate = new Set<string>();
-				for (const transaction of transactions) {
-					if (transaction.amount !== undefined) fieldsToUpdate.add("amount");
-					if (transaction.date !== undefined) fieldsToUpdate.add("date");
-					if (transaction.memo !== undefined) fieldsToUpdate.add("memo");
-					if (transaction.payee_id !== undefined)
-						fieldsToUpdate.add("payee_id");
-					if (transaction.payee_name !== undefined)
-						fieldsToUpdate.add("payee_name");
-					if (transaction.category_id !== undefined)
-						fieldsToUpdate.add("category_id");
-					if (transaction.cleared !== undefined) fieldsToUpdate.add("cleared");
-					if (transaction.approved !== undefined)
-						fieldsToUpdate.add("approved");
-					if (transaction.flag_color !== undefined)
-						fieldsToUpdate.add("flag_color");
-					if (transaction.subtransactions !== undefined)
-						fieldsToUpdate.add("subtransactions");
-				}
-
-				const response: Record<string, unknown> = {
-					dry_run: true,
-					action: "ynab_update_transactions",
-					validation: "passed",
-					summary: {
-						total_transactions: transactions.length,
-						accounts_affected: accountsAffected,
-						fields_to_update: Array.from(fieldsToUpdate),
-					},
-					transactions_preview: transactionsPreview,
-					note: "Dry run complete. No transactions updated. No caches invalidated. No server_knowledge updated.",
-				};
-
-				if (warnings.length > 0) {
-					response["warnings"] = warnings;
-				}
-
-				return {
-					content: [
-						{
-							type: "text",
-							text: responseFormatter.format(response),
-						},
-					],
-					structuredContent: response,
-				};
+				return previewBulkUpdate(ynabAPI, budget_id, transactions);
 			}
 			const budgetId = requireResolvedBudgetId(budget_id);
 
@@ -1428,126 +1634,16 @@ export async function handleUpdateTransactions(
 				transactions,
 			);
 
-			// Check metadata completeness threshold (5%)
-			const missingMetadataRatio = unresolvedIds.length / transactions.length;
-			const METADATA_THRESHOLD = 0.05; // 5%
-
-			if (missingMetadataRatio > METADATA_THRESHOLD) {
-				throw new ValidationError(
-					`METADATA_INCOMPLETE: ${(missingMetadataRatio * 100).toFixed(1)}% of transactions have missing metadata (threshold: ${(METADATA_THRESHOLD * 100).toFixed(0)}%)`,
-					JSON.stringify(
-						{
-							unresolved_count: unresolvedIds.length,
-							total_transactions: transactions.length,
-							ratio: `${(missingMetadataRatio * 100).toFixed(1)}%`,
-							threshold: `${(METADATA_THRESHOLD * 100).toFixed(0)}%`,
-							sample_unresolved_ids: unresolvedIds.slice(0, 5),
-						},
-						null,
-						2,
-					),
-					[
-						"Provide original_account_id and original_date for all transactions being updated",
-						"Ensure transactions exist in YNAB before updating them",
-					],
-				);
-			}
-
-			if (missingMetadataRatio > 0.01) {
-				globalRequestLogger.logRequest(
-					"ynab:update_transactions",
-					"metadata_resolution_warning",
-					{
-						unresolved_count: unresolvedIds.length,
-						total_transactions: transactions.length,
-						ratio: missingMetadataRatio.toFixed(3),
-						sample_ids: unresolvedIds.slice(0, 5),
-						message: "Metadata resolution incomplete for some transactions",
-					},
-					true,
-				);
-			}
-
-			// Prepare update transactions for the YNAB API
-			const updateTransactions: SaveTransactionWithIdOrImportId[] =
-				transactions.map((transaction) => {
-					const transactionData: SaveTransactionWithIdOrImportId = {
-						id: transaction.id,
-					};
-
-					// Note: account_id is intentionally excluded as account moves are not supported
-					if (transaction.amount !== undefined) {
-						transactionData.amount = transaction.amount;
-					}
-					if (transaction.date !== undefined) {
-						transactionData.date = transaction.date;
-					}
-					if (transaction.payee_name !== undefined) {
-						transactionData.payee_name = transaction.payee_name;
-					}
-					if (transaction.payee_id !== undefined) {
-						transactionData.payee_id = transaction.payee_id;
-					}
-					if (transaction.category_id !== undefined) {
-						transactionData.category_id = transaction.category_id;
-					}
-					if (transaction.memo !== undefined) {
-						transactionData.memo = transaction.memo;
-					}
-					if (transaction.cleared !== undefined) {
-						transactionData.cleared =
-							transaction.cleared as ynab.TransactionClearedStatus;
-					}
-					if (transaction.approved !== undefined) {
-						transactionData.approved = transaction.approved;
-					}
-					if (transaction.flag_color !== undefined) {
-						transactionData.flag_color =
-							transaction.flag_color as ynab.TransactionFlagColor;
-					}
-					if (
-						transaction.subtransactions &&
-						transaction.subtransactions.length > 0
-					) {
-						transactionData.subtransactions = toSaveSubtransactions(
-							transaction.subtransactions,
-						);
-					}
-
-					return transactionData;
-				});
+			assertMetadataComplete(unresolvedIds, transactions.length);
 
 			// Execute bulk update
 			const response = await ynabAPI.transactions.updateTransactions(budgetId, {
-				transactions: updateTransactions,
+				transactions: transactions.map(toSaveTransactionUpdate),
 			});
 
 			const responseData = response.data;
 			const updatedTransactions = responseData.transactions ?? [];
-
-			// Build results
-			const results: BulkUpdateResult[] = [];
-			const updatedIds = new Set(updatedTransactions.map((t) => t.id));
-
-			for (const [index, transaction] of transactions.entries()) {
-				if (updatedIds.has(transaction.id)) {
-					results.push({
-						request_index: index,
-						status: "updated",
-						transaction_id: transaction.id,
-						correlation_key: transaction.id,
-					});
-				} else {
-					results.push({
-						request_index: index,
-						status: "failed",
-						transaction_id: transaction.id,
-						correlation_key: transaction.id,
-						error_code: "update_failed",
-						error: "Transaction was not updated by YNAB API",
-					});
-				}
-			}
+			const results = buildBulkUpdateResults(transactions, updatedTransactions);
 
 			const summary = {
 				total_requested: transactions.length,
@@ -1575,73 +1671,15 @@ export async function handleUpdateTransactions(
 				);
 			}
 
-			const affectedAccountIds = new Set<string>();
-			const affectedMonthKeys = new Set<string>();
-			const affectedCategoryIds = new Set<string>();
-			let invalidateAllCategories = false;
-			let accountTotalsChanged = false;
-			let monthsImpacted = false;
-
-			for (const transaction of transactions) {
-				const meta = metadata.get(transaction.id);
-				const amountChanged = transaction.amount !== undefined;
-				const clearedChanged = transaction.cleared !== undefined;
-				const categoryChanged =
-					transaction.category_id !== undefined ||
-					transaction.subtransactions !== undefined;
-				const dateChanged = transaction.date !== undefined;
-
-				if ((amountChanged || clearedChanged) && meta) {
-					affectedAccountIds.add(meta.account_id);
-				}
-
-				if (amountChanged) {
-					monthsImpacted = true;
-					accountTotalsChanged = true;
-					invalidateAllCategories = true;
-					if (meta) {
-						affectedMonthKeys.add(toMonthKey(meta.date));
-					}
-				}
-
-				if (categoryChanged) {
-					monthsImpacted = true;
-					invalidateAllCategories = true;
-					if (transaction.category_id) {
-						affectedCategoryIds.add(transaction.category_id);
-					}
-					for (const subtransaction of transaction.subtransactions ?? []) {
-						if (subtransaction.category_id) {
-							affectedCategoryIds.add(subtransaction.category_id);
-						}
-					}
-					if (meta) {
-						affectedMonthKeys.add(toMonthKey(meta.date));
-					}
-				}
-
-				if (dateChanged && meta) {
-					monthsImpacted = true;
-					affectedMonthKeys.add(toMonthKey(meta.date));
-				}
-				if (dateChanged && transaction.date) {
-					affectedMonthKeys.add(toMonthKey(transaction.date));
-				}
-			}
-
+			const scope = collectBulkUpdateInvalidationScope(transactions, metadata);
 			invalidateTransactionCaches(
 				deltaCache,
 				knowledgeStore,
 				budgetId,
 				responseData.server_knowledge,
-				affectedAccountIds,
-				affectedMonthKeys,
-				{
-					affectedCategoryIds,
-					invalidateAllCategories,
-					accountTotalsChanged,
-					invalidateMonths: monthsImpacted,
-				},
+				scope.affectedAccountIds,
+				scope.affectedMonthKeys,
+				scope.options,
 			);
 
 			const finalizedResponse = finalizeBulkUpdateResponse(baseResponse);

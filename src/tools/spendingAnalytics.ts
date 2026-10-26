@@ -15,17 +15,11 @@ import {
 	requireResolvedBudgetId,
 } from "./adapters.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
-
-function requireDeltaFetcher(deps?: HandlerDeltaDeps): DeltaFetcher {
-	if (!deps?.deltaFetcher) {
-		throw new Error(
-			"Spending analytics handlers require a DeltaFetcher via deps",
-		);
-	}
-	return deps.deltaFetcher;
-}
-
+import { requireDeltaFetcher } from "./deltaSupport.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
+
+const DELTA_FETCHER_REQUIRED =
+	"Spending analytics handlers require a DeltaFetcher via deps";
 
 const dateSchema = z
 	.string()
@@ -315,7 +309,7 @@ export async function handleAnalyzeSpending(
 	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = requireDeltaFetcher(deps);
+	const deltaFetcher = requireDeltaFetcher(deps, DELTA_FETCHER_REQUIRED);
 	try {
 		const data = await analyze(
 			deltaFetcher,
@@ -356,7 +350,7 @@ export async function handleCompareSpendingPeriods(
 	deps?: HandlerDeltaDeps,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const deltaFetcher = requireDeltaFetcher(deps);
+	const deltaFetcher = requireDeltaFetcher(deps, DELTA_FETCHER_REQUIRED);
 	try {
 		const budgetId = requireResolvedBudgetId(params.budget_id);
 		const [periodA, periodB] = await Promise.all([

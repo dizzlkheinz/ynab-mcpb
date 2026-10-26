@@ -464,6 +464,156 @@ describe("parser", () => {
 			expect(transactions[1].amount).toBe(67890); // Credit is positive
 		});
 
+		test("should treat already-signed debits as outflows", () => {
+			const csvContent =
+				'Date,Description,Debit,Credit\n09/15/2023,Minus,-25.00,\n09/16/2023,Parens,(30.00),\n09/17/2023,Dollar,"$1,234.56",';
+			const format: CSVFormat = {
+				date_column: "Date",
+				description_column: "Description",
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: true,
+				delimiter: ",",
+			};
+
+			const transactions = parseBankCSV(csvContent, format);
+
+			expect(transactions.map((t) => t.amount)).toEqual([
+				-25000, -30000, -1234560,
+			]);
+		});
+
+		test("should skip blank debit/credit rows but keep explicit zero amounts", () => {
+			const csvContent =
+				"Date,Description,Debit,Credit\n09/15/2023,Balance forward,,\n09/16/2023,Zero row,0.00,0.00\n09/17/2023,Real,12.00,";
+			const format: CSVFormat = {
+				date_column: "Date",
+				description_column: "Description",
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: true,
+				delimiter: ",",
+			};
+
+			const transactions = parseBankCSV(csvContent, format);
+
+			expect(transactions.map((t) => [t.description, t.amount])).toEqual([
+				["Zero row", 0],
+				["Real", -12000],
+			]);
+		});
+
+		test("should treat signed credits as inflows", () => {
+			const csvContent =
+				"Date,Description,Debit,Credit\n09/15/2023,Minus,,-12.50\n09/16/2023,Parens,,(7.25)";
+			const format: CSVFormat = {
+				date_column: "Date",
+				description_column: "Description",
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: true,
+				delimiter: ",",
+			};
+
+			const transactions = parseBankCSV(csvContent, format);
+
+			expect(transactions.map((t) => t.amount)).toEqual([12500, 7250]);
+		});
+
+		test("should read debit/credit cells the same way as reconciliation", () => {
+			const csvContent =
+				'Date,Description,Debit,Credit\n09/15/2023,Euro,"1.234,56",\n09/16/2023,Code,25.00 CAD,\n09/17/2023,Thousands,,"2,500"';
+			const format: CSVFormat = {
+				date_column: "Date",
+				description_column: "Description",
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: true,
+				delimiter: ",",
+			};
+
+			const transactions = parseBankCSV(csvContent, format);
+
+			expect(transactions.map((t) => [t.amount, t.raw_amount])).toEqual([
+				[-1234560, "-1234.56"],
+				[-25000, "-25"],
+				[2500000, "2500"],
+			]);
+		});
+
+		test("should reject named debit/credit columns when there is no header", () => {
+			const format: CSVFormat = {
+				date_column: 0,
+				description_column: 1,
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: false,
+				delimiter: ",",
+			};
+
+			expect(() =>
+				parseBankCSV("09/15/2023,Test Transaction,123.45,", format),
+			).toThrow(/debit_column "Debit" must be a column index/);
+		});
+
+		test.each([true, false])(
+			"should preserve whitespace-grouped debit/credit amounts (header=%s)",
+			(hasHeader) => {
+				const format: CSVFormat = {
+					date_column: hasHeader ? "Date" : 0,
+					description_column: hasHeader ? "Description" : 1,
+					debit_column: hasHeader ? "Debit" : 2,
+					credit_column: hasHeader ? "Credit" : 3,
+					date_format: "YYYY-MM-DD",
+					has_header: hasHeader,
+					delimiter: ",",
+				};
+				for (const space of [" ", "\u00a0", "\u202f"]) {
+					const csv = [
+						...(hasHeader ? ["Date,Description,Debit,Credit"] : []),
+						`2026-01-01,Debit,1${space}234.56,`,
+						`2026-01-02,Credit,,1${space}234.56`,
+					].join("\n");
+					expect(parseBankCSV(csv, format).map((t) => t.amount)).toEqual([
+						-1234560, 1234560,
+					]);
+				}
+			},
+		);
+
+		test.each([true, false])(
+			"should skip malformed debit/credit cells without using the other cell (header=%s)",
+			(hasHeader) => {
+				const format: CSVFormat = {
+					date_column: hasHeader ? "Date" : 0,
+					description_column: hasHeader ? "Description" : 1,
+					debit_column: hasHeader ? "Debit" : 2,
+					credit_column: hasHeader ? "Credit" : 3,
+					date_format: "YYYY-MM-DD",
+					has_header: hasHeader,
+					delimiter: ",",
+				};
+				for (const amount of ["123abc", "12.34.56", "$", "CAD"]) {
+					for (const otherCell of ["", "0", "25.00"]) {
+						const csv = [
+							...(hasHeader ? ["Date,Description,Debit,Credit"] : []),
+							`2026-01-01,Invalid debit,${amount},${otherCell}`,
+							`2026-01-02,Invalid credit,${otherCell},${amount}`,
+							"2026-01-03,Valid,12.00,",
+						].join("\n");
+						expect(parseBankCSV(csv, format).map((t) => t.amount)).toEqual([
+							-12000,
+						]);
+					}
+				}
+			},
+		);
+
 		test("should skip rows with missing data", () => {
 			const csvContent =
 				"Date,Amount,Description\n09/15/2023,123.45,Test Transaction\n,67.89,Missing Date\n09/17/2023,,Missing Amount";

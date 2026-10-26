@@ -356,6 +356,230 @@ describe("executeReconciliation (apply mode)", () => {
 	});
 });
 
+describe("executeReconciliation (swallowed chunk failures)", () => {
+	const failureAccount: AccountSnapshot = {
+		balance: -944250,
+		cleared_balance: -899020,
+		uncleared_balance: -45230,
+	};
+
+	// Clearing the single match (-45.23) is exactly what aligns the balance
+	const buildAligningAnalysis = (): ReconciliationAnalysis => {
+		const analysis = buildAnalysis();
+		analysis.unmatched_bank = [];
+		analysis.unmatched_ynab = [];
+		analysis.balance_info.target_statement = toMoneyValue(-944250, "USD");
+		return analysis;
+	};
+
+	const buildFailureParams = (
+		overrides: Partial<ReconcileAccountRequest> = {},
+	): ReconcileAccountRequest => ({
+		budget_id: "budget-fail",
+		account_id: "account-fail",
+		csv_data: "Date,Description,Amount",
+		statement_balance: -944.25,
+		statement_end_date: "2025-10-31",
+		date_tolerance_days: 2,
+		match_strictness: "strict" as const,
+		auto_create_transactions: false,
+		auto_update_cleared_status: true,
+		auto_unclear_missing: false,
+		auto_adjust_dates: true,
+		dry_run: false,
+		...overrides,
+	});
+
+	it("withdraws balance alignment when the clearing update never reaches YNAB", async () => {
+		const analysis = buildAligningAnalysis();
+		const params = buildFailureParams();
+
+		const { api, mocks } = createMockYnabAPI(failureAccount);
+		// Network error: no HTTP status, so it is recorded but not propagated
+		mocks.updateTransactions.mockRejectedValue(new Error("socket hang up"));
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: "budget-fail",
+			accountId: "account-fail",
+			initialAccount: failureAccount,
+			currencyCode: "USD",
+		});
+
+		const actionTypes = result.actions_taken.map((action) => action.type);
+		expect(actionTypes).toContain("batch_update_failed");
+		expect(actionTypes).not.toContain("reconciliation_complete");
+		expect(
+			result.actions_taken.some(
+				(action) =>
+					action.type === "balance_checkpoint" &&
+					action.reason.includes("no longer aligned"),
+			),
+		).toBe(true);
+		// STEP 4 must not try to mark anything reconciled
+		expect(mocks.updateTransactions).toHaveBeenCalledTimes(1);
+		expect(result.summary.transactions_updated).toBe(0);
+		expect(result.summary.dates_adjusted).toBe(0);
+	});
+
+	it("does not unclear missing transactions to compensate for a failed clearing update", async () => {
+		// Keep the default cleared, in-window unmatched YNAB transaction (ynab-2)
+		const analysis = buildAligningAnalysis();
+		analysis.unmatched_ynab = buildAnalysis().unmatched_ynab;
+		const params = buildFailureParams({ auto_unclear_missing: true });
+
+		const { api, mocks } = createMockYnabAPI(failureAccount);
+		mocks.updateTransactions.mockRejectedValue(new Error("socket hang up"));
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: "budget-fail",
+			accountId: "account-fail",
+			initialAccount: failureAccount,
+			currencyCode: "USD",
+		});
+
+		// Only the failed STEP 2 update was attempted; STEP 3 sent nothing
+		expect(mocks.updateTransactions).toHaveBeenCalledTimes(1);
+		expect(
+			result.actions_taken.some(
+				(action) =>
+					action.type === "balance_checkpoint" &&
+					action.reason.includes("Skipped marking missing transactions"),
+			),
+		).toBe(true);
+		expect(
+			result.actions_taken.some(
+				(action) =>
+					action.type === "update_transaction" &&
+					action.reason.includes("uncleared"),
+			),
+		).toBe(false);
+	});
+
+	it("keeps applied updates when the progress callback throws after a chunk succeeds", async () => {
+		const analysis = buildAligningAnalysis();
+		const params = buildFailureParams();
+
+		const { api, mocks } = createMockYnabAPI(failureAccount);
+		mocks.updateTransactions.mockImplementation(async (_budgetId, body) => ({
+			data: {
+				transactions: (
+					body as { transactions: { id: string; cleared: string }[] }
+				).transactions.map((txn) => ({
+					id: txn.id,
+					amount: -45230,
+					cleared: txn.cleared,
+				})),
+			},
+		}));
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: "budget-fail",
+			accountId: "account-fail",
+			initialAccount: failureAccount,
+			currencyCode: "USD",
+			sendProgress: vi.fn().mockRejectedValue(new Error("client went away")),
+		});
+
+		const actionTypes = result.actions_taken.map((action) => action.type);
+		expect(actionTypes).not.toContain("batch_update_failed");
+		expect(actionTypes).toContain("reconciliation_complete");
+		expect(result.summary.dates_adjusted).toBe(1);
+		// STEP 2 clear + STEP 4 reconcile
+		expect(mocks.updateTransactions).toHaveBeenCalledTimes(2);
+	});
+
+	it("counts only successful chunks in the reconciliation_complete message", async () => {
+		// 101 already-cleared matches with the balance aligned up front, so
+		// STEP 4 sends two reconcile chunks (100 + 1)
+		const template = buildAnalysis().auto_matches[0]!;
+		const analysis = buildAligningAnalysis();
+		analysis.auto_matches = Array.from({ length: 101 }, (_, index) => ({
+			...template,
+			bankTransaction: { ...template.bankTransaction, id: `bank-${index}` },
+			ynabTransaction: {
+				...template.ynabTransaction!,
+				id: `ynab-${index}`,
+				cleared: "cleared",
+			},
+		}));
+		const params = buildFailureParams({ auto_adjust_dates: false });
+		const alignedAccount: AccountSnapshot = {
+			...failureAccount,
+			cleared_balance: -944250,
+		};
+
+		const { api, mocks } = createMockYnabAPI(alignedAccount);
+		mocks.updateTransactions
+			.mockImplementationOnce(async (_budgetId, body) => ({
+				data: {
+					transactions: (
+						body as { transactions: { id: string }[] }
+					).transactions.map((txn) => ({
+						id: txn.id,
+						amount: -45230,
+						cleared: "reconciled",
+					})),
+				},
+			}))
+			.mockRejectedValueOnce(new Error("socket hang up"));
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: "budget-fail",
+			accountId: "account-fail",
+			initialAccount: alignedAccount,
+			currencyCode: "USD",
+		});
+
+		expect(mocks.updateTransactions).toHaveBeenCalledTimes(2);
+		const complete = result.actions_taken.find(
+			(action) => action.type === "reconciliation_complete",
+		);
+		expect(complete?.reason).toMatch(/^Marked 100 of 101 matched/);
+		expect(complete?.reason).toContain("1 could not be reconciled");
+		expect(result.summary.transactions_updated).toBe(100);
+	});
+
+	it("reports only the transactions that were actually reconciled", async () => {
+		const analysis = buildAligningAnalysis();
+		const params = buildFailureParams();
+
+		const { api, mocks } = createMockYnabAPI(failureAccount);
+		mocks.updateTransactions
+			.mockResolvedValueOnce({
+				data: {
+					transactions: [{ id: "ynab-1", amount: -45230, cleared: "cleared" }],
+				},
+			})
+			.mockRejectedValueOnce(new Error("socket hang up"));
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: "budget-fail",
+			accountId: "account-fail",
+			initialAccount: failureAccount,
+			currencyCode: "USD",
+		});
+
+		const actionTypes = result.actions_taken.map((action) => action.type);
+		expect(actionTypes).toContain("batch_reconcile_failed");
+		expect(actionTypes).not.toContain("reconciliation_complete");
+	});
+});
+
 describe("executeReconciliation (ordered halting)", () => {
 	it("processes newest auto matches first and stops once balances align", async () => {
 		const analysis: ReconciliationAnalysis = {
@@ -624,6 +848,47 @@ describe("executeReconciliation (ordered halting)", () => {
 });
 
 describe("executeReconciliation - bulk create mode", () => {
+	it("does not re-create a bulk chunk when the progress callback throws", async () => {
+		const analysis = buildBulkAnalysis(3, 12);
+		const params = buildBulkParams(analysis.summary.target_statement_balance);
+		const initialAccount = { ...defaultAccountSnapshot };
+		const { api, mocks } = createMockYnabAPI(initialAccount);
+
+		mocks.createTransactions.mockImplementation(async (_budgetId, body) => {
+			const requested = (body as { transactions: ynab.NewTransaction[] })
+				.transactions;
+			return {
+				data: {
+					transactions: requested.map((txn, index) => ({
+						...txn,
+						id: `bulk-${index}`,
+						cleared: "cleared",
+						approved: true,
+					})),
+					duplicate_import_ids: [],
+				},
+			};
+		});
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: params.budget_id,
+			accountId: params.account_id,
+			initialAccount,
+			currencyCode: "USD",
+			sendProgress: vi.fn().mockRejectedValue(new Error("client went away")),
+		});
+
+		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
+		expect(mocks.createTransaction).not.toHaveBeenCalled();
+		expect(result.summary.transactions_created).toBe(3);
+		expect(result.bulk_operation_details).toEqual(
+			expect.objectContaining({ bulk_successes: 1, sequential_fallbacks: 0 }),
+		);
+	});
+
 	it("uses bulk create API for batches with multiple transactions", async () => {
 		const analysis = buildBulkAnalysis(5, 12);
 		const params = buildBulkParams(analysis.summary.target_statement_balance);
@@ -708,6 +973,68 @@ describe("executeReconciliation - bulk create mode", () => {
 		expect(mocks.createTransaction).toHaveBeenCalledTimes(1);
 		expect(result.summary.transactions_created).toBe(1);
 		expect(result.bulk_operation_details).toBeUndefined();
+	});
+
+	it("does not record a sequential create as failed when recording it throws", async () => {
+		const analysis = buildBulkAnalysis(1, 15);
+		const params = buildBulkParams(analysis.summary.target_statement_balance);
+		const initialAccount = { ...defaultAccountSnapshot };
+		const { api, mocks } = createMockYnabAPI(initialAccount);
+
+		mocks.createTransaction.mockResolvedValue({
+			data: { transaction: { id: "single-txn", amount: 15000 } },
+		});
+
+		// An invalid currency code makes formatting the create action throw
+		// after YNAB has already created the transaction
+		await expect(
+			executeReconciliation({
+				ynabAPI: api,
+				analysis,
+				params,
+				budgetId: params.budget_id,
+				accountId: params.account_id,
+				initialAccount,
+				currencyCode: "NOT-A-CURRENCY",
+			}),
+		).rejects.toThrow(RangeError);
+		expect(mocks.createTransaction).toHaveBeenCalledTimes(1);
+	});
+
+	it("records an uncorrelatable bulk chunk as created instead of aborting", async () => {
+		const analysis = buildBulkAnalysis(3, 12);
+		const params = buildBulkParams(analysis.summary.target_statement_balance);
+		const initialAccount = { ...defaultAccountSnapshot };
+		const { api, mocks } = createMockYnabAPI(initialAccount);
+
+		// A malformed response entry makes correlation throw
+		mocks.createTransactions.mockResolvedValue({
+			data: { transactions: [null], duplicate_import_ids: [] },
+		});
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: params.budget_id,
+			accountId: params.account_id,
+			initialAccount,
+			currencyCode: "USD",
+		});
+
+		expect(mocks.createTransactions).toHaveBeenCalledTimes(1);
+		expect(mocks.createTransaction).not.toHaveBeenCalled();
+		expect(result.summary.transactions_created).toBe(3);
+		const creates = result.actions_taken.filter(
+			(action) => action.type === "create_transaction",
+		);
+		expect(creates).toHaveLength(3);
+		for (const action of creates) {
+			expect(action.reason).toContain("response could not be matched");
+		}
+		expect(result.bulk_operation_details).toEqual(
+			expect.objectContaining({ bulk_successes: 1, transaction_failures: 0 }),
+		);
 	});
 
 	it("falls back to sequential creation when bulk request fails", async () => {

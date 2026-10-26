@@ -6,7 +6,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import { createErrorHandler } from "./errorHandler.js";
-import { globalRateLimiter, RateLimitError } from "./rateLimiter.js";
+import { globalRateLimiter, hashToken, RateLimitError } from "./rateLimiter.js";
 import { globalRequestLogger } from "./requestLogger.js";
 import { responseFormatter } from "./responseFormatter.js";
 
@@ -45,7 +45,7 @@ export class SecurityMiddleware {
 			);
 
 			// 2. Rate limiting — atomically check and record
-			const tokenHash = SecurityMiddleware.hashToken(context.accessToken);
+			const tokenHash = hashToken(context.accessToken);
 			const rateLimitCheck = globalRateLimiter.tryAcquire(tokenHash);
 			if (rateLimitCheck.isLimited) {
 				throw new RateLimitError(
@@ -74,7 +74,7 @@ export class SecurityMiddleware {
 			// 5. Log successful request
 			const duration = Date.now() - startTime;
 			const rateLimitInfo = globalRateLimiter.getStatus(
-				SecurityMiddleware.hashToken(context.accessToken),
+				hashToken(context.accessToken),
 			);
 
 			globalRequestLogger.logSuccess(
@@ -93,7 +93,7 @@ export class SecurityMiddleware {
 			// Log failed request
 			const duration = Date.now() - startTime;
 			const rateLimitInfo = globalRateLimiter.getStatus(
-				SecurityMiddleware.hashToken(context.accessToken),
+				hashToken(context.accessToken),
 			);
 
 			const errorMessage =
@@ -175,20 +175,6 @@ export class SecurityMiddleware {
 				},
 			],
 		};
-	}
-
-	/**
-	 * Hash access token for rate limiting and logging
-	 */
-	private static hashToken(token: string): string {
-		// Simple hash for rate limiting - not cryptographically secure
-		let hash = 0;
-		for (let i = 0; i < token.length; i++) {
-			const char = token.charCodeAt(i);
-			hash = (hash << 5) - hash + char;
-			hash = hash & hash; // Convert to 32-bit integer
-		}
-		return `token_${Math.abs(hash).toString(16)}`;
 	}
 
 	/**

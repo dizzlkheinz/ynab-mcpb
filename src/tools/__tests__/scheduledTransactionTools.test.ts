@@ -186,7 +186,9 @@ describe("scheduled transaction tools", () => {
 			memo: null,
 			flag_color: null,
 		});
-		await handleUpdateScheduledTransaction(api, params);
+		await handleUpdateScheduledTransaction(api, params, {
+			deltaCache: cacheMock(),
+		});
 		expect(
 			api.scheduledTransactions.updateScheduledTransaction,
 		).toHaveBeenCalledWith(
@@ -221,5 +223,17 @@ describe("scheduled transaction tools", () => {
 			scheduled_transaction_id: "scheduled-1",
 		});
 		expect(cache.forceFullRefresh).toHaveBeenCalled();
+	});
+
+	it("does not write to YNAB when the delta cache dependency is missing", async () => {
+		const api = apiMock();
+		const result = await handleDeleteScheduledTransaction(api, {
+			budget_id: "budget-1",
+			scheduled_transaction_id: "scheduled-1",
+		});
+		expect(result.isError).toBe(true);
+		expect(
+			api.scheduledTransactions.deleteScheduledTransaction,
+		).not.toHaveBeenCalled();
 	});
 });
