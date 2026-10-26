@@ -537,8 +537,7 @@ function toColumnIndex(column: string | number): number {
  * and credits positive, whatever sign or parentheses the bank used. This is
  * the same convention as reconciliation's split-amount parsing, and cells are
  * read by the same amount parser, so the two tools agree on every amount they
- * both accept. Explicit zeros give 0; rawAmount is "" only when neither cell
- * holds a number, so blank rows such as "balance forward" lines are skipped.
+ * both accept. Explicit zeros give 0; blank or malformed rows are skipped.
  */
 function combineDebitCredit(
 	debitVal: string,
@@ -546,6 +545,13 @@ function combineDebitCredit(
 ): Pick<RawRowFields, "rawAmount" | "amount"> {
 	const debit = parseAmount(debitVal);
 	const credit = parseAmount(creditVal);
+	// An invalid populated cell must not be hidden by a valid opposite cell.
+	if (
+		(!debit.valid && debitVal.trim()) ||
+		(!credit.valid && creditVal.trim())
+	) {
+		return { rawAmount: "" };
+	}
 	let amount: Milli;
 	if (debit.valid && debit.valueMilliunits !== 0) {
 		amount = -Math.abs(debit.valueMilliunits);

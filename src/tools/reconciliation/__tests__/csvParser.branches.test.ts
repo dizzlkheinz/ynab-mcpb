@@ -137,6 +137,9 @@ describe("csvParser bank-export branches", () => {
 		["1.234,56 EUR", 1234560],
 		["CAD 1,234", 1234000],
 		["£2.50", 2500],
+		["1 234.56", 1234560],
+		["1\u00a0234.56", 1234560],
+		["1\u202f234.56", 1234560],
 	] as const)("parses currency amount %s", (amount, expected) => {
 		const result = parseCSV(
 			`Date,Description,Amount\n2026-07-01,Test,"${amount}"`,
@@ -144,12 +147,17 @@ describe("csvParser bank-export branches", () => {
 		expect(result.transactions[0]?.amount).toBe(expected);
 	});
 
-	it.each(["", "not-money"])("rejects invalid amount %j", (amount) => {
-		const result = parseCSV(
-			`Date,Description,Amount\n2026-07-01,Test,${amount}`,
-		);
-		expect(result.errors.some((error) => error.field === "amount")).toBe(true);
-	});
+	it.each(["", "not-money", "123abc", "12.34.56", "$", "CAD"])(
+		"rejects invalid amount %j",
+		(amount) => {
+			const result = parseCSV(
+				`Date,Description,Amount\n2026-07-01,Test,${amount}`,
+			);
+			expect(result.errors.some((error) => error.field === "amount")).toBe(
+				true,
+			);
+		},
+	);
 
 	it("rejects invalid debit and credit values independently", () => {
 		const badDebit = parseCSV(

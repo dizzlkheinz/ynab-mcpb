@@ -858,7 +858,7 @@ export function parseAmount(str: string): {
 	let cleaned = str
 		.replace(CURRENCY_SYMBOLS, "")
 		.replace(CURRENCY_CODES, "")
-		.trim();
+		.replace(/\s/g, "");
 
 	// Handle parentheses as negative: (123.45) → -123.45
 	if (cleaned.startsWith("(") && cleaned.endsWith(")")) {
@@ -873,8 +873,13 @@ export function parseAmount(str: string): {
 	// Handle thousands separator: 1,234.56 or 1,234 → 1234.56 or 1234
 	cleaned = cleaned.replace(/,(\d{3})/g, "$1");
 
-	const dollars = Number.parseFloat(cleaned);
-	if (!Number.isFinite(dollars)) {
+	// Require the whole normalized cell to be numeric; parseFloat accepts
+	// truncated values such as "123abc" and "12.34.56".
+	const dollars = Number(cleaned);
+	if (
+		!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(cleaned) ||
+		!Number.isFinite(dollars)
+	) {
 		return {
 			valid: false,
 			valueMilliunits: 0,

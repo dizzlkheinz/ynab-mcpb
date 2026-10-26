@@ -561,6 +561,59 @@ describe("parser", () => {
 			).toThrow(/debit_column "Debit" must be a column index/);
 		});
 
+		test.each([true, false])(
+			"should preserve whitespace-grouped debit/credit amounts (header=%s)",
+			(hasHeader) => {
+				const format: CSVFormat = {
+					date_column: hasHeader ? "Date" : 0,
+					description_column: hasHeader ? "Description" : 1,
+					debit_column: hasHeader ? "Debit" : 2,
+					credit_column: hasHeader ? "Credit" : 3,
+					date_format: "YYYY-MM-DD",
+					has_header: hasHeader,
+					delimiter: ",",
+				};
+				for (const space of [" ", "\u00a0", "\u202f"]) {
+					const csv = [
+						...(hasHeader ? ["Date,Description,Debit,Credit"] : []),
+						`2026-01-01,Debit,1${space}234.56,`,
+						`2026-01-02,Credit,,1${space}234.56`,
+					].join("\n");
+					expect(parseBankCSV(csv, format).map((t) => t.amount)).toEqual([
+						-1234560, 1234560,
+					]);
+				}
+			},
+		);
+
+		test.each([true, false])(
+			"should skip malformed debit/credit cells without using the other cell (header=%s)",
+			(hasHeader) => {
+				const format: CSVFormat = {
+					date_column: hasHeader ? "Date" : 0,
+					description_column: hasHeader ? "Description" : 1,
+					debit_column: hasHeader ? "Debit" : 2,
+					credit_column: hasHeader ? "Credit" : 3,
+					date_format: "YYYY-MM-DD",
+					has_header: hasHeader,
+					delimiter: ",",
+				};
+				for (const amount of ["123abc", "12.34.56", "$", "CAD"]) {
+					for (const otherCell of ["", "0", "25.00"]) {
+						const csv = [
+							...(hasHeader ? ["Date,Description,Debit,Credit"] : []),
+							`2026-01-01,Invalid debit,${amount},${otherCell}`,
+							`2026-01-02,Invalid credit,${otherCell},${amount}`,
+							"2026-01-03,Valid,12.00,",
+						].join("\n");
+						expect(parseBankCSV(csv, format).map((t) => t.amount)).toEqual([
+							-12000,
+						]);
+					}
+				}
+			},
+		);
+
 		test("should skip rows with missing data", () => {
 			const csvContent =
 				"Date,Amount,Description\n09/15/2023,123.45,Test Transaction\n,67.89,Missing Date\n09/17/2023,,Missing Amount";
