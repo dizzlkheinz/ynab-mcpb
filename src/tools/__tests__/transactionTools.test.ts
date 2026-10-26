@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { maybeTextOf, textOf } from "../../__tests__/testUtils.js";
 import {
+	type BulkTransactionInput,
+	type CreateReceiptSplitTransactionParams,
 	CreateReceiptSplitTransactionSchema,
 	CreateTransactionSchema,
+	type CreateTransactionsParams,
 	CreateTransactionsSchema,
 	DeleteTransactionSchema,
 	GetTransactionSchema,
@@ -120,9 +123,10 @@ vi.mock("../deltaSupport.js", async (importOriginal) => {
 });
 
 // Import mocked cache manager
-const { cacheManager, CacheManager } = await import(
+const { cacheManager: mockedCacheManager, CacheManager } = await import(
 	"../../server/cacheManager.js"
 );
+const cacheManager = vi.mocked(mockedCacheManager);
 const { globalRequestLogger } = await import("../../server/requestLogger.js");
 const { resolveDeltaFetcherDeps } = await import("../deltaSupport.js");
 
@@ -393,7 +397,7 @@ describe("transactionTools", () => {
 						{
 							...mockTransaction,
 							id: "transaction-456",
-							cleared: "uncleared" as ynab.ClearedEnum,
+							cleared: "uncleared" as ynab.TransactionClearedStatus,
 						},
 					],
 				},
@@ -410,7 +414,7 @@ describe("transactionTools", () => {
 			});
 			const deltaFetcherResult = vi
 				.mocked(resolveDeltaFetcherDeps)
-				.mock.results.at(-1)!.value;
+				.mock.results.slice(-1)[0]!.value;
 
 			expect(vi.mocked(resolveDeltaFetcherDeps)).toHaveBeenCalled();
 			expect(deltaFetcherResult.fetchTransactions).toHaveBeenCalledWith(
@@ -538,14 +542,6 @@ describe("transactionTools", () => {
 					approved: true,
 					flag_color: null,
 					account_id: "test-account",
-					payee_id: null,
-					category_id: null,
-					transfer_account_id: null,
-					transfer_transaction_id: null,
-					matched_transaction_id: null,
-					import_id: null,
-					import_payee_name: null,
-					import_payee_name_original: null,
 					debt_transaction_type: null,
 					deleted: false,
 					account_name: "Test Account",
@@ -586,7 +582,7 @@ describe("transactionTools", () => {
 			expect(content).toBeDefined();
 			expect(content?.type).toBe("text");
 
-			const parsedResponse = JSON.parse(maybeTextOf(content));
+			const parsedResponse = JSON.parse(textOf(content));
 
 			// Large response path returns preview with message and preview_transactions
 			expect(parsedResponse.message).toBeDefined();
@@ -1589,7 +1585,7 @@ describe("transactionTools", () => {
 				],
 				receipt_subtotal: 50,
 				dry_run: true,
-			} as const;
+			} satisfies CreateReceiptSplitTransactionParams;
 
 			const result = await handleCreateReceiptSplitTransaction(
 				mockYnabAPI,
@@ -1641,7 +1637,7 @@ describe("transactionTools", () => {
 					},
 				],
 				receipt_subtotal: 50,
-			} as const;
+			} satisfies CreateReceiptSplitTransactionParams;
 
 			const result = await handleCreateReceiptSplitTransaction(
 				mockYnabAPI,
@@ -1691,7 +1687,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 14.47, // 4.99 + 3.49 + 5.99
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -1746,7 +1742,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 55.93,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -1820,7 +1816,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 540.93,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -1903,7 +1899,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 8.94, // -29.99 + 38.93
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -1976,7 +1972,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 38.93, // -5.0 + 43.93
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2041,7 +2037,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 135.0, // 90 + 45
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2101,7 +2097,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: -100.0,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2152,7 +2148,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 30.0,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2190,7 +2186,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 50.0,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2227,7 +2223,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 40.0,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2275,7 +2271,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 90.0, // 40 + 50
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2335,7 +2331,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 50.0,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2375,7 +2371,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 100.0,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2415,7 +2411,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 10.0,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -2462,7 +2458,7 @@ describe("transactionTools", () => {
 						],
 						receipt_subtotal: 60.0,
 						dry_run: true,
-					} as const;
+					} satisfies CreateReceiptSplitTransactionParams;
 
 					const result = await handleCreateReceiptSplitTransaction(
 						mockYnabAPI,
@@ -3155,25 +3151,19 @@ describe("transactionTools", () => {
 	});
 
 	describe("handleDeleteTransaction", () => {
-		const mockDeletedTransaction = {
+		const mockDeletedTransaction: ynab.TransactionDetail = {
 			id: "transaction-456",
 			deleted: true,
 			account_id: "account-456",
+			account_name: "Checking",
 			date: "2024-01-15",
 			amount: -5000,
 			cleared: "cleared",
 			approved: true,
-			payee_id: null,
 			category_id: "category-789",
-			transfer_account_id: null,
-			transfer_transaction_id: null,
-			matched_transaction_id: null,
-			import_id: null,
-			import_payee_name: null,
-			import_payee_name_original: null,
 			debt_transaction_type: null,
 			subtransactions: [],
-		} as ynab.TransactionDetail;
+		};
 
 		it("should delete transaction successfully", async () => {
 			const mockResponse = {
@@ -3366,7 +3356,9 @@ describe("transactionTools", () => {
 	describe("handleCreateTransactions", () => {
 		let transactionCounter = 0;
 
-		const buildTransaction = (overrides: Record<string, unknown> = {}) => ({
+		const buildTransaction = (
+			overrides: Partial<BulkTransactionInput> = {},
+		): BulkTransactionInput => ({
 			account_id: "account-001",
 			amount: -1500,
 			date: "2024-01-01",
@@ -3376,7 +3368,9 @@ describe("transactionTools", () => {
 			...overrides,
 		});
 
-		const buildParams = (overrides: Record<string, unknown> = {}) => ({
+		const buildParams = (
+			overrides: Partial<CreateTransactionsParams> = {},
+		): CreateTransactionsParams => ({
 			budget_id: "budget-123",
 			transactions: [buildTransaction()],
 			...overrides,
@@ -3466,6 +3460,7 @@ describe("transactionTools", () => {
 			it("surfaces validation errors before execution", async () => {
 				const invalidParams = buildParams({
 					transactions: [
+						// @ts-expect-error -- account_id is missing on purpose
 						{
 							amount: -2000,
 							date: "2024-01-01",
