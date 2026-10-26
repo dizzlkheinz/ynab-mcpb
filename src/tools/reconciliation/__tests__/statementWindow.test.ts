@@ -83,7 +83,7 @@ describe("statementWindow helpers", () => {
 			expect(clamped.parseResult.transactions[0]?.id).toBe("txn-2");
 			expect(clamped.parseResult.meta.validRows).toBe(1);
 			expect(clamped.parseResult.meta.skippedRows).toBe(2);
-			expect(clamped.parseResult.warnings.at(-1)?.message).toContain(
+			expect(clamped.parseResult.warnings.slice(-1)[0]?.message).toContain(
 				"outside statement window 2026-02-01 to 2026-02-28",
 			);
 		});

@@ -130,7 +130,9 @@ describeIntegration("Server Startup and Transport Integration", () => {
 						expect((error as { name?: string }).name).toBe(
 							"AuthenticationError",
 						);
-						expect(error.message).toContain("Token validation failed");
+						expect((error as Error).message).toContain(
+							"Token validation failed",
+						);
 					}
 				} finally {
 					process.env["YNAB_ACCESS_TOKEN"] = originalToken;

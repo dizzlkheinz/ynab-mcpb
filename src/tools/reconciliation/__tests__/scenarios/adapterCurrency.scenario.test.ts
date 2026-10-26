@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { MoneyValue } from "../../../../utils/money.js";
 import { buildReconciliationPayload } from "../../outputBuilder.js";
 import type { ReconciliationAnalysis, TransactionMatch } from "../../types.js";
 
-const makeMoney = (value: number, currency = "USD") => ({
+const makeMoney = (value: number, currency = "USD"): MoneyValue => ({
 	value_milliunits: Math.round(value * 1000),
 	value: value,
 	value_display:

@@ -21,11 +21,12 @@ describe("Security Integration", () => {
 		SecurityMiddleware.reset();
 
 		// Configure rate limiter for testing
-		globalRateLimiter.config = {
+		// No public setter; the test narrows the private limits directly
+		Reflect.set(globalRateLimiter, "config", {
 			maxRequests: 3,
 			windowMs: 1000,
 			enableLogging: false,
-		};
+		});
 
 		// Pin the logger config so console-output assertions do not depend
 		// on ambient LOG_LEVEL/NODE_ENV values
@@ -370,7 +371,7 @@ describe("Security Integration", () => {
 			expect(stats.requestStats["successfulRequests"]).toBe(2);
 			expect(stats.requestStats["failedRequests"]).toBe(1);
 			expect(stats.requestStats["averageDuration"]).toBeGreaterThanOrEqual(0);
-			expect(stats.requestStats["toolUsage"]["ynab:test"]).toBe(3);
+			expect(stats.requestStats["toolUsage"]).toMatchObject({ "ynab:test": 3 });
 		});
 	});
 

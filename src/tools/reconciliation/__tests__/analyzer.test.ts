@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Transaction as YNABAPITransaction } from "ynab";
+import type { TransactionDetail as YNABAPITransaction } from "ynab";
 import { analyzeReconciliation } from "../analyzer.js";
 import * as csvParser from "../csvParser.js";
 

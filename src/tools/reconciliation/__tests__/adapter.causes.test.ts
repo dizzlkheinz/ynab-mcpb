@@ -78,6 +78,7 @@ const execution: LegacyReconciliationResult = {
 			bank_statement_balance_milliunits: -921240,
 			ynab_calculated_balance_milliunits: -899020,
 			discrepancy_milliunits: -22220,
+			currency_decimal_digits: 2,
 			discrepancy_dollars: -22.22,
 		},
 		discrepancy_analysis: {

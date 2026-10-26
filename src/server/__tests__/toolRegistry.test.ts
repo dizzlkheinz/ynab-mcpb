@@ -41,7 +41,7 @@ function makeTestDeps() {
 		createValidationError: vi.fn((message: string, details?: string) => ({
 			content: [
 				{
-					type: "text",
+					type: "text" as const,
 					text: `validation:${message}${details ? `:${details}` : ""}`,
 				},
 			],
@@ -49,7 +49,7 @@ function makeTestDeps() {
 		handleError: vi.fn((error: unknown, context: string) => ({
 			content: [
 				{
-					type: "text",
+					type: "text" as const,
 					text: `handled:${context}:${error instanceof Error ? error.message : String(error)}`,
 				},
 			],
@@ -81,7 +81,9 @@ function makeTestDeps() {
 	const dependencies: ToolRegistryDependencies = {
 		errorHandler,
 		responseFormatter,
-		withSecurityWrapper,
+		// vi.fn drops the generic signature, so restate the contract
+		withSecurityWrapper:
+			withSecurityWrapper as ToolRegistryDependencies["withSecurityWrapper"],
 	};
 
 	return {
@@ -114,8 +116,10 @@ describe("ToolRegistry", () => {
 		vi.spyOn(dependencies.errorHandler, "handleError");
 	});
 
-	const registerSampleTool = (definition?: Partial<ToolDefinition>) => {
-		const base: ToolDefinition = {
+	const registerSampleTool = (
+		definition?: Partial<ToolDefinition<{ id: string }>>,
+	) => {
+		const base: ToolDefinition<{ id: string }> = {
 			name: "sample_tool",
 			description: "Test tool for registry",
 			inputSchema: z.object({
@@ -153,10 +157,10 @@ describe("ToolRegistry", () => {
 	it("rejects invalid tool definitions", () => {
 		expect(() =>
 			registry.register({
-				// @ts-expect-error intentionally malformed
 				name: "",
 				description: "invalid",
 				inputSchema: z.object({}),
+				// @ts-expect-error intentionally malformed
 				handler: null,
 			}),
 		).toThrowError("Tool definition requires a non-empty name");
@@ -230,7 +234,7 @@ describe("ToolRegistry", () => {
 	it.skip("routes reconcile_account tool to handler emitting dual-channel output", async () => {
 		const mockYnabAPI = {
 			accounts: {
-				getAccount: vi.fn().mockResolvedValue({
+				getAccountById: vi.fn().mockResolvedValue({
 					data: {
 						account: {
 							name: "Checking",
@@ -281,7 +285,7 @@ describe("ToolRegistry", () => {
 
 		expect(result.content).toHaveLength(2);
 		expect(result.content.every((entry) => entry.type === "text")).toBe(true);
-		expect(mockYnabAPI.accounts.getAccount).toHaveBeenCalled();
+		expect(mockYnabAPI.accounts.getAccountById).toHaveBeenCalled();
 
 		const toolNames = registry.listTools().map((tool) => tool.name);
 		expect(toolNames).toEqual(
@@ -460,10 +464,10 @@ describe("ToolRegistry", () => {
 		it("should use injected ErrorHandler instance", async () => {
 			const mockErrorHandler = {
 				handleError: vi.fn(() => ({
-					content: [{ type: "text", text: "Mock error" }],
+					content: [{ type: "text" as const, text: "Mock error" }],
 				})),
 				createValidationError: vi.fn(() => ({
-					content: [{ type: "text", text: "Mock validation error" }],
+					content: [{ type: "text" as const, text: "Mock validation error" }],
 				})),
 			};
 
@@ -861,6 +865,7 @@ describe("ToolRegistry", () => {
 				description: "Returns non-text content",
 				inputSchema: z.object({ id: z.string() }),
 				outputSchema,
+				// @ts-expect-error -- returns invalid content on purpose
 				handler,
 			});
 
@@ -904,6 +909,7 @@ describe("ToolRegistry", () => {
 				description: "Returns multiple content items with some invalid",
 				inputSchema: z.object({ id: z.string() }),
 				outputSchema,
+				// @ts-expect-error -- returns invalid content on purpose
 				handler,
 			});
 

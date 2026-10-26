@@ -197,9 +197,6 @@ describe("buildReconciliationPayload", () => {
 					reason: "Created missing transaction",
 				},
 			],
-			matches: [],
-			missing_in_ynab: [],
-			missing_in_bank: [],
 			recommendations: ["Review EvoCarShare discrepancy"],
 			balance_reconciliation: {
 				status: "DISCREPANCY_FOUND",
@@ -207,6 +204,7 @@ describe("buildReconciliationPayload", () => {
 					bank_statement_balance_milliunits: -921240,
 					ynab_calculated_balance_milliunits: -899020,
 					discrepancy_milliunits: -22220,
+					currency_decimal_digits: 2,
 					discrepancy_dollars: -22.22,
 				},
 				discrepancy_analysis: {

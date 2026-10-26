@@ -24,7 +24,9 @@ const createMockContext = (
 		setDefaultBudget: overrides.setDefaultBudget ?? vi.fn(),
 		cacheManager: overrides.cacheManager ?? ({} as any),
 		errorHandler: overrides.errorHandler ?? createMockErrorHandler(),
-		diagnosticManager: overrides.diagnosticManager,
+		...(overrides.diagnosticManager && {
+			diagnosticManager: overrides.diagnosticManager,
+		}),
 	} satisfies ToolContext;
 };
 

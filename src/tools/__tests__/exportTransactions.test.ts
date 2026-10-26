@@ -90,7 +90,9 @@ describe("exportTransactions", () => {
 
 	describe("ExportTransactionsSchema", () => {
 		it("should default minimal to true when not provided", () => {
-			const params = { budget_id: "test-budget" };
+			const params = ExportTransactionsSchema.parse({
+				budget_id: "test-budget",
+			});
 			const parsed = ExportTransactionsSchema.parse(params);
 			expect(parsed.minimal).toBe(true);
 		});
@@ -110,10 +112,13 @@ describe("exportTransactions", () => {
 
 	describe("handleExportTransactions", () => {
 		it("passes type in the SDK type argument slot", async () => {
-			await handleExportTransactions(mockYnabAPI, {
-				budget_id: "test-budget",
-				type: "unapproved",
-			});
+			await handleExportTransactions(
+				mockYnabAPI,
+				ExportTransactionsSchema.parse({
+					budget_id: "test-budget",
+					type: "unapproved",
+				}),
+			);
 
 			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
 				"test-budget",
@@ -124,7 +129,9 @@ describe("exportTransactions", () => {
 		});
 
 		it("should export minimal fields by default", async () => {
-			const params = { budget_id: "test-budget" };
+			const params = ExportTransactionsSchema.parse({
+				budget_id: "test-budget",
+			});
 
 			const result = await handleExportTransactions(mockYnabAPI, params);
 
@@ -213,10 +220,13 @@ describe("exportTransactions", () => {
 		});
 
 		it("should reject custom filenames that try to escape the export directory", async () => {
-			const result = await handleExportTransactions(mockYnabAPI, {
-				budget_id: "test-budget",
-				filename: "..\\outside",
-			});
+			const result = await handleExportTransactions(
+				mockYnabAPI,
+				ExportTransactionsSchema.parse({
+					budget_id: "test-budget",
+					filename: "..\\outside",
+				}),
+			);
 
 			expect(writeFileSync).not.toHaveBeenCalled();
 			const responseJson = JSON.parse(textOf(result.content[0]));
@@ -226,7 +236,9 @@ describe("exportTransactions", () => {
 		});
 
 		it('should include "minimal" in filename by default', async () => {
-			const params = { budget_id: "test-budget" };
+			const params = ExportTransactionsSchema.parse({
+				budget_id: "test-budget",
+			});
 
 			await handleExportTransactions(mockYnabAPI, params);
 

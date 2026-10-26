@@ -154,7 +154,7 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("Too many requests - 429");
 			mockYnabAPI.user.getUser.mockRejectedValue(error);
 
-			const result = await handleGetUser(mockYnabAPI);
+			const result = await handleGetUser(mockYnabAPI, {});
 			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(429);
@@ -221,7 +221,7 @@ describe("Error Handler Integration Tests", () => {
 				() => handleListCategories(mockYnabAPI, { budget_id: "test" }),
 				() => handleListPayees(mockYnabAPI, { budget_id: "test" }),
 				() => handleListMonths(mockYnabAPI, { budget_id: "test" }),
-				() => handleGetUser(mockYnabAPI),
+				() => handleGetUser(mockYnabAPI, {}),
 			];
 
 			// Mock all API calls to reject

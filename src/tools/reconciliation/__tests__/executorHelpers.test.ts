@@ -12,7 +12,7 @@ describe("executorHelpers", () => {
 				amount: -50000,
 				payee: "Store",
 				sourceRow: 1,
-				raw: {},
+				raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
 			},
 			ynabTransaction: {
 				id: "ynab-1",

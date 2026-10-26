@@ -152,9 +152,9 @@ describeIntegration("Delta-backed account tool handlers", () => {
 			const firstPayload = parseResponse(firstCall);
 			expect(firstPayload.cached).toBe(false);
 
-			const transactionDate = new Date().toISOString().split("T")[0];
+			const transactionDate = new Date().toISOString().slice(0, 10);
 			const memo = `delta-integration-${Date.now()}`;
-			const transactionPayload: ynab.SaveTransaction = {
+			const transactionPayload: ynab.NewTransaction = {
 				account_id: testAccountId,
 				date: transactionDate,
 				amount: -1000,

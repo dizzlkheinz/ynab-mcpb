@@ -47,8 +47,8 @@ describe("Config Module", () => {
 		};
 		expect(loadConfig(envWithLog).LOG_LEVEL).toBe("debug");
 
-		const envWithoutLog = { ...envWithLog };
-		envWithoutLog.LOG_LEVEL = undefined; // Ensure LOG_LEVEL is not set
+		// Ensure LOG_LEVEL is not set
+		const { LOG_LEVEL: _omitted, ...envWithoutLog } = envWithLog;
 		expect(loadConfig(envWithoutLog).LOG_LEVEL).toBe("info");
 	});
 

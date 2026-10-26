@@ -226,7 +226,7 @@ describe("Tool Registration", () => {
 			const toolNames = tools.map((t) => t.name);
 
 			const unexpectedTools = toolNames.filter(
-				(name) => !ALL_EXPECTED_TOOLS.includes(name),
+				(name) => !(ALL_EXPECTED_TOOLS as readonly string[]).includes(name),
 			);
 			expect(unexpectedTools, "Unexpected tools found").toEqual([]);
 		});
