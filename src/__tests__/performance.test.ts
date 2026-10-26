@@ -402,7 +402,7 @@ describe("YNAB MCP Server - Performance Tests", () => {
 
 	beforeEach(async () => {
 		// Ensure YNAB_ACCESS_TOKEN is set for all tests, even if just a placeholder
-		process.env.YNAB_ACCESS_TOKEN = "test-token-performance";
+		process.env["YNAB_ACCESS_TOKEN"] = "test-token-performance";
 		// Clear modules to ensure fresh import of server with new env var
 		vi.resetModules();
 		const { YNABMCPServer } = await import("../server/YNABMCPServer.js");

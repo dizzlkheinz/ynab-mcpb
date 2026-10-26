@@ -61,7 +61,7 @@ describe("YNABMCPServer", () => {
 	] as const;
 
 	beforeAll(() => {
-		if (!process.env.YNAB_ACCESS_TOKEN) {
+		if (!process.env["YNAB_ACCESS_TOKEN"]) {
 			throw new Error(
 				"YNAB_ACCESS_TOKEN is required. Set it in your .env file to run integration tests.",
 			);
@@ -90,43 +90,43 @@ describe("YNABMCPServer", () => {
 		});
 
 		it("should throw ValidationError when YNAB_ACCESS_TOKEN is missing", () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = undefined;
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = undefined;
 
 			expect(() => new YNABMCPServer()).toThrow(/YNAB_ACCESS_TOKEN/i);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should throw ValidationError when YNAB_ACCESS_TOKEN is empty string", () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = "";
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = "";
 
 			expect(() => new YNABMCPServer()).toThrow(
 				"YNAB_ACCESS_TOKEN must be a non-empty string",
 			);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should throw ValidationError when YNAB_ACCESS_TOKEN is only whitespace", () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = "   ";
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = "   ";
 
 			expect(() => new YNABMCPServer()).toThrow(
 				"YNAB_ACCESS_TOKEN must be a non-empty string",
 			);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should reload configuration for each server instance", () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
 
-			process.env.YNAB_ACCESS_TOKEN = "token-one";
+			process.env["YNAB_ACCESS_TOKEN"] = "token-one";
 			const firstServer = new YNABMCPServer(false);
 			const firstConfig = (
 				firstServer as unknown as {
@@ -135,7 +135,7 @@ describe("YNABMCPServer", () => {
 			).configInstance;
 			expect(firstConfig.YNAB_ACCESS_TOKEN).toBe("token-one");
 
-			process.env.YNAB_ACCESS_TOKEN = "token-two";
+			process.env["YNAB_ACCESS_TOKEN"] = "token-two";
 			const secondServer = new YNABMCPServer(false);
 			const secondConfig = (
 				secondServer as unknown as {
@@ -144,18 +144,18 @@ describe("YNABMCPServer", () => {
 			).configInstance;
 			expect(secondConfig.YNAB_ACCESS_TOKEN).toBe("token-two");
 
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should trim whitespace from access token", () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = `  ${originalToken}  `;
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = `  ${originalToken}  `;
 
 			const server = new YNABMCPServer();
 			expect(server).toBeInstanceOf(YNABMCPServer);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 	});
 
@@ -196,8 +196,8 @@ describe("YNABMCPServer", () => {
 		});
 
 		it("should handle invalid token gracefully", async () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = "invalid-token-format";
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = "invalid-token-format";
 
 			try {
 				const invalidServer = new YNABMCPServer(false);
@@ -206,7 +206,7 @@ describe("YNABMCPServer", () => {
 				);
 			} finally {
 				// Restore original token
-				process.env.YNAB_ACCESS_TOKEN = originalToken;
+				process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 			}
 		});
 
@@ -252,7 +252,7 @@ describe("YNABMCPServer", () => {
 		let registry: ToolRegistry;
 
 		const accessToken = () => {
-			const token = process.env.YNAB_ACCESS_TOKEN;
+			const token = process.env["YNAB_ACCESS_TOKEN"];
 			if (!token) {
 				throw new Error(
 					"YNAB_ACCESS_TOKEN must be defined for integration tests",
@@ -268,7 +268,7 @@ describe("YNABMCPServer", () => {
 				arguments: {},
 			});
 			const budgetsPayload = parseCallToolJson(budgetsResult);
-			const firstBudget = budgetsPayload.budgets?.[0];
+			const firstBudget = budgetsPayload["budgets"]?.[0];
 			expect(firstBudget?.id).toBeDefined();
 
 			await registry.executeTool({
@@ -299,7 +299,7 @@ describe("YNABMCPServer", () => {
 				arguments: {},
 			});
 			const payload = parseCallToolJson(result);
-			expect(payload.user?.id).toBeDefined();
+			expect(payload["user"]?.id).toBeDefined();
 		});
 
 		it("should set and retrieve default budget using tools", async () => {
@@ -311,8 +311,8 @@ describe("YNABMCPServer", () => {
 				arguments: {},
 			});
 			const defaultPayload = parseCallToolJson(defaultResult);
-			expect(defaultPayload.default_budget_id).toBe(budgetId);
-			expect(defaultPayload.has_default).toBe(true);
+			expect(defaultPayload["default_budget_id"]).toBe(budgetId);
+			expect(defaultPayload["has_default"]).toBe(true);
 		});
 
 		it("should trigger cache warming after setting default budget", async () => {
@@ -333,7 +333,7 @@ describe("YNABMCPServer", () => {
 				arguments: {},
 			});
 			const budgetsPayload = parseCallToolJson(budgetsResult);
-			const firstBudget = budgetsPayload.budgets?.[0];
+			const firstBudget = budgetsPayload["budgets"]?.[0];
 			expect(firstBudget?.id).toBeDefined();
 
 			// Set default budget (this should trigger cache warming)
@@ -392,7 +392,7 @@ describe("YNABMCPServer", () => {
 				arguments: {},
 			});
 			const budgetsPayload = parseCallToolJson(budgetsResult);
-			const firstBudget = budgetsPayload.budgets?.[0];
+			const firstBudget = budgetsPayload["budgets"]?.[0];
 			expect(firstBudget?.id).toBeDefined();
 			const realBudgetId = firstBudget.id as string;
 
@@ -405,8 +405,8 @@ describe("YNABMCPServer", () => {
 
 			// The set_default_budget operation should succeed
 			const payload = parseCallToolJson(result);
-			expect(payload.message).toContain("Default budget set to:");
-			expect(payload.default_budget_id).toBe(realBudgetId);
+			expect(payload["message"]).toContain("Default budget set to:");
+			expect(payload["default_budget_id"]).toBe(realBudgetId);
 
 			// Wait a moment for cache warming attempts to complete
 			await new Promise((resolve) => setTimeout(resolve, 100));
@@ -418,7 +418,7 @@ describe("YNABMCPServer", () => {
 				arguments: {},
 			});
 			const defaultPayload = parseCallToolJson(defaultResult);
-			expect(defaultPayload.default_budget_id).toBe(realBudgetId);
+			expect(defaultPayload["default_budget_id"]).toBe(realBudgetId);
 		});
 
 		it("should execute list tools that rely on the default budget", async () => {
@@ -430,7 +430,7 @@ describe("YNABMCPServer", () => {
 				arguments: {},
 			});
 			const accountsPayload = parseCallToolJson(accountsResult);
-			expect(Array.isArray(accountsPayload.accounts)).toBe(true);
+			expect(Array.isArray(accountsPayload["accounts"])).toBe(true);
 
 			const categoriesResult = await registry.executeTool({
 				name: "ynab_list_categories",
@@ -438,7 +438,7 @@ describe("YNABMCPServer", () => {
 				arguments: {},
 			});
 			const categoriesPayload = parseCallToolJson(categoriesResult);
-			expect(Array.isArray(categoriesPayload.categories)).toBe(true);
+			expect(Array.isArray(categoriesPayload["categories"])).toBe(true);
 		});
 
 		it("should provide diagnostic info with requested sections", async () => {
@@ -454,12 +454,12 @@ describe("YNABMCPServer", () => {
 				},
 			});
 			const diagnostics = parseCallToolJson(diagResult);
-			expect(diagnostics.timestamp).toBeDefined();
-			expect(diagnostics.server).toBeDefined();
-			expect(diagnostics.security).toBeDefined();
-			expect(diagnostics.cache).toBeDefined();
-			expect(diagnostics.memory).toBeUndefined();
-			expect(diagnostics.environment).toBeUndefined();
+			expect(diagnostics["timestamp"]).toBeDefined();
+			expect(diagnostics["server"]).toBeDefined();
+			expect(diagnostics["security"]).toBeDefined();
+			expect(diagnostics["cache"]).toBeDefined();
+			expect(diagnostics["memory"]).toBeUndefined();
+			expect(diagnostics["environment"]).toBeUndefined();
 		});
 
 		it("should clear cache using the clear_cache tool", async () => {
@@ -533,16 +533,18 @@ describe("YNABMCPServer", () => {
 			});
 
 			const diagnostics = parseCallToolJson(result);
-			expect(diagnostics.cache).toBeDefined();
-			expect(diagnostics.cache.entries).toEqual(expect.any(Number));
-			expect(diagnostics.cache.hits).toEqual(expect.any(Number));
-			expect(diagnostics.cache.misses).toEqual(expect.any(Number));
-			expect(diagnostics.cache.evictions).toEqual(expect.any(Number));
-			expect(diagnostics.cache.maxEntries).toEqual(expect.any(Number));
-			expect(diagnostics.cache.hitRate).toEqual(
+			expect(diagnostics["cache"]).toBeDefined();
+			expect(diagnostics["cache"].entries).toEqual(expect.any(Number));
+			expect(diagnostics["cache"].hits).toEqual(expect.any(Number));
+			expect(diagnostics["cache"].misses).toEqual(expect.any(Number));
+			expect(diagnostics["cache"].evictions).toEqual(expect.any(Number));
+			expect(diagnostics["cache"].maxEntries).toEqual(expect.any(Number));
+			expect(diagnostics["cache"].hitRate).toEqual(
 				expect.stringMatching(/^\d+\.\d{2}%$/),
 			);
-			expect(diagnostics.cache.performance_summary).toEqual(expect.any(String));
+			expect(diagnostics["cache"].performance_summary).toEqual(
+				expect.any(String),
+			);
 		});
 
 		it("should surface validation errors for invalid inputs", async () => {
@@ -552,8 +554,8 @@ describe("YNABMCPServer", () => {
 				arguments: {} as Record<string, unknown>,
 			});
 			const payload = parseCallToolJson(result);
-			expect(payload.error).toBeDefined();
-			expect(payload.error.code).toBe("VALIDATION_ERROR");
+			expect(payload["error"]).toBeDefined();
+			expect(payload["error"].code).toBe("VALIDATION_ERROR");
 		});
 
 		describe("Budget Resolution Error Handling", () => {
@@ -598,16 +600,16 @@ describe("YNABMCPServer", () => {
 					});
 
 					const payload = parseCallToolJson(result);
-					expect(payload.error).toBeDefined();
-					expect(payload.error.code).toBe("VALIDATION_ERROR");
-					expect(payload.error.message).toContain(
+					expect(payload["error"]).toBeDefined();
+					expect(payload["error"].code).toBe("VALIDATION_ERROR");
+					expect(payload["error"].message).toContain(
 						"No budget ID provided and no default budget set",
 					);
-					expect(payload.error.userMessage).toContain("invalid");
-					expect(payload.error.suggestions).toBeDefined();
-					expect(Array.isArray(payload.error.suggestions)).toBe(true);
+					expect(payload["error"].userMessage).toContain("invalid");
+					expect(payload["error"].suggestions).toBeDefined();
+					expect(Array.isArray(payload["error"].suggestions)).toBe(true);
 					expect(
-						payload.error.suggestions.some(
+						payload["error"].suggestions.some(
 							(suggestion: string) =>
 								suggestion.includes("ynab_set_default_budget") ||
 								suggestion.includes("budget_id parameter"),
@@ -625,14 +627,14 @@ describe("YNABMCPServer", () => {
 				});
 
 				const payload = parseCallToolJson(result);
-				expect(payload.error).toBeDefined();
-				expect(payload.error.code).toBe("VALIDATION_ERROR");
-				expect(payload.error.message).toContain("Invalid budget ID format");
-				expect(payload.error.userMessage).toContain("invalid");
-				expect(payload.error.suggestions).toBeDefined();
-				expect(Array.isArray(payload.error.suggestions)).toBe(true);
+				expect(payload["error"]).toBeDefined();
+				expect(payload["error"].code).toBe("VALIDATION_ERROR");
+				expect(payload["error"].message).toContain("Invalid budget ID format");
+				expect(payload["error"].userMessage).toContain("invalid");
+				expect(payload["error"].suggestions).toBeDefined();
+				expect(Array.isArray(payload["error"].suggestions)).toBe(true);
 				expect(
-					payload.error.suggestions.some(
+					payload["error"].suggestions.some(
 						(suggestion: string) =>
 							suggestion.includes("UUID v4 format") ||
 							suggestion.includes("ynab_list_budgets"),
@@ -649,8 +651,8 @@ describe("YNABMCPServer", () => {
 				});
 
 				let payload = parseCallToolJson(result);
-				expect(payload.error).toBeDefined();
-				expect(payload.error.code).toBe("VALIDATION_ERROR");
+				expect(payload["error"]).toBeDefined();
+				expect(payload["error"].code).toBe("VALIDATION_ERROR");
 
 				// Now set a default budget
 				const defaultBudgetId = await ensureDefaultBudget();
@@ -669,7 +671,7 @@ describe("YNABMCPServer", () => {
 
 				payload = parseCallToolJson(result);
 				// Should have accounts data or be valid response, not an error
-				expect(payload.error).toBeUndefined();
+				expect(payload["error"]).toBeUndefined();
 			});
 
 			it("should have consistent error response structure across all budget-dependent tools", async () => {
@@ -774,21 +776,21 @@ describe("YNABMCPServer", () => {
 
 		it("should maintain same error handling behavior after refactoring", () => {
 			// Test that configuration errors are still properly thrown
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = undefined;
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = undefined;
 
 			try {
 				expect(() => new YNABMCPServer()).toThrow(/YNAB_ACCESS_TOKEN/i);
 			} finally {
 				// Restore token
-				process.env.YNAB_ACCESS_TOKEN = originalToken;
+				process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 			}
 		});
 
 		it("should delegate diagnostic collection to diagnostic manager", async () => {
 			const registry = (server as unknown as { toolRegistry: ToolRegistry })
 				.toolRegistry;
-			const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+			const accessToken = process.env["YNAB_ACCESS_TOKEN"]!;
 
 			// Test that diagnostic_info tool works and returns expected structure
 			const result = await registry.executeTool({
@@ -804,16 +806,16 @@ describe("YNABMCPServer", () => {
 			});
 
 			const diagnostics = parseCallToolJson(result);
-			expect(diagnostics.timestamp).toBeDefined();
-			expect(diagnostics.server).toBeDefined();
-			expect(diagnostics.server.name).toBe("ynab-mcp-server");
-			expect(diagnostics.server.version).toBeDefined();
+			expect(diagnostics["timestamp"]).toBeDefined();
+			expect(diagnostics["server"]).toBeDefined();
+			expect(diagnostics["server"].name).toBe("ynab-mcp-server");
+			expect(diagnostics["server"].version).toBeDefined();
 
 			// These should be undefined because we set include flags to false
-			expect(diagnostics.memory).toBeUndefined();
-			expect(diagnostics.environment).toBeUndefined();
-			expect(diagnostics.security).toBeUndefined();
-			expect(diagnostics.cache).toBeUndefined();
+			expect(diagnostics["memory"]).toBeUndefined();
+			expect(diagnostics["environment"]).toBeUndefined();
+			expect(diagnostics["security"]).toBeUndefined();
+			expect(diagnostics["cache"]).toBeUndefined();
 		});
 	});
 
@@ -841,8 +843,8 @@ describe("YNABMCPServer", () => {
 			const result = errorHandler.createValidationError("Test error");
 
 			expect(result.content).toBeDefined();
-			expect(result.content[0].type).toBe("text");
-			expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+			expect(result.content[0]!.type).toBe("text");
+			expect(() => JSON.parse(result.content[0]!.text)).not.toThrow();
 		});
 
 		it("should use the same formatter for ErrorHandler and ToolRegistry", () => {
@@ -860,16 +862,16 @@ describe("YNABMCPServer", () => {
 			// Test that error responses still have the expected structure
 			const result = await registry.executeTool({
 				name: "ynab_get_budget",
-				accessToken: process.env.YNAB_ACCESS_TOKEN!,
+				accessToken: process.env["YNAB_ACCESS_TOKEN"]!,
 				arguments: {} as Record<string, unknown>,
 			});
 
 			const payload = parseCallToolJson(result);
-			expect(payload.error).toBeDefined();
-			expect(payload.error.code).toBe("VALIDATION_ERROR");
+			expect(payload["error"]).toBeDefined();
+			expect(payload["error"].code).toBe("VALIDATION_ERROR");
 
 			// Verify the response is properly formatted JSON
-			expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+			expect(() => JSON.parse(result.content[0]!.text)).not.toThrow();
 		});
 
 		it("should produce consistent error responses across ErrorHandler instances with same formatter", () => {
@@ -882,9 +884,9 @@ describe("YNABMCPServer", () => {
 			const result2 = errorHandler2.handleError(error, "testing");
 
 			// Both should produce the same result structure
-			expect(result1.content[0].type).toBe(result2.content[0].type);
-			expect(() => JSON.parse(result1.content[0].text)).not.toThrow();
-			expect(() => JSON.parse(result2.content[0].text)).not.toThrow();
+			expect(result1.content[0]!.type).toBe(result2.content[0]!.type);
+			expect(() => JSON.parse(result1.content[0]!.text)).not.toThrow();
+			expect(() => JSON.parse(result2.content[0]!.text)).not.toThrow();
 		});
 	});
 });

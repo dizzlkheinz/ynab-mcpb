@@ -391,8 +391,8 @@ describe("ListMonthsOutputSchema", () => {
 		expect(result.success).toBe(true);
 		if (result.success) {
 			expect(result.data.months).toHaveLength(2);
-			expect(result.data.months[0].month).toBe("2025-11-01");
-			expect(result.data.months[1].month).toBe("2025-10-01");
+			expect(result.data.months[0]!.month).toBe("2025-11-01");
+			expect(result.data.months[1]!.month).toBe("2025-10-01");
 			expect(result.data.cached).toBe(true);
 		}
 	});

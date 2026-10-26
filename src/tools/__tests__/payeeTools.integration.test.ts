@@ -7,8 +7,8 @@ import { handleGetPayee, handleListPayees } from "../payeeTools.js";
  * Integration tests for payee tools using real YNAB API
  * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
-const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
-const shouldSkip = process.env.SKIP_E2E_TESTS === "true" || !hasToken;
+const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
+const shouldSkip = process.env["SKIP_E2E_TESTS"] === "true" || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("Payee Tools Integration", () => {
@@ -17,10 +17,10 @@ describeIntegration("Payee Tools Integration", () => {
 	let testPayeeId: string;
 
 	beforeAll(async () => {
-		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+		const accessToken = process.env["YNAB_ACCESS_TOKEN"]!;
 		ynabAPI = new ynab.API(accessToken);
 		const budgetsResponse = await listBudgetsCompat(ynabAPI);
-		testBudgetId = budgetsResponse.budgets[0].id;
+		testBudgetId = budgetsResponse.budgets[0]!.id;
 	});
 
 	describe("handleListPayees", () => {
@@ -33,9 +33,9 @@ describeIntegration("Payee Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.payees).toBeDefined();
 			expect(Array.isArray(parsedContent.payees)).toBe(true);
 			expect(parsedContent.payees.length).toBeGreaterThan(0);
@@ -72,9 +72,9 @@ describeIntegration("Payee Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 
@@ -96,9 +96,9 @@ describeIntegration("Payee Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.payee).toBeDefined();
 
 			const payee = parsedContent.payee;
@@ -127,9 +127,9 @@ describeIntegration("Payee Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 
@@ -148,9 +148,9 @@ describeIntegration("Payee Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 

@@ -31,7 +31,7 @@ describe("Utility Tools", () => {
 			const result = await handleGetUser(mockYnabAPI, {
 				response_format: "json",
 			});
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.user).toBeDefined();
 			expect(parsed.user.id).toBe("user-123");
 			expect(mockYnabAPI.user.getUser).toHaveBeenCalledTimes(1);
@@ -45,7 +45,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0].text).toContain(
+			expect(result.content[0]!.text).toContain(
 				"Invalid or expired YNAB access token",
 			);
 		});
@@ -58,7 +58,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0].text).toContain(
+			expect(result.content[0]!.text).toContain(
 				"Insufficient permissions to access YNAB data",
 			);
 		});
@@ -71,7 +71,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0].text).toContain(
+			expect(result.content[0]!.text).toContain(
 				"Rate limit exceeded. Please try again later",
 			);
 		});
@@ -84,7 +84,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0].text).toContain(
+			expect(result.content[0]!.text).toContain(
 				"YNAB service is currently unavailable",
 			);
 		});
@@ -97,7 +97,7 @@ describe("Utility Tools", () => {
 				response_format: "json",
 			});
 
-			expect(result.content[0].text).toContain(
+			expect(result.content[0]!.text).toContain(
 				"Failed to get user information",
 			);
 		});

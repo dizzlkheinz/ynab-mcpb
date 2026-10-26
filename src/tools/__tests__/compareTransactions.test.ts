@@ -124,9 +124,9 @@ describe("compareTransactions", () => {
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.summary).toBeDefined();
 			expect(response.summary.bank_transactions_count).toBe(2);
 			expect(response.summary.ynab_transactions_count).toBe(2);
@@ -201,7 +201,7 @@ describe("compareTransactions", () => {
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
 			expect(result.content).toHaveLength(1);
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.summary.bank_transactions_count).toBe(1);
 		});
 
@@ -239,7 +239,7 @@ describe("compareTransactions", () => {
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
 			expect(result.content).toHaveLength(1);
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.summary.bank_transactions_count).toBe(2);
 		});
 
@@ -277,7 +277,7 @@ describe("compareTransactions", () => {
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
 			expect(result.content).toHaveLength(1);
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.summary.bank_transactions_count).toBe(2);
 			// Should successfully parse the date format and process the transactions
 			expect(response.missing_in_ynab).toHaveLength(2); // No matches with mock transactions
@@ -310,9 +310,9 @@ describe("compareTransactions", () => {
 
 			// Verify response structure matches original exactly
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response).toHaveProperty("summary");
 			expect(response).toHaveProperty("matches");
 			expect(response).toHaveProperty("missing_in_ynab");
@@ -354,7 +354,7 @@ describe("compareTransactions", () => {
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
 			expect(result.content).toHaveLength(1);
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.summary.bank_transactions_count).toBe(2);
 			// Should correctly detect debit/credit format and parse both transactions
 		});

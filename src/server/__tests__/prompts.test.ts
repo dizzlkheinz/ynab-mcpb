@@ -239,15 +239,15 @@ describe("prompts module", () => {
 						"Create a transaction for [PAYEE] in [ACCOUNT_NAME]",
 					);
 					expect(result.messages).toHaveLength(1);
-					expect(result.messages[0].role).toBe("user");
-					expect(result.messages[0].content.type).toBe("text");
-					expect(result.messages[0].content.text).toContain(
+					expect(result.messages[0]!.role).toBe("user");
+					expect(result.messages[0]!.content.type).toBe("text");
+					expect(result.messages[0]!.content.text).toContain(
 						"first available budget",
 					);
-					expect(result.messages[0].content.text).toContain("[ACCOUNT_NAME]");
-					expect(result.messages[0].content.text).toContain("[AMOUNT]");
-					expect(result.messages[0].content.text).toContain("[PAYEE]");
-					expect(result.messages[0].content.text).toContain("[CATEGORY]");
+					expect(result.messages[0]!.content.text).toContain("[ACCOUNT_NAME]");
+					expect(result.messages[0]!.content.text).toContain("[AMOUNT]");
+					expect(result.messages[0]!.content.text).toContain("[PAYEE]");
+					expect(result.messages[0]!.content.text).toContain("[CATEGORY]");
 				});
 
 				it("should generate transaction creation prompt with provided arguments", async () => {
@@ -268,12 +268,14 @@ describe("prompts module", () => {
 					expect(result.description).toBe(
 						"Create a transaction for Grocery Store in Checking Account",
 					);
-					expect(result.messages[0].content.text).toContain("Personal Budget");
-					expect(result.messages[0].content.text).toContain("Checking Account");
-					expect(result.messages[0].content.text).toContain("$25.50");
-					expect(result.messages[0].content.text).toContain("Grocery Store");
-					expect(result.messages[0].content.text).toContain("Groceries");
-					expect(result.messages[0].content.text).toContain("Weekly shopping");
+					expect(result.messages[0]!.content.text).toContain("Personal Budget");
+					expect(result.messages[0]!.content.text).toContain(
+						"Checking Account",
+					);
+					expect(result.messages[0]!.content.text).toContain("$25.50");
+					expect(result.messages[0]!.content.text).toContain("Grocery Store");
+					expect(result.messages[0]!.content.text).toContain("Groceries");
+					expect(result.messages[0]!.content.text).toContain("Weekly shopping");
 				});
 
 				it("should handle partial arguments", async () => {
@@ -290,13 +292,13 @@ describe("prompts module", () => {
 					expect(result.description).toBe(
 						"Create a transaction for Transfer in Savings Account",
 					);
-					expect(result.messages[0].content.text).toContain(
+					expect(result.messages[0]!.content.text).toContain(
 						"first available budget",
 					);
-					expect(result.messages[0].content.text).toContain("Savings Account");
-					expect(result.messages[0].content.text).toContain("[AMOUNT]");
-					expect(result.messages[0].content.text).toContain("Transfer");
-					expect(result.messages[0].content.text).toContain("[CATEGORY]");
+					expect(result.messages[0]!.content.text).toContain("Savings Account");
+					expect(result.messages[0]!.content.text).toContain("[AMOUNT]");
+					expect(result.messages[0]!.content.text).toContain("Transfer");
+					expect(result.messages[0]!.content.text).toContain("[CATEGORY]");
 				});
 
 				it("should include proper workflow instructions", async () => {
@@ -305,7 +307,7 @@ describe("prompts module", () => {
 						{},
 					);
 
-					const text = result.messages[0].content.text;
+					const text = result.messages[0]!.content.text;
 					expect(text).toContain("list budgets to find the budget ID");
 					expect(text).toContain(
 						"List accounts for that budget to find the account ID",
@@ -324,11 +326,11 @@ describe("prompts module", () => {
 						"Get budget summary for first available budget",
 					);
 					expect(result.messages).toHaveLength(1);
-					expect(result.messages[0].role).toBe("user");
-					expect(result.messages[0].content.text).toContain(
+					expect(result.messages[0]!.role).toBe("user");
+					expect(result.messages[0]!.content.text).toContain(
 						"first available budget",
 					);
-					expect(result.messages[0].content.text).toContain("current month");
+					expect(result.messages[0]!.content.text).toContain("current month");
 				});
 
 				it("should generate budget summary prompt with provided arguments", async () => {
@@ -342,7 +344,7 @@ describe("prompts module", () => {
 					expect(result.description).toBe(
 						"Get budget summary for Family Budget",
 					);
-					expect(result.messages[0].content.text).toContain(
+					expect(result.messages[0]!.content.text).toContain(
 						"Family Budget (2024-03)",
 					);
 				});
@@ -350,7 +352,7 @@ describe("prompts module", () => {
 				it("should include YNAB-specific guidance", async () => {
 					const result = await promptManager.getPrompt("budget-summary", {});
 
-					const text = result.messages[0].content.text;
+					const text = result.messages[0]!.content.text;
 					expect(text).toContain("budgeted: Amount assigned to the category");
 					expect(text).toContain("activity: Spending/income in the category");
 					expect(text).toContain("balance: Available amount in the category");
@@ -372,11 +374,11 @@ describe("prompts module", () => {
 						"Check account balances for all accounts",
 					);
 					expect(result.messages).toHaveLength(1);
-					expect(result.messages[0].role).toBe("user");
-					expect(result.messages[0].content.text).toContain(
+					expect(result.messages[0]!.role).toBe("user");
+					expect(result.messages[0]!.content.text).toContain(
 						"first available budget",
 					);
-					expect(result.messages[0].content.text).toContain("all accounts");
+					expect(result.messages[0]!.content.text).toContain("all accounts");
 				});
 
 				it("should generate account balances prompt with provided arguments", async () => {
@@ -393,14 +395,14 @@ describe("prompts module", () => {
 					expect(result.description).toBe(
 						"Check account balances for checking",
 					);
-					expect(result.messages[0].content.text).toContain("Business Budget");
-					expect(result.messages[0].content.text).toContain("checking");
+					expect(result.messages[0]!.content.text).toContain("Business Budget");
+					expect(result.messages[0]!.content.text).toContain("checking");
 				});
 
 				it("should include proper balance display instructions", async () => {
 					const result = await promptManager.getPrompt("account-balances", {});
 
-					const text = result.messages[0].content.text;
+					const text = result.messages[0]!.content.text;
 					expect(text).toContain("Account name and type");
 					expect(text).toContain("Current balance");
 					expect(text).toContain("Cleared vs uncleared amounts");
@@ -434,7 +436,7 @@ describe("prompts module", () => {
 					expect(result.description).toBe(
 						"Create a transaction for [PAYEE] in [ACCOUNT_NAME]",
 					);
-					expect(result.messages[0].content.text).toContain(
+					expect(result.messages[0]!.content.text).toContain(
 						"first available budget",
 					);
 				});
@@ -448,7 +450,7 @@ describe("prompts module", () => {
 					expect(result.description).toBe(
 						"Get budget summary for first available budget",
 					);
-					expect(result.messages[0].content.text).toContain("current month");
+					expect(result.messages[0]!.content.text).toContain("current month");
 				});
 
 				it("should handle empty arguments object", async () => {
@@ -457,7 +459,7 @@ describe("prompts module", () => {
 					expect(result.description).toBe(
 						"Check account balances for all accounts",
 					);
-					expect(result.messages[0].content.text).toContain("all accounts");
+					expect(result.messages[0]!.content.text).toContain("all accounts");
 				});
 
 				it("should handle arguments with null/undefined values", async () => {
@@ -473,12 +475,12 @@ describe("prompts module", () => {
 						args,
 					);
 
-					expect(result.messages[0].content.text).toContain(
+					expect(result.messages[0]!.content.text).toContain(
 						"first available budget",
 					);
-					expect(result.messages[0].content.text).toContain("[ACCOUNT_NAME]");
-					expect(result.messages[0].content.text).toContain("[AMOUNT]");
-					expect(result.messages[0].content.text).toContain("Test Payee");
+					expect(result.messages[0]!.content.text).toContain("[ACCOUNT_NAME]");
+					expect(result.messages[0]!.content.text).toContain("[AMOUNT]");
+					expect(result.messages[0]!.content.text).toContain("Test Payee");
 				});
 			});
 
@@ -488,10 +490,10 @@ describe("prompts module", () => {
 						"reconcile-account",
 						undefined,
 					);
-					expect(result.messages[0].content.text).toContain(
+					expect(result.messages[0]!.content.text).toContain(
 						"first available budget",
 					);
-					expect(result.messages[0].content.text).toContain(
+					expect(result.messages[0]!.content.text).toContain(
 						"No CSV data provided",
 					);
 				});
@@ -505,10 +507,10 @@ describe("prompts module", () => {
 						"scheduled-cash-flow-review",
 						{},
 					);
-					expect(comparison.messages[0].content.text).toContain(
+					expect(comparison.messages[0]!.content.text).toContain(
 						"code-calculated totals",
 					);
-					expect(cashFlow.messages[0].content.text).toContain(
+					expect(cashFlow.messages[0]!.content.text).toContain(
 						"schedule review—not a forecast",
 					);
 				});
@@ -525,7 +527,7 @@ describe("prompts module", () => {
 						args,
 					);
 
-					expect(result.messages[0].content.text).toContain(longValue);
+					expect(result.messages[0]!.content.text).toContain(longValue);
 				});
 
 				it("should handle special characters in arguments", async () => {
@@ -540,9 +542,9 @@ describe("prompts module", () => {
 						args,
 					);
 
-					expect(result.messages[0].content.text).toContain(args.payee);
-					expect(result.messages[0].content.text).toContain(args.category);
-					expect(result.messages[0].content.text).toContain(args.memo);
+					expect(result.messages[0]!.content.text).toContain(args.payee);
+					expect(result.messages[0]!.content.text).toContain(args.category);
+					expect(result.messages[0]!.content.text).toContain(args.memo);
 				});
 
 				it("should maintain consistent message structure across all prompts", async () => {
@@ -567,10 +569,10 @@ describe("prompts module", () => {
 						expect(result.messages).toHaveLength(1);
 						expect(result.messages[0]).toHaveProperty("role", "user");
 						expect(result.messages[0]).toHaveProperty("content");
-						expect(result.messages[0].content).toHaveProperty("type", "text");
-						expect(result.messages[0].content).toHaveProperty("text");
-						expect(typeof result.messages[0].content.text).toBe("string");
-						expect(result.messages[0].content.text.length).toBeGreaterThan(0);
+						expect(result.messages[0]!.content).toHaveProperty("type", "text");
+						expect(result.messages[0]!.content).toHaveProperty("text");
+						expect(typeof result.messages[0]!.content.text).toBe("string");
+						expect(result.messages[0]!.content.text.length).toBeGreaterThan(0);
 					}
 				});
 			});

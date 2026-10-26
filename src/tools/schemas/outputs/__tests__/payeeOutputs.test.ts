@@ -230,8 +230,8 @@ describe("ListPayeesOutputSchema", () => {
 		const result = ListPayeesOutputSchema.safeParse(validOutput);
 		expect(result.success).toBe(true);
 		if (result.success) {
-			expect(result.data.payees[0].deleted).toBe(false);
-			expect(result.data.payees[1].deleted).toBe(true);
+			expect(result.data.payees[0]!.deleted).toBe(false);
+			expect(result.data.payees[1]!.deleted).toBe(true);
 		}
 	});
 

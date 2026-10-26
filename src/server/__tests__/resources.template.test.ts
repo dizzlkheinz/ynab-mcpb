@@ -69,8 +69,8 @@ describe("ResourceManager Templates", () => {
 
 		expect(mockYnabAPI.plans.getPlanById).toHaveBeenCalledWith(budgetId);
 		expect(result.contents).toHaveLength(1);
-		expect(result.contents[0].uri).toBe(uri);
-		expect(JSON.parse(result.contents[0].text)).toEqual(mockBudget);
+		expect(result.contents[0]!.uri).toBe(uri);
+		expect(JSON.parse(result.contents[0]!.text)).toEqual(mockBudget);
 	});
 
 	it("should match and handle budget accounts template", async () => {
@@ -86,7 +86,7 @@ describe("ResourceManager Templates", () => {
 
 		expect(mockYnabAPI.accounts.getAccounts).toHaveBeenCalledWith(budgetId);
 		expect(result.contents).toHaveLength(1);
-		expect(JSON.parse(result.contents[0].text)).toEqual(mockAccounts);
+		expect(JSON.parse(result.contents[0]!.text)).toEqual(mockAccounts);
 	});
 
 	it("should match and handle specific account template", async () => {
@@ -106,7 +106,7 @@ describe("ResourceManager Templates", () => {
 			accountId,
 		);
 		expect(result.contents).toHaveLength(1);
-		expect(JSON.parse(result.contents[0].text)).toEqual(mockAccount);
+		expect(JSON.parse(result.contents[0]!.text)).toEqual(mockAccount);
 	});
 
 	it("should fallback to throwing error for unknown URIs", async () => {
@@ -129,7 +129,7 @@ describe("ResourceManager Templates", () => {
 		// Should call getBudgets (static), not getBudgetById (template)
 		expect(mockYnabAPI.plans.getPlans).toHaveBeenCalled();
 		expect(mockYnabAPI.plans.getPlanById).not.toHaveBeenCalled();
-		expect(JSON.parse(result.contents[0].text)).toEqual({
+		expect(JSON.parse(result.contents[0]!.text)).toEqual({
 			budgets: expect.any(Array),
 		});
 	});

@@ -559,8 +559,8 @@ describe("matcher", () => {
 			const matches = findMatches(bankTxns, ynabTxns, config);
 
 			expect(matches).toHaveLength(2);
-			expect(matches[0].bankTransaction.id).toBe("b1");
-			expect(matches[1].bankTransaction.id).toBe("b2");
+			expect(matches[0]!.bankTransaction.id).toBe("b1");
+			expect(matches[1]!.bankTransaction.id).toBe("b2");
 		});
 
 		it("should prevent duplicate matching of YNAB transactions", () => {
@@ -600,11 +600,11 @@ describe("matcher", () => {
 			expect(matches).toHaveLength(2);
 
 			// First should match
-			expect(matches[0].confidence).toBe("high");
-			expect(matches[0].bestMatch?.ynabTransaction.id).toBe("y1");
+			expect(matches[0]!.confidence).toBe("high");
+			expect(matches[0]!.bestMatch?.ynabTransaction.id).toBe("y1");
 
 			// Second should not match (y1 already used)
-			expect(matches[1].confidence).toBe("none");
+			expect(matches[1]!.confidence).toBe("none");
 		});
 
 		it("should handle mix of matched and unmatched transactions", () => {
@@ -646,9 +646,9 @@ describe("matcher", () => {
 			const matches = findMatches(bankTxns, ynabTxns, config);
 
 			expect(matches).toHaveLength(2);
-			expect(matches[0].confidence).toBe("high");
-			expect(matches[1].confidence).toBe("none");
-			expect(matches[1].bestMatch).toBeNull();
+			expect(matches[0]!.confidence).toBe("high");
+			expect(matches[1]!.confidence).toBe("none");
+			expect(matches[1]!.bestMatch).toBeNull();
 		});
 
 		it("should use custom configuration", () => {
@@ -691,7 +691,7 @@ describe("matcher", () => {
 
 			const matches = findMatches(bankTxns, ynabTxns, customConfig);
 
-			expect(matches[0].confidence).not.toBe("none");
+			expect(matches[0]!.confidence).not.toBe("none");
 		});
 	});
 

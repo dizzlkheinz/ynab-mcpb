@@ -71,7 +71,7 @@ describe("DeltaCache", () => {
 		};
 		cacheManagerMock = cacheManagerSpies as unknown as CacheManager;
 		knowledgeStoreMock = knowledgeStoreSpies as unknown as ServerKnowledgeStore;
-		process.env.YNAB_MCP_ENABLE_DELTA = "true";
+		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
 		resetRuntimeConfig();
 		deltaCache = new DeltaCache(
 			cacheManagerMock,
@@ -125,7 +125,7 @@ describe("DeltaCache", () => {
 		});
 
 		it("should bypass delta logic when flag is disabled", async () => {
-			process.env.YNAB_MCP_ENABLE_DELTA = "false";
+			process.env["YNAB_MCP_ENABLE_DELTA"] = "false";
 			cacheManagerSpies.get.mockReturnValue(null); // No cache - force fetch
 			knowledgeStoreSpies.get.mockReturnValue(1000);
 			const fetcher = createFetcher({
@@ -148,7 +148,7 @@ describe("DeltaCache", () => {
 		});
 
 		it("should still cache results when delta is disabled", async () => {
-			process.env.YNAB_MCP_ENABLE_DELTA = "false";
+			process.env["YNAB_MCP_ENABLE_DELTA"] = "false";
 			const fetcher = createFetcher({
 				data: [{ id: "full" }],
 				serverKnowledge: 1100,

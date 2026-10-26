@@ -48,13 +48,13 @@ const { cacheManager, CacheManager } = await import(
 );
 
 // Capture original NODE_ENV for restoration
-const originalNodeEnv = process.env.NODE_ENV;
+const originalNodeEnv = process.env["NODE_ENV"];
 
 describe("Category Tools", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		// Reset NODE_ENV to test to ensure cache bypassing in tests
-		process.env.NODE_ENV = "test";
+		process.env["NODE_ENV"] = "test";
 		(cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
 			async (
 				_key: string,
@@ -77,7 +77,7 @@ describe("Category Tools", () => {
 		if (originalNodeEnv === undefined) {
 			Reflect.deleteProperty(process.env, "NODE_ENV");
 		} else {
-			process.env.NODE_ENV = originalNodeEnv;
+			process.env["NODE_ENV"] = originalNodeEnv;
 		}
 	});
 
@@ -124,7 +124,7 @@ describe("Category Tools", () => {
 				{ deltaFetcher: fetcher },
 			);
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toContain("delta merge applied");
 			expect(parsedContent.categories).toHaveLength(1);
@@ -211,7 +211,7 @@ describe("Category Tools", () => {
 				{ deltaFetcher: fetcher },
 			);
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.categories).toHaveLength(3);
 			expect(parsedContent.category_groups).toHaveLength(2);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
@@ -257,7 +257,7 @@ describe("Category Tools", () => {
 				{ deltaFetcher: fetcher },
 			);
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -278,7 +278,7 @@ describe("Category Tools", () => {
 				{ deltaFetcher: fetcher },
 			);
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe("Budget or category not found");
 		});
 	});
@@ -312,9 +312,9 @@ describe("Category Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.category).toEqual({
 				id: "category-1",
 				category_group_id: "group-1",
@@ -366,7 +366,7 @@ describe("Category Tools", () => {
 				response_format: "json",
 			});
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.cached).toBe(true);
 			expect(parsedContent.cache_info).toBe(
 				"Data retrieved from cache for improved performance",
@@ -385,7 +385,7 @@ describe("Category Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe("Budget or category not found");
 		});
 	});
@@ -420,9 +420,9 @@ describe("Category Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.category.budgeted).toBe(60);
 			expect(parsedContent.updated_month).toMatch(/^\d{4}-\d{2}-01$/);
 
@@ -447,7 +447,7 @@ describe("Category Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe("Budget or category not found");
 		});
 
@@ -463,7 +463,7 @@ describe("Category Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Insufficient permissions to access YNAB data",
 			);
@@ -587,7 +587,7 @@ describe("Category Tools", () => {
 			expect(CacheManager.generateKey).not.toHaveBeenCalled();
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.dry_run).toBe(true);
 			expect(parsedContent.action).toBe("ynab_update_category");
 			expect(parsedContent.request).toMatchObject({

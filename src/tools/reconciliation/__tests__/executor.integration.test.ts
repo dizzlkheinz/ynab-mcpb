@@ -18,7 +18,7 @@ describeIntegration("Reconciliation Executor - Live Contract Smoke", () => {
 	const accountId = config.testAccountId?.trim();
 
 	beforeAll(() => {
-		ynabAPI = new ynab.API(process.env.YNAB_ACCESS_TOKEN!);
+		ynabAPI = new ynab.API(process.env["YNAB_ACCESS_TOKEN"]!);
 	});
 
 	afterEach(async () => {

@@ -16,8 +16,8 @@ import { YNABMCPServer } from "../YNABMCPServer";
  * - Transport connection setup
  * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
-const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
-const shouldSkip = process.env.SKIP_E2E_TESTS === "true" || !hasToken;
+const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
+const shouldSkip = process.env["SKIP_E2E_TESTS"] === "true" || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("Server Startup and Transport Integration", () => {
@@ -50,27 +50,27 @@ describeIntegration("Server Startup and Transport Integration", () => {
 		it("should fail initialization with missing access token", {
 			meta: { tier: "domain", domain: "server" },
 		}, () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = undefined;
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = undefined;
 
 			expect(() => new YNABMCPServer(false)).toThrow(/YNAB_ACCESS_TOKEN/i);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should fail initialization with invalid access token format", {
 			meta: { tier: "domain", domain: "server" },
 		}, () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = "";
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = "";
 
 			expect(() => new YNABMCPServer(false)).toThrow(
 				"YNAB_ACCESS_TOKEN must be a non-empty string",
 			);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 	});
 
@@ -94,8 +94,8 @@ describeIntegration("Server Startup and Transport Integration", () => {
 			meta: { tier: "domain", domain: "server" },
 		}, async (ctx) => {
 			await skipOnRateLimit(async () => {
-				const originalToken = process.env.YNAB_ACCESS_TOKEN;
-				process.env.YNAB_ACCESS_TOKEN = "invalid-token-12345";
+				const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+				process.env["YNAB_ACCESS_TOKEN"] = "invalid-token-12345";
 
 				try {
 					const invalidServer = new YNABMCPServer(false);
@@ -104,7 +104,7 @@ describeIntegration("Server Startup and Transport Integration", () => {
 						"AuthenticationError",
 					);
 				} finally {
-					process.env.YNAB_ACCESS_TOKEN = originalToken;
+					process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 				}
 			}, ctx);
 		});
@@ -113,8 +113,8 @@ describeIntegration("Server Startup and Transport Integration", () => {
 			meta: { tier: "domain", domain: "server" },
 		}, async (ctx) => {
 			await skipOnRateLimit(async () => {
-				const originalToken = process.env.YNAB_ACCESS_TOKEN;
-				process.env.YNAB_ACCESS_TOKEN = "definitely-invalid-token";
+				const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+				process.env["YNAB_ACCESS_TOKEN"] = "definitely-invalid-token";
 
 				try {
 					const invalidServer = new YNABMCPServer(false);
@@ -133,7 +133,7 @@ describeIntegration("Server Startup and Transport Integration", () => {
 						expect(error.message).toContain("Token validation failed");
 					}
 				} finally {
-					process.env.YNAB_ACCESS_TOKEN = originalToken;
+					process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 				}
 			}, ctx);
 		});
@@ -324,8 +324,8 @@ describeIntegration("Server Startup and Transport Integration", () => {
 		it("should report configuration errors clearly", {
 			meta: { tier: "domain", domain: "server" },
 		}, () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = undefined;
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = undefined;
 
 			expect(() => new YNABMCPServer(false)).toThrow(
 				expect.objectContaining({
@@ -333,15 +333,15 @@ describeIntegration("Server Startup and Transport Integration", () => {
 				}),
 			);
 
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should report authentication errors clearly", {
 			meta: { tier: "domain", domain: "server" },
 		}, async (ctx) => {
 			await skipOnRateLimit(async () => {
-				const originalToken = process.env.YNAB_ACCESS_TOKEN;
-				process.env.YNAB_ACCESS_TOKEN = "invalid-token";
+				const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+				process.env["YNAB_ACCESS_TOKEN"] = "invalid-token";
 
 				try {
 					const server = new YNABMCPServer(false);
@@ -350,7 +350,7 @@ describeIntegration("Server Startup and Transport Integration", () => {
 						"AuthenticationError",
 					);
 				} finally {
-					process.env.YNAB_ACCESS_TOKEN = originalToken;
+					process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 				}
 			}, ctx);
 		});
@@ -359,8 +359,8 @@ describeIntegration("Server Startup and Transport Integration", () => {
 			meta: { tier: "domain", domain: "server" },
 		}, async (ctx) => {
 			await skipOnRateLimit(async () => {
-				const originalToken = process.env.YNAB_ACCESS_TOKEN;
-				process.env.YNAB_ACCESS_TOKEN = "invalid-token";
+				const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+				process.env["YNAB_ACCESS_TOKEN"] = "invalid-token";
 
 				try {
 					const server = new YNABMCPServer(false);
@@ -384,7 +384,7 @@ describeIntegration("Server Startup and Transport Integration", () => {
 
 					consoleSpy.mockRestore();
 				} finally {
-					process.env.YNAB_ACCESS_TOKEN = originalToken;
+					process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 				}
 			}, ctx);
 		});
@@ -450,21 +450,21 @@ describeIntegration("Server Startup and Transport Integration", () => {
 		it("should fail fast on configuration errors", {
 			meta: { tier: "domain", domain: "server" },
 		}, () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = undefined;
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = undefined;
 
 			// Should fail immediately on construction, not during run()
 			expect(() => new YNABMCPServer(false)).toThrow(/YNAB_ACCESS_TOKEN/i);
 
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should warn but not crash on authentication errors", {
 			meta: { tier: "domain", domain: "server" },
 		}, async (ctx) => {
 			await skipOnRateLimit(async () => {
-				const originalToken = process.env.YNAB_ACCESS_TOKEN;
-				process.env.YNAB_ACCESS_TOKEN = "invalid-token";
+				const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+				process.env["YNAB_ACCESS_TOKEN"] = "invalid-token";
 
 				try {
 					const server = new YNABMCPServer(false);
@@ -491,7 +491,7 @@ describeIntegration("Server Startup and Transport Integration", () => {
 
 					consoleSpy.mockRestore();
 				} finally {
-					process.env.YNAB_ACCESS_TOKEN = originalToken;
+					process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 				}
 			}, ctx);
 		});

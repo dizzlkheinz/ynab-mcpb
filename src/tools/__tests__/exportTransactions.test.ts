@@ -155,7 +155,7 @@ describe("exportTransactions", () => {
 			});
 
 			// Verify response message indicates minimal export
-			const responseText = result.content[0].text;
+			const responseText = result.content[0]!.text;
 			expect(responseText).toContain("(minimal fields)");
 			const responseJson = JSON.parse(responseText);
 			expect(responseJson.export_mode).toBe("minimal");
@@ -203,7 +203,7 @@ describe("exportTransactions", () => {
 			expect(firstTransaction.amount).toBe(1);
 
 			// Verify response message indicates full export
-			const responseText = result.content[0].text;
+			const responseText = result.content[0]!.text;
 			expect(responseText).toContain("(full fields)");
 			const responseJson = JSON.parse(responseText);
 			expect(responseJson.export_mode).toBe("full");
@@ -218,7 +218,7 @@ describe("exportTransactions", () => {
 			});
 
 			expect(writeFileSync).not.toHaveBeenCalled();
-			const responseJson = JSON.parse(result.content[0].text);
+			const responseJson = JSON.parse(result.content[0]!.text);
 			expect(responseJson.error.message).toContain(
 				"Filename must be a file name",
 			);

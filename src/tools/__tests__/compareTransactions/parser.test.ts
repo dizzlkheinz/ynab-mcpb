@@ -396,11 +396,11 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].description).toBe("Test Transaction");
-			expect(transactions[0].amount).toBe(123450);
-			expect(transactions[0].row_number).toBe(2);
-			expect(transactions[1].amount).toBe(-67890);
-			expect(transactions[1].row_number).toBe(3);
+			expect(transactions[0]!.description).toBe("Test Transaction");
+			expect(transactions[0]!.amount).toBe(123450);
+			expect(transactions[0]!.row_number).toBe(2);
+			expect(transactions[1]!.amount).toBe(-67890);
+			expect(transactions[1]!.row_number).toBe(3);
 		});
 
 		test("should parse CSV without headers", () => {
@@ -418,10 +418,10 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].description).toBe("Test Transaction");
-			expect(transactions[0].amount).toBe(123450);
-			expect(transactions[0].row_number).toBe(1);
-			expect(transactions[1].row_number).toBe(2);
+			expect(transactions[0]!.description).toBe("Test Transaction");
+			expect(transactions[0]!.amount).toBe(123450);
+			expect(transactions[0]!.row_number).toBe(1);
+			expect(transactions[1]!.row_number).toBe(2);
 		});
 
 		test("should handle debit/credit columns with headers", () => {
@@ -440,8 +440,8 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].amount).toBe(-123450); // Debit is negative
-			expect(transactions[1].amount).toBe(67890); // Credit is positive
+			expect(transactions[0]!.amount).toBe(-123450); // Debit is negative
+			expect(transactions[1]!.amount).toBe(67890); // Credit is positive
 		});
 
 		test("should handle debit/credit columns without headers", () => {
@@ -460,8 +460,8 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].amount).toBe(-123450); // Debit is negative
-			expect(transactions[1].amount).toBe(67890); // Credit is positive
+			expect(transactions[0]!.amount).toBe(-123450); // Debit is negative
+			expect(transactions[1]!.amount).toBe(67890); // Credit is positive
 		});
 
 		test("should treat already-signed debits as outflows", () => {
@@ -629,7 +629,7 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(1);
-			expect(transactions[0].description).toBe("Test Transaction");
+			expect(transactions[0]!.description).toBe("Test Transaction");
 		});
 
 		test("should handle quoted dates with commas (MMM dd, yyyy format)", () => {
@@ -647,8 +647,8 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(1);
-			expect(transactions[0].date.getFullYear()).toBe(2023);
-			expect(transactions[0].date.getMonth()).toBe(8); // September is month 8
+			expect(transactions[0]!.date.getFullYear()).toBe(2023);
+			expect(transactions[0]!.date.getMonth()).toBe(8); // September is month 8
 		});
 
 		test("should parse quoted fields with commas in descriptions", () => {
@@ -666,8 +666,8 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].description).toBe("Transaction with, comma");
-			expect(transactions[1].description).toBe("Another, test, transaction");
+			expect(transactions[0]!.description).toBe("Transaction with, comma");
+			expect(transactions[1]!.description).toBe("Another, test, transaction");
 		});
 
 		test("should throw error when no amount column configuration", () => {
@@ -700,7 +700,7 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(1);
-			expect(transactions[0].description).toBe(""); // Empty description for missing column
+			expect(transactions[0]!.description).toBe(""); // Empty description for missing column
 		});
 
 		test("should parse semicolon-delimited CSV with headers", () => {
@@ -718,11 +718,11 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].description).toBe("Test Transaction");
-			expect(transactions[0].amount).toBe(123450);
-			expect(transactions[0].row_number).toBe(2);
-			expect(transactions[1].amount).toBe(-67890);
-			expect(transactions[1].row_number).toBe(3);
+			expect(transactions[0]!.description).toBe("Test Transaction");
+			expect(transactions[0]!.amount).toBe(123450);
+			expect(transactions[0]!.row_number).toBe(2);
+			expect(transactions[1]!.amount).toBe(-67890);
+			expect(transactions[1]!.row_number).toBe(3);
 		});
 
 		test("should parse tab-delimited CSV with headers", () => {
@@ -740,11 +740,11 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].description).toBe("Test Transaction");
-			expect(transactions[0].amount).toBe(123450);
-			expect(transactions[0].row_number).toBe(2);
-			expect(transactions[1].amount).toBe(-67890);
-			expect(transactions[1].row_number).toBe(3);
+			expect(transactions[0]!.description).toBe("Test Transaction");
+			expect(transactions[0]!.amount).toBe(123450);
+			expect(transactions[0]!.row_number).toBe(2);
+			expect(transactions[1]!.amount).toBe(-67890);
+			expect(transactions[1]!.row_number).toBe(3);
 		});
 
 		test("should parse semicolon-delimited CSV without headers", () => {
@@ -762,10 +762,10 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].description).toBe("Test Transaction");
-			expect(transactions[0].amount).toBe(123450);
-			expect(transactions[0].row_number).toBe(1);
-			expect(transactions[1].row_number).toBe(2);
+			expect(transactions[0]!.description).toBe("Test Transaction");
+			expect(transactions[0]!.amount).toBe(123450);
+			expect(transactions[0]!.row_number).toBe(1);
+			expect(transactions[1]!.row_number).toBe(2);
 		});
 
 		test("should parse tab-delimited CSV without headers", () => {
@@ -783,10 +783,10 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].description).toBe("Test Transaction");
-			expect(transactions[0].amount).toBe(123450);
-			expect(transactions[0].row_number).toBe(1);
-			expect(transactions[1].row_number).toBe(2);
+			expect(transactions[0]!.description).toBe("Test Transaction");
+			expect(transactions[0]!.amount).toBe(123450);
+			expect(transactions[0]!.row_number).toBe(1);
+			expect(transactions[1]!.row_number).toBe(2);
 		});
 
 		test("should handle semicolon-delimited debit/credit columns with headers", () => {
@@ -805,8 +805,8 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].amount).toBe(-123450); // Debit is negative
-			expect(transactions[1].amount).toBe(67890); // Credit is positive
+			expect(transactions[0]!.amount).toBe(-123450); // Debit is negative
+			expect(transactions[1]!.amount).toBe(67890); // Credit is positive
 		});
 
 		test("should handle tab-delimited debit/credit columns with headers", () => {
@@ -825,8 +825,8 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].amount).toBe(-123450); // Debit is negative
-			expect(transactions[1].amount).toBe(67890); // Credit is positive
+			expect(transactions[0]!.amount).toBe(-123450); // Debit is negative
+			expect(transactions[1]!.amount).toBe(67890); // Credit is positive
 		});
 
 		test("should parse semicolon-delimited CSV with quoted fields containing delimiter", () => {
@@ -844,10 +844,10 @@ describe("parser", () => {
 			const transactions = parseBankCSV(csvContent, format);
 
 			expect(transactions).toHaveLength(2);
-			expect(transactions[0].description).toBe("Utility;Gas");
-			expect(transactions[0].amount).toBe(-50000);
-			expect(transactions[1].description).toBe("Store;Purchase");
-			expect(transactions[1].amount).toBe(-25000);
+			expect(transactions[0]!.description).toBe("Utility;Gas");
+			expect(transactions[0]!.amount).toBe(-50000);
+			expect(transactions[1]!.description).toBe("Store;Purchase");
+			expect(transactions[1]!.amount).toBe(-25000);
 		});
 	});
 

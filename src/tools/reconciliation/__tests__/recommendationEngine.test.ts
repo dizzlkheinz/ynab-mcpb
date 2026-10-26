@@ -541,11 +541,11 @@ describe("recommendationEngine", () => {
 				expect(relatedTxns[2]?.id).toBe("y2");
 
 				// Verify enhanced metadata
-				expect(rec.metadata?.bank_transaction_amount).toBeDefined();
-				expect(rec.metadata?.bank_transaction_amount.value).toBe(-100.0);
-				expect(rec.metadata?.candidate_total_amount).toBeDefined();
-				expect(rec.metadata?.candidate_total_amount.value).toBe(-100.0); // -50 + -50
-				expect(rec.metadata?.candidate_count).toBe(2);
+				expect(rec.metadata?.["bank_transaction_amount"]).toBeDefined();
+				expect(rec.metadata?.["bank_transaction_amount"].value).toBe(-100.0);
+				expect(rec.metadata?.["candidate_total_amount"]).toBeDefined();
+				expect(rec.metadata?.["candidate_total_amount"].value).toBe(-100.0); // -50 + -50
+				expect(rec.metadata?.["candidate_count"]).toBe(2);
 			});
 		});
 
@@ -652,10 +652,10 @@ describe("recommendationEngine", () => {
 
 				expect(recommendations).toHaveLength(3);
 				// First should be medium (unmatched_bank)
-				expect(recommendations[0].priority).toBe("medium");
+				expect(recommendations[0]!.priority).toBe("medium");
 				// Next should be low priority items
-				expect(recommendations[1].priority).toBe("low");
-				expect(recommendations[2].priority).toBe("low");
+				expect(recommendations[1]!.priority).toBe("low");
+				expect(recommendations[2]!.priority).toBe("low");
 			});
 
 			it("should sort by confidence when priorities are equal", () => {
@@ -675,8 +675,8 @@ describe("recommendationEngine", () => {
 
 				expect(recommendations).toHaveLength(2);
 				// Both are medium priority, so should be sorted by confidence (0.75 > 0.7)
-				expect(recommendations[0].confidence).toBe(0.75); // repeat_amount
-				expect(recommendations[1].confidence).toBe(0.7); // near_match
+				expect(recommendations[0]!.confidence).toBe(0.75); // repeat_amount
+				expect(recommendations[1]!.confidence).toBe(0.7); // near_match
 			});
 
 			it("should handle mixed priorities and confidence", () => {
@@ -707,12 +707,12 @@ describe("recommendationEngine", () => {
 				const recommendations = generateRecommendations(context);
 
 				// Should be: high priority first, then medium sorted by confidence, then low
-				expect(recommendations[0].priority).toBe("high");
-				expect(recommendations[1].priority).toBe("medium");
-				expect(recommendations[1].confidence).toBe(0.8); // unmatched_bank
-				expect(recommendations[2].priority).toBe("medium");
-				expect(recommendations[2].confidence).toBe(0.7); // near_match
-				expect(recommendations[3].priority).toBe("low");
+				expect(recommendations[0]!.priority).toBe("high");
+				expect(recommendations[1]!.priority).toBe("medium");
+				expect(recommendations[1]!.confidence).toBe(0.8); // unmatched_bank
+				expect(recommendations[2]!.priority).toBe("medium");
+				expect(recommendations[2]!.confidence).toBe(0.7); // near_match
+				expect(recommendations[3]!.priority).toBe("low");
 			});
 		});
 
@@ -729,11 +729,11 @@ describe("recommendationEngine", () => {
 				const recommendations = generateRecommendations(context);
 
 				const rec = recommendations[0];
-				expect(rec.id).toBeDefined();
-				expect(rec.account_id).toBe("test-account-id");
-				expect(rec.metadata.version).toBe("1.0");
-				expect(rec.metadata.created_at).toBeDefined();
-				expect(new Date(rec.metadata.created_at).getTime()).not.toBeNaN();
+				expect(rec!.id).toBeDefined();
+				expect(rec!.account_id).toBe("test-account-id");
+				expect(rec!.metadata!["version"]).toBe("1.0");
+				expect(rec!.metadata!["created_at"]).toBeDefined();
+				expect(new Date(rec!.metadata!["created_at"]).getTime()).not.toBeNaN();
 			});
 
 			it("should generate unique IDs for each recommendation", () => {
@@ -773,7 +773,7 @@ describe("recommendationEngine", () => {
 				const recommendations = generateRecommendations(context);
 
 				const rec = recommendations[0];
-				expect(rec.estimated_impact.currency).toBe("EUR");
+				expect(rec!.estimated_impact.currency).toBe("EUR");
 			});
 
 			it("should include enhanced metadata in insight-based manual review recommendations", () => {
@@ -796,10 +796,10 @@ describe("recommendationEngine", () => {
 				expect(rec.action_type).toBe("manual_review");
 
 				// Verify enhanced metadata fields
-				expect(rec.metadata?.current_discrepancy).toBeDefined();
-				expect(rec.metadata?.current_discrepancy.value).toBe(-100);
-				expect(rec.metadata?.current_discrepancy.currency).toBe("USD");
-				expect(rec.metadata?.insight_severity).toBe("critical");
+				expect(rec.metadata?.["current_discrepancy"]).toBeDefined();
+				expect(rec.metadata?.["current_discrepancy"].value).toBe(-100);
+				expect(rec.metadata?.["current_discrepancy"].currency).toBe("USD");
+				expect(rec.metadata?.["insight_severity"]).toBe("critical");
 			});
 
 			it("should include enhanced metadata for all insight-based recommendation types", () => {
@@ -827,17 +827,22 @@ describe("recommendationEngine", () => {
 					expect(rec.action_type).toBe("manual_review");
 					const manualRec = rec as ManualReviewRecommendation;
 
-					expect(manualRec.metadata?.current_discrepancy).toBeDefined();
-					expect(manualRec.metadata?.current_discrepancy.value).toBe(-250.75);
-					expect(manualRec.metadata?.current_discrepancy.currency).toBe("CAD");
-					expect(manualRec.metadata?.insight_severity).toMatch(
+					expect(manualRec.metadata?.["current_discrepancy"]).toBeDefined();
+					expect(manualRec.metadata?.["current_discrepancy"].value).toBe(
+						-250.75,
+					);
+					expect(manualRec.metadata?.["current_discrepancy"].currency).toBe(
+						"CAD",
+					);
+					expect(manualRec.metadata?.["insight_severity"]).toMatch(
 						/^(info|warning|critical)$/,
 					);
 				}
 
 				// Verify specific severities
 				const severities = recommendations.map(
-					(r) => (r as ManualReviewRecommendation).metadata?.insight_severity,
+					(r) =>
+						(r as ManualReviewRecommendation).metadata?.["insight_severity"],
 				);
 				expect(severities).toContain("warning");
 				expect(severities).toContain("info");
@@ -907,7 +912,7 @@ describe("recommendationEngine", () => {
 				expect(recommendations).toHaveLength(100);
 				// Verify sorting still works
 				for (let i = 0; i < recommendations.length - 1; i++) {
-					expect(recommendations[i].priority).toBeDefined();
+					expect(recommendations[i]!.priority).toBeDefined();
 				}
 			});
 

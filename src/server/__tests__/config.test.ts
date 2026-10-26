@@ -6,8 +6,8 @@ describe("Config Module", () => {
 	beforeEach(() => {
 		vi.resetModules();
 		process.env = { ...originalEnv };
-		if (!process.env.YNAB_ACCESS_TOKEN) {
-			process.env.YNAB_ACCESS_TOKEN = "test-token-placeholder";
+		if (!process.env["YNAB_ACCESS_TOKEN"]) {
+			process.env["YNAB_ACCESS_TOKEN"] = "test-token-placeholder";
 		}
 	});
 
@@ -17,17 +17,17 @@ describe("Config Module", () => {
 
 	it("reloads environment variables on each loadConfig call", async () => {
 		const { loadConfig } = await import("../config");
-		process.env.YNAB_ACCESS_TOKEN = "test-token-123";
+		process.env["YNAB_ACCESS_TOKEN"] = "test-token-123";
 		expect(loadConfig().YNAB_ACCESS_TOKEN).toBe("test-token-123");
 
-		process.env.YNAB_ACCESS_TOKEN = "updated-token-456";
+		process.env["YNAB_ACCESS_TOKEN"] = "updated-token-456";
 		expect(loadConfig().YNAB_ACCESS_TOKEN).toBe("updated-token-456");
 	});
 
 	it("throws a detailed error if YNAB_ACCESS_TOKEN is missing", async () => {
 		const { loadConfig } = await import("../config");
 		const env = { ...process.env };
-		env.YNAB_ACCESS_TOKEN = undefined;
+		env["YNAB_ACCESS_TOKEN"] = undefined;
 
 		expect.assertions(2);
 		try {
@@ -54,9 +54,9 @@ describe("Config Module", () => {
 
 	it("falls back per key when a runtime value is invalid", async () => {
 		const { getRuntimeConfig, isDeltaEnabled } = await import("../config");
-		process.env.YNAB_MCP_ENABLE_DELTA = "true";
-		process.env.LOG_LEVEL = "debug";
-		process.env.RATE_LIMIT_LOGGING = "yes";
+		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
+		process.env["LOG_LEVEL"] = "debug";
+		process.env["RATE_LIMIT_LOGGING"] = "yes";
 
 		const config = getRuntimeConfig();
 		expect(config.RATE_LIMIT_LOGGING).toBe(false);
@@ -66,8 +66,8 @@ describe("Config Module", () => {
 
 	it("treats an invalid delta flag as disabled", async () => {
 		const { getRuntimeConfig, isDeltaEnabled } = await import("../config");
-		process.env.YNAB_MCP_ENABLE_DELTA = "yes";
-		process.env.LOG_LEVEL = "loud";
+		process.env["YNAB_MCP_ENABLE_DELTA"] = "yes";
+		process.env["LOG_LEVEL"] = "loud";
 
 		expect(isDeltaEnabled()).toBe(false);
 		expect(getRuntimeConfig().LOG_LEVEL).toBe("info");

@@ -74,9 +74,9 @@ describeIntegration("Transaction Tools - Live Contract Smoke", () => {
 
 	beforeAll(async () => {
 		try {
-			ynabAPI = new ynab.API(process.env.YNAB_ACCESS_TOKEN!);
+			ynabAPI = new ynab.API(process.env["YNAB_ACCESS_TOKEN"]!);
 			testBudgetId =
-				dedicatedBudgetId ?? (await listBudgetsCompat(ynabAPI)).budgets[0].id;
+				dedicatedBudgetId ?? (await listBudgetsCompat(ynabAPI)).budgets[0]!.id;
 		} catch (error) {
 			if (isRateLimitError(error) || isAuthError(error)) {
 				setupUnavailable = true;

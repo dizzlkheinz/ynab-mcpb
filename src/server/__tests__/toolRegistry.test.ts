@@ -177,7 +177,7 @@ describe("ToolRegistry", () => {
 			}),
 			required: ["id"],
 		});
-		expect(typeof schema?.$schema).toBe("string");
+		expect(typeof schema?.["$schema"]).toBe("string");
 	});
 
 	it("prefers custom metadata JSON schema when provided", () => {
@@ -445,8 +445,8 @@ describe("ToolRegistry", () => {
 		const tool = registry.listTools().find((item) => item.name === "any_tool");
 		const schema = tool?.inputSchema as Record<string, unknown> | undefined;
 		expect(schema).toBeDefined();
-		expect(schema?.type).toBe("object");
-		expect(schema?.additionalProperties).toBe(true);
+		expect(schema?.["type"]).toBe("object");
+		expect(schema?.["additionalProperties"]).toBe(true);
 	});
 
 	it("supports empty registry listings", () => {
@@ -576,10 +576,10 @@ describe("ToolRegistry", () => {
 			const tool = tools.find((t) => t.name === "union_output_tool");
 			const schema = tool?.outputSchema as Record<string, unknown> | undefined;
 			expect(schema).toBeDefined();
-			expect(schema?.type).toBe("object");
-			expect(Array.isArray(schema?.anyOf) || Array.isArray(schema?.oneOf)).toBe(
-				true,
-			);
+			expect(schema?.["type"]).toBe("object");
+			expect(
+				Array.isArray(schema?.["anyOf"]) || Array.isArray(schema?.["oneOf"]),
+			).toBe(true);
 		});
 
 		it("rejects handler output that does not match output schema", async () => {
@@ -735,8 +735,9 @@ describe("ToolRegistry", () => {
 			// structuredContent is the Zod-parsed result — extra field stripped
 			expect(result.structuredContent).toEqual({ id: "abc", value: 7 });
 			expect(
-				(result.structuredContent as Record<string, unknown>)
-					?.extra_field_not_in_schema,
+				(result.structuredContent as Record<string, unknown>)?.[
+					"extra_field_not_in_schema"
+				],
 			).toBeUndefined();
 		});
 

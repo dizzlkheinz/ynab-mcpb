@@ -15,11 +15,11 @@ describe("CSV Parser Integration Tests", () => {
 
 			expect(result.errors).toHaveLength(0);
 			expect(result.transactions).toHaveLength(3);
-			expect(result.transactions[0].amount).toBe(-45230); // Milliunits!
-			expect(result.transactions[0].payee).toBe(
+			expect(result.transactions[0]!.amount).toBe(-45230); // Milliunits!
+			expect(result.transactions[0]!.payee).toBe(
 				"SHELL STATION 1234 TORONTO ON",
 			);
-			expect(result.transactions[0].date).toBe("2025-09-15");
+			expect(result.transactions[0]!.date).toBe("2025-09-15");
 		});
 	});
 
@@ -33,8 +33,8 @@ describe("CSV Parser Integration Tests", () => {
 
 			expect(result.errors).toHaveLength(0);
 			expect(result.transactions).toHaveLength(2);
-			expect(result.transactions[0].amount).toBe(-45230); // Debit = negative milliunits
-			expect(result.transactions[1].amount).toBe(500000); // Credit = positive milliunits
+			expect(result.transactions[0]!.amount).toBe(-45230); // Debit = negative milliunits
+			expect(result.transactions[1]!.amount).toBe(500000); // Credit = positive milliunits
 		});
 	});
 
@@ -46,8 +46,8 @@ describe("CSV Parser Integration Tests", () => {
 			const result = parseCSV(ambiguousCSV, { preset: "rbc" });
 
 			expect(result.warnings).toHaveLength(1);
-			expect(result.warnings[0].message).toContain("Both Debit");
-			expect(result.transactions[0].amount).toBe(-50000); // Uses debit
+			expect(result.warnings[0]!.message).toContain("Both Debit");
+			expect(result.transactions[0]!.amount).toBe(-50000); // Uses debit
 		});
 	});
 
@@ -58,7 +58,7 @@ describe("CSV Parser Integration Tests", () => {
 		it("should handle European number format", () => {
 			const result = parseCSV(euroCSV);
 
-			expect(result.transactions[0].amount).toBe(1234560); // 1234.56 in milliunits
+			expect(result.transactions[0]!.amount).toBe(1234560); // 1234.56 in milliunits
 		});
 	});
 });
@@ -94,12 +94,12 @@ describe("Matcher Integration Tests", () => {
 		const matches = findMatches(parsed.transactions, mockYNABTransactions);
 
 		// Shell: exact amount match (both -45230 milliunits)
-		expect(matches[0].confidence).toBe("high");
-		expect(matches[0].bestMatch?.scores.amount).toBe(100);
+		expect(matches[0]!.confidence).toBe("high");
+		expect(matches[0]!.bestMatch?.scores.amount).toBe(100);
 
 		// Amazon: exact amount match (both -127990 milliunits)
-		expect(matches[1].confidence).toBe("high");
-		expect(matches[1].bestMatch?.scores.amount).toBe(100);
+		expect(matches[1]!.confidence).toBe("high");
+		expect(matches[1]!.bestMatch?.scores.amount).toBe(100);
 	});
 
 	it("should use exact integer comparison (no float precision issues)", () => {
@@ -126,6 +126,6 @@ describe("Matcher Integration Tests", () => {
 
 		const matches = findMatches([bankTxn], [ynabTxn]);
 		// Exact match because integers compare exactly: -45230 === -45230
-		expect(matches[0].bestMatch?.scores.amount).toBe(100);
+		expect(matches[0]!.bestMatch?.scores.amount).toBe(100);
 	});
 });

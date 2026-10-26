@@ -229,8 +229,9 @@ describe("handleReconcileAccount", () => {
 			{ deltaFetcher: deltaFetcher },
 		);
 
-		const structured = (result.structuredContent as Record<string, unknown>)
-			.structured as Record<string, unknown>;
+		const structured = (result.structuredContent as Record<string, unknown>)[
+			"structured"
+		] as Record<string, unknown>;
 
 		expect(structured).toHaveProperty("unmatched_bank");
 		expect(structured).toHaveProperty("unmatched_ynab");

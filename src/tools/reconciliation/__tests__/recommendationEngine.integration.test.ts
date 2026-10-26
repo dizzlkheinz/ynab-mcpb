@@ -78,15 +78,15 @@ describe("Recommendation Engine Integration", () => {
 
 			// Verify recommendation details
 			const rec = analysis.recommendations?.[0];
-			expect(rec.action_type).toBe("create_transaction");
-			expect(rec.priority).toMatch(/^(high|medium|low)$/);
-			expect(rec.account_id).toBe("test-account-id");
+			expect(rec!.action_type).toBe("create_transaction");
+			expect(rec!.priority).toMatch(/^(high|medium|low)$/);
+			expect(rec!.account_id).toBe("test-account-id");
 
-			if (rec.action_type === "create_transaction") {
-				expect(rec.parameters.payee_name).toContain("Coffee Shop");
-				expect(rec.parameters.amount).toBe(22220); // In milliunits
-				expect(rec.parameters.date).toBe("2024-01-15");
-				expect(rec.parameters.cleared).toBe("cleared");
+			if (rec!.action_type === "create_transaction") {
+				expect(rec!.parameters.payee_name).toContain("Coffee Shop");
+				expect(rec!.parameters.amount).toBe(22220); // In milliunits
+				expect(rec!.parameters.date).toBe("2024-01-15");
+				expect(rec!.parameters.cleared).toBe("cleared");
 			}
 		});
 
@@ -199,7 +199,7 @@ describe("Recommendation Engine Integration", () => {
 			expect(analysis.recommendations?.length).toBeGreaterThan(0);
 
 			// Verify any update_cleared recommendations are properly formed
-			for (const rec of updateRecs) {
+			for (const rec of updateRecs!) {
 				if (rec.action_type === "update_cleared") {
 					expect(rec.parameters.transaction_id).toBeDefined();
 					expect(rec.parameters.cleared).toMatch(/^(cleared|reconciled)$/);
@@ -365,7 +365,7 @@ describe("Recommendation Engine Integration", () => {
 			const createRecs = analysis.recommendations?.filter(
 				(rec) => rec.action_type === "create_transaction",
 			);
-			expect(createRecs.length).toBeGreaterThanOrEqual(3);
+			expect(createRecs!.length).toBeGreaterThanOrEqual(3);
 		});
 
 		it("should handle repeat amounts with recommendations", {
@@ -410,7 +410,7 @@ describe("Recommendation Engine Integration", () => {
 					rec.action_type === "create_transaction" ||
 					rec.action_type === "manual_review",
 			);
-			expect(relevantRecs.length).toBeGreaterThan(0);
+			expect(relevantRecs!.length).toBeGreaterThan(0);
 		});
 
 		it("should generate mixed recommendation types for complex scenario", {
@@ -487,8 +487,8 @@ describe("Recommendation Engine Integration", () => {
 				expect(rec.estimated_impact).toBeDefined();
 				expect(rec.account_id).toBe("test-account-id");
 				expect(rec.metadata).toBeDefined();
-				expect(rec.metadata.version).toBe("1.0");
-				expect(rec.metadata.created_at).toBeDefined();
+				expect(rec.metadata!["version"]).toBe("1.0");
+				expect(rec.metadata!["created_at"]).toBeDefined();
 			}
 		});
 
@@ -526,9 +526,9 @@ describe("Recommendation Engine Integration", () => {
 			const priorities = analysis.recommendations?.map((rec) => rec.priority);
 			const priorityValues = { high: 3, medium: 2, low: 1 };
 
-			for (let i = 0; i < priorities.length - 1; i++) {
-				const currentPriorityValue = priorityValues[priorities[i]!];
-				const nextPriorityValue = priorityValues[priorities[i + 1]!];
+			for (let i = 0; i < priorities!.length - 1; i++) {
+				const currentPriorityValue = priorityValues[priorities![i]!];
+				const nextPriorityValue = priorityValues[priorities![i + 1]!];
 				expect(currentPriorityValue).toBeGreaterThanOrEqual(nextPriorityValue);
 			}
 		});
@@ -580,10 +580,10 @@ describe("Recommendation Engine Integration", () => {
 			const createRecs = analysis.recommendations?.filter(
 				(rec) => rec.action_type === "create_transaction",
 			);
-			expect(createRecs.length).toBeGreaterThanOrEqual(2);
+			expect(createRecs!.length).toBeGreaterThanOrEqual(2);
 
 			// Large amounts should have high or medium priority
-			for (const rec of createRecs) {
+			for (const rec of createRecs!) {
 				if (
 					rec.action_type === "create_transaction" &&
 					Math.abs(rec.parameters.amount) >= 500000
@@ -641,9 +641,9 @@ describe("Recommendation Engine Integration", () => {
 
 				// Metadata
 				expect(rec.metadata).toBeDefined();
-				expect(rec.metadata.version).toBe("1.0");
-				expect(rec.metadata.created_at).toBeDefined();
-				expect(Date.parse(rec.metadata.created_at)).not.toBeNaN();
+				expect(rec.metadata!["version"]).toBe("1.0");
+				expect(rec.metadata!["created_at"]).toBeDefined();
+				expect(Date.parse(rec.metadata!["created_at"])).not.toBeNaN();
 
 				// Action-specific fields
 				expect(rec.action_type).toMatch(

@@ -57,7 +57,7 @@ describe("buildReconciliationPayload schema reference", () => {
 			currencyCode: "USD",
 		});
 
-		const schemaUrl = (structured as Record<string, unknown>).schema_url;
+		const schemaUrl = (structured as Record<string, unknown>)["schema_url"];
 		expect(schemaUrl).toContain("raw.githubusercontent.com");
 		expect(schemaUrl).toContain("/docs/schemas/reconciliation-v2.json");
 	});

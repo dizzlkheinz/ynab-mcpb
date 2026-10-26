@@ -150,7 +150,7 @@ describe("Tool Registration", () => {
 					`${tool.name} missing description`,
 				).toBeDefined();
 				expect(
-					tool.description.length,
+					tool.description!.length,
 					`${tool.name} has empty description`,
 				).toBeGreaterThan(0);
 			}

@@ -47,13 +47,13 @@ const { cacheManager, CacheManager } = await import(
 );
 
 // Capture original NODE_ENV for restoration
-const originalNodeEnv = process.env.NODE_ENV;
+const originalNodeEnv = process.env["NODE_ENV"];
 
 describe("Account Tools", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
 		// Reset NODE_ENV to test to ensure cache bypassing in tests
-		process.env.NODE_ENV = "test";
+		process.env["NODE_ENV"] = "test";
 		(cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
 			async (
 				_key: string,
@@ -76,7 +76,7 @@ describe("Account Tools", () => {
 		if (originalNodeEnv === undefined) {
 			Reflect.deleteProperty(process.env, "NODE_ENV");
 		} else {
-			process.env.NODE_ENV = originalNodeEnv;
+			process.env["NODE_ENV"] = originalNodeEnv;
 		}
 	});
 
@@ -118,7 +118,7 @@ describe("Account Tools", () => {
 			>;
 			expect(fetchAccountsMock).toHaveBeenCalledWith("budget-1");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toContain("delta merge applied");
 		});
@@ -169,9 +169,9 @@ describe("Account Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.accounts).toHaveLength(2);
 			expect(parsedContent.accounts[0]).toEqual({
 				id: "account-1",
@@ -209,7 +209,7 @@ describe("Account Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Failed to list accounts - budget or account not found",
 			);
@@ -231,7 +231,7 @@ describe("Account Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -253,7 +253,7 @@ describe("Account Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe("Failed to list accounts");
 		});
 	});
@@ -286,9 +286,9 @@ describe("Account Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.account).toEqual({
 				id: "account-1",
 				name: "Checking Account",
@@ -336,7 +336,7 @@ describe("Account Tools", () => {
 				response_format: "json",
 			});
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.cached).toBe(true);
 			expect(parsedContent.cache_info).toBe(
 				"Data retrieved from cache for improved performance",
@@ -355,7 +355,7 @@ describe("Account Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Failed to get account - budget or account not found",
 			);
@@ -373,7 +373,7 @@ describe("Account Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -420,7 +420,7 @@ describe("Account Tools", () => {
 				});
 
 				expect(result.content).toHaveLength(1);
-				const parsedContent = JSON.parse(result.content[0].text);
+				const parsedContent = JSON.parse(result.content[0]!.text);
 				expect(parsedContent.account.type).toBe(accountType);
 				expect(parsedContent.account.name).toBe(`${accountType} Account`);
 			}
@@ -453,7 +453,7 @@ describe("Account Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.account.balance).toBe(0);
 
 			// Verify the API was called with balance 0 in milliunits
@@ -560,7 +560,7 @@ describe("Account Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe("Failed to create account");
 		});
 
@@ -613,7 +613,7 @@ describe("Account Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.account.id).toBe("account-1");
 		});
 
@@ -649,7 +649,7 @@ describe("Account Tools", () => {
 			expect(CacheManager.generateKey).not.toHaveBeenCalled();
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.dry_run).toBe(true);
 			expect(parsedContent.action).toBe("ynab_create_account");
 			expect(parsedContent.request).toMatchObject({

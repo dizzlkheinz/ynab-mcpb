@@ -129,7 +129,7 @@ describe("transactionTools", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		// Reset NODE_ENV to test to ensure cache bypassing in tests
-		process.env.NODE_ENV = "test";
+		process.env["NODE_ENV"] = "test";
 	});
 
 	describe("ListTransactionsSchema", () => {
@@ -167,7 +167,7 @@ describe("transactionTools", () => {
 			const result = ListTransactionsSchema.safeParse(invalidParams);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toContain(
+				expect(result.error.issues[0]!.message).toContain(
 					"Date must be in ISO format",
 				);
 			}
@@ -239,7 +239,7 @@ describe("transactionTools", () => {
 				undefined,
 			);
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.cached).toBe(false);
 			expect(parsedContent.cache_info).toBe(
 				"Fresh data retrieved from YNAB API",
@@ -254,7 +254,7 @@ describe("transactionTools", () => {
 
 		it.skip("should not cache filtered requests - obsolete test (account_id)", async () => {
 			// Temporarily set NODE_ENV to non-test
-			process.env.NODE_ENV = "development";
+			process.env["NODE_ENV"] = "development";
 
 			const mockResponse = {
 				data: {
@@ -279,14 +279,14 @@ describe("transactionTools", () => {
 				mockYnabAPI.transactions.getTransactionsByAccount,
 			).toHaveBeenCalledWith("budget-123", "account-456", undefined);
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.cached).toBe(false);
 			expect(parsedContent.cache_info).toBe(
 				"Fresh data retrieved from YNAB API",
 			);
 
 			// Reset NODE_ENV
-			process.env.NODE_ENV = "test";
+			process.env["NODE_ENV"] = "test";
 		});
 
 		it("should list all transactions when no filters are provided", async () => {
@@ -312,8 +312,8 @@ describe("transactionTools", () => {
 				undefined,
 				undefined,
 			);
-			expect(result.content[0].text).toContain("transaction-123");
-			expect(result.content[0].text).toContain("-50");
+			expect(result.content[0]!.text).toContain("transaction-123");
+			expect(result.content[0]!.text).toContain("-50");
 		});
 
 		it("should filter by account_id when provided", async () => {
@@ -357,7 +357,7 @@ describe("transactionTools", () => {
 				undefined,
 				undefined,
 			);
-			expect(result.content[0].text).toContain("transaction-123");
+			expect(result.content[0]!.text).toContain("transaction-123");
 		});
 
 		it("should filter by category_id when provided", async () => {
@@ -381,7 +381,7 @@ describe("transactionTools", () => {
 			expect(
 				mockYnabAPI.transactions.getTransactionsByCategory,
 			).toHaveBeenCalledWith("budget-123", "category-789", undefined);
-			expect(result.content[0].text).toContain("transaction-123");
+			expect(result.content[0]!.text).toContain("transaction-123");
 		});
 
 		it("should filter fetched transactions by cleared status before pagination", async () => {
@@ -423,7 +423,7 @@ describe("transactionTools", () => {
 				undefined,
 				undefined,
 			);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.total_count).toBe(1);
 			expect(parsedContent.transactions).toHaveLength(1);
 			expect(parsedContent.transactions[0].id).toBe("transaction-456");
@@ -468,7 +468,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -483,7 +483,7 @@ describe("transactionTools", () => {
 			const params = { budget_id: "invalid-budget" };
 			const result = await handleListTransactions(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -501,7 +501,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Rate limit exceeded. Please try again later",
 			);
@@ -519,7 +519,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleListTransactions(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe("Failed to list transactions");
 		});
 
@@ -625,8 +625,8 @@ describe("transactionTools", () => {
 			const result = GetTransactionSchema.safeParse(invalidParams);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].code).toBe("invalid_type");
-				expect(result.error.issues[0].path).toEqual(["transaction_id"]);
+				expect(result.error.issues[0]!.code).toBe("invalid_type");
+				expect(result.error.issues[0]!.path).toEqual(["transaction_id"]);
 			}
 		});
 
@@ -686,7 +686,7 @@ describe("transactionTools", () => {
 				"transaction-456",
 			);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.transaction.id).toBe("transaction-123");
 			expect(response.transaction.amount).toBe(-50);
 			expect(response.transaction.account_name).toBe("Test Account");
@@ -707,7 +707,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -726,7 +726,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -745,7 +745,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleGetTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe("Failed to get transaction");
 		});
 	});
@@ -818,7 +818,7 @@ describe("transactionTools", () => {
 			const result = CreateTransactionSchema.safeParse(invalidParams);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toContain(
+				expect(result.error.issues[0]!.message).toContain(
 					"Amount must be an integer in milliunits",
 				);
 			}
@@ -835,7 +835,7 @@ describe("transactionTools", () => {
 			const result = CreateTransactionSchema.safeParse(invalidParams);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toContain(
+				expect(result.error.issues[0]!.message).toContain(
 					"Date must be in ISO format",
 				);
 			}
@@ -910,7 +910,7 @@ describe("transactionTools", () => {
 			const result = CreateTransactionSchema.safeParse(invalidParams);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toBe(
+				expect(result.error.issues[0]!.message).toBe(
 					"Amount must equal the sum of subtransaction amounts",
 				);
 			}
@@ -983,7 +983,7 @@ describe("transactionTools", () => {
 			expect(payload.transaction).not.toHaveProperty("subtransactions");
 			expect(payload.transaction).not.toHaveProperty("approved");
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.transaction.id).toBe("new-transaction-123");
 			expect(response.transaction.amount).toBe(-50);
 		});
@@ -1046,7 +1046,7 @@ describe("transactionTools", () => {
 			});
 			expect(payload.transaction).not.toHaveProperty("subtransactions");
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.transaction.id).toBe("new-transaction-123");
 		});
 
@@ -1155,7 +1155,7 @@ describe("transactionTools", () => {
 				],
 			});
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.transaction.amount).toBe(-75);
 			expect(response.transaction.account_balance).toBe(250);
 			expect(response.transaction.account_cleared_balance).toBe(225);
@@ -1203,7 +1203,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleCreateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -1223,7 +1223,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleCreateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -1243,7 +1243,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleCreateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe("Failed to create transaction");
 		});
 
@@ -1290,7 +1290,7 @@ describe("transactionTools", () => {
 			expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.transaction.id).toBe("new-transaction-123");
 		});
 
@@ -1331,7 +1331,7 @@ describe("transactionTools", () => {
 			expect(CacheManager.generateKey).not.toHaveBeenCalled();
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.dry_run).toBe(true);
 			expect(parsedContent.action).toBe("ynab_create_transaction");
 			expect(parsedContent.request).toMatchObject({
@@ -1357,7 +1357,7 @@ describe("transactionTools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.error.code).toBe("VALIDATION_ERROR");
 			expect(parsed.error.details).toBeDefined();
 
@@ -1390,7 +1390,7 @@ describe("transactionTools", () => {
 				invalidParams as any,
 			);
 
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.error.code).toBe("VALIDATION_ERROR");
 			expect(parsed.error.details).toBeDefined();
 
@@ -1596,7 +1596,7 @@ describe("transactionTools", () => {
 			);
 
 			expect(mockYnabAPI.transactions.createTransaction).not.toHaveBeenCalled();
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.dry_run).toBe(true);
 			expect(parsed.transaction_preview.amount).toBe(-55);
 			expect(parsed.receipt_summary.total).toBe(55);
@@ -1656,7 +1656,7 @@ describe("transactionTools", () => {
 			expect(callArgs[1].transaction.amount).toBe(-55000);
 			expect(callArgs[1].transaction.subtransactions).toHaveLength(5);
 
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.receipt_summary.total).toBe(55);
 			const homeCategory = parsed.receipt_summary.categories.find(
 				(category: any) => category.category_id === "category-home",
@@ -1696,7 +1696,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					expect(parsed.subtransactions).toHaveLength(4);
 					// Each item should be separate and use live YNAB outflow signs
@@ -1751,7 +1751,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Should have 4 subtransactions: 3 collapsed batches + 1 tax
 					expect(parsed.subtransactions).toHaveLength(4);
@@ -1825,7 +1825,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Should have: 1 big ticket + 2 collapsed grocery batches + 2 tax subtransactions
 					expect(parsed.subtransactions).toHaveLength(5);
@@ -1908,7 +1908,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Should have: 1 return + 2 collapsed grocery batches + 1 tax (groceries only)
 					expect(parsed.subtransactions).toHaveLength(4);
@@ -1981,7 +1981,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Should have: 1 discount + 2 collapsed batches + 1 tax
 					expect(parsed.subtransactions).toHaveLength(4);
@@ -2046,7 +2046,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Total items: 1 widget entry + 4 groceries = 5 items -> collapse mode (>= 5)
 					// Widget has unit price $30 < $50, so NOT big ticket
@@ -2106,7 +2106,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Should have: 1 return + 1 tax refund
 					expect(parsed.subtransactions).toHaveLength(2);
@@ -2157,7 +2157,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Should have 3 itemized items, no tax
 					expect(parsed.subtransactions).toHaveLength(3);
@@ -2195,7 +2195,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Should have 2 subtransactions: 1 collapsed batch + 1 tax
 					expect(parsed.subtransactions).toHaveLength(2);
@@ -2232,7 +2232,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Should have 5 subtransactions: 4 itemized + 1 tax
 					expect(parsed.subtransactions).toHaveLength(5);
@@ -2280,7 +2280,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Total: 7 items -> collapse mode
 					// All categories should collapse (consistency rule)
@@ -2340,7 +2340,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					expect(parsed.subtransactions).toHaveLength(2);
 					const collapsedMemo = parsed.subtransactions[0].memo;
@@ -2380,7 +2380,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Big ticket separate + collapsed remaining items + tax
 					expect(parsed.subtransactions.length).toBeGreaterThanOrEqual(3);
@@ -2420,7 +2420,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// Should have 2 subtransactions: 1 itemized + 1 tax
 					// (only 1 item, so no collapse, but name gets truncated)
@@ -2467,7 +2467,7 @@ describe("transactionTools", () => {
 						mockYnabAPI,
 						params,
 					);
-					const parsed = JSON.parse(result.content[0].text);
+					const parsed = JSON.parse(result.content[0]!.text);
 
 					// 6 items -> collapse mode, long item first creates its own subtransaction
 					// that gets truncated
@@ -2552,7 +2552,7 @@ describe("transactionTools", () => {
 			const result = UpdateTransactionSchema.safeParse(invalidParams);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toContain(
+				expect(result.error.issues[0]!.message).toContain(
 					"Amount must be an integer in milliunits",
 				);
 			}
@@ -2568,7 +2568,7 @@ describe("transactionTools", () => {
 			const result = UpdateTransactionSchema.safeParse(invalidParams);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toContain(
+				expect(result.error.issues[0]!.message).toContain(
 					"Date must be in ISO format",
 				);
 			}
@@ -2671,7 +2671,7 @@ describe("transactionTools", () => {
 				},
 			);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.transaction.id).toBe("transaction-456");
 			expect(response.transaction.amount).toBe(-60);
 			expect(response.updated_balance).toBe(150);
@@ -2724,7 +2724,7 @@ describe("transactionTools", () => {
 					},
 				},
 			);
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.transaction.subtransactions[0].amount).toBe(-40);
 			expect(response.transaction.subtransactions[1].amount).toBe(-20);
 		});
@@ -2782,7 +2782,7 @@ describe("transactionTools", () => {
 				},
 			);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.transaction.id).toBe("transaction-456");
 		});
 
@@ -2799,7 +2799,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleUpdateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -2818,7 +2818,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleUpdateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -2837,7 +2837,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleUpdateTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe("Failed to update transaction");
 		});
 
@@ -2883,7 +2883,7 @@ describe("transactionTools", () => {
 			expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.transaction.id).toBe("transaction-456");
 		});
 
@@ -2923,7 +2923,7 @@ describe("transactionTools", () => {
 			expect(CacheManager.generateKey).not.toHaveBeenCalled();
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.dry_run).toBe(true);
 			expect(parsedContent.action).toBe("ynab_update_transaction");
 			expect(parsedContent.request).toEqual({
@@ -2966,8 +2966,8 @@ describe("transactionTools", () => {
 			const result = DeleteTransactionSchema.safeParse(invalidParams);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].code).toBe("invalid_type");
-				expect(result.error.issues[0].path).toEqual(["transaction_id"]);
+				expect(result.error.issues[0]!.code).toBe("invalid_type");
+				expect(result.error.issues[0]!.path).toEqual(["transaction_id"]);
 			}
 		});
 
@@ -3029,7 +3029,7 @@ describe("transactionTools", () => {
 			const result = CreateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toContain(
+				expect(result.error.issues[0]!.message).toContain(
 					"At least one transaction is required",
 				);
 			}
@@ -3043,7 +3043,7 @@ describe("transactionTools", () => {
 			});
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toContain(
+				expect(result.error.issues[0]!.message).toContain(
 					"A maximum of 100 transactions",
 				);
 			}
@@ -3057,7 +3057,7 @@ describe("transactionTools", () => {
 			const result = CreateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].path).toEqual([
+				expect(result.error.issues[0]!.path).toEqual([
 					"transactions",
 					0,
 					"account_id",
@@ -3073,7 +3073,7 @@ describe("transactionTools", () => {
 			const result = CreateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].path).toEqual([
+				expect(result.error.issues[0]!.path).toEqual([
 					"transactions",
 					0,
 					"date",
@@ -3089,7 +3089,7 @@ describe("transactionTools", () => {
 			const result = CreateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].path).toEqual([
+				expect(result.error.issues[0]!.path).toEqual([
 					"transactions",
 					0,
 					"amount",
@@ -3146,7 +3146,7 @@ describe("transactionTools", () => {
 			const result = CreateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(true);
 			if (result.success) {
-				expect(result.data.transactions[0].import_id).toBe(
+				expect(result.data.transactions[0]!.import_id).toBe(
 					"YNAB:-5000:2024-01-01:1",
 				);
 			}
@@ -3210,7 +3210,7 @@ describe("transactionTools", () => {
 				"transaction-456",
 			);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.message).toBe("Transaction deleted successfully");
 			expect(response.transaction.id).toBe("transaction-456");
 			expect(response.transaction.deleted).toBe(true);
@@ -3228,7 +3228,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleDeleteTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Budget, account, category, or transaction not found",
 			);
@@ -3246,7 +3246,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleDeleteTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -3264,7 +3264,7 @@ describe("transactionTools", () => {
 			};
 			const result = await handleDeleteTransaction(mockYnabAPI, params);
 
-			const response = JSON.parse(result.content[0].text);
+			const response = JSON.parse(result.content[0]!.text);
 			expect(response.error.message).toBe("Failed to delete transaction");
 		});
 
@@ -3311,7 +3311,7 @@ describe("transactionTools", () => {
 			expect(cacheManager.delete).toHaveBeenCalledWith(mockCacheKey);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.transaction.id).toBe("transaction-456");
 			expect(parsedContent.transaction.deleted).toBe(true);
 		});
@@ -3351,7 +3351,7 @@ describe("transactionTools", () => {
 			expect(CacheManager.generateKey).not.toHaveBeenCalled();
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.dry_run).toBe(true);
 			expect(parsedContent.action).toBe("ynab_delete_transaction");
 			expect(parsedContent.request).toEqual({
@@ -3382,24 +3382,24 @@ describe("transactionTools", () => {
 		});
 
 		const buildApiTransaction = (overrides: Record<string, unknown> = {}) => ({
-			id: overrides.id ?? `transaction-${++transactionCounter}`,
-			account_id: overrides.account_id ?? "account-001",
-			date: overrides.date ?? "2024-01-01",
-			amount: overrides.amount ?? -1500,
-			memo: overrides.memo ?? "Bulk test",
-			cleared: overrides.cleared ?? "cleared",
-			approved: overrides.approved ?? true,
-			flag_color: overrides.flag_color ?? null,
-			account_name: overrides.account_name ?? "Checking",
-			payee_id: overrides.payee_id ?? null,
-			payee_name: overrides.payee_name ?? null,
-			category_id: overrides.category_id ?? null,
-			category_name: overrides.category_name ?? null,
-			transfer_account_id: overrides.transfer_account_id ?? null,
-			transfer_transaction_id: overrides.transfer_transaction_id ?? null,
-			matched_transaction_id: overrides.matched_transaction_id ?? null,
-			import_id: overrides.import_id ?? null,
-			deleted: overrides.deleted ?? false,
+			id: overrides["id"] ?? `transaction-${++transactionCounter}`,
+			account_id: overrides["account_id"] ?? "account-001",
+			date: overrides["date"] ?? "2024-01-01",
+			amount: overrides["amount"] ?? -1500,
+			memo: overrides["memo"] ?? "Bulk test",
+			cleared: overrides["cleared"] ?? "cleared",
+			approved: overrides["approved"] ?? true,
+			flag_color: overrides["flag_color"] ?? null,
+			account_name: overrides["account_name"] ?? "Checking",
+			payee_id: overrides["payee_id"] ?? null,
+			payee_name: overrides["payee_name"] ?? null,
+			category_id: overrides["category_id"] ?? null,
+			category_name: overrides["category_name"] ?? null,
+			transfer_account_id: overrides["transfer_account_id"] ?? null,
+			transfer_transaction_id: overrides["transfer_transaction_id"] ?? null,
+			matched_transaction_id: overrides["matched_transaction_id"] ?? null,
+			import_id: overrides["import_id"] ?? null,
+			deleted: overrides["deleted"] ?? false,
 			subtransactions: [],
 		});
 
@@ -3408,10 +3408,10 @@ describe("transactionTools", () => {
 			extras: Record<string, unknown> = {},
 		) => ({
 			data: {
-				transaction_ids: transactions.map((txn) => String(txn.id)),
+				transaction_ids: transactions.map((txn) => String(txn["id"])),
 				transactions,
-				duplicate_import_ids: extras.duplicate_import_ids ?? [],
-				server_knowledge: extras.server_knowledge ?? 1,
+				duplicate_import_ids: extras["duplicate_import_ids"] ?? [],
+				server_knowledge: extras["server_knowledge"] ?? 1,
 			},
 		});
 
@@ -3452,13 +3452,13 @@ describe("transactionTools", () => {
 				expect(
 					mockYnabAPI.transactions.createTransactions,
 				).not.toHaveBeenCalled();
-				expect(response.dry_run).toBe(true);
-				expect(response.summary.total_transactions).toBe(2);
-				expect(response.summary.accounts_affected).toEqual([
+				expect(response["dry_run"]).toBe(true);
+				expect(response["summary"].total_transactions).toBe(2);
+				expect(response["summary"].accounts_affected).toEqual([
 					"account-foo",
 					"account-bar",
 				]);
-				expect(response.transactions_preview).toHaveLength(2);
+				expect(response["transactions_preview"]).toHaveLength(2);
 				expect(cacheManager.deleteMany).not.toHaveBeenCalled();
 			});
 
@@ -3521,10 +3521,12 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.summary.created).toBe(2);
-				expect(response.results).toHaveLength(2);
+				expect(response["summary"].created).toBe(2);
+				expect(response["results"]).toHaveLength(2);
 				expect(
-					response.results.every((result: any) => result.status === "created"),
+					response["results"].every(
+						(result: any) => result.status === "created",
+					),
 				).toBe(true);
 				// Cache invalidation now uses individual delete calls, not deleteMany
 				expect(cacheManager.delete).toHaveBeenCalled();
@@ -3549,7 +3551,7 @@ describe("transactionTools", () => {
 					),
 				);
 				expect(
-					response.results.map((result: any) => result.transaction_id),
+					response["results"].map((result: any) => result.transaction_id),
 				).toEqual(["hash-1", "hash-2"]);
 			});
 
@@ -3573,11 +3575,11 @@ describe("transactionTools", () => {
 					),
 				);
 				expect(
-					response.results.find((r: any) => r.transaction_id === "mix-1")
+					response["results"].find((r: any) => r.transaction_id === "mix-1")
 						?.status,
 				).toBe("created");
 				expect(
-					response.results.find((r: any) => r.transaction_id === "mix-2")
+					response["results"].find((r: any) => r.transaction_id === "mix-2")
 						?.status,
 				).toBe("created");
 			});
@@ -3605,9 +3607,9 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.summary.duplicates).toBe(2);
+				expect(response["summary"].duplicates).toBe(2);
 				expect(
-					response.results.every(
+					response["results"].every(
 						(result: any) => result.status === "duplicate",
 					),
 				).toBe(true);
@@ -3637,10 +3639,10 @@ describe("transactionTools", () => {
 					),
 				);
 
-				const duplicateResult = response.results.find(
+				const duplicateResult = response["results"].find(
 					(result: any) => result.correlation_key === "dup-1",
 				);
-				const createdResult = response.results.find(
+				const createdResult = response["results"].find(
 					(result: any) => result.transaction_id === "created-new",
 				);
 				expect(duplicateResult?.status).toBe("duplicate");
@@ -3657,8 +3659,8 @@ describe("transactionTools", () => {
 				const response = await parseResponse(
 					handleCreateTransactions(mockYnabAPI, buildParams()),
 				);
-				expect(response.transactions).toBeDefined();
-				expect(response.mode).toBe("full");
+				expect(response["transactions"]).toBeDefined();
+				expect(response["mode"]).toBe("full");
 			});
 
 			it("downgrades to summary mode when response exceeds 64KB", async () => {
@@ -3675,8 +3677,8 @@ describe("transactionTools", () => {
 					handleCreateTransactions(mockYnabAPI, buildParams()),
 				);
 
-				expect(response.transactions).toBeUndefined();
-				expect(response.mode).toBe("summary");
+				expect(response["transactions"]).toBeUndefined();
+				expect(response["mode"]).toBe("summary");
 				byteSpy.mockRestore();
 			});
 
@@ -3695,8 +3697,8 @@ describe("transactionTools", () => {
 					handleCreateTransactions(mockYnabAPI, buildParams()),
 				);
 
-				expect(response.mode).toBe("ids_only");
-				expect(response.results[0].transaction_id).toBeDefined();
+				expect(response["mode"]).toBe("ids_only");
+				expect(response["results"][0].transaction_id).toBeDefined();
 				byteSpy.mockRestore();
 			});
 
@@ -3743,7 +3745,7 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.results.map((r: any) => r.request_index)).toEqual([
+				expect(response["results"].map((r: any) => r.request_index)).toEqual([
 					0, 1, 2,
 				]);
 			});
@@ -3760,8 +3762,8 @@ describe("transactionTools", () => {
 				const response = await parseResponse(
 					handleCreateTransactions(mockYnabAPI, buildParams()),
 				);
-				expect(response.results[0].status).toBe("failed");
-				expect(response.results[0].error_code).toBe("correlation_failed");
+				expect(response["results"][0].status).toBe("failed");
+				expect(response["results"][0].error_code).toBe("correlation_failed");
 				expect(logErrorSpy).toHaveBeenCalledWith(
 					"ynab:create_transactions",
 					"correlate_results",
@@ -3930,7 +3932,7 @@ describe("transactionTools", () => {
 						buildParams({ transactions: batch }),
 					),
 				);
-				expect(response.results[0].status).toBe("created");
+				expect(response["results"][0].status).toBe("created");
 			});
 
 			it("allows transfer transactions by passing transfer payee ids", async () => {
@@ -3950,7 +3952,7 @@ describe("transactionTools", () => {
 						buildParams({ transactions: batch }),
 					),
 				);
-				expect(response.results[0].status).toBe("created");
+				expect(response["results"][0].status).toBe("created");
 			});
 		});
 	});
@@ -3986,7 +3988,7 @@ describe("transactionTools", () => {
 			const result = UpdateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].path).toContain("id");
+				expect(result.error.issues[0]!.path).toContain("id");
 			}
 		});
 
@@ -4013,7 +4015,7 @@ describe("transactionTools", () => {
 			const result = UpdateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toContain(
+				expect(result.error.issues[0]!.message).toContain(
 					"At least one transaction is required",
 				);
 			}
@@ -4027,7 +4029,7 @@ describe("transactionTools", () => {
 			const result = UpdateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].message).toContain(
+				expect(result.error.issues[0]!.message).toContain(
 					"A maximum of 100 transactions",
 				);
 			}
@@ -4041,7 +4043,7 @@ describe("transactionTools", () => {
 			const result = UpdateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].path).toEqual([
+				expect(result.error.issues[0]!.path).toEqual([
 					"transactions",
 					0,
 					"date",
@@ -4057,7 +4059,7 @@ describe("transactionTools", () => {
 			const result = UpdateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].path).toEqual([
+				expect(result.error.issues[0]!.path).toEqual([
 					"transactions",
 					0,
 					"original_date",
@@ -4073,7 +4075,7 @@ describe("transactionTools", () => {
 			const result = UpdateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0].path).toEqual([
+				expect(result.error.issues[0]!.path).toEqual([
 					"transactions",
 					0,
 					"amount",
@@ -4103,10 +4105,10 @@ describe("transactionTools", () => {
 			const result = UpdateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(true);
 			if (result.success) {
-				expect(result.data.transactions[0].original_account_id).toBe(
+				expect(result.data.transactions[0]!.original_account_id).toBe(
 					"account-old",
 				);
-				expect(result.data.transactions[0].original_date).toBe("2024-01-01");
+				expect(result.data.transactions[0]!.original_date).toBe("2024-01-01");
 			}
 		});
 
@@ -4130,8 +4132,8 @@ describe("transactionTools", () => {
 			expect(result.success).toBe(false);
 			if (!result.success) {
 				// Expect "unrecognized_keys" error from strict() schema
-				expect(result.error.issues[0].code).toBe("unrecognized_keys");
-				expect(result.error.issues[0].path).toEqual(["transactions", 0]);
+				expect(result.error.issues[0]!.code).toBe("unrecognized_keys");
+				expect(result.error.issues[0]!.path).toEqual(["transactions", 0]);
 			}
 		});
 	});
@@ -4164,24 +4166,24 @@ describe("transactionTools", () => {
 		});
 
 		const buildApiTransaction = (overrides: Record<string, unknown> = {}) => ({
-			id: overrides.id ?? `transaction-${++transactionCounter}`,
-			account_id: overrides.account_id ?? "account-001",
-			date: overrides.date ?? "2024-01-01",
-			amount: overrides.amount ?? -1500,
-			memo: overrides.memo ?? "Updated",
-			cleared: overrides.cleared ?? "cleared",
-			approved: overrides.approved ?? true,
-			flag_color: overrides.flag_color ?? null,
-			account_name: overrides.account_name ?? "Checking",
-			payee_id: overrides.payee_id ?? null,
-			payee_name: overrides.payee_name ?? null,
-			category_id: overrides.category_id ?? null,
-			category_name: overrides.category_name ?? null,
-			transfer_account_id: overrides.transfer_account_id ?? null,
-			transfer_transaction_id: overrides.transfer_transaction_id ?? null,
-			matched_transaction_id: overrides.matched_transaction_id ?? null,
-			import_id: overrides.import_id ?? null,
-			deleted: overrides.deleted ?? false,
+			id: overrides["id"] ?? `transaction-${++transactionCounter}`,
+			account_id: overrides["account_id"] ?? "account-001",
+			date: overrides["date"] ?? "2024-01-01",
+			amount: overrides["amount"] ?? -1500,
+			memo: overrides["memo"] ?? "Updated",
+			cleared: overrides["cleared"] ?? "cleared",
+			approved: overrides["approved"] ?? true,
+			flag_color: overrides["flag_color"] ?? null,
+			account_name: overrides["account_name"] ?? "Checking",
+			payee_id: overrides["payee_id"] ?? null,
+			payee_name: overrides["payee_name"] ?? null,
+			category_id: overrides["category_id"] ?? null,
+			category_name: overrides["category_name"] ?? null,
+			transfer_account_id: overrides["transfer_account_id"] ?? null,
+			transfer_transaction_id: overrides["transfer_transaction_id"] ?? null,
+			matched_transaction_id: overrides["matched_transaction_id"] ?? null,
+			import_id: overrides["import_id"] ?? null,
+			deleted: overrides["deleted"] ?? false,
 			subtransactions: [],
 		});
 
@@ -4191,7 +4193,7 @@ describe("transactionTools", () => {
 		) => ({
 			data: {
 				transactions,
-				server_knowledge: extras.server_knowledge ?? 1,
+				server_knowledge: extras["server_knowledge"] ?? 1,
 			},
 		});
 
@@ -4233,9 +4235,9 @@ describe("transactionTools", () => {
 				expect(
 					mockYnabAPI.transactions.updateTransactions,
 				).not.toHaveBeenCalled();
-				expect(response.dry_run).toBe(true);
-				expect(response.summary.total_transactions).toBe(2);
-				expect(response.transactions_preview).toHaveLength(2);
+				expect(response["dry_run"]).toBe(true);
+				expect(response["summary"].total_transactions).toBe(2);
+				expect(response["transactions_preview"]).toHaveLength(2);
 				expect(cacheManager.deleteMany).not.toHaveBeenCalled();
 			});
 
@@ -4267,10 +4269,10 @@ describe("transactionTools", () => {
 					handleUpdateTransactions(mockYnabAPI, params),
 				);
 
-				expect(response.dry_run).toBe(true);
-				expect(response.transactions_preview).toHaveLength(1);
+				expect(response["dry_run"]).toBe(true);
+				expect(response["transactions_preview"]).toHaveLength(1);
 
-				const preview = response.transactions_preview[0];
+				const preview = response["transactions_preview"][0];
 				expect(preview.transaction_id).toBe("transaction-001");
 				expect(preview.before).toEqual({
 					amount: -5,
@@ -4302,8 +4304,8 @@ describe("transactionTools", () => {
 					handleUpdateTransactions(mockYnabAPI, params),
 				);
 
-				expect(response.dry_run).toBe(true);
-				const preview = response.transactions_preview[0];
+				expect(response["dry_run"]).toBe(true);
+				const preview = response["transactions_preview"][0];
 				expect(preview.before).toBe("unavailable");
 				expect(preview.after).toBeDefined();
 			});
@@ -4337,9 +4339,9 @@ describe("transactionTools", () => {
 					handleUpdateTransactions(mockYnabAPI, params),
 				);
 
-				expect(response.summary.accounts_affected).toContain("account-001");
-				expect(response.summary.fields_to_update).toContain("amount");
-				expect(response.summary.fields_to_update).toContain("memo");
+				expect(response["summary"].accounts_affected).toContain("account-001");
+				expect(response["summary"].fields_to_update).toContain("amount");
+				expect(response["summary"].fields_to_update).toContain("memo");
 			});
 
 			it("previews split lines in major currency units", async () => {
@@ -4373,8 +4375,12 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.summary.fields_to_update).toContain("subtransactions");
-				expect(response.transactions_preview[0].after.subtransactions).toEqual([
+				expect(response["summary"].fields_to_update).toContain(
+					"subtransactions",
+				);
+				expect(
+					response["transactions_preview"][0].after.subtransactions,
+				).toEqual([
 					{ amount: -3, category_id: "category-1" },
 					{ amount: -2, category_id: "category-2" },
 				]);
@@ -4445,9 +4451,9 @@ describe("transactionTools", () => {
 				).not.toHaveBeenCalled();
 
 				// Verify preview still works correctly
-				expect(response.dry_run).toBe(true);
-				expect(response.transactions_preview).toHaveLength(1);
-				const preview = response.transactions_preview[0];
+				expect(response["dry_run"]).toBe(true);
+				expect(response["transactions_preview"]).toHaveLength(1);
+				const preview = response["transactions_preview"][0];
 				expect(preview.transaction_id).toBe("transaction-001");
 				expect(preview.before).toEqual({
 					amount: -5,
@@ -4488,12 +4494,14 @@ describe("transactionTools", () => {
 					handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
 				);
 
-				expect(response.summary.updated).toBe(2);
-				expect(response.results).toHaveLength(2);
+				expect(response["summary"].updated).toBe(2);
+				expect(response["results"]).toHaveLength(2);
 				expect(
-					response.results.every((result: any) => result.status === "updated"),
+					response["results"].every(
+						(result: any) => result.status === "updated",
+					),
 				).toBe(true);
-				expect(response.transactions[0].amount).toBe(-1.5);
+				expect(response["transactions"][0].amount).toBe(-1.5);
 				// Cache invalidation now uses individual delete calls
 				expect(cacheManager.delete).toHaveBeenCalled();
 			});
@@ -4724,7 +4732,7 @@ describe("transactionTools", () => {
 					}),
 				);
 
-				const response = JSON.parse(result.content[0].text);
+				const response = JSON.parse(result.content[0]!.text);
 				expect(response.error).toBeDefined();
 			});
 
@@ -4750,8 +4758,8 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.results[0].status).toBe("failed");
-				expect(response.results[0].error_code).toBe("update_failed");
+				expect(response["results"][0].status).toBe("failed");
+				expect(response["results"][0].error_code).toBe("update_failed");
 			});
 
 			it("handles metadata resolution failures without crashing", async () => {
@@ -4787,7 +4795,7 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.summary.updated).toBe(1);
+				expect(response["summary"].updated).toBe(1);
 			});
 		});
 
@@ -4834,7 +4842,7 @@ describe("transactionTools", () => {
 					mockYnabAPI,
 					buildParams({ transactions }),
 				);
-				const response = JSON.parse(result.content[0].text);
+				const response = JSON.parse(result.content[0]!.text);
 
 				expect(response.error).toBeDefined();
 				expect(response.error.code).toBe("VALIDATION_ERROR");
@@ -4887,7 +4895,7 @@ describe("transactionTools", () => {
 					handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
 				);
 
-				expect(response.summary.updated).toBe(20);
+				expect(response["summary"].updated).toBe(20);
 			});
 
 			it("returns warnings in dry_run mode when metadata is missing", async () => {
@@ -4908,12 +4916,12 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.dry_run).toBe(true);
-				expect(response.warnings).toBeDefined();
-				expect(response.warnings).toHaveLength(1);
-				expect(response.warnings[0].code).toBe("metadata_unavailable");
-				expect(response.warnings[0].count).toBe(2);
-				expect(response.warnings[0].sample_ids).toEqual([
+				expect(response["dry_run"]).toBe(true);
+				expect(response["warnings"]).toBeDefined();
+				expect(response["warnings"]).toHaveLength(1);
+				expect(response["warnings"][0].code).toBe("metadata_unavailable");
+				expect(response["warnings"][0].count).toBe(2);
+				expect(response["warnings"][0].sample_ids).toEqual([
 					"transaction-001",
 					"transaction-002",
 				]);
@@ -4951,8 +4959,8 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.dry_run).toBe(true);
-				expect(response.warnings).toBeUndefined();
+				expect(response["dry_run"]).toBe(true);
+				expect(response["warnings"]).toBeUndefined();
 			});
 		});
 
@@ -4975,9 +4983,9 @@ describe("transactionTools", () => {
 					handleUpdateTransactions(mockYnabAPI, buildParams({ transactions })),
 				);
 
-				expect(response.results).toHaveLength(2);
-				expect(response.results[0].correlation_key).toBe("transaction-001");
-				expect(response.results[1].correlation_key).toBe("transaction-002");
+				expect(response["results"]).toHaveLength(2);
+				expect(response["results"][0].correlation_key).toBe("transaction-001");
+				expect(response["results"][1].correlation_key).toBe("transaction-002");
 			});
 
 			it("includes correlation_key in failed update results", async () => {
@@ -4997,8 +5005,8 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.results[0].status).toBe("failed");
-				expect(response.results[0].correlation_key).toBe("failed-id");
+				expect(response["results"][0].status).toBe("failed");
+				expect(response["results"][0].correlation_key).toBe("failed-id");
 			});
 
 			it("preserves correlation_key in ids_only downgrade mode", async () => {
@@ -5024,10 +5032,10 @@ describe("transactionTools", () => {
 					),
 				);
 
-				expect(response.mode).toBe("ids_only");
-				expect(response.results[0].correlation_key).toBe("transaction-001");
-				expect(response.results[0].transaction_id).toBe("transaction-001");
-				expect(response.results[0].status).toBe("updated");
+				expect(response["mode"]).toBe("ids_only");
+				expect(response["results"][0].correlation_key).toBe("transaction-001");
+				expect(response["results"][0].transaction_id).toBe("transaction-001");
+				expect(response["results"][0].status).toBe("updated");
 
 				byteSpy.mockRestore();
 			});
@@ -5049,8 +5057,8 @@ describe("transactionTools", () => {
 				const response = await parseResponse(
 					handleUpdateTransactions(mockYnabAPI, buildParams()),
 				);
-				expect(response.transactions).toBeDefined();
-				expect(response.mode).toBe("full");
+				expect(response["transactions"]).toBeDefined();
+				expect(response["mode"]).toBe("full");
 			});
 
 			it("downgrades to summary mode when response exceeds 64KB", async () => {
@@ -5067,8 +5075,8 @@ describe("transactionTools", () => {
 					handleUpdateTransactions(mockYnabAPI, buildParams()),
 				);
 
-				expect(response.transactions).toBeUndefined();
-				expect(response.mode).toBe("summary");
+				expect(response["transactions"]).toBeUndefined();
+				expect(response["mode"]).toBe("summary");
 				byteSpy.mockRestore();
 			});
 		});
@@ -5108,9 +5116,9 @@ describe("transactionTools", () => {
 				);
 
 				// Verify the update was successful
-				expect(response.error).toBeUndefined();
-				expect(response.summary).toBeDefined();
-				expect(response.summary.updated).toBe(1);
+				expect(response["error"]).toBeUndefined();
+				expect(response["summary"]).toBeDefined();
+				expect(response["summary"].updated).toBe(1);
 
 				// Cache invalidation uses individual delete calls
 				const deleteCalls = cacheManager.delete.mock.calls.map(

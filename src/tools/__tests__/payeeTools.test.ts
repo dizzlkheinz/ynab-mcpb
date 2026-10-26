@@ -47,7 +47,7 @@ describe("Payee Tools", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
 		// Reset NODE_ENV to test to ensure cache bypassing in tests
-		process.env.NODE_ENV = "test";
+		process.env["NODE_ENV"] = "test";
 		// Mock cache.wrap to call the loader directly (bypass cache)
 		(cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
 			async (
@@ -97,7 +97,7 @@ describe("Payee Tools", () => {
 				{ deltaFetcher: fetcher },
 			);
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toContain("delta merge applied");
 			expect(parsedContent.payees).toHaveLength(2);
@@ -105,7 +105,7 @@ describe("Payee Tools", () => {
 
 		it.skip("should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher", async () => {
 			// Temporarily set NODE_ENV to non-test
-			process.env.NODE_ENV = "development";
+			process.env["NODE_ENV"] = "development";
 
 			const mockPayees = [
 				{
@@ -137,14 +137,14 @@ describe("Payee Tools", () => {
 			});
 			expect(cacheManager.has).toHaveBeenCalledWith(mockCacheKey);
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.cached).toBe(true);
 			expect(parsedContent.cache_info).toBe(
 				"Data retrieved from cache for improved performance",
 			);
 
 			// Reset NODE_ENV
-			process.env.NODE_ENV = "test";
+			process.env["NODE_ENV"] = "test";
 		});
 
 		it("should return formatted payee list on success", async () => {
@@ -183,9 +183,9 @@ describe("Payee Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.payees).toHaveLength(3);
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toBe(
@@ -221,7 +221,7 @@ describe("Payee Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);
@@ -243,7 +243,7 @@ describe("Payee Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Insufficient permissions to access YNAB data",
 			);
@@ -265,7 +265,7 @@ describe("Payee Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe("Budget or payee not found");
 		});
 
@@ -285,7 +285,7 @@ describe("Payee Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Rate limit exceeded. Please try again later",
 			);
@@ -307,7 +307,7 @@ describe("Payee Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"YNAB service is currently unavailable",
 			);
@@ -329,7 +329,7 @@ describe("Payee Tools", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe("Failed to list payees");
 		});
 	});
@@ -337,7 +337,7 @@ describe("Payee Tools", () => {
 	describe("handleGetPayee", () => {
 		it.skip("should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher", async () => {
 			// Temporarily set NODE_ENV to non-test
-			process.env.NODE_ENV = "development";
+			process.env["NODE_ENV"] = "development";
 
 			const mockPayee = {
 				id: "payee-1",
@@ -369,14 +369,14 @@ describe("Payee Tools", () => {
 				loader: expect.any(Function),
 			});
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.cached).toBe(true);
 			expect(parsedContent.cache_info).toBe(
 				"Data retrieved from cache for improved performance",
 			);
 
 			// Reset NODE_ENV
-			process.env.NODE_ENV = "test";
+			process.env["NODE_ENV"] = "test";
 		});
 
 		it("should return detailed payee information on success", async () => {
@@ -398,9 +398,9 @@ describe("Payee Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.payee).toEqual({
 				id: "payee-1",
 				name: "Grocery Store",
@@ -428,7 +428,7 @@ describe("Payee Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.payee.transfer_account_id).toBe("account-2");
 		});
 
@@ -444,7 +444,7 @@ describe("Payee Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe("Budget or payee not found");
 		});
 
@@ -460,7 +460,7 @@ describe("Payee Tools", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(result.content[0]!.text);
 			expect(parsedContent.error.message).toBe(
 				"Invalid or expired YNAB access token",
 			);

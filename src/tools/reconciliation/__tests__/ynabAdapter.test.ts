@@ -60,8 +60,8 @@ describe("ynabAdapter", () => {
 		const results = normalizeYNABTransactions(transactions);
 
 		expect(results).toHaveLength(2);
-		expect(results[0].id).toBe("test-id-1");
-		expect(results[1].id).toBe("test-id-2");
-		expect(results[1].amount).toBe(5000);
+		expect(results[0]!.id).toBe("test-id-1");
+		expect(results[1]!.id).toBe("test-id-2");
+		expect(results[1]!.amount).toBe(5000);
 	});
 });

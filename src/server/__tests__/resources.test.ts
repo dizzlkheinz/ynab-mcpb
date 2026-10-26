@@ -280,7 +280,7 @@ describe("resources module", () => {
 
 				expect(customFormatter.format).toHaveBeenCalled();
 				expect(mockResponseFormatter.format).not.toHaveBeenCalled();
-				expect(result.contents[0].text).toBe("custom-formatted-response");
+				expect(result.contents[0]!.text).toBe("custom-formatted-response");
 			});
 		});
 
@@ -292,7 +292,7 @@ describe("resources module", () => {
 
 				const result = await resourceManager.readResource("ynab://budgets");
 
-				expect(result.contents[0].text).toBe(JSON.stringify({ budgets: [] }));
+				expect(result.contents[0]!.text).toBe(JSON.stringify({ budgets: [] }));
 			});
 
 			it("should handle user without extended properties", async () => {
@@ -306,7 +306,7 @@ describe("resources module", () => {
 
 				const result = await resourceManager.readResource("ynab://user");
 
-				expect(result.contents[0].text).toBe(
+				expect(result.contents[0]!.text).toBe(
 					JSON.stringify({ user: { id: minimalUser.id } }),
 				);
 			});

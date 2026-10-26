@@ -137,7 +137,7 @@ describe("analyzer", () => {
 			const result = analyzeReconciliation("csv", undefined, ynabTxns, -50.0);
 
 			expect(result.auto_matches.length).toBeGreaterThan(0);
-			expect(result.auto_matches[0].confidence).toBe("high");
+			expect(result.auto_matches[0]!.confidence).toBe("high");
 		});
 
 		it("should categorize medium-confidence matches as suggested", () => {
@@ -180,7 +180,7 @@ describe("analyzer", () => {
 
 			// Should be suggested (medium)
 			expect(result.suggested_matches.length).toBeGreaterThan(0);
-			expect(result.suggested_matches[0].confidence).toBe("medium");
+			expect(result.suggested_matches[0]!.confidence).toBe("medium");
 		});
 
 		it("keeps a bank transaction unmatched when its medium YNAB candidate is claimed by a high-confidence match", () => {
@@ -231,7 +231,7 @@ describe("analyzer", () => {
 			const result = analyzeReconciliation("csv", undefined, ynabTxns, -50.0);
 
 			expect(result.auto_matches).toHaveLength(1);
-			expect(result.auto_matches[0].bankTransaction.id).toBe("b-high");
+			expect(result.auto_matches[0]!.bankTransaction.id).toBe("b-high");
 			expect(result.suggested_matches).toHaveLength(0);
 			expect(result.unmatched_bank.map((txn) => txn.id)).toContain("b-medium");
 		});
@@ -265,7 +265,7 @@ describe("analyzer", () => {
 			const result = analyzeReconciliation("csv", undefined, ynabTxns, 0);
 
 			expect(result.unmatched_bank.length).toBe(1);
-			expect(result.unmatched_bank[0].payee).toBe("New Store");
+			expect(result.unmatched_bank[0]!.payee).toBe("New Store");
 		});
 
 		it("should identify unmatched YNAB transactions", () => {
@@ -297,7 +297,7 @@ describe("analyzer", () => {
 			const result = analyzeReconciliation("csv", undefined, ynabTxns, 0);
 
 			expect(result.unmatched_ynab.length).toBe(1);
-			expect(result.unmatched_ynab[0].payee).toBe("Restaurant");
+			expect(result.unmatched_ynab[0]!.payee).toBe("Restaurant");
 		});
 
 		it("should calculate balance information correctly", () => {

@@ -13,9 +13,9 @@ describe("CacheManager", () => {
 		vi.clearAllMocks();
 		vi.useFakeTimers({ now: 0 }); // Start fake timers at timestamp 0
 		// Clear environment variables
-		process.env.YNAB_MCP_CACHE_MAX_ENTRIES = undefined;
-		process.env.YNAB_MCP_CACHE_STALE_MS = undefined;
-		process.env.YNAB_MCP_CACHE_DEFAULT_TTL_MS = undefined;
+		process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = undefined;
+		process.env["YNAB_MCP_CACHE_STALE_MS"] = undefined;
+		process.env["YNAB_MCP_CACHE_DEFAULT_TTL_MS"] = undefined;
 		cache = new CacheManager();
 	});
 
@@ -138,7 +138,7 @@ describe("CacheManager", () => {
 
 	describe("LRU Eviction", () => {
 		beforeEach(() => {
-			process.env.YNAB_MCP_CACHE_MAX_ENTRIES = "3";
+			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "3";
 			cache = new CacheManager();
 		});
 
@@ -185,7 +185,7 @@ describe("CacheManager", () => {
 		});
 
 		it("should handle zero maxEntries (no caching)", () => {
-			process.env.YNAB_MCP_CACHE_MAX_ENTRIES = "0";
+			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "0";
 			cache = new CacheManager();
 
 			cache.set("key1", "value1");
@@ -200,7 +200,7 @@ describe("CacheManager", () => {
 			cache.set("key3", "value3");
 
 			// Change maxEntries to 1 by creating a new cache manager
-			process.env.YNAB_MCP_CACHE_MAX_ENTRIES = "1";
+			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "1";
 			const smallCache = new CacheManager();
 
 			// Add entries that should trigger multiple evictions
@@ -542,7 +542,7 @@ describe("CacheManager", () => {
 
 	describe("Environment Variable Configuration", () => {
 		it("should use environment variable for maxEntries", () => {
-			process.env.YNAB_MCP_CACHE_MAX_ENTRIES = "5";
+			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "5";
 			const configuredCache = new CacheManager();
 
 			const stats = configuredCache.getStats();
@@ -550,7 +550,7 @@ describe("CacheManager", () => {
 		});
 
 		it("should use environment variable for stale window", () => {
-			process.env.YNAB_MCP_CACHE_STALE_MS = "30000";
+			process.env["YNAB_MCP_CACHE_STALE_MS"] = "30000";
 			const configuredCache = new CacheManager();
 
 			configuredCache.set("key1", "value1", {
@@ -567,9 +567,9 @@ describe("CacheManager", () => {
 		});
 
 		it("should fall back to defaults for invalid environment values", () => {
-			process.env.YNAB_MCP_CACHE_MAX_ENTRIES = "invalid";
-			process.env.YNAB_MCP_CACHE_STALE_MS = "not-a-number";
-			process.env.YNAB_MCP_CACHE_DEFAULT_TTL_MS = "invalid-ttl";
+			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "invalid";
+			process.env["YNAB_MCP_CACHE_STALE_MS"] = "not-a-number";
+			process.env["YNAB_MCP_CACHE_DEFAULT_TTL_MS"] = "invalid-ttl";
 
 			// Reset timers for new cache instance
 			vi.useRealTimers();
@@ -590,7 +590,7 @@ describe("CacheManager", () => {
 		});
 
 		it("should use environment variable for default TTL", () => {
-			process.env.YNAB_MCP_CACHE_DEFAULT_TTL_MS = "60000"; // 1 minute
+			process.env["YNAB_MCP_CACHE_DEFAULT_TTL_MS"] = "60000"; // 1 minute
 
 			// Reset timers for new cache instance
 			vi.useRealTimers();
@@ -607,9 +607,9 @@ describe("CacheManager", () => {
 		});
 
 		it("should fall back to defaults when environment variables are missing", () => {
-			process.env.YNAB_MCP_CACHE_MAX_ENTRIES = undefined;
-			process.env.YNAB_MCP_CACHE_STALE_MS = undefined;
-			process.env.YNAB_MCP_CACHE_DEFAULT_TTL_MS = undefined;
+			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = undefined;
+			process.env["YNAB_MCP_CACHE_STALE_MS"] = undefined;
+			process.env["YNAB_MCP_CACHE_DEFAULT_TTL_MS"] = undefined;
 
 			// Reset timers for new cache instance
 			vi.useRealTimers();
@@ -670,7 +670,7 @@ describe("CacheManager", () => {
 
 			const entries = cache.getEntriesForSizeEstimation();
 			expect(entries).toHaveLength(1); // Only non-expired entry
-			expect(entries[0][0]).toBe("key2");
+			expect(entries[0]![0]).toBe("key2");
 		});
 
 		it("should provide lightweight cache metadata without full entry data", () => {
@@ -728,7 +728,7 @@ describe("CacheManager", () => {
 		});
 
 		it("should handle very large cache sizes", () => {
-			process.env.YNAB_MCP_CACHE_MAX_ENTRIES = "10000";
+			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "10000";
 			const largeCache = new CacheManager();
 
 			// Add many entries

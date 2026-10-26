@@ -65,9 +65,9 @@ describe("scenario: non-USD formatting in adapter payload", () => {
 		});
 
 		const structured = payload.structured as Record<string, any>;
-		expect(structured.balance.current_cleared.currency).toBe("CAD");
-		expect(structured.summary.current_cleared_balance.currency).toBe("CAD");
-		expect(structured.csv_format).toEqual({
+		expect(structured["balance"].current_cleared.currency).toBe("CAD");
+		expect(structured["summary"].current_cleared_balance.currency).toBe("CAD");
+		expect(structured["csv_format"]).toEqual({
 			delimiter: ";",
 			decimal_separator: ",",
 			thousands_separator: " ",

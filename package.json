@@ -27,7 +27,7 @@
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
 		"format:check": "biome format .",
-		"type-check": "tsc --noEmit",
+		"type-check": "tsc --noEmit && tsc -p tsconfig.test.json",
 		"test": "vitest run --project unit && npm run filter-test-results",
 		"test:watch": "vitest",
 		"test:unit": "vitest run --project unit",

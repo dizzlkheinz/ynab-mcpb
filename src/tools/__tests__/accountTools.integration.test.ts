@@ -4,9 +4,9 @@ import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { handleGetAccount, handleListAccounts } from "../accountTools.js";
 
 const isSkip = ["true", "1", "yes", "y", "on"].includes(
-	(process.env.SKIP_E2E_TESTS || "").toLowerCase().trim(),
+	(process.env["SKIP_E2E_TESTS"] || "").toLowerCase().trim(),
 );
-const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
+const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
 const shouldSkip = isSkip || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
@@ -15,12 +15,12 @@ describeIntegration("Account Tools Integration", () => {
 	let testBudgetId: string;
 
 	beforeAll(async () => {
-		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+		const accessToken = process.env["YNAB_ACCESS_TOKEN"]!;
 		ynabAPI = new ynab.API(accessToken);
 
 		// Get the first budget for testing
 		const budgetsResponse = await listBudgetsCompat(ynabAPI);
-		testBudgetId = budgetsResponse.budgets[0].id;
+		testBudgetId = budgetsResponse.budgets[0]!.id;
 	});
 
 	it("should successfully list accounts from real API", {
@@ -32,9 +32,9 @@ describeIntegration("Account Tools Integration", () => {
 		});
 
 		expect(result.content).toHaveLength(1);
-		expect(result.content[0].type).toBe("text");
+		expect(result.content[0]!.type).toBe("text");
 
-		const parsedContent = JSON.parse(result.content[0].text);
+		const parsedContent = JSON.parse(result.content[0]!.text);
 		expect(parsedContent.accounts).toBeDefined();
 		expect(Array.isArray(parsedContent.accounts)).toBe(true);
 
@@ -60,7 +60,7 @@ describeIntegration("Account Tools Integration", () => {
 			budget_id: testBudgetId,
 			response_format: "json",
 		});
-		const parsedListContent = JSON.parse(listResult.content[0].text);
+		const parsedListContent = JSON.parse(listResult.content[0]!.text);
 
 		if (parsedListContent.accounts.length === 0) {
 			console.warn(
@@ -78,9 +78,9 @@ describeIntegration("Account Tools Integration", () => {
 		});
 
 		expect(result.content).toHaveLength(1);
-		expect(result.content[0].type).toBe("text");
+		expect(result.content[0]!.type).toBe("text");
 
-		const parsedContent = JSON.parse(result.content[0].text);
+		const parsedContent = JSON.parse(result.content[0]!.text);
 		expect(parsedContent.account).toBeDefined();
 		expect(parsedContent.account.id).toBe(testAccountId);
 		expect(parsedContent.account).toHaveProperty("name");
@@ -100,7 +100,7 @@ describeIntegration("Account Tools Integration", () => {
 		});
 
 		expect(result.content).toHaveLength(1);
-		const parsedContent = JSON.parse(result.content[0].text);
+		const parsedContent = JSON.parse(result.content[0]!.text);
 		expect(parsedContent.error).toBeDefined();
 		expect(parsedContent.error.message).toContain("Failed to list accounts");
 
@@ -119,7 +119,7 @@ describeIntegration("Account Tools Integration", () => {
 		});
 
 		expect(result.content).toHaveLength(1);
-		const parsedContent = JSON.parse(result.content[0].text);
+		const parsedContent = JSON.parse(result.content[0]!.text);
 		expect(parsedContent.error).toBeDefined();
 		expect(parsedContent.error.message).toContain("Failed to get account");
 

@@ -196,7 +196,7 @@ describe("mergeCategories", () => {
 		const delta = [buildCategoryGroup({ id: "group-1", name: "Renamed" })];
 
 		const result = mergeCategories(snapshot, delta);
-		expect(result[0].name).toBe("Renamed");
+		expect(result[0]!.name).toBe("Renamed");
 	});
 
 	it("should delete groups flagged as deleted", () => {
@@ -215,7 +215,7 @@ describe("mergeCategories", () => {
 		const delta = [buildCategoryGroup({ id: "group-1", deleted: true })];
 
 		const result = mergeCategories(snapshot, delta, { preserveDeleted: true });
-		expect(result[0].deleted).toBe(true);
+		expect(result[0]!.deleted).toBe(true);
 	});
 
 	it("should merge new categories within existing group", () => {
@@ -233,7 +233,7 @@ describe("mergeCategories", () => {
 		];
 
 		const result = mergeCategories(snapshot, delta);
-		expect(result[0].categories.map((cat) => cat.id)).toEqual([
+		expect(result[0]!.categories.map((cat) => cat.id)).toEqual([
 			"cat-1",
 			"cat-2",
 		]);
@@ -254,7 +254,7 @@ describe("mergeCategories", () => {
 		];
 
 		const result = mergeCategories(snapshot, delta);
-		expect(result[0].categories[0].name).toBe("New Name");
+		expect(result[0]!.categories[0]!.name).toBe("New Name");
 	});
 
 	it("should delete categories marked as deleted", () => {
@@ -275,7 +275,7 @@ describe("mergeCategories", () => {
 		];
 
 		const result = mergeCategories(snapshot, delta);
-		expect(result[0].categories.map((cat) => cat.id)).toEqual(["cat-1"]);
+		expect(result[0]!.categories.map((cat) => cat.id)).toEqual(["cat-1"]);
 	});
 
 	it("should preserve deleted categories when preserveDeleted is true", () => {
@@ -293,7 +293,7 @@ describe("mergeCategories", () => {
 		];
 
 		const result = mergeCategories(snapshot, delta, { preserveDeleted: true });
-		expect(result[0].categories[0].deleted).toBe(true);
+		expect(result[0]!.categories[0]!.deleted).toBe(true);
 	});
 
 	it("should handle groups with empty category lists", () => {
@@ -306,7 +306,7 @@ describe("mergeCategories", () => {
 		const delta = [buildCategoryGroup({ id: "group-1", categories: [] })];
 
 		const result = mergeCategories(snapshot, delta);
-		expect(result[0].categories).toEqual([]);
+		expect(result[0]!.categories).toEqual([]);
 	});
 
 	it("should handle metadata-only updates (no categories provided)", () => {
@@ -328,8 +328,8 @@ describe("mergeCategories", () => {
 		];
 
 		const result = mergeCategories(snapshot, delta);
-		expect(result[0].name).toBe("Updated");
-		expect(result[0].categories).toEqual([buildCategory({ id: "cat-1" })]);
+		expect(result[0]!.name).toBe("Updated");
+		expect(result[0]!.categories).toEqual([buildCategory({ id: "cat-1" })]);
 	});
 
 	it("should apply nested updates to metadata and categories simultaneously", () => {
@@ -355,8 +355,8 @@ describe("mergeCategories", () => {
 		];
 
 		const result = mergeCategories(snapshot, delta);
-		expect(result[0].name).toBe("New");
-		expect(result[0].categories.map((cat) => cat.id)).toEqual([
+		expect(result[0]!.name).toBe("New");
+		expect(result[0]!.categories.map((cat) => cat.id)).toEqual([
 			"cat-1",
 			"cat-2",
 			"cat-3",
@@ -381,7 +381,7 @@ describe("mergeCategories", () => {
 		];
 
 		const result = mergeCategories(snapshot, delta);
-		expect(result[0].categories.map((cat) => cat.name)).toEqual([
+		expect(result[0]!.categories.map((cat) => cat.name)).toEqual([
 			"First",
 			"Second",
 			"Third",
@@ -438,8 +438,8 @@ describe("mergeCategories", () => {
 		];
 
 		const result = mergeCategories(snapshot, delta);
-		expect(snapshot[0].categories[0].name).toBe("Original");
-		expect(result[0].categories[0].name).toBe("Updated");
+		expect(snapshot[0]!.categories[0]!.name).toBe("Original");
+		expect(result[0]!.categories[0]!.name).toBe("Updated");
 	});
 });
 
@@ -457,7 +457,7 @@ describe("mergeTransactions", () => {
 		const delta = [buildTransaction({ id: "txn-1", memo: "new" })];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].memo).toBe("new");
+		expect(result[0]!.memo).toBe("new");
 	});
 
 	it("should delete transactions marked as deleted", () => {
@@ -478,7 +478,7 @@ describe("mergeTransactions", () => {
 		const result = mergeTransactions(snapshot, delta, {
 			preserveDeleted: true,
 		});
-		expect(result[0].deleted).toBe(true);
+		expect(result[0]!.deleted).toBe(true);
 	});
 
 	it("should merge new subtransactions into existing transaction", () => {
@@ -500,7 +500,7 @@ describe("mergeTransactions", () => {
 		];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].subtransactions.map((sub) => sub.id)).toEqual([
+		expect(result[0]!.subtransactions.map((sub) => sub.id)).toEqual([
 			"sub-1",
 			"sub-2",
 		]);
@@ -521,7 +521,7 @@ describe("mergeTransactions", () => {
 		];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].subtransactions[0].amount).toBe(200);
+		expect(result[0]!.subtransactions[0]!.amount).toBe(200);
 	});
 
 	it("should delete subtransactions when flagged deleted", () => {
@@ -542,7 +542,7 @@ describe("mergeTransactions", () => {
 		];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].subtransactions.map((sub) => sub.id)).toEqual(["sub-1"]);
+		expect(result[0]!.subtransactions.map((sub) => sub.id)).toEqual(["sub-1"]);
 	});
 
 	it("should preserve deleted subtransactions when preserveDeleted is true", () => {
@@ -562,7 +562,7 @@ describe("mergeTransactions", () => {
 		const result = mergeTransactions(snapshot, delta, {
 			preserveDeleted: true,
 		});
-		expect(result[0].subtransactions[0].deleted).toBe(true);
+		expect(result[0]!.subtransactions[0]!.deleted).toBe(true);
 	});
 
 	it("should handle transactions without subtransactions arrays", () => {
@@ -572,7 +572,7 @@ describe("mergeTransactions", () => {
 		];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].memo).toBe("updated");
+		expect(result[0]!.memo).toBe("updated");
 	});
 
 	it("should handle delta updates without subtransactions list", () => {
@@ -597,8 +597,8 @@ describe("mergeTransactions", () => {
 		];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].date).toBe("2024-02-01");
-		expect(result[0].subtransactions.length).toBe(1);
+		expect(result[0]!.date).toBe("2024-02-01");
+		expect(result[0]!.subtransactions.length).toBe(1);
 	});
 
 	it("should apply nested operations to transaction and subtransactions", () => {
@@ -621,8 +621,8 @@ describe("mergeTransactions", () => {
 		];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].memo).toBe("new");
-		expect(result[0].subtransactions.map((sub) => sub.id)).toEqual([
+		expect(result[0]!.memo).toBe("new");
+		expect(result[0]!.subtransactions.map((sub) => sub.id)).toEqual([
 			"sub-1",
 			"sub-2",
 		]);
@@ -646,7 +646,7 @@ describe("mergeTransactions", () => {
 		];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].subtransactions.map((sub) => sub.id)).toEqual([
+		expect(result[0]!.subtransactions.map((sub) => sub.id)).toEqual([
 			"sub-1",
 			"sub-2",
 			"sub-3",
@@ -673,8 +673,8 @@ describe("mergeTransactions", () => {
 		const delta = [buildTransaction({ id: "txn-1", memo: "new" })];
 
 		mergeTransactions(snapshot, delta);
-		expect(snapshot[0].memo).toBe("old");
-		expect(delta[0].memo).toBe("new");
+		expect(snapshot[0]!.memo).toBe("old");
+		expect(delta[0]!.memo).toBe("new");
 	});
 });
 
@@ -687,7 +687,7 @@ describe("Merge Edge Cases", () => {
 		];
 
 		const result = mergeFlatEntities(snapshot, delta);
-		expect(result[0].name).toBe("second");
+		expect(result[0]!.name).toBe("second");
 	});
 
 	it("should handle null and undefined optional fields", () => {
@@ -702,7 +702,7 @@ describe("Merge Edge Cases", () => {
 		];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].memo).toBeNull();
+		expect(result[0]!.memo).toBeNull();
 	});
 
 	it("should efficiently handle large snapshots", () => {
@@ -746,7 +746,7 @@ describe("Merge Edge Cases", () => {
 
 		const result = mergeCategories(snapshot, delta);
 		expect(
-			result[0].categories.every((cat) => cat.name?.startsWith("Updated")),
+			result[0]!.categories.every((cat) => cat.name?.startsWith("Updated")),
 		).toBe(true);
 	});
 
@@ -770,9 +770,9 @@ describe("Merge Edge Cases", () => {
 		];
 
 		const result = mergeTransactions(snapshot, delta);
-		expect(result[0].subtransactions.length).toBe(11);
+		expect(result[0]!.subtransactions.length).toBe(11);
 		expect(
-			result[0].subtransactions.find((sub) => sub.id === "sub-3")?.amount,
+			result[0]!.subtransactions.find((sub) => sub.id === "sub-3")?.amount,
 		).toBe(999);
 	});
 
@@ -781,8 +781,8 @@ describe("Merge Edge Cases", () => {
 		const delta = [buildCategoryGroup({ id: "group-1", name: "New" })];
 
 		mergeCategories(snapshot, delta);
-		expect(snapshot[0].name).toBe("Old");
-		expect(delta[0].name).toBe("New");
+		expect(snapshot[0]!.name).toBe("Old");
+		expect(delta[0]!.name).toBe("New");
 	});
 
 	it("should handle special characters in IDs and names", () => {
@@ -790,6 +790,6 @@ describe("Merge Edge Cases", () => {
 		const delta = [{ id: "payee:ä", name: "New" }];
 
 		const result = mergeFlatEntities(snapshot, delta);
-		expect(result[0].name).toBe("New");
+		expect(result[0]!.name).toBe("New");
 	});
 });

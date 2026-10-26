@@ -77,7 +77,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 		};
 		cacheManagerMock = cacheManagerSpies as unknown as CacheManager;
 		knowledgeStoreMock = knowledgeStoreSpies as unknown as ServerKnowledgeStore;
-		process.env.YNAB_MCP_ENABLE_DELTA = "true";
+		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
 		deltaCache = new DeltaCache(
 			cacheManagerMock,
 			knowledgeStoreMock,
@@ -158,7 +158,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 	});
 
 	it("should pass staleWhileRevalidate when delta is disabled", async () => {
-		process.env.YNAB_MCP_ENABLE_DELTA = "false";
+		process.env["YNAB_MCP_ENABLE_DELTA"] = "false";
 		const fetcher = createFetcher({
 			data: [{ id: "test-1" }],
 			serverKnowledge: 1000,

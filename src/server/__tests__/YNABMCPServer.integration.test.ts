@@ -10,8 +10,8 @@ import { YNABMCPServer } from "../YNABMCPServer.js";
  * Real YNAB API tests using token from .env (YNAB_ACCESS_TOKEN)
  * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
-const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
-const shouldSkip = process.env.SKIP_E2E_TESTS === "true" || !hasToken;
+const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
+const shouldSkip = process.env["SKIP_E2E_TESTS"] === "true" || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("YNABMCPServer", () => {
@@ -42,54 +42,54 @@ describeIntegration("YNABMCPServer", () => {
 		it("should throw ValidationError when YNAB_ACCESS_TOKEN is missing", {
 			meta: { tier: "domain", domain: "server" },
 		}, () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = undefined;
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = undefined;
 
 			expect(() => new YNABMCPServer()).toThrow(/YNAB_ACCESS_TOKEN/i);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should throw ValidationError when YNAB_ACCESS_TOKEN is empty string", {
 			meta: { tier: "domain", domain: "server" },
 		}, () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = "";
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = "";
 
 			expect(() => new YNABMCPServer()).toThrow(
 				"YNAB_ACCESS_TOKEN must be a non-empty string",
 			);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should throw ValidationError when YNAB_ACCESS_TOKEN is only whitespace", {
 			meta: { tier: "domain", domain: "server" },
 		}, () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = "   ";
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = "   ";
 
 			expect(() => new YNABMCPServer()).toThrow(
 				"YNAB_ACCESS_TOKEN must be a non-empty string",
 			);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 
 		it("should trim whitespace from access token", {
 			meta: { tier: "domain", domain: "server" },
 		}, () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = `  ${originalToken}  `;
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = `  ${originalToken}  `;
 
 			const server = new YNABMCPServer();
 			expect(server).toBeInstanceOf(YNABMCPServer);
 
 			// Restore token
-			process.env.YNAB_ACCESS_TOKEN = originalToken;
+			process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 		});
 	});
 
@@ -144,8 +144,8 @@ describeIntegration("YNABMCPServer", () => {
 		it("should handle invalid token gracefully", {
 			meta: { tier: "domain", domain: "server" },
 		}, async () => {
-			const originalToken = process.env.YNAB_ACCESS_TOKEN;
-			process.env.YNAB_ACCESS_TOKEN = "invalid-token-format";
+			const originalToken = process.env["YNAB_ACCESS_TOKEN"];
+			process.env["YNAB_ACCESS_TOKEN"] = "invalid-token-format";
 
 			try {
 				const invalidServer = new YNABMCPServer(false);
@@ -155,7 +155,7 @@ describeIntegration("YNABMCPServer", () => {
 				);
 			} finally {
 				// Restore original token
-				process.env.YNAB_ACCESS_TOKEN = originalToken;
+				process.env["YNAB_ACCESS_TOKEN"] = originalToken;
 			}
 		});
 
@@ -213,7 +213,7 @@ describeIntegration("YNABMCPServer", () => {
 		let registry: ToolRegistry;
 
 		const accessToken = () => {
-			const token = process.env.YNAB_ACCESS_TOKEN;
+			const token = process.env["YNAB_ACCESS_TOKEN"];
 			if (!token) {
 				throw new Error(
 					"YNAB_ACCESS_TOKEN must be defined for integration tests",
@@ -373,11 +373,11 @@ describeIntegration("YNABMCPServer", () => {
 		}, async () => {
 			// This test demonstrates the LRU eviction functionality
 			// by creating a temporary cache with a low maxEntries limit
-			const originalEnvValue = process.env.YNAB_MCP_CACHE_MAX_ENTRIES;
+			const originalEnvValue = process.env["YNAB_MCP_CACHE_MAX_ENTRIES"];
 
 			try {
 				// Set low limit and create a new cache manager instance
-				process.env.YNAB_MCP_CACHE_MAX_ENTRIES = "2";
+				process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "2";
 				const tempCache = new (
 					await import("../cacheManager.js")
 				).CacheManager();
@@ -396,9 +396,9 @@ describeIntegration("YNABMCPServer", () => {
 			} finally {
 				// Restore original environment
 				if (originalEnvValue !== undefined) {
-					process.env.YNAB_MCP_CACHE_MAX_ENTRIES = originalEnvValue;
+					process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = originalEnvValue;
 				} else {
-					process.env.YNAB_MCP_CACHE_MAX_ENTRIES = undefined;
+					process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = undefined;
 				}
 			}
 		});
@@ -526,7 +526,7 @@ describeIntegration("YNABMCPServer", () => {
 		let registry: ToolRegistry;
 
 		const accessToken = () => {
-			const token = process.env.YNAB_ACCESS_TOKEN;
+			const token = process.env["YNAB_ACCESS_TOKEN"];
 			if (!token) {
 				throw new Error(
 					"YNAB_ACCESS_TOKEN must be defined for integration tests",
@@ -623,10 +623,10 @@ describeIntegration("YNABMCPServer", () => {
 			// Should return an error result, not throw an exception
 			expect(result.content).toBeDefined();
 			expect(result.content[0]).toBeDefined();
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 			// Should contain validation error about missing budget_id
-			expect(result.content[0].text).toContain("VALIDATION_ERROR");
-			expect(result.content[0].text).toContain("budget_id");
+			expect(result.content[0]!.text).toContain("VALIDATION_ERROR");
+			expect(result.content[0]!.text).toContain("budget_id");
 		});
 	});
 
@@ -635,7 +635,7 @@ describeIntegration("YNABMCPServer", () => {
 		let registry: ToolRegistry;
 
 		const accessToken = () => {
-			const token = process.env.YNAB_ACCESS_TOKEN;
+			const token = process.env["YNAB_ACCESS_TOKEN"];
 			if (!token) {
 				throw new Error(
 					"YNAB_ACCESS_TOKEN must be defined for integration tests",

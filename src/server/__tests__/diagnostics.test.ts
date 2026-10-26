@@ -188,8 +188,8 @@ describe("diagnostics module", () => {
 				});
 
 				it("should handle custom NODE_ENV", async () => {
-					const originalEnv = process.env.NODE_ENV;
-					process.env.NODE_ENV = "production";
+					const originalEnv = process.env["NODE_ENV"];
+					process.env["NODE_ENV"] = "production";
 
 					try {
 						const options: DiagnosticOptions = { include_server: true };
@@ -208,7 +208,7 @@ describe("diagnostics module", () => {
 						if (originalEnv === undefined) {
 							Reflect.deleteProperty(process.env, "NODE_ENV");
 						} else {
-							process.env.NODE_ENV = originalEnv;
+							process.env["NODE_ENV"] = originalEnv;
 						}
 					}
 				});
@@ -310,7 +310,7 @@ describe("diagnostics module", () => {
 				it("should handle missing token", async () => {
 					const originalEnv = process.env;
 					process.env = { ...originalEnv };
-					process.env.YNAB_ACCESS_TOKEN = undefined;
+					process.env["YNAB_ACCESS_TOKEN"] = undefined;
 
 					try {
 						const options: DiagnosticOptions = { include_environment: true };
@@ -333,8 +333,8 @@ describe("diagnostics module", () => {
 
 			describe("delta diagnostics", () => {
 				it("should include delta metrics when include_delta is true", async () => {
-					const originalEnv = process.env.YNAB_MCP_ENABLE_DELTA;
-					process.env.YNAB_MCP_ENABLE_DELTA = "true";
+					const originalEnv = process.env["YNAB_MCP_ENABLE_DELTA"];
+					process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
 					resetRuntimeConfig();
 
 					try {
@@ -378,17 +378,17 @@ describe("diagnostics module", () => {
 							// Assigning undefined would store the string "undefined"
 							Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
 						} else {
-							process.env.YNAB_MCP_ENABLE_DELTA = originalEnv;
+							process.env["YNAB_MCP_ENABLE_DELTA"] = originalEnv;
 						}
 						resetRuntimeConfig();
 					}
 				});
 
 				it("should keep delta enabled when a sibling runtime key is invalid", async () => {
-					const originalDelta = process.env.YNAB_MCP_ENABLE_DELTA;
-					const originalRateLimitLogging = process.env.RATE_LIMIT_LOGGING;
-					process.env.YNAB_MCP_ENABLE_DELTA = "true";
-					process.env.RATE_LIMIT_LOGGING = "yes";
+					const originalDelta = process.env["YNAB_MCP_ENABLE_DELTA"];
+					const originalRateLimitLogging = process.env["RATE_LIMIT_LOGGING"];
+					process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
+					process.env["RATE_LIMIT_LOGGING"] = "yes";
 					resetRuntimeConfig();
 
 					try {
@@ -418,8 +418,8 @@ describe("diagnostics module", () => {
 				});
 
 				it("should show a malformed delta flag verbatim next to enabled:false", async () => {
-					const originalDelta = process.env.YNAB_MCP_ENABLE_DELTA;
-					process.env.YNAB_MCP_ENABLE_DELTA = "TRUE";
+					const originalDelta = process.env["YNAB_MCP_ENABLE_DELTA"];
+					process.env["YNAB_MCP_ENABLE_DELTA"] = "TRUE";
 					resetRuntimeConfig();
 
 					try {
@@ -437,7 +437,7 @@ describe("diagnostics module", () => {
 						if (originalDelta === undefined) {
 							Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
 						} else {
-							process.env.YNAB_MCP_ENABLE_DELTA = originalDelta;
+							process.env["YNAB_MCP_ENABLE_DELTA"] = originalDelta;
 						}
 						resetRuntimeConfig();
 					}
@@ -896,7 +896,7 @@ describe("diagnostics module", () => {
 
 			expect(customFormatter.format).toHaveBeenCalled();
 			expect(mockResponseFormatter.format).not.toHaveBeenCalled();
-			expect(result.content[0].text).toBe("custom-formatted");
+			expect(result.content[0]!.text).toBe("custom-formatted");
 		});
 
 		it("should use injected server version", async () => {
