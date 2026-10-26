@@ -8,6 +8,15 @@ This package is configured as a **Trusted Publisher** on npm (OIDC). With that e
 
 Note: `npm whoami` will still fail in CI under OIDC; authentication happens only during `npm publish`.
 
+## Before releasing
+
+CI never contacts YNAB, so run the live suites locally with a real token first:
+
+```bash
+RUN_LIVE_YNAB_TESTS=true npm run test:integration:live        # read-only smoke
+RUN_LIVE_YNAB_TESTS=true npm run test:integration:live:delta  # creates and deletes one $1.00 transaction in your first budget
+```
+
 ## Common failure: `npm ERR! need auth`
 
 This error means the runner has no valid auth for `https://registry.npmjs.org/`.
