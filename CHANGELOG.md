@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- With `YNAB_MCP_ENABLE_DELTA=true`, every read again asks YNAB for changes since the cached snapshot, as in 0.29.1. In 0.30.0, reads within the cache TTL were served without contacting YNAB, so changes made outside the server (for example in the YNAB app) could stay hidden for several minutes. Writes through the server still invalidate caches, and an invalidated in-flight read still cannot republish stale data
+- Offline test runs pin `YNAB_MCP_ENABLE_DELTA=false`, so a local `.env` can no longer change their results
+
 ## [0.30.0] - 2026-10-26
 
 ### Changed

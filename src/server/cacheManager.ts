@@ -389,24 +389,32 @@ export class CacheManager {
 	 * Wrap a loader with caching, concurrent deduplication and background refresh.
 	 * Foreground failures propagate; failed background refreshes leave stale data
 	 * available until its existing stale window expires.
+	 *
+	 * `revalidate` always runs the loader, even over a fresh entry, while keeping
+	 * deduplication and the guard against publishing after invalidation.
 	 */
 	async wrap<T>(
 		key: string,
-		options: CacheSetOptions & { loader: () => Promise<T> },
+		options: CacheSetOptions & {
+			loader: () => Promise<T>;
+			revalidate?: boolean;
+		},
 	): Promise<T> {
-		const existingEntry = this.cache.get(key);
-		const cached = this.get<T>(key);
-		if (cached !== null) {
-			if (this.pendingRefresh.has(key) && !this.pendingFetches.has(key)) {
-				const refreshOptions = this.getRefreshOptions(options, existingEntry);
-				const refreshPromise = this.loadAndCache(
-					key,
-					options.loader,
-					refreshOptions,
-				);
-				void this.observeBackgroundRefresh(refreshPromise);
+		if (!options.revalidate) {
+			const existingEntry = this.cache.get(key);
+			const cached = this.get<T>(key);
+			if (cached !== null) {
+				if (this.pendingRefresh.has(key) && !this.pendingFetches.has(key)) {
+					const refreshOptions = this.getRefreshOptions(options, existingEntry);
+					const refreshPromise = this.loadAndCache(
+						key,
+						options.loader,
+						refreshOptions,
+					);
+					void this.observeBackgroundRefresh(refreshPromise);
+				}
+				return cached;
 			}
-			return cached;
 		}
 
 		const existingFetch = this.pendingFetches.get(key) as

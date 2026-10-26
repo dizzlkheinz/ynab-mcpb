@@ -4,6 +4,8 @@ const offlineEnvironment = {
 	YNAB_ACCESS_TOKEN: "test-token-for-mocked-tests",
 	RUN_LIVE_YNAB_TESTS: "false",
 	SKIP_E2E_TESTS: "true",
+	// Use the default so a local .env cannot change offline results; delta tests stub it.
+	YNAB_MCP_ENABLE_DELTA: "false",
 };
 
 export default defineConfig({

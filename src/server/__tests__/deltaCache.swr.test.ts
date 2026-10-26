@@ -57,60 +57,93 @@ function deferred() {
 	return { promise, resolve };
 }
 
+function disableDelta() {
+	vi.stubEnv("YNAB_MCP_ENABLE_DELTA", "false");
+	resetRuntimeConfig();
+}
+
 describe("DeltaCache stale-while-revalidate with real caching", () => {
-	it.each([true, false])(
-		"serves stale data and performs one background refresh with delta enabled=%s",
-		async (enabled) => {
-			vi.stubEnv("YNAB_MCP_ENABLE_DELTA", String(enabled));
-			resetRuntimeConfig();
-			await seed();
-			vi.advanceTimersByTime(101);
-			const refresh = deferred();
-			const fetcher = vi.fn(() => refresh.promise);
-			const stale = await delta.fetchWithDelta<Entity>(
-				key,
-				budget,
-				fetcher,
-				mergeFlatEntities,
-				options,
-			);
-			const concurrent = await delta.fetchWithDelta<Entity>(
-				key,
-				budget,
-				fetcher,
-				mergeFlatEntities,
-				options,
-			);
-			expect(stale).toMatchObject({
-				data: [{ id: "original" }],
-				wasCached: true,
-				usedDelta: false,
+	it("serves stale data and performs one background refresh when delta is disabled", async () => {
+		disableDelta();
+		await seed();
+		vi.advanceTimersByTime(101);
+		const refresh = deferred();
+		const fetcher = vi.fn(() => refresh.promise);
+		const stale = await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			fetcher,
+			mergeFlatEntities,
+			options,
+		);
+		const concurrent = await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			fetcher,
+			mergeFlatEntities,
+			options,
+		);
+		expect(stale).toMatchObject({
+			data: [{ id: "original" }],
+			wasCached: true,
+			usedDelta: false,
+		});
+		expect(concurrent.data).toEqual(stale.data);
+		expect(fetcher).toHaveBeenCalledExactlyOnceWith(undefined);
+		refresh.resolve({ data: [{ id: "updated" }], serverKnowledge: 1001 });
+		await vi.advanceTimersByTimeAsync(0);
+		const fresh = await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			fetcher,
+			mergeFlatEntities,
+			options,
+		);
+		expect(fresh.data).toEqual([{ id: "updated" }]);
+		expect(fresh).toMatchObject({
+			wasCached: true,
+			serverKnowledge: 1001,
+			usedDelta: false,
+		});
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(knowledge.get(key)).toBe(1001);
+	});
+
+	it("in delta mode, a stale read waits for the delta instead of serving stale data", async () => {
+		await seed();
+		vi.advanceTimersByTime(101);
+		const refresh = deferred();
+		const fetcher = vi.fn(() => refresh.promise);
+		let settled = false;
+		const result = delta
+			.fetchWithDelta<Entity>(key, budget, fetcher, mergeFlatEntities, options)
+			.then((value) => {
+				settled = true;
+				return value;
 			});
-			expect(concurrent.data).toEqual(stale.data);
-			expect(fetcher).toHaveBeenCalledExactlyOnceWith(
-				enabled ? 1000 : undefined,
-			);
-			refresh.resolve({ data: [{ id: "updated" }], serverKnowledge: 1001 });
-			await vi.advanceTimersByTimeAsync(0);
-			const fresh = await delta.fetchWithDelta<Entity>(
-				key,
-				budget,
-				fetcher,
-				mergeFlatEntities,
-				options,
-			);
-			expect(fresh.data).toEqual(
-				enabled ? [{ id: "original" }, { id: "updated" }] : [{ id: "updated" }],
-			);
-			expect(fresh).toMatchObject({
-				wasCached: true,
-				serverKnowledge: 1001,
-				usedDelta: false,
-			});
-			expect(fetcher).toHaveBeenCalledTimes(1);
-			expect(knowledge.get(key)).toBe(1001);
-		},
-	);
+		const concurrent = delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			fetcher,
+			mergeFlatEntities,
+			options,
+		);
+		await Promise.resolve();
+		expect(settled).toBe(false);
+		expect(fetcher).toHaveBeenCalledExactlyOnceWith(1000);
+		refresh.resolve({ data: [{ id: "updated" }], serverKnowledge: 1001 });
+		expect(await result).toMatchObject({
+			data: [{ id: "original" }, { id: "updated" }],
+			wasCached: true,
+			usedDelta: true,
+			serverKnowledge: 1001,
+		});
+		expect((await concurrent).data).toEqual([
+			{ id: "original" },
+			{ id: "updated" },
+		]);
+		expect(knowledge.get(key)).toBe(1001);
+	});
 
 	it("waits for fresh data when the stale window has expired", async () => {
 		await seed();
@@ -158,7 +191,40 @@ describe("DeltaCache stale-while-revalidate with real caching", () => {
 		});
 	});
 
+	it("in delta mode, a failed delta request rejects and keeps the snapshot for the next read", async () => {
+		await seed();
+		vi.advanceTimersByTime(101);
+		const fetcher = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValueOnce({
+				data: [{ id: "recovered" }],
+				serverKnowledge: 1001,
+			});
+		await expect(
+			delta.fetchWithDelta<Entity>(
+				key,
+				budget,
+				fetcher,
+				mergeFlatEntities,
+				options,
+			),
+		).rejects.toThrow("offline");
+		expect(cache.peek(key)).toBeDefined();
+		expect(knowledge.get(key)).toBe(1000);
+		const recovered = await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			fetcher,
+			mergeFlatEntities,
+			options,
+		);
+		expect(fetcher).toHaveBeenNthCalledWith(2, 1000);
+		expect(recovered.data).toEqual([{ id: "original" }, { id: "recovered" }]);
+	});
+
 	it("retains stale data after a background error and permits a later refresh", async () => {
+		disableDelta();
 		await seed();
 		vi.advanceTimersByTime(101);
 		const fetcher = vi
@@ -194,15 +260,15 @@ describe("DeltaCache stale-while-revalidate with real caching", () => {
 			mergeFlatEntities,
 			options,
 		);
-		expect(recovered.data).toEqual([{ id: "original" }, { id: "recovered" }]);
+		expect(recovered.data).toEqual([{ id: "recovered" }]);
 		expect(fetcher).toHaveBeenCalledTimes(2);
 	});
 
-	it("does not resurrect invalidated background data or knowledge", async () => {
+	it("does not resurrect invalidated in-flight data or knowledge", async () => {
 		await seed();
 		vi.advanceTimersByTime(101);
 		const refresh = deferred();
-		await delta.fetchWithDelta<Entity>(
+		const inFlight = delta.fetchWithDelta<Entity>(
 			key,
 			budget,
 			() => refresh.promise,
@@ -211,6 +277,7 @@ describe("DeltaCache stale-while-revalidate with real caching", () => {
 		);
 		delta.forceFullRefresh(budget);
 		refresh.resolve({ data: [{ id: "stale-update" }], serverKnowledge: 1001 });
+		await inFlight;
 		await vi.advanceTimersByTimeAsync(0);
 		expect(cache.peek(key)).toBeUndefined();
 		expect(knowledge.get(key)).toBeUndefined();

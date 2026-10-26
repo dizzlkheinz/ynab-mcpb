@@ -309,6 +309,41 @@ describe("CacheManager", () => {
 			expect(cache.get("key1")).toBe("loaded-value");
 		});
 
+		it("should run the loader over a fresh entry when revalidating", async () => {
+			const loader = vi.fn().mockResolvedValue("revalidated-value");
+			cache.set("key1", "cached-value");
+
+			const result = await cache.wrap("key1", { loader, revalidate: true });
+
+			expect(result).toBe("revalidated-value");
+			expect(loader).toHaveBeenCalledTimes(1);
+			expect(cache.get("key1")).toBe("revalidated-value");
+		});
+
+		it("should deduplicate concurrent revalidations and not publish after invalidation", async () => {
+			cache.set("budgets:list:b1", "cached-value");
+			let finish!: (value: string) => void;
+			const loader = vi.fn(
+				() =>
+					new Promise<string>((resolve) => {
+						finish = resolve;
+					}),
+			);
+
+			const first = cache.wrap("budgets:list:b1", { loader, revalidate: true });
+			const second = cache.wrap("budgets:list:b1", {
+				loader,
+				revalidate: true,
+			});
+			cache.deleteByBudgetId("b1");
+			finish("stale-value");
+
+			expect(await first).toBe("stale-value");
+			expect(await second).toBe("stale-value");
+			expect(loader).toHaveBeenCalledTimes(1);
+			expect(cache.peek("budgets:list:b1")).toBeUndefined();
+		});
+
 		it("should deduplicate concurrent requests", async () => {
 			const loader = vi
 				.fn()

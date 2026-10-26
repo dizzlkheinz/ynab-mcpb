@@ -51,7 +51,7 @@ async function seed(cacheKey = key, data: Entity[] = [{ id: "original" }]) {
 const expire = () => vi.advanceTimersByTime(ttl + 1);
 
 describe("DeltaCache with the real cache lifecycle", () => {
-	it("filters deleted full-response records, caches fresh reads and reports knowledge", async () => {
+	it("filters deleted full-response records, revalidates fresh reads with a delta and reports knowledge", async () => {
 		const fetcher = vi.fn<() => Promise<Response>>().mockResolvedValue({
 			data: [{ id: "kept" }, { id: "deleted", deleted: true }],
 			serverKnowledge: 10,
@@ -77,15 +77,18 @@ describe("DeltaCache with the real cache lifecycle", () => {
 			mergeFlatEntities,
 			{ ttl: 50 },
 		);
+		// Delta mode asks YNAB for changes even within the TTL; unchanged
+		// knowledge keeps the cached snapshot.
 		expect(cached).toMatchObject({
 			data: first.data,
 			wasCached: true,
 			usedDelta: false,
 		});
-		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(fetcher).toHaveBeenLastCalledWith(10);
 		expect(knowledge.get(key)).toBe(10);
-		vi.advanceTimersByTime(2);
-		await delta.fetchWithDelta<Entity>(
+		vi.advanceTimersByTime(51);
+		const expired = await delta.fetchWithDelta<Entity>(
 			key,
 			budget,
 			fetcher,
@@ -94,7 +97,50 @@ describe("DeltaCache with the real cache lifecycle", () => {
 				ttl: 50,
 			},
 		);
-		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(fetcher).toHaveBeenCalledTimes(3);
+		expect(expired.wasCached).toBe(false);
+	});
+
+	it("shows changes made outside the server on the next read within the TTL", async () => {
+		await seed();
+		const fetcher = vi.fn().mockResolvedValue({
+			data: [{ id: "added-in-ynab-app" }],
+			serverKnowledge: 1001,
+		});
+		const result = await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			fetcher,
+			mergeFlatEntities,
+			{ ttl },
+		);
+		expect(fetcher).toHaveBeenCalledExactlyOnceWith(1000);
+		expect(result).toMatchObject({
+			data: [{ id: "original" }, { id: "added-in-ynab-app" }],
+			wasCached: true,
+			usedDelta: true,
+			serverKnowledge: 1001,
+		});
+		expect(knowledge.get(key)).toBe(1001);
+	});
+
+	it("serves fresh reads from cache without a request when delta is disabled", async () => {
+		vi.stubEnv("YNAB_MCP_ENABLE_DELTA", "false");
+		resetRuntimeConfig();
+		await seed();
+		const fetcher = vi.fn();
+		const result = await delta.fetchWithDelta<Entity>(
+			key,
+			budget,
+			fetcher,
+			mergeFlatEntities,
+			{ ttl },
+		);
+		expect(fetcher).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			data: [{ id: "original" }],
+			wasCached: true,
+		});
 	});
 
 	it("uses an expired snapshot's knowledge and merges updates, additions and deletions", async () => {
@@ -455,7 +501,9 @@ describe("DeltaCache with the real cache lifecycle", () => {
 		);
 		finish({ data: [{ id: "old" }], serverKnowledge: 1 });
 		expect((await first).data).toEqual([{ id: "old" }]);
-		const nextFetcher = vi.fn();
+		const nextFetcher = vi
+			.fn()
+			.mockResolvedValue({ data: [], serverKnowledge: 2 });
 		const next = await delta.fetchWithDelta<Entity>(
 			key,
 			budget,
@@ -463,8 +511,9 @@ describe("DeltaCache with the real cache lifecycle", () => {
 			mergeFlatEntities,
 			{ ttl },
 		);
+		// The next delta builds on the newer load, never the invalidated one.
+		expect(nextFetcher).toHaveBeenCalledExactlyOnceWith(2);
 		expect(next.data).toEqual([{ id: "new" }]);
-		expect(nextFetcher).not.toHaveBeenCalled();
 		expect(knowledge.get(key)).toBe(2);
 	});
 
