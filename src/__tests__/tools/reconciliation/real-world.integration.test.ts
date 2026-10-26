@@ -16,9 +16,9 @@ describe("Real World CSV Validation (Simulated)", () => {
 			expect(result.transactions.length).toBe(3);
 
 			const first = result.transactions[0];
-			expect(first.date).toBe("2025-11-21");
-			expect(first.payee).toContain("Amazon");
-			expect(first.amount).toBe(-42680); // -42.68
+			expect(first!.date).toBe("2025-11-21");
+			expect(first!.payee).toContain("Amazon");
+			expect(first!.amount).toBe(-42680); // -42.68
 		});
 	});
 
@@ -39,15 +39,15 @@ describe("Real World CSV Validation (Simulated)", () => {
 
 			const first = result.transactions[0];
 			// 11/21/2025
-			expect(first.date).toBe("2025-11-21");
-			expect(first.payee).toBe("EvoCarShare");
+			expect(first!.date).toBe("2025-11-21");
+			expect(first!.payee).toBe("EvoCarShare");
 			// 23.87 Debit = Outflow = Negative
-			expect(first.amount).toBe(-23870);
+			expect(first!.amount).toBe(-23870);
 
 			const third = result.transactions[2];
 			// 1378.31 Credit = Inflow = Positive
-			expect(third.payee).toBe("PAYMENT - THANK YOU");
-			expect(third.amount).toBe(1378310);
+			expect(third!.payee).toBe("PAYMENT - THANK YOU");
+			expect(third!.amount).toBe(1378310);
 		});
 	});
 });

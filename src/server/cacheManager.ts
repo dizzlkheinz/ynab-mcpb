@@ -17,7 +17,7 @@ interface CacheSetOptions {
 	 * When explicitly set to undefined, uses the default stale window.
 	 * When omitted entirely, no stale-while-revalidate is applied.
 	 */
-	staleWhileRevalidate?: number;
+	staleWhileRevalidate?: number | undefined;
 }
 
 export class CacheManager {

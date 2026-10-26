@@ -5,6 +5,7 @@ import {
 	DeltaCache,
 	type DeltaCacheEntry,
 	type Logger,
+	type MergeFn,
 } from "../deltaCache.js";
 import type { ServerKnowledgeStore } from "../serverKnowledgeStore.js";
 
@@ -71,7 +72,7 @@ describe("DeltaCache", () => {
 		};
 		cacheManagerMock = cacheManagerSpies as unknown as CacheManager;
 		knowledgeStoreMock = knowledgeStoreSpies as unknown as ServerKnowledgeStore;
-		process.env.YNAB_MCP_ENABLE_DELTA = "true";
+		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
 		resetRuntimeConfig();
 		deltaCache = new DeltaCache(
 			cacheManagerMock,
@@ -93,7 +94,7 @@ describe("DeltaCache", () => {
 
 	const createMerger = () =>
 		vi
-			.fn<[TestEntity[], TestEntity[], unknown?], TestEntity[]>()
+			.fn<MergeFn<TestEntity>>()
 			.mockImplementation((snapshot: TestEntity[], delta: TestEntity[]) => [
 				...snapshot,
 				...delta,
@@ -125,7 +126,7 @@ describe("DeltaCache", () => {
 		});
 
 		it("should bypass delta logic when flag is disabled", async () => {
-			process.env.YNAB_MCP_ENABLE_DELTA = "false";
+			process.env["YNAB_MCP_ENABLE_DELTA"] = "false";
 			cacheManagerSpies.get.mockReturnValue(null); // No cache - force fetch
 			knowledgeStoreSpies.get.mockReturnValue(1000);
 			const fetcher = createFetcher({
@@ -148,7 +149,7 @@ describe("DeltaCache", () => {
 		});
 
 		it("should still cache results when delta is disabled", async () => {
-			process.env.YNAB_MCP_ENABLE_DELTA = "false";
+			process.env["YNAB_MCP_ENABLE_DELTA"] = "false";
 			const fetcher = createFetcher({
 				data: [{ id: "full" }],
 				serverKnowledge: 1100,
@@ -164,7 +165,7 @@ describe("DeltaCache", () => {
 			);
 
 			expect(cacheManagerSpies.set).toHaveBeenCalledTimes(1);
-			const [key, entry] = cacheManagerSpies.set.mock.calls[0];
+			const [key, entry] = cacheManagerSpies.set.mock.calls[0]!;
 			expect(key).toBe("transactions:list:budget-1");
 			expect(entry.snapshot).toEqual([{ id: "full" }]);
 		});

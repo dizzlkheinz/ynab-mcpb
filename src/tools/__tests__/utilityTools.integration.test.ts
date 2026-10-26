@@ -1,21 +1,21 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
-import { skipOnRateLimit } from "../../__tests__/testUtils.js";
+import { skipOnRateLimit, textOf } from "../../__tests__/testUtils.js";
 import { handleGetUser } from "../utilityTools.js";
 
 /**
  * Utility Tools Integration Tests
  * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
-const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
-const shouldSkip = process.env.SKIP_E2E_TESTS === "true" || !hasToken;
+const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
+const shouldSkip = process.env["SKIP_E2E_TESTS"] === "true" || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("Utility Tools Integration Tests", () => {
 	let ynabAPI: ynab.API;
 
 	beforeAll(() => {
-		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+		const accessToken = process.env["YNAB_ACCESS_TOKEN"]!;
 		ynabAPI = new ynab.API(accessToken);
 	});
 
@@ -27,7 +27,7 @@ describeIntegration("Utility Tools Integration Tests", () => {
 				const result = await handleGetUser(ynabAPI, {
 					response_format: "json",
 				});
-				const response = JSON.parse(result.content[0].text);
+				const response = JSON.parse(textOf(result.content[0]));
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (response.error) {

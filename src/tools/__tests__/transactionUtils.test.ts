@@ -404,6 +404,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
@@ -439,15 +440,16 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
 			const results = correlateResults(requests, responseData, duplicates);
 
 			expect(results).toHaveLength(1);
-			expect(results[0].status).toBe("created");
-			expect(results[0].transaction_id).toBe("txn-1");
-			expect(results[0].correlation_key).toMatch(/^hash:[a-f0-9]{16}$/);
+			expect(results[0]!.status).toBe("created");
+			expect(results[0]!.transaction_id).toBe("txn-1");
+			expect(results[0]!.correlation_key).toMatch(/^hash:[a-f0-9]{16}$/);
 		});
 
 		it("should correlate by hash when YNAB response includes payee_id but request only had payee_name", () => {
@@ -475,14 +477,15 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
 			const results = correlateResults(requests, responseData, duplicates);
 
 			expect(results).toHaveLength(1);
-			expect(results[0].status).toBe("created");
-			expect(results[0].transaction_id).toBe("txn-1");
+			expect(results[0]!.status).toBe("created");
+			expect(results[0]!.transaction_id).toBe("txn-1");
 		});
 
 		it("correlates a unique response that omits payee_name", () => {
@@ -506,6 +509,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 
 			const results = correlateResults(requests, responseData, new Set());
@@ -550,6 +554,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 
 			const results = correlateResults(requests, responseData, new Set());
@@ -573,6 +578,7 @@ describe("transactionUtils", () => {
 				transactions: [],
 				duplicate_import_ids: ["YNAB:1"],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set(["YNAB:1"]);
 
@@ -607,6 +613,7 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
@@ -655,14 +662,15 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
 			const results = correlateResults(requests, responseData, duplicates);
 
 			expect(results).toHaveLength(2);
-			expect(results[0].transaction_id).toBe("txn-1");
-			expect(results[1].transaction_id).toBe("txn-2");
+			expect(results[0]!.transaction_id).toBe("txn-1");
+			expect(results[1]!.transaction_id).toBe("txn-2");
 		});
 
 		it("should fall back to hash correlation when import_id fails", () => {
@@ -688,14 +696,15 @@ describe("transactionUtils", () => {
 				],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
 			const results = correlateResults(requests, responseData, duplicates);
 
 			expect(results).toHaveLength(1);
-			expect(results[0].status).toBe("created");
-			expect(results[0].transaction_id).toBe("txn-1");
+			expect(results[0]!.status).toBe("created");
+			expect(results[0]!.transaction_id).toBe("txn-1");
 		});
 
 		it("should handle empty response transactions", () => {
@@ -706,13 +715,14 @@ describe("transactionUtils", () => {
 				transactions: [],
 				duplicate_import_ids: [],
 				server_knowledge: 100,
+				transaction_ids: [],
 			};
 			const duplicates = new Set<string>();
 
 			const results = correlateResults(requests, responseData, duplicates);
 
 			expect(results).toHaveLength(1);
-			expect(results[0].status).toBe("failed");
+			expect(results[0]!.status).toBe("failed");
 		});
 	});
 
@@ -1013,8 +1023,8 @@ describe("transactionUtils", () => {
 			// Should be summary or ids_only mode
 			expect(["summary", "ids_only"]).toContain(result.mode);
 			// Error code should be preserved in results
-			expect(result.results[0].error_code).toBe("ERR");
-			expect(result.results[0].error).toBeDefined();
+			expect(result.results[0]!.error_code).toBe("ERR");
+			expect(result.results[0]!.error).toBeDefined();
 		});
 
 		it("should throw ValidationError when response is too large", () => {
@@ -1058,7 +1068,7 @@ describe("transactionUtils", () => {
 				"Default message",
 			);
 			expect(result.isError).toBe(true);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 			expect(responseFormatter.format).toHaveBeenCalledWith({
 				error: { message: "Default message" },
 			});

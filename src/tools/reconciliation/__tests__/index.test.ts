@@ -117,12 +117,12 @@ describe("handleReconcileAccount", () => {
 		try {
 			const result = await handleReconcileAccount(
 				ynabAPI,
-				{
+				ReconcileAccountSchema.parse({
 					budget_id: "budget-1",
 					account_id: "account-1",
 					csv_file_path: csvPath,
 					statement_balance: -10,
-				},
+				}),
 				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
 			);
 
@@ -153,12 +153,12 @@ describe("handleReconcileAccount", () => {
 		try {
 			const result = await handleReconcileAccount(
 				ynabAPI,
-				{
+				ReconcileAccountSchema.parse({
 					budget_id: "budget-1",
 					account_id: "account-1",
 					csv_file_path: csvUrl,
 					statement_balance: -10,
-				},
+				}),
 				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
 			);
 
@@ -193,12 +193,12 @@ describe("handleReconcileAccount", () => {
 		try {
 			const result = await handleReconcileAccount(
 				ynabAPI,
-				{
+				ReconcileAccountSchema.parse({
 					budget_id: "budget-1",
 					account_id: "account-1",
 					csv_file_path: csvUrl,
 					statement_balance: -10,
-				},
+				}),
 				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
 			);
 
@@ -219,18 +219,19 @@ describe("handleReconcileAccount", () => {
 
 		const result = await handleReconcileAccount(
 			ynabAPI,
-			{
+			ReconcileAccountSchema.parse({
 				budget_id: "budget-1",
 				account_id: "account-1",
 				csv_data: "Date,Description,Amount\n2025-01-01,Coffee,-10.00",
 				statement_balance: -10,
 				auto_unclear_missing: false,
-			},
+			}),
 			{ deltaFetcher: deltaFetcher },
 		);
 
-		const structured = (result.structuredContent as Record<string, unknown>)
-			.structured as Record<string, unknown>;
+		const structured = (result.structuredContent as Record<string, unknown>)[
+			"structured"
+		] as Record<string, unknown>;
 
 		expect(structured).toHaveProperty("unmatched_bank");
 		expect(structured).toHaveProperty("unmatched_ynab");

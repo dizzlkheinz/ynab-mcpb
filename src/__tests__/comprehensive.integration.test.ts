@@ -100,7 +100,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 
 	beforeEach(async () => {
 		// Set up environment
-		process.env.YNAB_ACCESS_TOKEN = "test-token";
+		process.env["YNAB_ACCESS_TOKEN"] = "test-token";
 
 		// Create server instance
 		server = new YNABMCPServer();
@@ -738,7 +738,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Mock specific category response
 			const mockCategory = {
 				data: {
-					category: mockCategories.data.category_groups[0].categories[0],
+					category: mockCategories.data.category_groups[0]!.categories[0],
 				},
 			};
 
@@ -759,7 +759,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 
 			// Mock category update
 			const updatedCategory = {
-				...mockCategories.data.category_groups[0].categories[0],
+				...mockCategories.data.category_groups[0]!.categories[0],
 				budgeted: 160000, // $160.00
 			};
 
@@ -916,13 +916,13 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 		let previousNodeEnv: string | undefined;
 
 		beforeAll(() => {
-			previousNodeEnv = process.env.NODE_ENV;
-			process.env.NODE_ENV = "development";
+			previousNodeEnv = process.env["NODE_ENV"];
+			process.env["NODE_ENV"] = "development";
 		});
 
 		beforeEach(() => {
 			cacheManager.clear();
-			process.env.NODE_ENV = "development";
+			process.env["NODE_ENV"] = "development";
 		});
 
 		afterAll(() => {
@@ -930,7 +930,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			if (previousNodeEnv === undefined) {
 				Reflect.deleteProperty(process.env, "NODE_ENV");
 			} else {
-				process.env.NODE_ENV = previousNodeEnv;
+				process.env["NODE_ENV"] = previousNodeEnv;
 			}
 		});
 

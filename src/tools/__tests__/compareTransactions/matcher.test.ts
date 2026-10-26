@@ -193,10 +193,10 @@ describe("matcher", () => {
 			);
 
 			expect(matches).toHaveLength(2);
-			expect(matches[0].bank_transaction.description).toBe("First");
-			expect(matches[0].ynab_transaction.id).toBe("ynab1");
-			expect(matches[1].bank_transaction.description).toBe("Second");
-			expect(matches[1].ynab_transaction.id).toBe("ynab2");
+			expect(matches[0]!.bank_transaction.description).toBe("First");
+			expect(matches[0]!.ynab_transaction.id).toBe("ynab1");
+			expect(matches[1]!.bank_transaction.description).toBe("Second");
+			expect(matches[1]!.ynab_transaction.id).toBe("ynab2");
 		});
 
 		test("should give chronology bonus for close dates", () => {
@@ -216,8 +216,8 @@ describe("matcher", () => {
 			);
 
 			expect(matches).toHaveLength(1);
-			expect(matches[0].ynab_transaction.id).toBe("ynab1"); // Should pick the closer date
-			expect(matches[0].match_reasons).toContain(
+			expect(matches[0]!.ynab_transaction.id).toBe("ynab1"); // Should pick the closer date
+			expect(matches[0]!.match_reasons).toContain(
 				"Chronological order bonus (+15)",
 			);
 		});
@@ -324,8 +324,8 @@ describe("matcher", () => {
 			expect(unmatched_bank).toHaveLength(1);
 			expect(unmatched_ynab).toHaveLength(1);
 			// The exact match may vary based on algorithm, but we should have proper separation
-			expect(matches[0].bank_transaction.description).toBe("Matched");
-			expect(matches[0].ynab_transaction.payee_name).toBe("Matched");
+			expect(matches[0]!.bank_transaction.description).toBe("Matched");
+			expect(matches[0]!.ynab_transaction.payee_name).toBe("Matched");
 		});
 
 		test("should handle duplicate amounts with special logic", () => {
@@ -445,8 +445,8 @@ describe("matcher", () => {
 			const { matches } = findMatches(bankTxns, ynabTxns, 0.01, 5);
 
 			expect(matches).toHaveLength(1);
-			expect(matches[0].bank_transaction.amount).toBe(-123450);
-			expect(matches[0].ynab_transaction.amount).toBe(-123450);
+			expect(matches[0]!.bank_transaction.amount).toBe(-123450);
+			expect(matches[0]!.ynab_transaction.amount).toBe(-123450);
 		});
 
 		test("should demonstrate parity mode (legacy behavior) vs enhanced mode with chronology bonus", () => {
@@ -486,7 +486,7 @@ describe("matcher", () => {
 			const { matches } = findMatches(bankTxns, ynabTxns, 0.01, 5, false);
 
 			expect(matches).toHaveLength(1);
-			expect(matches[0].match_reasons).not.toContain(
+			expect(matches[0]!.match_reasons).not.toContain(
 				"Chronological order bonus",
 			);
 		});
@@ -501,7 +501,7 @@ describe("matcher", () => {
 
 			expect(matches).toHaveLength(1);
 			// Note: chronology bonus is only applied to duplicate amounts, so this single transaction won't get the bonus
-			expect(matches[0].match_reasons).not.toContain(
+			expect(matches[0]!.match_reasons).not.toContain(
 				"Chronological order bonus",
 			);
 		});

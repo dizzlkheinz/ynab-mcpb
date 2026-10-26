@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
-import { skipOnRateLimit } from "../../__tests__/testUtils.js";
+import { skipOnRateLimit, textOf } from "../../__tests__/testUtils.js";
 import { handleGetBudget, handleListBudgets } from "../budgetTools.js";
 
 /**
@@ -8,9 +8,9 @@ import { handleGetBudget, handleListBudgets } from "../budgetTools.js";
  * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
 const isSkip = ["true", "1", "yes", "y", "on"].includes(
-	(process.env.SKIP_E2E_TESTS || "").toLowerCase().trim(),
+	(process.env["SKIP_E2E_TESTS"] || "").toLowerCase().trim(),
 );
-const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
+const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
 const shouldSkip = isSkip || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
@@ -19,7 +19,7 @@ describeIntegration("Budget Tools Integration", () => {
 	let testBudgetId: string;
 
 	beforeAll(() => {
-		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+		const accessToken = process.env["YNAB_ACCESS_TOKEN"]!;
 		ynabAPI = new ynab.API(accessToken);
 	});
 
@@ -33,9 +33,9 @@ describeIntegration("Budget Tools Integration", () => {
 				});
 
 				expect(result.content).toHaveLength(1);
-				expect(result.content[0].type).toBe("text");
+				expect(result.content[0]!.type).toBe("text");
 
-				const parsedContent = JSON.parse(result.content[0].text);
+				const parsedContent = JSON.parse(textOf(result.content[0]));
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (parsedContent.error) {
@@ -75,7 +75,7 @@ describeIntegration("Budget Tools Integration", () => {
 					const listResult = await handleListBudgets(ynabAPI, {
 						response_format: "json",
 					});
-					const listContent = JSON.parse(listResult.content[0].text);
+					const listContent = JSON.parse(textOf(listResult.content[0]));
 					if (listContent.error) {
 						throw new Error(JSON.stringify(listContent.error));
 					}
@@ -92,9 +92,9 @@ describeIntegration("Budget Tools Integration", () => {
 				});
 
 				expect(result.content).toHaveLength(1);
-				expect(result.content[0].type).toBe("text");
+				expect(result.content[0]!.type).toBe("text");
 
-				const parsedContent = JSON.parse(result.content[0].text);
+				const parsedContent = JSON.parse(textOf(result.content[0]));
 
 				// If response contains an error, throw it so skipOnRateLimit can catch it
 				if (parsedContent.error) {
@@ -127,9 +127,9 @@ describeIntegration("Budget Tools Integration", () => {
 				});
 
 				expect(result.content).toHaveLength(1);
-				expect(result.content[0].type).toBe("text");
+				expect(result.content[0]!.type).toBe("text");
 
-				const parsedContent = JSON.parse(result.content[0].text);
+				const parsedContent = JSON.parse(textOf(result.content[0]));
 				expect(parsedContent.error).toBeDefined();
 				expect(parsedContent.error.message).toBeDefined();
 

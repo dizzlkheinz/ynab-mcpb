@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * Runs the small, read-only YNAB E2E smoke suite.
+ * Runs a live YNAB suite against the real API:
+ *   (default) smoke - small, read-only E2E smoke suite
+ *   delta           - delta-backed tool tests; WRITES: creates one $1.00
+ *                     transaction in the first budget and deletes it again
  *
  * Live access requires both an explicit opt-in and a real token. Keeping this
  * guard in the command prevents an ordinary integration run from consuming API
@@ -36,6 +39,30 @@ if (!hasRealToken) {
 	process.exit(1);
 }
 
+const SUITES = {
+	smoke: ["--project", "e2e", "src/__tests__/smoke.e2e.test.ts"],
+	delta: [
+		"--project",
+		"integration:domain",
+		"src/tools/__tests__/accountTools.delta.integration.test.ts",
+		"src/tools/__tests__/budgetTools.delta.integration.test.ts",
+		"src/tools/__tests__/categoryTools.delta.integration.test.ts",
+		"src/tools/__tests__/monthTools.delta.integration.test.ts",
+		"src/tools/__tests__/payeeTools.delta.integration.test.ts",
+		"src/tools/__tests__/deltaFetcher.scheduled.integration.test.ts",
+		"src/tools/reconciliation/__tests__/reconciliation.delta.integration.test.ts",
+	],
+};
+const [suiteArg, ...passthroughArgs] = process.argv.slice(2);
+const suiteName = suiteArg && suiteArg in SUITES ? suiteArg : "smoke";
+const extraArgs =
+	suiteArg && suiteArg in SUITES ? passthroughArgs : process.argv.slice(2);
+if (suiteName === "delta") {
+	console.warn(
+		"Live delta suite: creates and deletes one test transaction in your first budget.",
+	);
+}
+
 const projectRoot = process.cwd();
 const vitestBin = path.join(
 	projectRoot,
@@ -43,13 +70,7 @@ const vitestBin = path.join(
 	"vitest",
 	"vitest.mjs",
 );
-const vitestArgs = [
-	"run",
-	"--project",
-	"e2e",
-	"src/__tests__/smoke.e2e.test.ts",
-	...process.argv.slice(2),
-];
+const vitestArgs = ["run", ...SUITES[suiteName], ...extraArgs];
 
 const child = spawn(process.execPath, [vitestBin, ...vitestArgs], {
 	stdio: "inherit",

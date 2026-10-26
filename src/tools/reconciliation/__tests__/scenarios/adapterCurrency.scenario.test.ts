@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { MoneyValue } from "../../../../utils/money.js";
 import { buildReconciliationPayload } from "../../outputBuilder.js";
 import type { ReconciliationAnalysis, TransactionMatch } from "../../types.js";
 
-const makeMoney = (value: number, currency = "USD") => ({
+const makeMoney = (value: number, currency = "USD"): MoneyValue => ({
 	value_milliunits: Math.round(value * 1000),
 	value: value,
 	value_display:
@@ -65,9 +66,9 @@ describe("scenario: non-USD formatting in adapter payload", () => {
 		});
 
 		const structured = payload.structured as Record<string, any>;
-		expect(structured.balance.current_cleared.currency).toBe("CAD");
-		expect(structured.summary.current_cleared_balance.currency).toBe("CAD");
-		expect(structured.csv_format).toEqual({
+		expect(structured["balance"].current_cleared.currency).toBe("CAD");
+		expect(structured["summary"].current_cleared_balance.currency).toBe("CAD");
+		expect(structured["csv_format"]).toEqual({
 			delimiter: ";",
 			decimal_separator: ",",
 			thousands_separator: " ",

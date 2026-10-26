@@ -31,7 +31,7 @@ describe("csvParser", () => {
 			const content = `Date,Description,Amount\n2024-01-01,${badDesc},10.00`;
 
 			const result = parseCSV(content);
-			expect(result.transactions[0].payee).toBe("BadDescription");
+			expect(result.transactions[0]!.payee).toBe("BadDescription");
 		});
 
 		it("should limit description length to 500 characters", () => {
@@ -39,8 +39,8 @@ describe("csvParser", () => {
 			const content = `Date,Description,Amount\n2024-01-01,${longDesc},10.00`;
 
 			const result = parseCSV(content);
-			expect(result.transactions[0].payee).toHaveLength(500);
-			expect(result.transactions[0].payee).toBe("a".repeat(500));
+			expect(result.transactions[0]!.payee).toHaveLength(500);
+			expect(result.transactions[0]!.payee).toBe("a".repeat(500));
 		});
 	});
 
@@ -50,19 +50,19 @@ describe("csvParser", () => {
 			// But we want 2024-01-01 regardless of local timezone
 			const content = "Date,Description,Amount\n2024-01-01,Test,10.00";
 			const result = parseCSV(content);
-			expect(result.transactions[0].date).toBe("2024-01-01");
+			expect(result.transactions[0]!.date).toBe("2024-01-01");
 		});
 
 		it("should parse MDY dates correctly without timezone shift", () => {
 			const content = "Date,Description,Amount\n01/01/2024,Test,10.00";
 			const result = parseCSV(content, { dateFormat: "MDY" });
-			expect(result.transactions[0].date).toBe("2024-01-01");
+			expect(result.transactions[0]!.date).toBe("2024-01-01");
 		});
 
 		it("should parse DMY dates correctly without timezone shift", () => {
 			const content = "Date,Description,Amount\n01/01/2024,Test,10.00";
 			const result = parseCSV(content, { dateFormat: "DMY" });
-			expect(result.transactions[0].date).toBe("2024-01-01");
+			expect(result.transactions[0]!.date).toBe("2024-01-01");
 		});
 	});
 
@@ -82,8 +82,8 @@ describe("csvParser", () => {
 			// Should detect TD preset which implies header: false
 			expect(result.meta.detectedColumns).toBeDefined();
 			expect(result.transactions).toHaveLength(2);
-			expect(result.transactions[0].amount).toBe(100000); // Credit is inflow (positive)
-			expect(result.transactions[1].amount).toBe(-50000); // Debit is outflow (negative)
+			expect(result.transactions[0]!.amount).toBe(100000); // Credit is inflow (positive)
+			expect(result.transactions[1]!.amount).toBe(-50000); // Debit is outflow (negative)
 		});
 	});
 });

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import type { DeltaCache } from "../../server/deltaCache.js";
-import type { ServerKnowledgeStore } from "../../server/serverKnowledgeStore.js";
 import type { DeltaFetcher } from "../deltaFetcher.js";
 import {
 	CreateScheduledTransactionSchema,
@@ -61,8 +60,6 @@ function cacheMock() {
 		forceFullRefresh: vi.fn(),
 	} as unknown as DeltaCache;
 }
-
-const _knowledgeStore = {} as ServerKnowledgeStore;
 
 describe("scheduled transaction tools", () => {
 	it("lists normalized scheduled transactions from the delta cache", async () => {

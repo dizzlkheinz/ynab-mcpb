@@ -173,9 +173,9 @@ describe("formatter", () => {
 				createYNABTransaction("ynab2", "2023-09-16", 67890),
 				createYNABTransaction("ynab3", "2023-09-17", 99999),
 			];
-			const matches = [createTransactionMatch(bankTxns[0], ynabTxns[0])];
-			const unmatchedBank = [bankTxns[1]];
-			const unmatchedYnab = [ynabTxns[2]];
+			const matches = [createTransactionMatch(bankTxns[0]!, ynabTxns[0]!)];
+			const unmatchedBank = [bankTxns[1]!];
+			const unmatchedYnab = [ynabTxns[2]!];
 			const parameters = { amount_tolerance: 0.01, date_tolerance_days: 5 };
 			const dateRange = { start: "2023-09-15", end: "2023-09-16" };
 
@@ -261,8 +261,8 @@ describe("formatter", () => {
 
 			const formatted = formatMatches([match]);
 
-			expect(formatted[0].bank_amount).toBe("-123.45");
-			expect(formatted[0].ynab_amount).toBe("-123.45");
+			expect(formatted[0]!.bank_amount).toBe("-123.45");
+			expect(formatted[0]!.ynab_amount).toBe("-123.45");
 		});
 
 		test("should handle null payee names", () => {
@@ -272,7 +272,7 @@ describe("formatter", () => {
 
 			const formatted = formatMatches([match]);
 
-			expect(formatted[0].ynab_payee).toBeNull();
+			expect(formatted[0]!.ynab_payee).toBeNull();
 		});
 
 		test("should handle large amounts", () => {
@@ -286,8 +286,8 @@ describe("formatter", () => {
 
 			const formatted = formatMatches([match]);
 
-			expect(formatted[0].bank_amount).toBe("999999.99");
-			expect(formatted[0].ynab_amount).toBe("999999.99");
+			expect(formatted[0]!.bank_amount).toBe("999999.99");
+			expect(formatted[0]!.ynab_amount).toBe("999999.99");
 		});
 
 		test("should handle zero amounts", () => {
@@ -297,8 +297,8 @@ describe("formatter", () => {
 
 			const formatted = formatMatches([match]);
 
-			expect(formatted[0].bank_amount).toBe("0.00");
-			expect(formatted[0].ynab_amount).toBe("0.00");
+			expect(formatted[0]!.bank_amount).toBe("0.00");
+			expect(formatted[0]!.ynab_amount).toBe("0.00");
 		});
 
 		test("should handle empty matches array", () => {
@@ -347,7 +347,7 @@ describe("formatter", () => {
 
 			const formatted = formatUnmatchedBank(bankTxns, payees);
 
-			expect(formatted[0].amount).toBe("-123.45");
+			expect(formatted[0]!.amount).toBe("-123.45");
 		});
 
 		test("should handle empty transactions array", () => {
@@ -367,7 +367,13 @@ describe("formatter", () => {
 					"Test Payee",
 					"Test Memo",
 				),
-				createYNABTransaction("ynab2", "2023-09-16", 67890, null, null),
+				createYNABTransaction(
+					"ynab2",
+					"2023-09-16",
+					67890,
+					undefined,
+					undefined,
+				),
 			];
 
 			const formatted = formatUnmatchedYNAB(ynabTxns);
@@ -396,7 +402,7 @@ describe("formatter", () => {
 
 			const formatted = formatUnmatchedYNAB(ynabTxns);
 
-			expect(formatted[0].amount).toBe("-123.45");
+			expect(formatted[0]!.amount).toBe("-123.45");
 		});
 
 		test("should handle empty transactions array", () => {
@@ -414,7 +420,7 @@ describe("formatter", () => {
 			const ynabTxns = [
 				createYNABTransaction("ynab1", "2023-09-15", 123450, "Test Payee"),
 			];
-			const matches = [createTransactionMatch(bankTxns[0], ynabTxns[0])];
+			const matches = [createTransactionMatch(bankTxns[0]!, ynabTxns[0]!)];
 			const unmatchedBank = [
 				createBankTransaction("2023-09-16", 67890, "Unmatched", 2),
 			];
@@ -441,11 +447,12 @@ describe("formatter", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 			expect(mockResponseFormatter.format).toHaveBeenCalledOnce();
 
 			// Verify the structure passed to responseFormatter
-			const formatterArg = mockResponseFormatter.format.mock.calls[0][0];
+			const formatterArg = mockResponseFormatter.format.mock
+				.calls[0]![0] as any;
 			expect(formatterArg).toHaveProperty("summary");
 			expect(formatterArg).toHaveProperty("matches");
 			expect(formatterArg).toHaveProperty("missing_in_ynab");
@@ -476,9 +483,10 @@ describe("formatter", () => {
 			);
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const formatterArg = mockResponseFormatter.format.mock.calls[0][0];
+			const formatterArg = mockResponseFormatter.format.mock
+				.calls[0]![0] as any;
 			expect(formatterArg.summary.bank_transactions_count).toBe(0);
 			expect(formatterArg.summary.ynab_transactions_count).toBe(0);
 			expect(formatterArg.summary.matches_found).toBe(0);
@@ -490,7 +498,7 @@ describe("formatter", () => {
 		test("should call responseFormatter.format with correct structure", () => {
 			const bankTxns = [createBankTransaction("2023-09-15", 123450, "Test", 1)];
 			const ynabTxns = [createYNABTransaction("ynab1", "2023-09-15", 123450)];
-			const matches = [createTransactionMatch(bankTxns[0], ynabTxns[0])];
+			const matches = [createTransactionMatch(bankTxns[0]!, ynabTxns[0]!)];
 
 			const matchResults = {
 				matches,

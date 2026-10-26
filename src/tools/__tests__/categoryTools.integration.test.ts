@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { textOf } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import {
 	handleGetCategory,
@@ -10,9 +11,9 @@ import {
 /**
  * Integration tests for category tools using real YNAB API
  */
-const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
+const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
 const shouldSkip =
-	process.env.SKIP_E2E_TESTS?.toLowerCase() === "true" || !hasToken;
+	process.env["SKIP_E2E_TESTS"]?.toLowerCase() === "true" || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("Category Tools Integration", () => {
@@ -22,12 +23,12 @@ describeIntegration("Category Tools Integration", () => {
 	let originalBudgetedAmount: number;
 
 	beforeAll(async () => {
-		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+		const accessToken = process.env["YNAB_ACCESS_TOKEN"]!;
 		ynabAPI = new ynab.API(accessToken);
 
 		// Get first budget ID for testing
 		const budgetsResponse = await listBudgetsCompat(ynabAPI);
-		testBudgetId = budgetsResponse.budgets[0].id;
+		testBudgetId = budgetsResponse.budgets[0]!.id;
 	});
 
 	describe("handleListCategories", () => {
@@ -40,9 +41,9 @@ describeIntegration("Category Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.categories).toBeDefined();
 			expect(Array.isArray(parsedContent.categories)).toBe(true);
 
@@ -99,9 +100,9 @@ describeIntegration("Category Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 
@@ -127,9 +128,9 @@ describeIntegration("Category Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.category).toBeDefined();
 
 			const category = parsedContent.category;
@@ -157,9 +158,9 @@ describeIntegration("Category Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 
@@ -188,9 +189,9 @@ describeIntegration("Category Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 
 			// Debug: Log the actual response if it's an error
 			if (parsedContent.error) {
@@ -239,9 +240,9 @@ describeIntegration("Category Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 
@@ -268,9 +269,9 @@ describeIntegration("Category Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 
 			// Debug: Log the actual response if it's an error
 			if (parsedContent.error) {

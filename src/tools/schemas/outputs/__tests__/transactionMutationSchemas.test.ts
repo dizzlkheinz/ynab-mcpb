@@ -244,10 +244,11 @@ describe("Transaction Mutation Schema Type Safety", () => {
 			const parsed = CreateReceiptSplitTransactionOutputSchema.parse(
 				dryRunWithInvalidSubtransactions,
 			);
-			if (parsed.dry_run === true) {
-				expect(parsed.subtransactions[0]).not.toHaveProperty("id");
-				expect(parsed.subtransactions[0]).not.toHaveProperty("transaction_id");
+			if (!("dry_run" in parsed)) {
+				throw new Error("Expected the dry-run variant");
 			}
+			expect(parsed.subtransactions[0]).not.toHaveProperty("id");
+			expect(parsed.subtransactions[0]).not.toHaveProperty("transaction_id");
 		});
 	});
 });

@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod/v4";
+import { textOf } from "../../__tests__/testUtils.js";
 import { globalRateLimiter, RateLimiter } from "../rateLimiter.js";
 import { globalRequestLogger, RequestLogger } from "../requestLogger.js";
 import { SecurityMiddleware } from "../securityMiddleware.js";
@@ -20,11 +21,12 @@ describe("Security Integration", () => {
 		SecurityMiddleware.reset();
 
 		// Configure rate limiter for testing
-		globalRateLimiter.config = {
+		// No public setter; the test narrows the private limits directly
+		Reflect.set(globalRateLimiter, "config", {
 			maxRequests: 3,
 			windowMs: 1000,
 			enableLogging: false,
-		};
+		});
 
 		// Pin the logger config so console-output assertions do not depend
 		// on ambient LOG_LEVEL/NODE_ENV values
@@ -69,18 +71,18 @@ describe("Security Integration", () => {
 			});
 
 			// Verify successful result
-			expect(result.content[0].text).toContain("success");
+			expect(textOf(result.content[0])).toContain("success");
 
 			// Verify logging occurred
 			const logs = globalRequestLogger.getRecentLogs(1);
 			expect(logs).toHaveLength(1);
-			expect(logs[0].toolName).toBe("ynab:create_transaction");
-			expect(logs[0].success).toBe(true);
-			expect(logs[0].parameters.budget_id).toBe("test-budget-123");
-			expect(logs[0].parameters.amount).toBe(1000);
+			expect(logs[0]!.toolName).toBe("ynab:create_transaction");
+			expect(logs[0]!.success).toBe(true);
+			expect(logs[0]!.parameters["budget_id"]).toBe("test-budget-123");
+			expect(logs[0]!.parameters["amount"]).toBe(1000);
 
 			// Verify rate limiting is tracking
-			expect(logs[0].rateLimitInfo.remaining).toBe(2); // Started with 3, used 1
+			expect(logs[0]!.rateLimitInfo!.remaining).toBe(2); // Started with 3, used 1
 
 			// Verify console logging (should show success)
 			expect(consoleSpy).toHaveBeenCalledWith(
@@ -122,15 +124,15 @@ describe("Security Integration", () => {
 			expect(mockOperation).not.toHaveBeenCalled();
 
 			// Verify error response
-			const responseText = JSON.parse(result.content[0].text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 
 			// Verify error logging
 			const logs = globalRequestLogger.getRecentLogs(1);
 			expect(logs).toHaveLength(1);
-			expect(logs[0].success).toBe(false);
-			expect(logs[0].error).toContain("Validation failed");
+			expect(logs[0]!.success).toBe(false);
+			expect(logs[0]!.error).toContain("Validation failed");
 
 			// Verify console error logging
 			expect(consoleSpy).toHaveBeenCalledWith(
@@ -172,7 +174,7 @@ describe("Security Integration", () => {
 			);
 
 			// Verify rate limit response
-			const responseText = JSON.parse(result.content[0].text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("RATE_LIMIT_EXCEEDED");
 			expect(responseText.error.message).toContain("Rate limit exceeded");
 			expect(responseText.error.details.resetTime).toBeDefined();
@@ -183,19 +185,19 @@ describe("Security Integration", () => {
 			expect(logs).toHaveLength(4);
 
 			// First 3 should be successful
-			expect(logs[0].success).toBe(true);
-			expect(logs[1].success).toBe(true);
-			expect(logs[2].success).toBe(true);
+			expect(logs[0]!.success).toBe(true);
+			expect(logs[1]!.success).toBe(true);
+			expect(logs[2]!.success).toBe(true);
 
 			// Fourth should be failed due to rate limiting
-			expect(logs[3].success).toBe(false);
-			expect(logs[3].error).toContain("Rate limit exceeded");
+			expect(logs[3]!.success).toBe(false);
+			expect(logs[3]!.error).toContain("Rate limit exceeded");
 
 			// Verify rate limit info progression
-			expect(logs[0].rateLimitInfo.remaining).toBe(2);
-			expect(logs[1].rateLimitInfo.remaining).toBe(1);
-			expect(logs[2].rateLimitInfo.remaining).toBe(0);
-			expect(logs[3].rateLimitInfo.isLimited).toBe(true);
+			expect(logs[0]!.rateLimitInfo!.remaining).toBe(2);
+			expect(logs[1]!.rateLimitInfo!.remaining).toBe(1);
+			expect(logs[2]!.rateLimitInfo!.remaining).toBe(0);
+			expect(logs[3]!.rateLimitInfo!.isLimited).toBe(true);
 
 			consoleSpy.mockRestore();
 		});
@@ -234,13 +236,13 @@ describe("Security Integration", () => {
 			);
 
 			const logs = globalRequestLogger.getRecentLogs(1);
-			const loggedParams = logs[0].parameters;
+			const loggedParams = logs[0]!.parameters;
 
 			// Verify sensitive data is sanitized
-			expect(loggedParams.budget_id).toBe("test-budget"); // Non-sensitive data preserved
-			expect(loggedParams.memo).toBe("Payment with token=***"); // Token pattern sanitized
-			expect(loggedParams.access_token).toBe("***"); // Sensitive parameter name sanitized
-			expect(loggedParams.api_key).toBe("***"); // Sensitive parameter name sanitized
+			expect(loggedParams["budget_id"]).toBe("test-budget"); // Non-sensitive data preserved
+			expect(loggedParams["memo"]).toBe("Payment with token=***"); // Token pattern sanitized
+			expect(loggedParams["access_token"]).toBe("***"); // Sensitive parameter name sanitized
+			expect(loggedParams["api_key"]).toBe("***"); // Sensitive parameter name sanitized
 		});
 
 		it("should handle multiple users with independent rate limits", {
@@ -292,7 +294,7 @@ describe("Security Integration", () => {
 				testSchema,
 				mockOperation,
 			);
-			const user1Response = JSON.parse(user1Result.content[0].text);
+			const user1Response = JSON.parse(textOf(user1Result.content[0]));
 			expect(user1Response.error.code).toBe("RATE_LIMIT_EXCEEDED");
 
 			// User 2 should still be allowed
@@ -301,22 +303,22 @@ describe("Security Integration", () => {
 				testSchema,
 				mockOperation,
 			);
-			expect(user2Result.content[0].text).toBe("Success");
+			expect(textOf(user2Result.content[0])).toBe("Success");
 
 			// Verify independent tracking in logs
 			const logs = globalRequestLogger.getRecentLogs(5);
 			const user1Logs = logs.filter(
-				(log) => log.parameters.budget_id === "budget-1",
+				(log) => log.parameters["budget_id"] === "budget-1",
 			);
 			const user2Logs = logs.filter(
-				(log) => log.parameters.budget_id === "budget-2",
+				(log) => log.parameters["budget_id"] === "budget-2",
 			);
 
 			expect(user1Logs).toHaveLength(4); // 3 successful + 1 rate limited
 			expect(user2Logs).toHaveLength(1); // 1 successful
 
 			// User 2 should have full rate limit remaining
-			expect(user2Logs[0].rateLimitInfo.remaining).toBe(2);
+			expect(user2Logs[0]!.rateLimitInfo!.remaining).toBe(2);
 		});
 
 		it("should provide comprehensive security statistics", {
@@ -365,11 +367,11 @@ describe("Security Integration", () => {
 
 			expect(stats.rateLimitStats).toBeDefined();
 			expect(stats.requestStats).toBeDefined();
-			expect(stats.requestStats.totalRequests).toBe(3);
-			expect(stats.requestStats.successfulRequests).toBe(2);
-			expect(stats.requestStats.failedRequests).toBe(1);
-			expect(stats.requestStats.averageDuration).toBeGreaterThanOrEqual(0);
-			expect(stats.requestStats.toolUsage["ynab:test"]).toBe(3);
+			expect(stats.requestStats["totalRequests"]).toBe(3);
+			expect(stats.requestStats["successfulRequests"]).toBe(2);
+			expect(stats.requestStats["failedRequests"]).toBe(1);
+			expect(stats.requestStats["averageDuration"]).toBeGreaterThanOrEqual(0);
+			expect(stats.requestStats["toolUsage"]).toMatchObject({ "ynab:test": 3 });
 		});
 	});
 
@@ -459,8 +461,8 @@ describe("Security Integration", () => {
 			expect(logs).toHaveLength(2);
 
 			// Should keep the most recent entries
-			expect(logs[0].toolName).toBe("tool2");
-			expect(logs[1].toolName).toBe("tool3");
+			expect(logs[0]!.toolName).toBe("tool2");
+			expect(logs[1]!.toolName).toBe("tool3");
 		});
 	});
 });

@@ -4,6 +4,7 @@ import {
 	getTestConfig,
 	skipOnRateLimit,
 } from "../../../__tests__/testUtils.js";
+import { toMoneyValueFromDecimal } from "../../../utils/money.js";
 import { type AccountSnapshot, executeReconciliation } from "../executor.js";
 import type { ReconcileAccountRequest } from "../index.js";
 import type { ReconciliationAnalysis } from "../types.js";
@@ -18,7 +19,7 @@ describeIntegration("Reconciliation Executor - Live Contract Smoke", () => {
 	const accountId = config.testAccountId?.trim();
 
 	beforeAll(() => {
-		ynabAPI = new ynab.API(process.env.YNAB_ACCESS_TOKEN!);
+		ynabAPI = new ynab.API(process.env["YNAB_ACCESS_TOKEN"]!);
 	});
 
 	afterEach(async () => {
@@ -30,54 +31,50 @@ describeIntegration("Reconciliation Executor - Live Contract Smoke", () => {
 		}
 	}, 30000);
 
-	it(
-		"creates two transactions without import_id through the real bulk API",
-		{
-			meta: { tier: "domain", domain: "reconciliation" },
-		},
-		async (ctx) => {
-			if (!budgetId || !accountId) {
-				ctx.skip();
-				return;
+	it("creates two transactions without import_id through the real bulk API", {
+		meta: { tier: "domain", domain: "reconciliation" },
+		timeout: 30000,
+	}, async (ctx) => {
+		if (!budgetId || !accountId) {
+			ctx.skip();
+			return;
+		}
+
+		await skipOnRateLimit(async () => {
+			const accountSnapshot = await fetchAccountSnapshot(
+				ynabAPI,
+				budgetId,
+				accountId,
+			);
+			const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 9);
+			const params = buildIntegrationParams(
+				accountId,
+				budgetId,
+				analysis.summary.target_statement_balance.value,
+			);
+
+			const result = await executeReconciliation({
+				ynabAPI,
+				analysis,
+				params,
+				budgetId,
+				accountId,
+				initialAccount: accountSnapshot,
+				currencyCode: "USD",
+			});
+
+			for (const action of result.actions_taken) {
+				if (action.type !== "create_transaction") continue;
+				const transaction = action.transaction as { id?: string } | null;
+				if (transaction?.id) createdTransactionIds.push(transaction.id);
 			}
 
-			await skipOnRateLimit(async () => {
-				const accountSnapshot = await fetchAccountSnapshot(
-					ynabAPI,
-					budgetId,
-					accountId,
-				);
-				const analysis = buildIntegrationAnalysis(accountSnapshot, 2, 9);
-				const params = buildIntegrationParams(
-					accountId,
-					budgetId,
-					analysis.summary.target_statement_balance,
-				);
-
-				const result = await executeReconciliation({
-					ynabAPI,
-					analysis,
-					params,
-					budgetId,
-					accountId,
-					initialAccount: accountSnapshot,
-					currencyCode: "USD",
-				});
-
-				for (const action of result.actions_taken) {
-					if (action.type !== "create_transaction") continue;
-					const transaction = action.transaction as { id?: string } | null;
-					if (transaction?.id) createdTransactionIds.push(transaction.id);
-				}
-
-				expect(result.summary.transactions_created).toBe(2);
-				expect(result.bulk_operation_details?.bulk_successes).toBe(1);
-				expect(result.bulk_operation_details?.chunks_processed).toBe(1);
-				expect(result.bulk_operation_details?.duplicates_detected).toBe(0);
-			}, ctx);
-		},
-		30000,
-	);
+			expect(result.summary.transactions_created).toBe(2);
+			expect(result.bulk_operation_details?.bulk_successes).toBe(1);
+			expect(result.bulk_operation_details?.chunks_processed).toBe(1);
+			expect(result.bulk_operation_details?.duplicates_detected).toBe(0);
+		}, ctx);
+	});
 });
 
 async function fetchAccountSnapshot(
@@ -113,13 +110,15 @@ function buildIntegrationAnalysis(
 			statement_date_range: "Integration test",
 			bank_transactions_count: count,
 			ynab_transactions_count: 0,
+			ynab_in_range_count: 0,
+			ynab_outside_range_count: 0,
 			auto_matched: 0,
 			suggested_matches: 0,
 			unmatched_bank: count,
 			unmatched_ynab: 0,
-			current_cleared_balance: clearedDollars,
-			target_statement_balance: statementBalance,
-			discrepancy: totalDelta,
+			current_cleared_balance: toMoneyValueFromDecimal(clearedDollars),
+			target_statement_balance: toMoneyValueFromDecimal(statementBalance),
+			discrepancy: toMoneyValueFromDecimal(totalDelta),
 			discrepancy_explanation: "Synthetic integration delta",
 		},
 		auto_matches: [],
@@ -132,16 +131,24 @@ function buildIntegrationAnalysis(
 				amount: transactionAmount,
 				payee: `Integration Payee ${index}-${runNonce}`,
 				memo: `Integration memo ${index}`,
-				original_csv_row: index + 1,
+				sourceRow: index + 1,
+				raw: {
+					date: date.toISOString().slice(0, 10),
+					amount: String(transactionAmount),
+					description: `Integration Payee ${index}`,
+				},
 			};
 		}),
 		unmatched_ynab: [],
+		ynab_outside_date_range: [],
 		balance_info: {
-			current_cleared: clearedDollars,
-			current_uncleared: snapshot.uncleared_balance / 1000,
-			current_total: snapshot.balance / 1000,
-			target_statement: statementBalance,
-			discrepancy: totalDelta,
+			current_cleared: toMoneyValueFromDecimal(clearedDollars),
+			current_uncleared: toMoneyValueFromDecimal(
+				snapshot.uncleared_balance / 1000,
+			),
+			current_total: toMoneyValueFromDecimal(snapshot.balance / 1000),
+			target_statement: toMoneyValueFromDecimal(statementBalance),
+			discrepancy: toMoneyValueFromDecimal(totalDelta),
 			on_track: false,
 		},
 		next_steps: [],
@@ -162,6 +169,8 @@ function buildIntegrationParams(
 		statement_end_date: new Date().toISOString().slice(0, 10),
 		date_tolerance_days: 1,
 		match_strictness: "strict",
+		sign_convention: "auto",
+		max_suggestions_in_output: 20,
 		auto_create_transactions: true,
 		auto_update_cleared_status: false,
 		auto_unclear_missing: false,

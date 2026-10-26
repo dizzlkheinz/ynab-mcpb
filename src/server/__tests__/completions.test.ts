@@ -270,9 +270,11 @@ describe("CompletionsManager", () => {
 				name: `Budget ${i}`,
 			}));
 
-			mockYnabAPI.plans = {
-				getPlans: vi.fn().mockResolvedValue({ data: { plans: manyBudgets } }),
-			} as unknown as ynab.PlansApi;
+			Object.assign(mockYnabAPI, {
+				plans: {
+					getPlans: vi.fn().mockResolvedValue({ data: { plans: manyBudgets } }),
+				} as unknown as ynab.PlansApi,
+			});
 
 			manager = new CompletionsManager(
 				mockYnabAPI as ynab.API,

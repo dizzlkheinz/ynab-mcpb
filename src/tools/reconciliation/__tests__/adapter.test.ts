@@ -153,14 +153,15 @@ describe("buildReconciliationPayload", () => {
 		expect(payload.human.toUpperCase()).toContain("DISCREPANCY");
 
 		const structured = payload.structured as Record<string, any>;
-		expect(structured.version).toBe("2.0");
-		expect(structured.summary.current_cleared_balance.value_display).toBe(
+		expect(structured["version"]).toBe("2.0");
+		expect(structured["summary"].current_cleared_balance.value_display).toBe(
 			"-$899.02",
 		);
-		expect(structured.summary.current_cleared_balance.currency).toBe("USD");
-		expect(structured.balance.discrepancy.direction).toBeDefined();
+		expect(structured["summary"].current_cleared_balance.currency).toBe("USD");
+		expect(structured["balance"].discrepancy.direction).toBeDefined();
 		expect(
-			structured.matches.auto[0].bank_transaction.amount_money.value_milliunits,
+			structured["matches"].auto[0].bank_transaction.amount_money
+				.value_milliunits,
 		).toBe(-45230);
 	});
 
@@ -196,9 +197,6 @@ describe("buildReconciliationPayload", () => {
 					reason: "Created missing transaction",
 				},
 			],
-			matches: [],
-			missing_in_ynab: [],
-			missing_in_bank: [],
 			recommendations: ["Review EvoCarShare discrepancy"],
 			balance_reconciliation: {
 				status: "DISCREPANCY_FOUND",
@@ -206,6 +204,7 @@ describe("buildReconciliationPayload", () => {
 					bank_statement_balance_milliunits: -921240,
 					ynab_calculated_balance_milliunits: -899020,
 					discrepancy_milliunits: -22220,
+					currency_decimal_digits: 2,
 					discrepancy_dollars: -22.22,
 				},
 				discrepancy_analysis: {
@@ -242,17 +241,17 @@ describe("buildReconciliationPayload", () => {
 		);
 
 		const structured = payload.structured as Record<string, any>;
-		expect(structured.execution).toBeDefined();
-		expect(structured.execution.summary.transactions_created).toBe(1);
+		expect(structured["execution"]).toBeDefined();
+		expect(structured["execution"].summary.transactions_created).toBe(1);
 		expect(
-			structured.execution.account_balance.after.cleared_balance
+			structured["execution"].account_balance.after.cleared_balance
 				.value_milliunits,
 		).toBe(-921240);
 		expect(
-			structured.execution.account_balance.after.cleared_balance.currency,
+			structured["execution"].account_balance.after.cleared_balance.currency,
 		).toBe("CAD");
 		expect(
-			structured.execution.balance_reconciliation?.precision_calculations
+			structured["execution"].balance_reconciliation?.precision_calculations
 				?.discrepancy.value_display,
 		).toBe("-CA$22.22");
 		expect(payload.human).toContain("change(s) applied to YNAB");

@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { textOf } from "../../__tests__/testUtils.js";
 import type { CacheManager } from "../cacheManager.js";
 import { type ResourceDependencies, ResourceManager } from "../resources.js";
 
@@ -280,7 +281,7 @@ describe("resources module", () => {
 
 				expect(customFormatter.format).toHaveBeenCalled();
 				expect(mockResponseFormatter.format).not.toHaveBeenCalled();
-				expect(result.contents[0].text).toBe("custom-formatted-response");
+				expect(textOf(result.contents[0])).toBe("custom-formatted-response");
 			});
 		});
 
@@ -292,7 +293,9 @@ describe("resources module", () => {
 
 				const result = await resourceManager.readResource("ynab://budgets");
 
-				expect(result.contents[0].text).toBe(JSON.stringify({ budgets: [] }));
+				expect(textOf(result.contents[0])).toBe(
+					JSON.stringify({ budgets: [] }),
+				);
 			});
 
 			it("should handle user without extended properties", async () => {
@@ -306,7 +309,7 @@ describe("resources module", () => {
 
 				const result = await resourceManager.readResource("ynab://user");
 
-				expect(result.contents[0].text).toBe(
+				expect(textOf(result.contents[0])).toBe(
 					JSON.stringify({ user: { id: minimalUser.id } }),
 				);
 			});

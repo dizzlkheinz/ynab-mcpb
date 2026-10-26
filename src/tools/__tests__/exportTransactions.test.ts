@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { textOf } from "../../__tests__/testUtils.js";
 import {
 	ExportTransactionsSchema,
 	handleExportTransactions,
@@ -89,7 +90,9 @@ describe("exportTransactions", () => {
 
 	describe("ExportTransactionsSchema", () => {
 		it("should default minimal to true when not provided", () => {
-			const params = { budget_id: "test-budget" };
+			const params = ExportTransactionsSchema.parse({
+				budget_id: "test-budget",
+			});
 			const parsed = ExportTransactionsSchema.parse(params);
 			expect(parsed.minimal).toBe(true);
 		});
@@ -109,10 +112,13 @@ describe("exportTransactions", () => {
 
 	describe("handleExportTransactions", () => {
 		it("passes type in the SDK type argument slot", async () => {
-			await handleExportTransactions(mockYnabAPI, {
-				budget_id: "test-budget",
-				type: "unapproved",
-			});
+			await handleExportTransactions(
+				mockYnabAPI,
+				ExportTransactionsSchema.parse({
+					budget_id: "test-budget",
+					type: "unapproved",
+				}),
+			);
 
 			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
 				"test-budget",
@@ -123,7 +129,9 @@ describe("exportTransactions", () => {
 		});
 
 		it("should export minimal fields by default", async () => {
-			const params = { budget_id: "test-budget" };
+			const params = ExportTransactionsSchema.parse({
+				budget_id: "test-budget",
+			});
 
 			const result = await handleExportTransactions(mockYnabAPI, params);
 
@@ -155,7 +163,7 @@ describe("exportTransactions", () => {
 			});
 
 			// Verify response message indicates minimal export
-			const responseText = result.content[0].text;
+			const responseText = textOf(result.content[0]);
 			expect(responseText).toContain("(minimal fields)");
 			const responseJson = JSON.parse(responseText);
 			expect(responseJson.export_mode).toBe("minimal");
@@ -203,7 +211,7 @@ describe("exportTransactions", () => {
 			expect(firstTransaction.amount).toBe(1);
 
 			// Verify response message indicates full export
-			const responseText = result.content[0].text;
+			const responseText = textOf(result.content[0]);
 			expect(responseText).toContain("(full fields)");
 			const responseJson = JSON.parse(responseText);
 			expect(responseJson.export_mode).toBe("full");
@@ -212,20 +220,25 @@ describe("exportTransactions", () => {
 		});
 
 		it("should reject custom filenames that try to escape the export directory", async () => {
-			const result = await handleExportTransactions(mockYnabAPI, {
-				budget_id: "test-budget",
-				filename: "..\\outside",
-			});
+			const result = await handleExportTransactions(
+				mockYnabAPI,
+				ExportTransactionsSchema.parse({
+					budget_id: "test-budget",
+					filename: "..\\outside",
+				}),
+			);
 
 			expect(writeFileSync).not.toHaveBeenCalled();
-			const responseJson = JSON.parse(result.content[0].text);
+			const responseJson = JSON.parse(textOf(result.content[0]));
 			expect(responseJson.error.message).toContain(
 				"Filename must be a file name",
 			);
 		});
 
 		it('should include "minimal" in filename by default', async () => {
-			const params = { budget_id: "test-budget" };
+			const params = ExportTransactionsSchema.parse({
+				budget_id: "test-budget",
+			});
 
 			await handleExportTransactions(mockYnabAPI, params);
 

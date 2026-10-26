@@ -5,6 +5,7 @@ import {
 	DeltaCache,
 	type DeltaCacheEntry,
 	type Logger,
+	type MergeFn,
 } from "../deltaCache.js";
 import type { ServerKnowledgeStore } from "../serverKnowledgeStore.js";
 
@@ -77,7 +78,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 		};
 		cacheManagerMock = cacheManagerSpies as unknown as CacheManager;
 		knowledgeStoreMock = knowledgeStoreSpies as unknown as ServerKnowledgeStore;
-		process.env.YNAB_MCP_ENABLE_DELTA = "true";
+		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
 		deltaCache = new DeltaCache(
 			cacheManagerMock,
 			knowledgeStoreMock,
@@ -98,7 +99,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 
 	const createMerger = () =>
 		vi
-			.fn<[TestEntity[], TestEntity[], unknown?], TestEntity[]>()
+			.fn<MergeFn<TestEntity>>()
 			.mockImplementation((snapshot: TestEntity[], delta: TestEntity[]) => [
 				...snapshot,
 				...delta,
@@ -152,13 +153,13 @@ describe("DeltaCache stale-while-revalidate", () => {
 			},
 		);
 
-		const [, entry, options] = cacheManagerSpies.set.mock.calls[0];
+		const [, entry, options] = cacheManagerSpies.set.mock.calls[0]!;
 		expect(entry.staleWhileRevalidate).toBeUndefined();
 		expect(options).not.toHaveProperty("staleWhileRevalidate");
 	});
 
 	it("should pass staleWhileRevalidate when delta is disabled", async () => {
-		process.env.YNAB_MCP_ENABLE_DELTA = "false";
+		process.env["YNAB_MCP_ENABLE_DELTA"] = "false";
 		const fetcher = createFetcher({
 			data: [{ id: "test-1" }],
 			serverKnowledge: 1000,
@@ -209,7 +210,7 @@ describe("DeltaCache stale-while-revalidate", () => {
 			},
 		);
 
-		const [, entry] = cacheManagerSpies.set.mock.calls[0];
+		const [, entry] = cacheManagerSpies.set.mock.calls[0]!;
 		expect(entry.staleWhileRevalidate).toBe(1000);
 	});
 });

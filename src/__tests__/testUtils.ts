@@ -278,6 +278,26 @@ export function getErrorMessage(result: CallToolResult): string {
 }
 
 /**
+ * Text of a tool-result or resource content item. Fails the test when the
+ * item is missing or carries no text (an image or blob item, for example).
+ */
+export function textOf(item: object | undefined): string {
+	if (item && "text" in item && typeof item.text === "string") {
+		return item.text;
+	}
+	throw new Error(
+		`Expected a text content item, got ${JSON.stringify(item) ?? "undefined"}`,
+	);
+}
+
+/** Like {@link textOf}, but returns undefined instead of failing. */
+export function maybeTextOf(item: object | undefined): string | undefined {
+	return item && "text" in item && typeof item.text === "string"
+		? item.text
+		: undefined;
+}
+
+/**
  * Parse and normalize JSON payload from a CallToolResult's text content.
  *
  * @param result - The tool call result whose first content item must be a text string containing JSON.

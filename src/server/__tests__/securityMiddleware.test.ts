@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod/v4";
+import { textOf } from "../../__tests__/testUtils.js";
 import {
 	globalRateLimiter,
 	RateLimitError,
@@ -79,7 +80,7 @@ describe("SecurityMiddleware", () => {
 			);
 
 			expect(mockOperation).not.toHaveBeenCalled();
-			const responseText = JSON.parse(result.content[0].text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 		});
@@ -134,7 +135,7 @@ describe("SecurityMiddleware", () => {
 					mockOperation,
 				);
 
-				const responseText = JSON.parse(result.content[0].text);
+				const responseText = JSON.parse(textOf(result.content[0]));
 				expect(responseText.error.code).toBe("RATE_LIMIT_EXCEEDED");
 				expect(responseText.error.message).toContain("Rate limit exceeded");
 			} finally {
@@ -163,10 +164,10 @@ describe("SecurityMiddleware", () => {
 			const logs = globalRequestLogger.getRecentLogs(1);
 
 			expect(logs).toHaveLength(1);
-			expect(logs[0].toolName).toBe("ynab:test");
-			expect(logs[0].operation).toBe("test operation");
-			expect(logs[0].success).toBe(true);
-			expect(logs[0].duration).toBeGreaterThanOrEqual(0);
+			expect(logs[0]!.toolName).toBe("ynab:test");
+			expect(logs[0]!.operation).toBe("test operation");
+			expect(logs[0]!.success).toBe(true);
+			expect(logs[0]!.duration).toBeGreaterThanOrEqual(0);
 		});
 
 		it("should log failed requests", async () => {
@@ -193,8 +194,8 @@ describe("SecurityMiddleware", () => {
 			const logs = globalRequestLogger.getRecentLogs(1);
 
 			expect(logs).toHaveLength(1);
-			expect(logs[0].success).toBe(false);
-			expect(logs[0].error).toBe("Test error");
+			expect(logs[0]!.success).toBe(false);
+			expect(logs[0]!.error).toBe("Test error");
 		});
 
 		it("should handle rate limit errors specially", async () => {
@@ -218,7 +219,7 @@ describe("SecurityMiddleware", () => {
 				mockOperation,
 			);
 
-			const responseText = JSON.parse(result.content[0].text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("RATE_LIMIT_EXCEEDED");
 			expect(responseText.error.details.resetTime).toBeDefined();
 			expect(responseText.error.details.remaining).toBe(0);
@@ -241,9 +242,9 @@ describe("SecurityMiddleware", () => {
 
 			const logs = globalRequestLogger.getRecentLogs(1);
 
-			expect(logs[0].rateLimitInfo).toBeDefined();
-			expect(logs[0].rateLimitInfo.remaining).toBeGreaterThanOrEqual(0);
-			expect(typeof logs[0].rateLimitInfo.isLimited).toBe("boolean");
+			expect(logs[0]!.rateLimitInfo).toBeDefined();
+			expect(logs[0]!.rateLimitInfo!.remaining).toBeGreaterThanOrEqual(0);
+			expect(typeof logs[0]!.rateLimitInfo!.isLimited).toBe("boolean");
 		});
 	});
 
@@ -266,7 +267,7 @@ describe("SecurityMiddleware", () => {
 			);
 
 			expect(mockOperation).not.toHaveBeenCalled();
-			const responseText = JSON.parse(result.content[0].text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 		});
@@ -289,7 +290,7 @@ describe("SecurityMiddleware", () => {
 			);
 
 			expect(mockOperation).not.toHaveBeenCalled();
-			const responseText = JSON.parse(result.content[0].text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 		});
@@ -351,8 +352,8 @@ describe("SecurityMiddleware", () => {
 			const logs = globalRequestLogger.getRecentLogs(2);
 
 			// Both requests should affect the same rate limit counter
-			expect(logs[0].rateLimitInfo.remaining).toBe(
-				logs[1].rateLimitInfo.remaining + 1,
+			expect(logs[0]!.rateLimitInfo!.remaining).toBe(
+				logs[1]!.rateLimitInfo!.remaining + 1,
 			);
 		});
 
@@ -391,8 +392,8 @@ describe("SecurityMiddleware", () => {
 			const logs = globalRequestLogger.getRecentLogs(2);
 
 			// Different tokens should have independent rate limit counters
-			expect(logs[0].rateLimitInfo.remaining).toBe(
-				logs[1].rateLimitInfo.remaining,
+			expect(logs[0]!.rateLimitInfo!.remaining).toBe(
+				logs[1]!.rateLimitInfo!.remaining,
 			);
 		});
 	});
@@ -417,8 +418,8 @@ describe("SecurityMiddleware", () => {
 
 			expect(stats.rateLimitStats).toBeDefined();
 			expect(stats.requestStats).toBeDefined();
-			expect(stats.requestStats.totalRequests).toBe(1);
-			expect(stats.requestStats.successfulRequests).toBe(1);
+			expect(stats.requestStats["totalRequests"]).toBe(1);
+			expect(stats.requestStats["successfulRequests"]).toBe(1);
 		});
 	});
 
@@ -441,14 +442,14 @@ describe("SecurityMiddleware", () => {
 
 			// Verify state exists
 			const statsBefore = SecurityMiddleware.getSecurityStats();
-			expect(statsBefore.requestStats.totalRequests).toBe(1);
+			expect(statsBefore.requestStats["totalRequests"]).toBe(1);
 
 			// Reset
 			SecurityMiddleware.reset();
 
 			// Verify state is cleared
 			const statsAfter = SecurityMiddleware.getSecurityStats();
-			expect(statsAfter.requestStats.totalRequests).toBe(0);
+			expect(statsAfter.requestStats["totalRequests"]).toBe(0);
 		});
 	});
 
@@ -499,7 +500,7 @@ describe("SecurityMiddleware", () => {
 			);
 
 			expect(mockOperation).not.toHaveBeenCalled();
-			const responseText = JSON.parse(result.content[0].text);
+			const responseText = JSON.parse(textOf(result.content[0]));
 			expect(responseText.error.code).toBe("VALIDATION_ERROR");
 			expect(responseText.error.message).toContain("Invalid parameters");
 		});

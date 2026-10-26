@@ -78,6 +78,7 @@ const execution: LegacyReconciliationResult = {
 			bank_statement_balance_milliunits: -921240,
 			ynab_calculated_balance_milliunits: -899020,
 			discrepancy_milliunits: -22220,
+			currency_decimal_digits: 2,
 			discrepancy_dollars: -22.22,
 		},
 		discrepancy_analysis: {
@@ -125,7 +126,7 @@ describe("buildReconciliationPayload discrepancy causes mapping", () => {
 
 		const structured = payload.structured as Record<string, any>;
 		const discrepancyAnalysis =
-			structured.execution?.balance_reconciliation?.discrepancy_analysis;
+			structured["execution"]?.balance_reconciliation?.discrepancy_analysis;
 		expect(discrepancyAnalysis).toBeDefined();
 		expect(discrepancyAnalysis.likely_causes).toHaveLength(2);
 
@@ -133,8 +134,8 @@ describe("buildReconciliationPayload discrepancy causes mapping", () => {
 			string,
 			any
 		>[]) {
-			expect(cause.amount).toMatchObject({ currency: "CAD" });
-			expect(typeof cause.suggested_action).toBe("string");
+			expect(cause["amount"]).toMatchObject({ currency: "CAD" });
+			expect(typeof cause["suggested_action"]).toBe("string");
 		}
 		const [bankFee, interest] = discrepancyAnalysis.likely_causes;
 		expect(bankFee.type).toBe("bank_fee");

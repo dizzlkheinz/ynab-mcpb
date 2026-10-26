@@ -10,9 +10,9 @@ import { handleListBudgets } from "../budgetTools.js";
 import { DeltaFetcher } from "../deltaFetcher.js";
 
 const shouldSkip = ["true", "1", "yes", "y", "on"].includes(
-	(process.env.SKIP_E2E_TESTS || "").toLowerCase().trim(),
+	(process.env["SKIP_E2E_TESTS"] || "").toLowerCase().trim(),
 );
-const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
+const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
 const skipTests = shouldSkip || !hasToken;
 const describeIntegration = skipTests ? describe.skip : describe;
 
@@ -22,18 +22,18 @@ describeIntegration("Delta-backed budget tool handler", () => {
 	let previousNodeEnv: string | undefined;
 
 	beforeAll(async () => {
-		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+		const accessToken = process.env["YNAB_ACCESS_TOKEN"]!;
 		ynabAPI = new ynab.API(accessToken);
 	});
 
 	beforeEach(() => {
-		previousNodeEnv = process.env.NODE_ENV;
-		process.env.NODE_ENV = "integration";
+		previousNodeEnv = process.env["NODE_ENV"];
+		process.env["NODE_ENV"] = "integration";
 		const cacheManager = new CacheManager();
 		const knowledgeStore = new ServerKnowledgeStore();
 		const deltaCache = new DeltaCache(cacheManager, knowledgeStore);
 		deltaFetcher = new DeltaFetcher(ynabAPI, deltaCache);
-		process.env.YNAB_MCP_ENABLE_DELTA = "true";
+		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
 		resetRuntimeConfig();
 	});
 
@@ -43,7 +43,7 @@ describeIntegration("Delta-backed budget tool handler", () => {
 		if (previousNodeEnv === undefined) {
 			Reflect.deleteProperty(process.env, "NODE_ENV");
 		} else {
-			process.env.NODE_ENV = previousNodeEnv;
+			process.env["NODE_ENV"] = previousNodeEnv;
 		}
 		previousNodeEnv = undefined;
 	});

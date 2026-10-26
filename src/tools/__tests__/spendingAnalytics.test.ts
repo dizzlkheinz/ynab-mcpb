@@ -96,7 +96,6 @@ describe("deterministic spending analytics", () => {
 	it("expands split transactions for category groups without corrupting totals", async () => {
 		const split = transaction({
 			amount: -15_000,
-			category_id: undefined,
 			category_name: "Split",
 			subtransactions: [
 				{
@@ -117,6 +116,8 @@ describe("deterministic spending analytics", () => {
 				},
 			],
 		});
+		// A split parent carries no category of its own
+		delete split.category_id;
 		const output = structured(
 			await handleAnalyzeSpending(
 				{} as ynab.API,

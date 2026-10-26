@@ -180,8 +180,8 @@ describe("ListBudgetsOutputSchema", () => {
 		expect(result.success).toBe(true);
 		if (result.success) {
 			expect(result.data.budgets).toHaveLength(2);
-			expect(result.data.budgets[0].id).toBe("budget-1");
-			expect(result.data.budgets[1].id).toBe("budget-2");
+			expect(result.data.budgets[0]!.id).toBe("budget-1");
+			expect(result.data.budgets[1]!.id).toBe("budget-2");
 			expect(result.data.cached).toBe(true);
 			expect(result.data.cache_info).toBe(
 				"Data retrieved from cache for improved performance",
@@ -205,7 +205,7 @@ describe("ListBudgetsOutputSchema", () => {
 		expect(result.success).toBe(true);
 		if (result.success) {
 			expect(result.data.budgets).toHaveLength(1);
-			expect(result.data.budgets[0].name).toBe("Solo Budget");
+			expect(result.data.budgets[0]!.name).toBe("Solo Budget");
 			expect(result.data.cached).toBe(false);
 		}
 	});
@@ -257,8 +257,8 @@ describe("ListBudgetsOutputSchema", () => {
 		expect(result.success).toBe(true);
 		if (result.success) {
 			const budget = result.data.budgets[0];
-			expect(budget.currency_format?.iso_code).toBe("EUR");
-			expect(budget.currency_format?.symbol_first).toBe(false);
+			expect(budget!.currency_format?.iso_code).toBe("EUR");
+			expect(budget!.currency_format?.symbol_first).toBe(false);
 		}
 	});
 

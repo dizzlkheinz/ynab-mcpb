@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
 import {
 	getTestConfig,
 	isAuthError,
 	isRateLimitError,
+	maybeTextOf,
 	skipOnRateLimit,
 } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
@@ -19,14 +21,8 @@ const config = getTestConfig();
 const describeIntegration = config.skipE2ETests ? describe.skip : describe;
 
 /** Throw if the tool result is an error response, so skipOnRateLimit can catch it. */
-const throwIfError = (result: {
-	isError?: boolean;
-	content?: Array<{ type: string; text?: string }>;
-}) => {
-	const text =
-		result.content?.[0]?.type === "text"
-			? (result.content[0] as { text: string }).text
-			: undefined;
+const throwIfError = (result: CallToolResult) => {
+	const text = maybeTextOf(result.content?.[0]);
 
 	if (result.isError) {
 		throw new Error(text ?? "unknown error");
@@ -53,12 +49,10 @@ interface TransactionToolResponse {
 	preview_transactions?: Array<{ id?: string }>;
 }
 
-const parseToolResult = (result: {
-	content?: Array<{ text?: string }>;
-}): TransactionToolResponse => {
-	const raw = result.content?.[0]?.text ?? "{}";
-	return JSON.parse(raw) as TransactionToolResponse;
-};
+const parseToolResult = (result: CallToolResult): TransactionToolResponse =>
+	JSON.parse(
+		maybeTextOf(result.content?.[0]) ?? "{}",
+	) as TransactionToolResponse;
 
 describeIntegration("Transaction Tools - Live Contract Smoke", () => {
 	let ynabAPI: ynab.API;
@@ -74,9 +68,9 @@ describeIntegration("Transaction Tools - Live Contract Smoke", () => {
 
 	beforeAll(async () => {
 		try {
-			ynabAPI = new ynab.API(process.env.YNAB_ACCESS_TOKEN!);
+			ynabAPI = new ynab.API(process.env["YNAB_ACCESS_TOKEN"]!);
 			testBudgetId =
-				dedicatedBudgetId ?? (await listBudgetsCompat(ynabAPI)).budgets[0].id;
+				dedicatedBudgetId ?? (await listBudgetsCompat(ynabAPI)).budgets[0]!.id;
 		} catch (error) {
 			if (isRateLimitError(error) || isAuthError(error)) {
 				setupUnavailable = true;

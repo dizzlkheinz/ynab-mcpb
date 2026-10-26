@@ -30,6 +30,7 @@ npm run test:integration:core      # Core integration tests
 npm run test:integration:domain    # Domain-specific integration tests
 npm run test:integration:full      # Full mocked integration suite (never contacts YNAB)
 npm run test:integration:live      # Read-only live smoke (requires explicit opt-in)
+npm run test:integration:live:delta # Live delta tests; writes (creates+deletes one transaction). Run before releases
 npm run test:integration:budgets   # Budget-specific integration tests
 npm run test:integration:accounts  # Account-specific integration tests
 npm run test:integration:transactions  # Transaction-specific integration tests

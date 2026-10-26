@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
+import { textOf } from "../../__tests__/testUtils.js";
 import {
 	listBudgetsCompat,
 	listMonthsCompat,
@@ -10,8 +11,8 @@ import { handleGetMonth, handleListMonths } from "../monthTools.js";
  * Integration tests for month tools using real YNAB API
  * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
  */
-const hasToken = !!process.env.YNAB_ACCESS_TOKEN;
-const shouldSkip = process.env.SKIP_E2E_TESTS === "true" || !hasToken;
+const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
+const shouldSkip = process.env["SKIP_E2E_TESTS"] === "true" || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("Month Tools Integration", () => {
@@ -20,7 +21,7 @@ describeIntegration("Month Tools Integration", () => {
 	let testMonth: string;
 
 	beforeAll(async () => {
-		const accessToken = process.env.YNAB_ACCESS_TOKEN!;
+		const accessToken = process.env["YNAB_ACCESS_TOKEN"]!;
 		ynabAPI = new ynab.API(accessToken);
 
 		// Get a test budget ID
@@ -28,14 +29,14 @@ describeIntegration("Month Tools Integration", () => {
 		if (budgetsResponse.budgets.length === 0) {
 			throw new Error("No budgets found for testing");
 		}
-		testBudgetId = budgetsResponse.budgets[0].id;
+		testBudgetId = budgetsResponse.budgets[0]!.id;
 
 		// Get a test month from the existing months in the budget
 		const monthsResponse = await listMonthsCompat(ynabAPI, testBudgetId);
 		if (monthsResponse.months.length === 0) {
 			throw new Error("No months found for testing");
 		}
-		testMonth = monthsResponse.months[0].month;
+		testMonth = monthsResponse.months[0]!.month;
 	});
 
 	describe("handleListMonths", () => {
@@ -48,9 +49,9 @@ describeIntegration("Month Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.months).toBeDefined();
 			expect(Array.isArray(parsedContent.months)).toBe(true);
 			expect(parsedContent.months.length).toBeGreaterThan(0);
@@ -81,9 +82,9 @@ describeIntegration("Month Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 
@@ -104,9 +105,9 @@ describeIntegration("Month Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.month).toBeDefined();
 
 			const month = parsedContent.month;
@@ -150,9 +151,9 @@ describeIntegration("Month Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 
@@ -171,9 +172,9 @@ describeIntegration("Month Tools Integration", () => {
 			});
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe("text");
+			expect(result.content[0]!.type).toBe("text");
 
-			const parsedContent = JSON.parse(result.content[0].text);
+			const parsedContent = JSON.parse(textOf(result.content[0]));
 			expect(parsedContent.error).toBeDefined();
 			expect(parsedContent.error.message).toBeDefined();
 

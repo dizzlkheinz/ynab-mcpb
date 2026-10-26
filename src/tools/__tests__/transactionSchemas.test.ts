@@ -294,7 +294,7 @@ describe("Transaction Schemas", () => {
 				],
 			});
 			expect(result.subtransactions).toHaveLength(3);
-			expect(result.subtransactions?.[0].amount).toBe(15000);
+			expect(result.subtransactions![0]!.amount).toBe(15000);
 		});
 
 		it("should validate subtransactions with all optional fields", () => {
@@ -311,9 +311,9 @@ describe("Transaction Schemas", () => {
 					},
 				],
 			});
-			expect(result.subtransactions?.[0].payee_name).toBe("Sub Payee");
-			expect(result.subtransactions?.[0].payee_id).toBe("payee-sub");
-			expect(result.subtransactions?.[0].memo).toBe("Subtransaction memo");
+			expect(result.subtransactions![0]!.payee_name).toBe("Sub Payee");
+			expect(result.subtransactions![0]!.payee_id).toBe("payee-sub");
+			expect(result.subtransactions![0]!.memo).toBe("Subtransaction memo");
 		});
 
 		it("should reject subtransactions with non-matching total", () => {
@@ -392,7 +392,7 @@ describe("Transaction Schemas", () => {
 			});
 			expect(result.budget_id).toBe("budget-1");
 			expect(result.transactions).toHaveLength(1);
-			expect(result.transactions[0].account_id).toBe("account-1");
+			expect(result.transactions[0]!.account_id).toBe("account-1");
 		});
 
 		it("should validate with multiple transactions", () => {
@@ -433,8 +433,8 @@ describe("Transaction Schemas", () => {
 					},
 				],
 			});
-			expect(result.transactions[0].payee_name).toBe("Store");
-			expect(result.transactions[0].memo).toBe("Test memo");
+			expect(result.transactions[0]!.payee_name).toBe("Store");
+			expect(result.transactions[0]!.memo).toBe("Test memo");
 		});
 
 		it("should reject empty transactions array", () => {
@@ -590,8 +590,8 @@ describe("Transaction Schemas", () => {
 				],
 				receipt_total: 12.5,
 			});
-			expect(result.categories[0].items[0].quantity).toBe(2.5);
-			expect(result.categories[0].items[0].memo).toBe("2.5 lbs @ $4/lb");
+			expect(result.categories[0]!.items[0]!.quantity).toBe(2.5);
+			expect(result.categories[0]!.items[0]!.memo).toBe("2.5 lbs @ $4/lb");
 		});
 
 		it("should validate items with category_name", () => {
@@ -605,7 +605,7 @@ describe("Transaction Schemas", () => {
 					},
 				],
 			});
-			expect(result.categories[0].category_name).toBe("Groceries");
+			expect(result.categories[0]!.category_name).toBe("Groceries");
 		});
 
 		it("should validate when subtotal + tax = total (exact match)", () => {
@@ -636,7 +636,7 @@ describe("Transaction Schemas", () => {
 					},
 				],
 			});
-			expect(result.categories[0].items).toHaveLength(2);
+			expect(result.categories[0]!.items).toHaveLength(2);
 		});
 
 		it("should reject when items total does not match receipt_subtotal", () => {
@@ -1007,7 +1007,7 @@ describe("Transaction Schemas", () => {
 				transactions: [validUpdate],
 			});
 			expect(result.transactions).toHaveLength(1);
-			expect(result.transactions[0].id).toBe("trans-1");
+			expect(result.transactions[0]!.id).toBe("trans-1");
 		});
 
 		it("should validate with multiple updates", () => {
@@ -1050,9 +1050,9 @@ describe("Transaction Schemas", () => {
 					},
 				],
 			});
-			expect(result.transactions[0].amount).toBe(20000);
-			expect(result.transactions[0].original_account_id).toBe("account-1");
-			expect(result.transactions[0].original_date).toBe("2024-01-01");
+			expect(result.transactions[0]!.amount).toBe(20000);
+			expect(result.transactions[0]!.original_account_id).toBe("account-1");
+			expect(result.transactions[0]!.original_date).toBe("2024-01-01");
 		});
 
 		it("supports normalized split updates in a bulk request", () => {

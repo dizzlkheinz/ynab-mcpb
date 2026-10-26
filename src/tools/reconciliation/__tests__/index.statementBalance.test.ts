@@ -12,7 +12,7 @@ vi.mock("../analyzer.js", () => ({
 	analyzeReconciliation: analyzerMocks.analyzeReconciliation,
 }));
 
-import { handleReconcileAccount } from "../index.js";
+import { handleReconcileAccount, ReconcileAccountSchema } from "../index.js";
 
 const buildAnalysis = (): ReconciliationAnalysis => ({
 	success: true,
@@ -100,7 +100,7 @@ describe("handleReconcileAccount statement balance handling", () => {
 
 		await handleReconcileAccount(
 			ynabAPI,
-			{
+			ReconcileAccountSchema.parse({
 				budget_id: "budget-1",
 				account_id: "credit-card",
 				csv_data: "Date,Description,Amount\n",
@@ -110,7 +110,7 @@ describe("handleReconcileAccount statement balance handling", () => {
 				auto_unclear_missing: false,
 				auto_adjust_dates: false,
 				dry_run: true,
-			},
+			}),
 			{ deltaFetcher: deltaFetcher },
 		);
 

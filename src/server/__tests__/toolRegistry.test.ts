@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import { maybeTextOf } from "../../__tests__/testUtils.js";
 import {
 	handleReconcileAccount,
 	ReconcileAccountSchema,
@@ -40,7 +41,7 @@ function makeTestDeps() {
 		createValidationError: vi.fn((message: string, details?: string) => ({
 			content: [
 				{
-					type: "text",
+					type: "text" as const,
 					text: `validation:${message}${details ? `:${details}` : ""}`,
 				},
 			],
@@ -48,7 +49,7 @@ function makeTestDeps() {
 		handleError: vi.fn((error: unknown, context: string) => ({
 			content: [
 				{
-					type: "text",
+					type: "text" as const,
 					text: `handled:${context}:${error instanceof Error ? error.message : String(error)}`,
 				},
 			],
@@ -80,7 +81,9 @@ function makeTestDeps() {
 	const dependencies: ToolRegistryDependencies = {
 		errorHandler,
 		responseFormatter,
-		withSecurityWrapper,
+		// vi.fn drops the generic signature, so restate the contract
+		withSecurityWrapper:
+			withSecurityWrapper as ToolRegistryDependencies["withSecurityWrapper"],
 	};
 
 	return {
@@ -113,8 +116,10 @@ describe("ToolRegistry", () => {
 		vi.spyOn(dependencies.errorHandler, "handleError");
 	});
 
-	const registerSampleTool = (definition?: Partial<ToolDefinition>) => {
-		const base: ToolDefinition = {
+	const registerSampleTool = (
+		definition?: Partial<ToolDefinition<{ id: string }>>,
+	) => {
+		const base: ToolDefinition<{ id: string }> = {
 			name: "sample_tool",
 			description: "Test tool for registry",
 			inputSchema: z.object({
@@ -152,10 +157,10 @@ describe("ToolRegistry", () => {
 	it("rejects invalid tool definitions", () => {
 		expect(() =>
 			registry.register({
-				// @ts-expect-error intentionally malformed
 				name: "",
 				description: "invalid",
 				inputSchema: z.object({}),
+				// @ts-expect-error intentionally malformed
 				handler: null,
 			}),
 		).toThrowError("Tool definition requires a non-empty name");
@@ -177,7 +182,7 @@ describe("ToolRegistry", () => {
 			}),
 			required: ["id"],
 		});
-		expect(typeof schema?.$schema).toBe("string");
+		expect(typeof schema?.["$schema"]).toBe("string");
 	});
 
 	it("prefers custom metadata JSON schema when provided", () => {
@@ -229,7 +234,7 @@ describe("ToolRegistry", () => {
 	it.skip("routes reconcile_account tool to handler emitting dual-channel output", async () => {
 		const mockYnabAPI = {
 			accounts: {
-				getAccount: vi.fn().mockResolvedValue({
+				getAccountById: vi.fn().mockResolvedValue({
 					data: {
 						account: {
 							name: "Checking",
@@ -280,7 +285,7 @@ describe("ToolRegistry", () => {
 
 		expect(result.content).toHaveLength(2);
 		expect(result.content.every((entry) => entry.type === "text")).toBe(true);
-		expect(mockYnabAPI.accounts.getAccount).toHaveBeenCalled();
+		expect(mockYnabAPI.accounts.getAccountById).toHaveBeenCalled();
 
 		const toolNames = registry.listTools().map((tool) => tool.name);
 		expect(toolNames).toEqual(
@@ -363,7 +368,7 @@ describe("ToolRegistry", () => {
 		});
 
 		expect(
-			result.content[0]?.text?.startsWith(
+			maybeTextOf(result.content[0])?.startsWith(
 				"validation:Invalid parameters for sample_tool:",
 			),
 		).toBe(true);
@@ -445,8 +450,8 @@ describe("ToolRegistry", () => {
 		const tool = registry.listTools().find((item) => item.name === "any_tool");
 		const schema = tool?.inputSchema as Record<string, unknown> | undefined;
 		expect(schema).toBeDefined();
-		expect(schema?.type).toBe("object");
-		expect(schema?.additionalProperties).toBe(true);
+		expect(schema?.["type"]).toBe("object");
+		expect(schema?.["additionalProperties"]).toBe(true);
 	});
 
 	it("supports empty registry listings", () => {
@@ -459,10 +464,10 @@ describe("ToolRegistry", () => {
 		it("should use injected ErrorHandler instance", async () => {
 			const mockErrorHandler = {
 				handleError: vi.fn(() => ({
-					content: [{ type: "text", text: "Mock error" }],
+					content: [{ type: "text" as const, text: "Mock error" }],
 				})),
 				createValidationError: vi.fn(() => ({
-					content: [{ type: "text", text: "Mock validation error" }],
+					content: [{ type: "text" as const, text: "Mock validation error" }],
 				})),
 			};
 
@@ -480,7 +485,7 @@ describe("ToolRegistry", () => {
 			});
 
 			expect(mockErrorHandler.createValidationError).toHaveBeenCalled();
-			expect(result.content[0]?.text).toBe("Mock validation error");
+			expect(maybeTextOf(result.content[0])).toBe("Mock validation error");
 		});
 
 		it("should use the same formatter instance for both ErrorHandler and ToolRegistry", () => {
@@ -537,8 +542,8 @@ describe("ToolRegistry", () => {
 			});
 
 			expect(handler).toHaveBeenCalledTimes(1);
-			expect(result.content[0]?.text).toContain("success");
-			expect(result.content[0]?.text).toContain("test-id");
+			expect(maybeTextOf(result.content[0])).toContain("success");
+			expect(maybeTextOf(result.content[0])).toContain("test-id");
 			expect(result.structuredContent).toEqual({
 				success: true,
 				data: { id: "test-id", value: 42 },
@@ -576,10 +581,10 @@ describe("ToolRegistry", () => {
 			const tool = tools.find((t) => t.name === "union_output_tool");
 			const schema = tool?.outputSchema as Record<string, unknown> | undefined;
 			expect(schema).toBeDefined();
-			expect(schema?.type).toBe("object");
-			expect(Array.isArray(schema?.anyOf) || Array.isArray(schema?.oneOf)).toBe(
-				true,
-			);
+			expect(schema?.["type"]).toBe("object");
+			expect(
+				Array.isArray(schema?.["anyOf"]) || Array.isArray(schema?.["oneOf"]),
+			).toBe(true);
 		});
 
 		it("rejects handler output that does not match output schema", async () => {
@@ -618,8 +623,10 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain("invalid_output_tool");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain("invalid_output_tool");
 		});
 
 		it("rejects handler output with missing required fields", async () => {
@@ -658,8 +665,10 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain("missing_field_tool");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain("missing_field_tool");
 		});
 
 		it("passes through non-JSON handler output (e.g. markdown)", async () => {
@@ -688,7 +697,7 @@ describe("ToolRegistry", () => {
 			expect(handler).toHaveBeenCalledTimes(1);
 			// Non-JSON passes through without error, no structuredContent
 			expect(result.isError).toBeFalsy();
-			expect(result.content[0]?.text).toBe(
+			expect(maybeTextOf(result.content[0])).toBe(
 				"## Markdown output\n\nThis is markdown, not JSON",
 			);
 			expect(result.structuredContent).toBeUndefined();
@@ -731,12 +740,13 @@ describe("ToolRegistry", () => {
 
 			expect(result.isError).toBeFalsy();
 			// Text content is preserved unchanged
-			expect(result.content[0]?.text).toBe("## Markdown");
+			expect(maybeTextOf(result.content[0])).toBe("## Markdown");
 			// structuredContent is the Zod-parsed result — extra field stripped
 			expect(result.structuredContent).toEqual({ id: "abc", value: 7 });
 			expect(
-				(result.structuredContent as Record<string, unknown>)
-					?.extra_field_not_in_schema,
+				(result.structuredContent as Record<string, unknown>)?.[
+					"extra_field_not_in_schema"
+				],
 			).toBeUndefined();
 		});
 
@@ -772,7 +782,9 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
 		});
 
 		it("validates content array even when structuredContent is present", async () => {
@@ -803,7 +815,9 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
 		});
 
 		it("rejects handler output with empty content", async () => {
@@ -831,8 +845,10 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain("empty content");
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain("empty content");
 		});
 
 		it("rejects handler output with non-text content", async () => {
@@ -849,6 +865,7 @@ describe("ToolRegistry", () => {
 				description: "Returns non-text content",
 				inputSchema: z.object({ id: z.string() }),
 				outputSchema,
+				// @ts-expect-error -- returns invalid content on purpose
 				handler,
 			});
 
@@ -862,11 +879,13 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain(
 				"Handler returned invalid content items",
 			);
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
 				'Item 0: type is "image" instead of "text"',
 			);
 		});
@@ -890,6 +909,7 @@ describe("ToolRegistry", () => {
 				description: "Returns multiple content items with some invalid",
 				inputSchema: z.object({ id: z.string() }),
 				outputSchema,
+				// @ts-expect-error -- returns invalid content on purpose
 				handler,
 			});
 
@@ -903,18 +923,20 @@ describe("ToolRegistry", () => {
 			expect(
 				dependencies.errorHandler.createValidationError,
 			).toHaveBeenCalled();
-			expect(result.content[0]?.text).toContain("Output validation failed");
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
+				"Output validation failed",
+			);
+			expect(maybeTextOf(result.content[0])).toContain(
 				"Handler returned invalid content items",
 			);
-			expect(result.content[0]?.text).toContain("3 of 4 failed");
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain("3 of 4 failed");
+			expect(maybeTextOf(result.content[0])).toContain(
 				'Item 1: type is "image" instead of "text"',
 			);
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
 				"Item 2: text property is number instead of string",
 			);
-			expect(result.content[0]?.text).toContain(
+			expect(maybeTextOf(result.content[0])).toContain(
 				"Item 3: text property is undefined instead of string",
 			);
 		});
@@ -937,7 +959,7 @@ describe("ToolRegistry", () => {
 			});
 
 			expect(handler).toHaveBeenCalledTimes(1);
-			expect(result.content[0]?.text).toBe("any output format");
+			expect(maybeTextOf(result.content[0])).toBe("any output format");
 			// Error handler should not be called for validation
 			expect(
 				dependencies.errorHandler.createValidationError,

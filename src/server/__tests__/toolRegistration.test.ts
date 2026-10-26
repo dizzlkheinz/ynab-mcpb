@@ -150,7 +150,7 @@ describe("Tool Registration", () => {
 					`${tool.name} missing description`,
 				).toBeDefined();
 				expect(
-					tool.description.length,
+					tool.description!.length,
 					`${tool.name} has empty description`,
 				).toBeGreaterThan(0);
 			}
@@ -226,7 +226,7 @@ describe("Tool Registration", () => {
 			const toolNames = tools.map((t) => t.name);
 
 			const unexpectedTools = toolNames.filter(
-				(name) => !ALL_EXPECTED_TOOLS.includes(name),
+				(name) => !(ALL_EXPECTED_TOOLS as readonly string[]).includes(name),
 			);
 			expect(unexpectedTools, "Unexpected tools found").toEqual([]);
 		});

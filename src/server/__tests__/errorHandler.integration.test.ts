@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { textOf } from "../../__tests__/testUtils.js";
 import {
 	createErrorHandler,
 	ValidationError,
@@ -54,7 +55,7 @@ describe("Error Handler Integration Tests", () => {
 			mockYnabAPI.budgets.getBudgets.mockRejectedValue(error);
 
 			const result = await handleListBudgets(mockYnabAPI);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(401);
 			expect(parsed.error.message).toContain(
@@ -71,7 +72,7 @@ describe("Error Handler Integration Tests", () => {
 			const result = await handleListAccounts(mockYnabAPI, {
 				budget_id: "test-budget",
 			});
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(401);
 			expect(parsed.error.message).toContain(
@@ -88,7 +89,7 @@ describe("Error Handler Integration Tests", () => {
 			const result = await handleListTransactions(mockYnabAPI, {
 				budget_id: "test-budget",
 			});
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(401);
 			expect(parsed.error.message).toContain(
@@ -107,7 +108,7 @@ describe("Error Handler Integration Tests", () => {
 			const result = await handleListCategories(mockYnabAPI, {
 				budget_id: "test-budget",
 			});
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(403);
 			expect(parsed.error.message).toContain("Insufficient permissions");
@@ -122,7 +123,7 @@ describe("Error Handler Integration Tests", () => {
 			const result = await handleListPayees(mockYnabAPI, {
 				budget_id: "test-budget",
 			});
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(403);
 			expect(parsed.error.message).toContain("Insufficient permissions");
@@ -139,7 +140,7 @@ describe("Error Handler Integration Tests", () => {
 			const result = await handleListMonths(mockYnabAPI, {
 				budget_id: "invalid-budget",
 			});
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(404);
 			expect(parsed.error.message).toContain("Budget or month not found");
@@ -153,8 +154,8 @@ describe("Error Handler Integration Tests", () => {
 			const error = new Error("Too many requests - 429");
 			mockYnabAPI.user.getUser.mockRejectedValue(error);
 
-			const result = await handleGetUser(mockYnabAPI);
-			const parsed = JSON.parse(result.content[0].text);
+			const result = await handleGetUser(mockYnabAPI, {});
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(429);
 			expect(parsed.error.message).toContain("Rate limit exceeded");
@@ -169,7 +170,7 @@ describe("Error Handler Integration Tests", () => {
 			mockYnabAPI.budgets.getBudgets.mockRejectedValue(error);
 
 			const result = await handleListBudgets(mockYnabAPI);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe(500);
 			expect(parsed.error.message).toContain(
@@ -186,7 +187,7 @@ describe("Error Handler Integration Tests", () => {
 			mockYnabAPI.budgets.getBudgets.mockRejectedValue(error);
 
 			const result = await handleListBudgets(mockYnabAPI);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe("UNKNOWN_ERROR");
 			expect(parsed.error.message).toContain("Failed to list budgets");
@@ -201,7 +202,7 @@ describe("Error Handler Integration Tests", () => {
 			const result = await handleListAccounts(mockYnabAPI, {
 				budget_id: "test-budget",
 			});
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			expect(parsed.error.code).toBe("UNKNOWN_ERROR");
 			expect(parsed.error.message).toContain("Failed to list accounts");
@@ -220,7 +221,7 @@ describe("Error Handler Integration Tests", () => {
 				() => handleListCategories(mockYnabAPI, { budget_id: "test" }),
 				() => handleListPayees(mockYnabAPI, { budget_id: "test" }),
 				() => handleListMonths(mockYnabAPI, { budget_id: "test" }),
-				() => handleGetUser(mockYnabAPI),
+				() => handleGetUser(mockYnabAPI, {}),
 			];
 
 			// Mock all API calls to reject
@@ -239,7 +240,7 @@ describe("Error Handler Integration Tests", () => {
 				expect(result.content).toHaveLength(1);
 				expect(result.content[0]).toHaveProperty("type", "text");
 
-				const parsed = JSON.parse(result.content[0].text);
+				const parsed = JSON.parse(textOf(result.content[0]));
 				expect(parsed).toHaveProperty("error");
 				expect(parsed.error).toHaveProperty("code");
 				expect(parsed.error).toHaveProperty("message");
@@ -264,11 +265,11 @@ describe("Error Handler Integration Tests", () => {
 			mockYnabAPI.budgets.getBudgets.mockRejectedValue(ynabError);
 
 			const result = await handleListBudgets(mockYnabAPI);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 
 			// Should not contain the actual sensitive values
-			expect(result.content[0].text).not.toContain("abc123xyz");
-			expect(result.content[0].text).not.toContain("secret456");
+			expect(textOf(result.content[0])).not.toContain("abc123xyz");
+			expect(textOf(result.content[0])).not.toContain("secret456");
 
 			// Should contain sanitized versions if details are present
 			if (parsed.error.details) {
@@ -288,9 +289,9 @@ describe("Error Handler Integration Tests", () => {
 			const result = errorHandler.handleError(error, "testing");
 
 			// Should produce properly formatted JSON
-			expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+			expect(() => JSON.parse(textOf(result.content[0]))).not.toThrow();
 
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe(401);
 		});
 
@@ -306,9 +307,9 @@ describe("Error Handler Integration Tests", () => {
 			const result = errorHandler.handleError(error, "testing");
 
 			// Should produce properly formatted JSON
-			expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+			expect(() => JSON.parse(textOf(result.content[0]))).not.toThrow();
 
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(textOf(result.content[0]));
 			expect(parsed.error.code).toBe("VALIDATION_ERROR");
 			expect(parsed.error.message).toBe("Test validation error");
 			expect(parsed.error.details).toBe("Invalid input");
@@ -376,9 +377,9 @@ describe("Error Handler Integration Tests", () => {
 			const error = new ValidationError("Test");
 			const result = errorHandler.handleError(error, "testing");
 
-			expect(result.content[0].text).toContain("CUSTOM:");
+			expect(textOf(result.content[0])).toContain("CUSTOM:");
 			expect(() =>
-				JSON.parse(result.content[0].text.substring(8)),
+				JSON.parse(textOf(result.content[0]).substring(8)),
 			).not.toThrow();
 		});
 	});
@@ -401,8 +402,8 @@ describe("Error Handler Integration Tests", () => {
 			const result1 = handler1.handleError(error, "testing");
 			const result2 = handler2.handleError(error, "testing");
 
-			expect(result1.content[0].text).toContain("F1:");
-			expect(result2.content[0].text).toContain("F2:");
+			expect(textOf(result1.content[0])).toContain("F1:");
+			expect(textOf(result2.content[0])).toContain("F2:");
 		});
 
 		it("should maintain instance isolation", {

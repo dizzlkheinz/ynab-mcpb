@@ -34,11 +34,11 @@ describe("RequestLogger", () => {
 
 			const logs = logger.getRecentLogs(1);
 			expect(logs).toHaveLength(1);
-			expect(logs[0].toolName).toBe("ynab:create_transaction");
-			expect(logs[0].operation).toBe("creating transaction");
-			expect(logs[0].success).toBe(true);
-			expect(logs[0].duration).toBe(150);
-			expect(logs[0].parameters).toEqual(parameters);
+			expect(logs[0]!.toolName).toBe("ynab:create_transaction");
+			expect(logs[0]!.operation).toBe("creating transaction");
+			expect(logs[0]!.success).toBe(true);
+			expect(logs[0]!.duration).toBe(150);
+			expect(logs[0]!.parameters).toEqual(parameters);
 		});
 
 		it("should log a failed request", () => {
@@ -55,10 +55,10 @@ describe("RequestLogger", () => {
 
 			const logs = logger.getRecentLogs(1);
 			expect(logs).toHaveLength(1);
-			expect(logs[0].toolName).toBe("ynab:get_budget");
-			expect(logs[0].success).toBe(false);
-			expect(logs[0].error).toBe(error);
-			expect(logs[0].duration).toBe(75);
+			expect(logs[0]!.toolName).toBe("ynab:get_budget");
+			expect(logs[0]!.success).toBe(false);
+			expect(logs[0]!.error).toBe(error);
+			expect(logs[0]!.duration).toBe(75);
 		});
 
 		it("should include rate limit information", () => {
@@ -73,7 +73,7 @@ describe("RequestLogger", () => {
 			);
 
 			const logs = logger.getRecentLogs(1);
-			expect(logs[0].rateLimitInfo).toEqual(rateLimitInfo);
+			expect(logs[0]!.rateLimitInfo).toEqual(rateLimitInfo);
 		});
 
 		it("should not log when disabled", () => {
@@ -98,12 +98,12 @@ describe("RequestLogger", () => {
 			logger.logSuccess("ynab:test", "test", parameters);
 
 			const logs = logger.getRecentLogs(1);
-			const sanitizedParams = logs[0].parameters;
+			const sanitizedParams = logs[0]!.parameters;
 
-			expect(sanitizedParams.budget_id).toBe("test-budget");
-			expect(sanitizedParams.access_token).toBe("***");
-			expect(sanitizedParams.api_key).toBe("***");
-			expect(sanitizedParams.password).toBe("***");
+			expect(sanitizedParams["budget_id"]).toBe("test-budget");
+			expect(sanitizedParams["access_token"]).toBe("***");
+			expect(sanitizedParams["api_key"]).toBe("***");
+			expect(sanitizedParams["password"]).toBe("***");
 		});
 
 		it("should sanitize long alphanumeric strings in values", () => {
@@ -115,10 +115,10 @@ describe("RequestLogger", () => {
 			logger.logSuccess("ynab:test", "test", parameters);
 
 			const logs = logger.getRecentLogs(1);
-			const sanitizedParams = logs[0].parameters;
+			const sanitizedParams = logs[0]!.parameters;
 
-			expect(sanitizedParams.memo).toBe("Payment to merchant with ref: ***");
-			expect(sanitizedParams.description).toBe("Normal description");
+			expect(sanitizedParams["memo"]).toBe("Payment to merchant with ref: ***");
+			expect(sanitizedParams["description"]).toBe("Normal description");
 		});
 
 		it("should sanitize Bearer tokens in strings", () => {
@@ -130,11 +130,11 @@ describe("RequestLogger", () => {
 			logger.logSuccess("ynab:test", "test", parameters);
 
 			const logs = logger.getRecentLogs(1);
-			const sanitizedParams = logs[0].parameters;
+			const sanitizedParams = logs[0]!.parameters;
 
 			// authorization is a sensitive parameter name, so it gets replaced with ***
-			expect(sanitizedParams.authorization).toBe("***");
-			expect(sanitizedParams.memo).toBe("Authorization: Bearer ***");
+			expect(sanitizedParams["authorization"]).toBe("***");
+			expect(sanitizedParams["memo"]).toBe("Authorization: Bearer ***");
 		});
 
 		it("should sanitize nested objects", () => {
@@ -152,7 +152,7 @@ describe("RequestLogger", () => {
 			logger.logSuccess("ynab:test", "test", parameters);
 
 			const logs = logger.getRecentLogs(1);
-			const sanitizedParams = logs[0].parameters as any;
+			const sanitizedParams = logs[0]!.parameters as any;
 
 			expect(sanitizedParams.transaction.amount).toBe(1000);
 			expect(sanitizedParams.transaction.memo).toBe("token=***");
@@ -171,7 +171,7 @@ describe("RequestLogger", () => {
 			logger.logSuccess("ynab:test", "test", parameters);
 
 			const logs = logger.getRecentLogs(1);
-			const sanitizedParams = logs[0].parameters as any;
+			const sanitizedParams = logs[0]!.parameters as any;
 
 			expect(sanitizedParams.transactions[0].memo).toBe("Normal memo");
 			expect(sanitizedParams.transactions[1].memo).toBe("token=***");
@@ -184,7 +184,7 @@ describe("RequestLogger", () => {
 			noSanitizeLogger.logSuccess("ynab:test", "test", parameters);
 
 			const logs = noSanitizeLogger.getRecentLogs(1);
-			expect(logs[0].parameters.access_token).toBe("secret-token-123");
+			expect(logs[0]!.parameters["access_token"]).toBe("secret-token-123");
 		});
 	});
 
@@ -195,7 +195,7 @@ describe("RequestLogger", () => {
 			logger.logError("ynab:test", "test", {}, error);
 
 			const logs = logger.getRecentLogs(1);
-			expect(logs[0].error).toBe("Authentication failed with token=***");
+			expect(logs[0]!.error).toBe("Authentication failed with token=***");
 		});
 
 		it("should sanitize Bearer tokens in error messages", () => {
@@ -204,7 +204,7 @@ describe("RequestLogger", () => {
 			logger.logError("ynab:test", "test", {}, error);
 
 			const logs = logger.getRecentLogs(1);
-			expect(logs[0].error).toBe("Invalid authorization header: Bearer ***");
+			expect(logs[0]!.error).toBe("Invalid authorization header: Bearer ***");
 		});
 	});
 
@@ -221,9 +221,9 @@ describe("RequestLogger", () => {
 			expect(logs).toHaveLength(3);
 
 			// Should keep the most recent entries
-			expect(logs[0].toolName).toBe("ynab:test2");
-			expect(logs[1].toolName).toBe("ynab:test3");
-			expect(logs[2].toolName).toBe("ynab:test4");
+			expect(logs[0]!.toolName).toBe("ynab:test2");
+			expect(logs[1]!.toolName).toBe("ynab:test3");
+			expect(logs[2]!.toolName).toBe("ynab:test4");
 		});
 
 		it("should clear all logs", () => {
@@ -258,7 +258,7 @@ describe("RequestLogger", () => {
 			});
 
 			expect(filtered).toHaveLength(1);
-			expect(filtered[0].toolName).toBe("ynab:list_budgets");
+			expect(filtered[0]!.toolName).toBe("ynab:list_budgets");
 		});
 
 		it("should filter by success status", () => {
@@ -294,7 +294,7 @@ describe("RequestLogger", () => {
 			});
 
 			expect(filtered).toHaveLength(1);
-			expect(filtered[0].success).toBe(false);
+			expect(filtered[0]!.success).toBe(false);
 		});
 	});
 
