@@ -16,6 +16,7 @@ vi.mock("../config.js", () => ({
 		VERBOSE_TESTS: false,
 		YNAB_MCP_ENABLE_DELTA: undefined,
 	}),
+	isDeltaEnabled: () => false,
 	loadConfig: () => ({
 		YNAB_ACCESS_TOKEN: "unit-test-token",
 		YNAB_DEFAULT_BUDGET_ID: undefined,

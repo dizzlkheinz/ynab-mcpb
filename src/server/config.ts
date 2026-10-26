@@ -119,4 +119,9 @@ export function resetRuntimeConfig(): void {
 	cachedRuntimeConfig = undefined;
 }
 
+/** Whether delta requests are in effect, per the parsed runtime config. */
+export function isDeltaEnabled(): boolean {
+	return getRuntimeConfig().YNAB_MCP_ENABLE_DELTA === "true";
+}
+
 export const RESPONSE_SIZE_LIMIT_BYTES = 90_000;

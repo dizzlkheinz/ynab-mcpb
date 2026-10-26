@@ -6,6 +6,7 @@
  */
 
 import type { CacheManager } from "./cacheManager.js";
+import { isDeltaEnabled } from "./config.js";
 import type { DeltaCache } from "./deltaCache.js";
 import type { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
 
@@ -327,8 +328,10 @@ export class DiagnosticManager {
 			const deltaHitRate =
 				totalDeltaRequests > 0 ? deltaStats.deltaHits / totalDeltaRequests : 0;
 			diagnostics["delta"] = {
-				// Ask DeltaCache itself so this reports what is in effect
-				enabled: this.dependencies.deltaCache.isDeltaEnabled(),
+				// Effective value from the parsed runtime config. It can differ from
+				// feature_flag below (e.g. when config parsing fell back to defaults);
+				// that disagreement is the signal, so both are reported.
+				enabled: isDeltaEnabled(),
 				knowledge_entries: Object.keys(knowledgeStats.entries).length, // Canonical count from entries
 				knowledge_stats: knowledgeStats.entries,
 				// Raw env value, as set by the user

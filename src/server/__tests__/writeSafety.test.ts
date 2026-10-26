@@ -155,6 +155,47 @@ describe("ToolRegistry write safety enforcement", () => {
 		expect(registry.hasTool("ynab_delete_transaction")).toBe(false);
 	});
 
+	it("treats a truthy non-boolean mutation flag as a protected mutation", async () => {
+		const handler = vi.fn(
+			async ({ input }: { input: Record<string, unknown> }) =>
+				result({ received: input }),
+		);
+		const definition = {
+			name: "ynab_loose_mutation",
+			description: "Loosely flagged mutation",
+			inputSchema: z
+				.object({ id: z.string(), dry_run: z.boolean().optional() })
+				.strict(),
+			handler,
+			metadata: {
+				// Simulates an untyped caller passing a non-literal flag
+				writeSafety: { mutation: "yes", preview: "dry-run" },
+			},
+		} as unknown as Parameters<ToolRegistry["register"]>[0];
+
+		const readOnly = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "read-only" })),
+		);
+		readOnly.register(definition);
+		expect(readOnly.hasTool("ynab_loose_mutation")).toBe(false);
+
+		const preview = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+			),
+		);
+		preview.register(definition);
+		const response = await preview.executeTool({
+			name: "ynab_loose_mutation",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(handler).toHaveBeenCalledWith(
+			expect.objectContaining({ input: { id: "txn-1", dry_run: true } }),
+		);
+		expect(confirmationToken(response)).toBe(FIXED_TOKEN);
+	});
+
 	it("preserves direct mutation behavior in enabled mode", async () => {
 		const registry = new ToolRegistry(
 			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),

@@ -76,7 +76,7 @@ describeIntegration("Delta-backed account tool handlers", () => {
 	});
 
 	afterEach(() => {
-		process.env.YNAB_MCP_ENABLE_DELTA = undefined;
+		Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
 		if (previousNodeEnv === undefined) {
 			process.env.NODE_ENV = undefined;
 		} else {

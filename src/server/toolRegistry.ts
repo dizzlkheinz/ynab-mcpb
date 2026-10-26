@@ -187,7 +187,7 @@ export class ToolRegistry {
 			return;
 		}
 		if (
-			definition.metadata?.writeSafety?.mutation &&
+			this.isMutation(definition) &&
 			this.deps.writeSafetyPolicy &&
 			!this.deps.writeSafetyPolicy.shouldRegisterMutation()
 		) {
@@ -516,6 +516,10 @@ export class ToolRegistry {
 		// confirmed call always executes, regardless of a client's default.
 		const confirmationArguments = { ...validated, dry_run: false };
 
+		// Consume before running the handler, never after: this keeps each token
+		// at-most-once. Releasing it on handler failure could repeat a write that
+		// YNAB already committed (e.g. a timeout, or output validation failing
+		// after the write), so a failed confirmed call needs a fresh preview.
 		if (confirmationToken) {
 			const confirmation = policy.consume(
 				confirmationToken,
@@ -573,10 +577,18 @@ export class ToolRegistry {
 		tool: Pick<ToolDefinition, "metadata">,
 	): WriteSafetyPolicy | undefined {
 		const policy = this.deps.writeSafetyPolicy;
-		return tool.metadata?.writeSafety?.mutation === true &&
-			policy?.requiresConfirmation() === true
+		return this.isMutation(tool) && policy?.requiresConfirmation() === true
 			? policy
 			: undefined;
+	}
+
+	/**
+	 * Single mutation predicate for registration and confirmation. Truthy rather
+	 * than `=== true` so an unexpected flag value fails closed: hidden in
+	 * read-only mode and confirmation-gated in preview mode.
+	 */
+	private isMutation(tool: Pick<ToolDefinition, "metadata">): boolean {
+		return Boolean(tool.metadata?.writeSafety?.mutation);
 	}
 
 	private isCallToolResult(value: unknown): value is CallToolResult {

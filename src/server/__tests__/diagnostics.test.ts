@@ -5,6 +5,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetRuntimeConfig } from "../config.js";
 import {
 	type DiagnosticDependencies,
 	DiagnosticManager,
@@ -37,7 +38,6 @@ const mockKnowledgeStore = {
 
 const mockDeltaCache = {
 	getStats: vi.fn(),
-	isDeltaEnabled: vi.fn(),
 };
 
 // Mock process functions for testing
@@ -127,7 +127,6 @@ describe("diagnostics module", () => {
 			mergeOperations: 0,
 			knowledgeGapEvents: 0,
 		});
-		mockDeltaCache.isDeltaEnabled.mockReturnValue(false);
 	});
 
 	describe("DiagnosticManager", () => {
@@ -332,7 +331,7 @@ describe("diagnostics module", () => {
 				it("should include delta metrics when include_delta is true", async () => {
 					const originalEnv = process.env.YNAB_MCP_ENABLE_DELTA;
 					process.env.YNAB_MCP_ENABLE_DELTA = "true";
-					mockDeltaCache.isDeltaEnabled.mockReturnValue(true);
+					resetRuntimeConfig();
 
 					try {
 						mockKnowledgeStore.getStats.mockReturnValue({
@@ -377,6 +376,41 @@ describe("diagnostics module", () => {
 						} else {
 							process.env.YNAB_MCP_ENABLE_DELTA = originalEnv;
 						}
+						resetRuntimeConfig();
+					}
+				});
+
+				it("should report delta disabled when the env flag is not in effect", async () => {
+					const originalDelta = process.env.YNAB_MCP_ENABLE_DELTA;
+					const originalRateLimitLogging = process.env.RATE_LIMIT_LOGGING;
+					process.env.YNAB_MCP_ENABLE_DELTA = "true";
+					// An invalid sibling key makes runtime config fall back to defaults
+					process.env.RATE_LIMIT_LOGGING = "yes";
+					resetRuntimeConfig();
+
+					try {
+						await diagnosticManager.collectDiagnostics({ include_delta: true });
+
+						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
+							expect.objectContaining({
+								delta: expect.objectContaining({
+									enabled: false,
+									feature_flag: "true",
+								}),
+							}),
+						);
+					} finally {
+						for (const [key, value] of [
+							["YNAB_MCP_ENABLE_DELTA", originalDelta],
+							["RATE_LIMIT_LOGGING", originalRateLimitLogging],
+						] as const) {
+							if (value === undefined) {
+								Reflect.deleteProperty(process.env, key);
+							} else {
+								process.env[key] = value;
+							}
+						}
+						resetRuntimeConfig();
 					}
 				});
 

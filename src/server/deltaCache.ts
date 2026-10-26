@@ -1,5 +1,5 @@
 import type { CacheManager } from "./cacheManager.js";
-import { getRuntimeConfig } from "./config.js";
+import { isDeltaEnabled } from "./config.js";
 import { globalRequestLogger } from "./requestLogger.js";
 import type { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
 
@@ -137,7 +137,7 @@ export class DeltaCache {
 			options.ttl,
 		);
 
-		if (!this.isDeltaEnabled()) {
+		if (!isDeltaEnabled()) {
 			return this.fetchWithoutDelta(cacheKey, budgetId, fetcher, options);
 		}
 
@@ -377,9 +377,5 @@ export class DeltaCache {
 		}
 
 		return ttl;
-	}
-
-	isDeltaEnabled(): boolean {
-		return getRuntimeConfig().YNAB_MCP_ENABLE_DELTA === "true";
 	}
 }
