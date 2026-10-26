@@ -460,17 +460,18 @@ const STRICTNESS_THRESHOLDS = {
 	strict: { autoMatch: 93, suggested: 75 },
 } as const;
 
-const LIABILITY_ACCOUNT_TYPES = new Set<string>([
-	"creditCard",
-	"lineOfCredit",
-	"mortgage",
-	"autoLoan",
-	"studentLoan",
-	"personalLoan",
-	"medicalDebt",
-	"otherDebt",
-	"otherLiability",
-]);
+const LIABILITY_ACCOUNT_TYPES: ReadonlySet<ynab.AccountType> =
+	new Set<ynab.AccountType>([
+		"creditCard",
+		"lineOfCredit",
+		"mortgage",
+		"autoLoan",
+		"studentLoan",
+		"personalLoan",
+		"medicalDebt",
+		"otherDebt",
+		"otherLiability",
+	]);
 
 type SignConvention = "auto" | "invert" | "as_is";
 

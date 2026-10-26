@@ -3,7 +3,6 @@ import type * as ynab from "ynab";
 import {
 	type CompareTransactionsParams,
 	CompareTransactionsSchema,
-	formatDateOnly,
 	handleCompareTransactions,
 } from "../../compareTransactions/index.js";
 
@@ -15,10 +14,7 @@ const mockFindMatches = vi.hoisted(() => vi.fn());
 const mockBuildComparisonResult = vi.hoisted(() => vi.fn());
 
 // Mock all the sub-modules with hoisted mocks wired directly
-vi.mock("../../compareTransactions/parser.js", async (importOriginal) => ({
-	...(await importOriginal<
-		typeof import("../../compareTransactions/parser.js")
-	>()),
+vi.mock("../../compareTransactions/parser.js", () => ({
 	parseBankCSV: mockParseBankCSV,
 	readCSVFile: mockReadCSVFile,
 	autoDetectCSVFormat: mockAutoDetectCSVFormat,
@@ -78,22 +74,6 @@ describe("compareTransactions index (main handler)", () => {
 			expect(parsed.amount_tolerance).toBe(0.01);
 			expect(parsed.date_tolerance_days).toBe(5);
 			expect(parsed.auto_detect_format).toBe(false);
-		});
-
-		test("formatDateOnly does not depend on UTC serialization", () => {
-			const toISOString = vi
-				.spyOn(Date.prototype, "toISOString")
-				.mockImplementation(() => {
-					throw new Error(
-						"toISOString should not be used for date-only output",
-					);
-				});
-
-			try {
-				expect(formatDateOnly(new Date(2024, 0, 1))).toBe("2024-01-01");
-			} finally {
-				toISOString.mockRestore();
-			}
 		});
 	});
 

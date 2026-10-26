@@ -14,7 +14,7 @@ export interface ExecutionSummary {
 	dry_run: boolean;
 }
 
-interface UpdateFlags {
+export interface UpdateFlags {
 	needsClearedUpdate: boolean;
 	needsDateUpdate: boolean;
 }

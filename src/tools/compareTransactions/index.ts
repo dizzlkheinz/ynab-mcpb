@@ -3,15 +3,11 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { ErrorHandler } from "../../server/errorHandler.js";
 import { withToolErrorHandling } from "../../types/index.js";
+import { formatISODate } from "../../utils/dateUtils.js";
 import { requireResolvedBudgetId } from "../adapters.js";
 import { buildComparisonResult } from "./formatter.js";
 import { findMatches } from "./matcher.js";
-import {
-	autoDetectCSVFormat,
-	formatDateOnly,
-	parseBankCSV,
-	readCSVFile,
-} from "./parser.js";
+import { autoDetectCSVFormat, parseBankCSV, readCSVFile } from "./parser.js";
 import type { YNABTransaction } from "./types.js";
 
 // Re-export core types for consumers
@@ -73,8 +69,6 @@ export const CompareTransactionsSchema = z
 export type CompareTransactionsParams = z.infer<
 	typeof CompareTransactionsSchema
 >;
-
-export { formatDateOnly };
 
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -156,8 +150,8 @@ export async function handleCompareTransactions(
 			endDate.setDate(endDate.getDate() + dateToleranceDays);
 
 			// Get YNAB transactions for the account in the date range
-			const sinceDate = formatDateOnly(startDate);
-			const endDateString = formatDateOnly(endDate);
+			const sinceDate = formatISODate(startDate);
+			const endDateString = formatISODate(endDate);
 			const response = await ynabAPI.transactions.getTransactionsByAccount(
 				budgetId,
 				parsed.account_id,
@@ -167,7 +161,7 @@ export async function handleCompareTransactions(
 			// Filter YNAB transactions to the extended date range and convert for comparison
 			const ynabTransactions: YNABTransaction[] = response.data.transactions
 				.filter((txn) => {
-					const txnDateString = formatDateOnly(parseDateOnly(txn.date));
+					const txnDateString = formatISODate(parseDateOnly(txn.date));
 					return (
 						txnDateString >= sinceDate &&
 						txnDateString <= endDateString &&
@@ -190,7 +184,7 @@ export async function handleCompareTransactions(
 
 			if (parsed.statement_start_date || parsed.statement_date) {
 				filteredBankTransactions = bankTransactions.filter((t) => {
-					const dateStr = formatDateOnly(t.date);
+					const dateStr = formatISODate(t.date);
 					if (
 						parsed.statement_start_date &&
 						dateStr < parsed.statement_start_date
@@ -203,7 +197,7 @@ export async function handleCompareTransactions(
 					return true;
 				});
 				filteredYnabTransactions = ynabTransactions.filter((t) => {
-					const dateStr = formatDateOnly(t.date);
+					const dateStr = formatISODate(t.date);
 					if (
 						parsed.statement_start_date &&
 						dateStr < parsed.statement_start_date
@@ -241,8 +235,8 @@ export async function handleCompareTransactions(
 						Math.max(...filteredBankDates.map((d) => d.getTime())),
 					);
 					dateRange = {
-						start: formatDateOnly(filteredMinDate),
-						end: formatDateOnly(filteredMaxDate),
+						start: formatISODate(filteredMinDate),
+						end: formatISODate(filteredMaxDate),
 					};
 				} else {
 					// Fallback to statement window if no filtered transactions
@@ -250,18 +244,18 @@ export async function handleCompareTransactions(
 						start:
 							parsed.statement_start_date ||
 							parsed.statement_date ||
-							formatDateOnly(minDate),
+							formatISODate(minDate),
 						end:
 							parsed.statement_date ||
 							parsed.statement_start_date ||
-							formatDateOnly(maxDate),
+							formatISODate(maxDate),
 					};
 				}
 			} else {
 				// Use original unfiltered date range when no statement window filtering
 				dateRange = {
-					start: formatDateOnly(minDate),
-					end: formatDateOnly(maxDate),
+					start: formatISODate(minDate),
+					end: formatISODate(maxDate),
 				};
 			}
 

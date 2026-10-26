@@ -1,20 +1,11 @@
 import { readFileSync } from "node:fs";
 import { parse as parseDateFns } from "date-fns";
 import Papa from "papaparse";
+import { formatISODate } from "../../utils/dateUtils.js";
 import type { Milli } from "../../utils/money.js";
 import { toMilli } from "../../utils/money.js";
 import { resolveCsvPathCandidates } from "../csvFilePath.js";
 import type { BankTransaction, CSVFormat } from "./types.js";
-
-/**
- * Format a Date as YYYY-MM-DD using local date components
- */
-export function formatDateOnly(date: Date): string {
-	const year = date.getFullYear();
-	const month = String(date.getMonth() + 1).padStart(2, "0");
-	const day = String(date.getDate()).padStart(2, "0");
-	return `${year}-${month}-${day}`;
-}
 
 /**
  * Parse date string using date-fns for better reliability
@@ -599,7 +590,7 @@ export function extractDateRangeFromCSV(
 	const maxDateObj = new Date(Math.max(...dates));
 
 	return {
-		minDate: formatDateOnly(minDateObj),
-		maxDate: formatDateOnly(maxDateObj),
+		minDate: formatISODate(minDateObj),
+		maxDate: formatISODate(maxDateObj),
 	};
 }

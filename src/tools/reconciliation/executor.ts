@@ -27,6 +27,7 @@ import {
 	sortByDateDescending,
 	sortMatchesByBankDateDescending,
 	truncateMemo,
+	type UpdateFlags,
 	updateReason,
 } from "./executorHelpers.js";
 import type { ReconcileAccountRequest } from "./index.js";
@@ -143,6 +144,18 @@ interface ExecutionState {
 	bulkOperationDetails: BulkOperationDetails | undefined;
 }
 
+interface PlannedMatch {
+	readonly match: TransactionMatch;
+	readonly flags: UpdateFlags;
+}
+
+interface MatchPlan {
+	/** Auto-matches newest-to-oldest by bank date, with their update flags */
+	readonly ordered: PlannedMatch[];
+	/** First planned match per YNAB transaction ID, for chunk-result lookups */
+	readonly byTransactionId: Map<string, PlannedMatch>;
+}
+
 interface ChunkedUpdateConfig {
 	failureType: string;
 	failureVerb: string;
@@ -203,12 +216,13 @@ export async function executeReconciliation(
 	const statementTargetMilli = resolveStatementBalanceMilli(
 		analysis.balance_info,
 	);
+	const matchPlan = buildMatchPlan(analysis.auto_matches, params);
 
 	const state: ExecutionState = {
 		options,
 		summary: buildInitialSummary(analysis, params),
 		actions: [],
-		totalOperations: countPlannedOperations(analysis, params),
+		totalOperations: countPlannedOperations(analysis, params, matchPlan),
 		balanceToleranceMilli: DEFAULT_TOLERANCE_CENTS * CENTS_TO_MILLI,
 		completedOperations: 0,
 		clearedDeltaMilli: addMilli(
@@ -222,11 +236,8 @@ export async function executeReconciliation(
 
 	recordAlignmentIfNeeded(state, "initial balance check", { log: false });
 
-	const orderedAutoMatches = sortMatchesByBankDateDescending(
-		analysis.auto_matches,
-	);
 	const reconcilableMatchedTransactionIds = new Set<string>();
-	for (const match of orderedAutoMatches) {
+	for (const { match } of matchPlan.ordered) {
 		if (match.ynabTransaction?.cleared === "cleared") {
 			reconcilableMatchedTransactionIds.add(match.ynabTransaction.id);
 		}
@@ -248,7 +259,7 @@ export async function executeReconciliation(
 	if (!state.balanceAligned) {
 		await updateMatchedTransactions(
 			state,
-			orderedAutoMatches,
+			matchPlan,
 			reconcilableMatchedTransactionIds,
 		);
 	}
@@ -264,7 +275,7 @@ export async function executeReconciliation(
 	) {
 		await reconcileMatchedTransactions(
 			state,
-			orderedAutoMatches,
+			matchPlan,
 			reconcilableMatchedTransactionIds,
 		);
 	}
@@ -295,17 +306,39 @@ function buildInitialSummary(
 }
 
 /**
+ * Sort auto-matches and compute their update flags once, so the progress
+ * count, update collection, and chunk-result handling all share them.
+ */
+function buildMatchPlan(
+	matches: TransactionMatch[],
+	params: ReconcileAccountRequest,
+): MatchPlan {
+	const ordered = sortMatchesByBankDateDescending(matches).map((match) => ({
+		match,
+		flags: computeUpdateFlags(match, params),
+	}));
+	const byTransactionId = new Map<string, PlannedMatch>();
+	for (const planned of ordered) {
+		const id = planned.match.ynabTransaction?.id;
+		if (id && !byTransactionId.has(id)) {
+			byTransactionId.set(id, planned);
+		}
+	}
+	return { ordered, byTransactionId };
+}
+
+/**
  * Count operations for MCP progress notifications. Only matches that will
  * actually be updated are counted, so skipped matches don't inflate the total.
  */
 function countPlannedOperations(
 	analysis: ReconciliationAnalysis,
 	params: ReconcileAccountRequest,
+	matchPlan: MatchPlan,
 ): number {
-	const matchesNeedingUpdate = analysis.auto_matches.filter((match) => {
-		const flags = computeUpdateFlags(match, params);
-		return flags.needsClearedUpdate || flags.needsDateUpdate;
-	});
+	const matchesNeedingUpdate = matchPlan.ordered.filter(
+		({ flags }) => flags.needsClearedUpdate || flags.needsDateUpdate,
+	);
 	return (
 		(params.auto_create_transactions ? analysis.unmatched_bank.length : 0) +
 		matchesNeedingUpdate.length +
@@ -818,11 +851,11 @@ async function fallBackToSequential(
 
 async function updateMatchedTransactions(
 	state: ExecutionState,
-	orderedAutoMatches: TransactionMatch[],
+	matchPlan: MatchPlan,
 	reconcilableMatchedTransactionIds: Set<string>,
 ): Promise<void> {
 	const { params, currencyCode } = state.options;
-	const transactionsToUpdate = collectMatchUpdates(state, orderedAutoMatches);
+	const transactionsToUpdate = collectMatchUpdates(state, matchPlan);
 
 	if (params.dry_run || transactionsToUpdate.length === 0) {
 		return;
@@ -836,13 +869,8 @@ async function updateMatchedTransactions(
 			state.summary.transactions_updated += updatedTransactions.length;
 
 			for (const updatedTransaction of updatedTransactions) {
-				const match = orderedAutoMatches.find(
-					(m) => m.ynabTransaction?.id === updatedTransaction.id,
-				);
-				const flags = match
-					? computeUpdateFlags(match, params)
-					: { needsClearedUpdate: false, needsDateUpdate: false };
-				if (match && flags.needsClearedUpdate) {
+				const planned = matchPlan.byTransactionId.get(updatedTransaction.id);
+				if (planned?.flags.needsClearedUpdate) {
 					reconcilableMatchedTransactionIds.add(updatedTransaction.id);
 				}
 				state.actions.push({
@@ -851,7 +879,7 @@ async function updateMatchedTransactions(
 						string,
 						unknown
 					> | null,
-					reason: `Updated transaction: ${match ? updateReason(match, flags, currencyCode) : "cleared"}`,
+					reason: `Updated transaction: ${planned ? updateReason(planned.match, planned.flags, currencyCode) : "cleared"}`,
 				});
 			}
 			state.accountSnapshotDirty = true;
@@ -871,14 +899,13 @@ async function updateMatchedTransactions(
  */
 function collectMatchUpdates(
 	state: ExecutionState,
-	orderedAutoMatches: TransactionMatch[],
+	matchPlan: MatchPlan,
 ): ynab.SaveTransactionWithIdOrImportId[] {
 	const { params, currencyCode } = state.options;
 	const transactionsToUpdate: ynab.SaveTransactionWithIdOrImportId[] = [];
 
-	for (const match of orderedAutoMatches) {
+	for (const { match, flags } of matchPlan.ordered) {
 		if (state.balanceAligned) break;
-		const flags = computeUpdateFlags(match, params);
 		if (!flags.needsClearedUpdate && !flags.needsDateUpdate) continue;
 		if (!match.ynabTransaction) continue;
 
@@ -924,7 +951,7 @@ function collectMatchUpdates(
 function buildMatchUpdatePayload(
 	ynabTransaction: YNABTransaction,
 	bankDate: string,
-	flags: ReturnType<typeof computeUpdateFlags>,
+	flags: UpdateFlags,
 ): ynab.SaveTransactionWithIdOrImportId {
 	// Build minimal update payload - only include ID and fields that are changing
 	// Including unnecessary fields (like amount, payee_name) can cause unexpected behavior
@@ -1085,13 +1112,13 @@ function collectUnclearUpdates(
 
 async function reconcileMatchedTransactions(
 	state: ExecutionState,
-	orderedAutoMatches: TransactionMatch[],
+	matchPlan: MatchPlan,
 	reconcilableMatchedTransactionIds: Set<string>,
 ): Promise<void> {
 	const { currencyCode } = state.options;
 	const transactionsToReconcile: ynab.SaveTransactionWithIdOrImportId[] = [];
 
-	for (const match of orderedAutoMatches) {
+	for (const { match } of matchPlan.ordered) {
 		if (!match.ynabTransaction) continue;
 		// Only reconcile transactions that are not already reconciled
 		if (match.ynabTransaction.cleared === "reconciled") continue;
@@ -1116,9 +1143,9 @@ async function reconcileMatchedTransactions(
 			state.summary.transactions_updated += reconciledTransactions.length;
 
 			for (const reconciledTransaction of reconciledTransactions) {
-				const match = orderedAutoMatches.find(
-					(m) => m.ynabTransaction?.id === reconciledTransaction.id,
-				);
+				const match = matchPlan.byTransactionId.get(
+					reconciledTransaction.id,
+				)?.match;
 				state.actions.push({
 					type: "update_transaction",
 					transaction: reconciledTransaction as unknown as Record<
