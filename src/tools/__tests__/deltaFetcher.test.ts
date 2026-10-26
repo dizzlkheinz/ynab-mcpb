@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import * as ynab from "ynab";
 import { CACHE_TTLS } from "../../server/cacheManager.js";
 import type { DeltaCache } from "../../server/deltaCache.js";
@@ -27,43 +27,41 @@ describe("DeltaFetcher", () => {
 			},
 			scheduledTransactions: { getScheduledTransactions: vi.fn() },
 			payees: { getPayees: vi.fn() },
-			months: { getBudgetMonths: vi.fn() },
+			months: { getPlanMonths: vi.fn() },
 			plans: { getPlans: vi.fn() },
 		} as unknown as ynab.API;
 
-		(mockYnabAPI.accounts.getAccounts as unknown as vi.Mock).mockResolvedValue({
+		(mockYnabAPI.accounts.getAccounts as unknown as Mock).mockResolvedValue({
 			data: { accounts: [], server_knowledge: 0 },
 		});
+		(mockYnabAPI.categories.getCategories as unknown as Mock).mockResolvedValue(
+			{
+				data: { category_groups: [], server_knowledge: 0 },
+			},
+		);
 		(
-			mockYnabAPI.categories.getCategories as unknown as vi.Mock
-		).mockResolvedValue({
-			data: { category_groups: [], server_knowledge: 0 },
-		});
-		(
-			mockYnabAPI.transactions.getTransactions as unknown as vi.Mock
+			mockYnabAPI.transactions.getTransactions as unknown as Mock
 		).mockResolvedValue({
 			data: { transactions: [], server_knowledge: 0 },
 		});
 		(
-			mockYnabAPI.transactions.getTransactionsByAccount as unknown as vi.Mock
+			mockYnabAPI.transactions.getTransactionsByAccount as unknown as Mock
 		).mockResolvedValue({
 			data: { transactions: [], server_knowledge: 0 },
 		});
 		(
 			mockYnabAPI.scheduledTransactions
-				.getScheduledTransactions as unknown as vi.Mock
+				.getScheduledTransactions as unknown as Mock
 		).mockResolvedValue({
 			data: { scheduled_transactions: [], server_knowledge: 0 },
 		});
-		(mockYnabAPI.payees.getPayees as unknown as vi.Mock).mockResolvedValue({
+		(mockYnabAPI.payees.getPayees as unknown as Mock).mockResolvedValue({
 			data: { payees: [], server_knowledge: 0 },
 		});
-		(
-			mockYnabAPI.months.getBudgetMonths as unknown as vi.Mock
-		).mockResolvedValue({
+		(mockYnabAPI.months.getPlanMonths as unknown as Mock).mockResolvedValue({
 			data: { months: [], server_knowledge: 0 },
 		});
-		(mockYnabAPI.plans.getPlans as unknown as vi.Mock).mockResolvedValue({
+		(mockYnabAPI.plans.getPlans as unknown as Mock).mockResolvedValue({
 			data: { budgets: [], server_knowledge: 0 },
 		});
 	});
@@ -79,7 +77,7 @@ describe("DeltaFetcher", () => {
 			usedDelta: false,
 			serverKnowledge: 1,
 		};
-		(mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mockResolvedValue(
+		(mockDeltaCache.fetchWithDelta as unknown as Mock).mockResolvedValue(
 			mockResult,
 		);
 
@@ -94,8 +92,8 @@ describe("DeltaFetcher", () => {
 			expect.objectContaining({ ttl: CACHE_TTLS.ACCOUNTS }),
 		);
 
-		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mock
-			.calls[0][2];
+		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as Mock).mock
+			.calls[0]![2];
 		await fetcherFn(42);
 		expect(mockYnabAPI.accounts.getAccounts).toHaveBeenCalledWith(
 			"budget-1",
@@ -108,7 +106,7 @@ describe("DeltaFetcher", () => {
 			mockYnabAPI,
 			mockDeltaCache as unknown as DeltaCache,
 		);
-		(mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mockResolvedValue({});
+		(mockDeltaCache.fetchWithDelta as unknown as Mock).mockResolvedValue({});
 
 		await fetcher.fetchCategories("budget-2");
 
@@ -126,7 +124,7 @@ describe("DeltaFetcher", () => {
 			mockYnabAPI,
 			mockDeltaCache as unknown as DeltaCache,
 		);
-		(mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mockResolvedValue({});
+		(mockDeltaCache.fetchWithDelta as unknown as Mock).mockResolvedValue({});
 
 		await fetcher.fetchTransactions(
 			"budget-3",
@@ -141,8 +139,8 @@ describe("DeltaFetcher", () => {
 			mergeTransactions,
 			expect.objectContaining({ ttl: CACHE_TTLS.TRANSACTIONS }),
 		);
-		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mock
-			.calls[0][2];
+		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as Mock).mock
+			.calls[0]![2];
 		await fetcherFn(undefined);
 		expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledWith(
 			"budget-3",
@@ -158,7 +156,7 @@ describe("DeltaFetcher", () => {
 			mockYnabAPI,
 			mockDeltaCache as unknown as DeltaCache,
 		);
-		(mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mockResolvedValue({});
+		(mockDeltaCache.fetchWithDelta as unknown as Mock).mockResolvedValue({});
 
 		await fetcher.fetchTransactionsByAccount(
 			"budget-4",
@@ -173,8 +171,8 @@ describe("DeltaFetcher", () => {
 			mergeTransactions,
 			expect.objectContaining({ ttl: CACHE_TTLS.TRANSACTIONS }),
 		);
-		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mock
-			.calls[0][2];
+		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as Mock).mock
+			.calls[0]![2];
 		await fetcherFn(5);
 		expect(
 			mockYnabAPI.transactions.getTransactionsByAccount,
@@ -193,7 +191,7 @@ describe("DeltaFetcher", () => {
 			mockYnabAPI,
 			mockDeltaCache as unknown as DeltaCache,
 		);
-		(mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mockResolvedValue({});
+		(mockDeltaCache.fetchWithDelta as unknown as Mock).mockResolvedValue({});
 
 		await fetcher.fetchScheduledTransactions("budget-sched");
 
@@ -205,8 +203,8 @@ describe("DeltaFetcher", () => {
 			expect.objectContaining({ ttl: CACHE_TTLS.SCHEDULED_TRANSACTIONS }),
 		);
 
-		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mock
-			.calls[0][2];
+		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as Mock).mock
+			.calls[0]![2];
 		await fetcherFn(321);
 		expect(
 			mockYnabAPI.scheduledTransactions.getScheduledTransactions,
@@ -218,7 +216,7 @@ describe("DeltaFetcher", () => {
 			mockYnabAPI,
 			mockDeltaCache as unknown as DeltaCache,
 		);
-		(mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mockResolvedValue({});
+		(mockDeltaCache.fetchWithDelta as unknown as Mock).mockResolvedValue({});
 
 		await fetcher.fetchPayees("budget-5");
 
@@ -236,7 +234,7 @@ describe("DeltaFetcher", () => {
 			mockYnabAPI,
 			mockDeltaCache as unknown as DeltaCache,
 		);
-		(mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mockResolvedValue({});
+		(mockDeltaCache.fetchWithDelta as unknown as Mock).mockResolvedValue({});
 
 		await fetcher.fetchMonths("budget-6");
 
@@ -254,7 +252,7 @@ describe("DeltaFetcher", () => {
 			mockYnabAPI,
 			mockDeltaCache as unknown as DeltaCache,
 		);
-		(mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mockResolvedValue({});
+		(mockDeltaCache.fetchWithDelta as unknown as Mock).mockResolvedValue({});
 
 		await fetcher.fetchBudgets();
 
@@ -270,8 +268,8 @@ describe("DeltaFetcher", () => {
 		);
 
 		// Verify the loader function calls the YNAB API correctly
-		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as vi.Mock).mock
-			.calls[0][2];
+		const fetcherFn = (mockDeltaCache.fetchWithDelta as unknown as Mock).mock
+			.calls[0]![2];
 		await fetcherFn();
 		expect(mockYnabAPI.plans.getPlans).toHaveBeenCalledWith();
 	});
@@ -281,7 +279,7 @@ describe("DeltaFetcher", () => {
 			mockYnabAPI,
 			mockDeltaCache as unknown as DeltaCache,
 		);
-		(mockYnabAPI.accounts.getAccounts as unknown as vi.Mock).mockResolvedValue({
+		(mockYnabAPI.accounts.getAccounts as unknown as Mock).mockResolvedValue({
 			data: {
 				accounts: [
 					{ id: "acct-1", deleted: false },
@@ -308,7 +306,7 @@ describe("DeltaFetcher", () => {
 			mockDeltaCache as unknown as DeltaCache,
 		);
 		(
-			mockYnabAPI.transactions.getTransactionsByAccount as unknown as vi.Mock
+			mockYnabAPI.transactions.getTransactionsByAccount as unknown as Mock
 		).mockResolvedValue({
 			data: {
 				transactions: [
