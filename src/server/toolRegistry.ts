@@ -161,10 +161,7 @@ export interface ToolRegistryDependencies {
 }
 
 export class ToolRegistry {
-	private readonly tools = new Map<
-		string,
-		RegisteredTool<Record<string, unknown>, Record<string, unknown>>
-	>();
+	private readonly tools = new Map<string, AnyRegisteredTool>();
 	private readonly outputValidators = new Map<
 		string,
 		z.ZodSchema<Record<string, unknown>>
@@ -216,10 +213,7 @@ export class ToolRegistry {
 
 		// Type assertion is safe here because TInput/TOutput extend Record<string, unknown>
 		// and RegisteredTool is covariant in its type parameters for storage purposes
-		const registeredTool = resolved as RegisteredTool<
-			Record<string, unknown>,
-			Record<string, unknown>
-		>;
+		const registeredTool = resolved as AnyRegisteredTool;
 		this.tools.set(definition.name, registeredTool);
 
 		// Cache output validator if present
@@ -301,9 +295,9 @@ export class ToolRegistry {
 			);
 		}
 
-		const auth = await this.authenticate(tool, options.accessToken);
-		if (!auth.ok) {
-			return auth.result;
+		const authFailure = await this.authenticate(tool, options.accessToken);
+		if (authFailure) {
+			return authFailure;
 		}
 
 		const policy = this.confirmationPolicyFor(tool);
@@ -353,27 +347,25 @@ export class ToolRegistry {
 		}
 	}
 
+	/** Returns the error result when authentication fails, otherwise undefined. */
 	private async authenticate(
 		tool: AnyRegisteredTool,
 		accessToken: string,
-	): Promise<ExecutionStep<void>> {
+	): Promise<CallToolResult | undefined> {
 		if (!this.deps.validateAccessToken) {
-			return { ok: true, value: undefined };
+			return undefined;
 		}
 		try {
 			await this.deps.validateAccessToken(accessToken);
-			return { ok: true, value: undefined };
+			return undefined;
 		} catch (error) {
 			if (this.isCallToolResult(error)) {
-				return { ok: false, result: error };
+				return error;
 			}
-			return {
-				ok: false,
-				result: this.deps.errorHandler.handleError(
-					error,
-					`authenticating ${tool.name}`,
-				),
-			};
+			return this.deps.errorHandler.handleError(
+				error,
+				`authenticating ${tool.name}`,
+			);
 		}
 	}
 
@@ -479,9 +471,10 @@ export class ToolRegistry {
 	}
 
 	/**
-	 * Runs the handler for schema-validated input. Thrown failures, including
-	 * output validation, are reported as execution errors; a rejected
-	 * confirmation token is returned as a validation error.
+	 * Runs the handler for schema-validated input. Thrown handler errors go
+	 * through handleError as execution errors. Output validation failures and
+	 * rejected confirmation tokens are returned as validation errors, except
+	 * after a committed write, where the error says the write went through.
 	 */
 	private async runValidated(
 		tool: AnyRegisteredTool,
@@ -494,6 +487,11 @@ export class ToolRegistry {
 		try {
 			const context = this.buildExecutionContext(tool, options, rawArguments);
 			if (!policy) {
+				// Without confirmation (enabled mode), a mutation that is not a dry
+				// run writes straight to YNAB.
+				if (this.isMutation(tool) && validated["dry_run"] !== true) {
+					return await this.executeCommittedWrite(tool, validated, context);
+				}
 				return await this.invokeHandler(tool, validated, context);
 			}
 			return await this.runProtectedMutation(
@@ -528,42 +526,77 @@ export class ToolRegistry {
 		// confirmed call always executes, regardless of a client's default.
 		const confirmationArguments = { ...validated, dry_run: false };
 
+		if (!confirmationToken) {
+			const preview = await this.invokeHandler(
+				tool,
+				{ ...validated, dry_run: true },
+				context,
+			);
+			if (preview.isError) {
+				return preview;
+			}
+			const issued = policy.issue(tool.name, confirmationArguments);
+			return {
+				...preview,
+				content: [
+					...preview.content,
+					{
+						type: "text",
+						text: `Preview complete. To execute this exact request, call ${tool.name} again with confirmation_token="${issued.token}" before ${issued.expiresAt}. The token is single-use.`,
+					},
+				],
+			};
+		}
+
 		// Consume before running the handler, never after: this keeps each token
 		// at-most-once. Releasing it on handler failure could repeat a write that
 		// YNAB already committed (e.g. a timeout, or output validation failing
 		// after the write), so a failed confirmed call needs a fresh preview.
-		if (confirmationToken) {
-			const confirmation = policy.consume(
-				confirmationToken,
-				tool.name,
-				confirmationArguments,
-			);
-			if (!confirmation.ok) {
-				return this.deps.errorHandler.createValidationError(
-					`Write confirmation rejected for ${tool.name}`,
-					CONFIRMATION_REJECTION_DETAILS[confirmation.reason],
-				);
-			}
-		}
-
-		const result = await this.invokeHandler(
-			tool,
-			{ ...validated, dry_run: !confirmationToken },
-			context,
+		const confirmation = policy.consume(
+			confirmationToken,
+			tool.name,
+			confirmationArguments,
 		);
-		if (confirmationToken || result.isError) {
-			return result;
+		if (!confirmation.ok) {
+			return this.deps.errorHandler.createValidationError(
+				`Write confirmation rejected for ${tool.name}`,
+				CONFIRMATION_REJECTION_DETAILS[confirmation.reason],
+			);
 		}
 
-		const issued = policy.issue(tool.name, confirmationArguments);
+		return this.executeCommittedWrite(tool, confirmationArguments, context);
+	}
+
+	/**
+	 * Runs a mutation for real. Once the handler succeeds the write is committed
+	 * in YNAB, so an output validation failure must not look like a plain
+	 * failure: the caller would retry, duplicating the write.
+	 */
+	private async executeCommittedWrite(
+		tool: AnyRegisteredTool,
+		input: Record<string, unknown>,
+		context: ToolExecutionContext,
+	): Promise<CallToolResult> {
+		const handlerResult = await tool.handler({ input, context });
+		if (handlerResult.isError) {
+			return handlerResult;
+		}
+		const validated = this.validateOutput(tool.name, handlerResult);
+		if (!validated.isError) {
+			return validated;
+		}
+		const handlerText = (handlerResult.content ?? []).filter(
+			(item) => item?.type === "text" && typeof item.text === "string",
+		);
 		return {
-			...result,
+			isError: true,
 			content: [
-				...result.content,
 				{
 					type: "text",
-					text: `Preview complete. To execute this exact request, call ${tool.name} again with confirmation_token="${issued.token}" before ${issued.expiresAt}. The token is single-use.`,
+					text: `${tool.name} was committed to YNAB, but its response failed output validation. Do not retry this request: it would repeat the write. Use a read tool to check the result.`,
 				},
+				...validated.content,
+				...handlerText,
 			],
 		};
 	}
@@ -614,7 +647,7 @@ export class ToolRegistry {
 
 	private normalizeSecurityError(
 		error: unknown,
-		tool: RegisteredTool<Record<string, unknown>, Record<string, unknown>>,
+		tool: AnyRegisteredTool,
 	): CallToolResult {
 		if (error instanceof z.ZodError) {
 			const validationError = fromZodError(error);
@@ -736,11 +769,15 @@ export class ToolRegistry {
 			...inputSchema,
 			properties: {
 				...properties,
+				// null and "" are accepted as "absent" (see extractConfirmationToken)
 				confirmation_token: {
-					type: "string",
-					minLength: 16,
+					anyOf: [
+						{ type: "string", minLength: 16 },
+						{ const: "" },
+						{ type: "null" },
+					],
 					description:
-						"Short-lived, single-use token returned by the immediately preceding preview of this exact validated request.",
+						"Short-lived, single-use token returned by the immediately preceding preview of this exact validated request. Omit, or pass null or an empty string, to preview.",
 				},
 			},
 		};

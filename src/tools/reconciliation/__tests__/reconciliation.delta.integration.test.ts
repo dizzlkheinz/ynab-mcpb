@@ -14,6 +14,7 @@ import {
 	skipOnRateLimit,
 } from "../../../__tests__/testUtils.js";
 import { CacheManager } from "../../../server/cacheManager.js";
+import { resetRuntimeConfig } from "../../../server/config.js";
 import { DeltaCache } from "../../../server/deltaCache.js";
 import { ServerKnowledgeStore } from "../../../server/serverKnowledgeStore.js";
 import { listBudgetsCompat } from "../../../utils/ynabApiCompat.js";
@@ -81,10 +82,12 @@ describeIntegration("Reconciliation delta isolation", () => {
 		const deltaCache = new DeltaCache(cacheManager, knowledgeStore);
 		deltaFetcher = new DeltaFetcher(ynabAPI, deltaCache);
 		process.env.YNAB_MCP_ENABLE_DELTA = "true";
+		resetRuntimeConfig();
 	});
 
 	afterEach(() => {
 		Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
+		resetRuntimeConfig();
 		if (previousNodeEnv === undefined) {
 			Reflect.deleteProperty(process.env, "NODE_ENV");
 		} else {

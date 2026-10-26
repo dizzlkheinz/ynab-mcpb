@@ -79,25 +79,20 @@ export function resetAppConfig(): void {
  * YNAB_ACCESS_TOKEN, so this schema only covers optional keys and never
  * throws. Each key falls back to its default on its own, so one invalid value
  * does not discard the valid ones.
+ *
+ * Fields reuse envSchema's definitions, so both schemas accept the same
+ * values; only the failure policy differs. The server validates the same
+ * environment strictly via loadConfig() at startup, so inside a running server
+ * these fallbacks never apply and both views agree.
  */
+const { shape: envShape } = envSchema;
 const runtimeEnvSchema = z.object({
-	LOG_LEVEL: z
-		.enum(["trace", "debug", "info", "warn", "error", "fatal"])
-		.default("info")
-		.catch("info"),
-	YNAB_EXPORT_PATH: z.string().optional().catch(undefined),
-	XDG_DOCUMENTS_DIR: z.string().optional().catch(undefined),
-	YNAB_MCP_ENABLE_DELTA: z.enum(["true", "false"]).optional().catch(undefined),
-	RATE_LIMIT_LOGGING: z
-		.enum(["true", "false"])
-		.optional()
-		.catch(undefined)
-		.transform((value) => value === "true"),
-	VERBOSE_TESTS: z
-		.enum(["true", "false"])
-		.optional()
-		.catch(undefined)
-		.transform((value) => value === "true"),
+	LOG_LEVEL: envShape.LOG_LEVEL.catch("info"),
+	YNAB_EXPORT_PATH: envShape.YNAB_EXPORT_PATH.catch(undefined),
+	XDG_DOCUMENTS_DIR: envShape.XDG_DOCUMENTS_DIR.catch(undefined),
+	YNAB_MCP_ENABLE_DELTA: envShape.YNAB_MCP_ENABLE_DELTA.catch(undefined),
+	RATE_LIMIT_LOGGING: envShape.RATE_LIMIT_LOGGING.catch(false),
+	VERBOSE_TESTS: envShape.VERBOSE_TESTS.catch(false),
 });
 
 export type RuntimeConfig = z.infer<typeof runtimeEnvSchema>;

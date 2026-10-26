@@ -84,6 +84,28 @@ function registerMutation(
 	return handler;
 }
 
+/** Dry runs return valid output; real writes return output that fails the schema. */
+function registerMutationWithInvalidWriteOutput(registry: ToolRegistry) {
+	const handler = vi.fn(
+		async ({ input }: { input: Record<string, unknown> }) =>
+			input["dry_run"] ? result({ id: "txn-1" }) : result({ id: 42 }),
+	);
+	registry.register({
+		name: "ynab_create_transaction",
+		description: "Protected mutation",
+		inputSchema: z
+			.object({ id: z.string(), dry_run: z.boolean().optional() })
+			.strict(),
+		outputSchema: z.object({ id: z.string() }),
+		handler,
+		metadata: {
+			writeSafety: { mutation: true, preview: "dry-run" },
+			annotations: { readOnlyHint: false },
+		},
+	});
+	return handler;
+}
+
 function confirmationToken(response: CallToolResult): string {
 	const text = response.content
 		.filter((item) => item.type === "text")
@@ -423,6 +445,71 @@ describe("ToolRegistry write safety enforcement", () => {
 		});
 		expect(preview.isError).toBe(true);
 		expect(JSON.stringify(preview.content)).not.toContain(FIXED_TOKEN);
+	});
+
+	it("reports a confirmed write as committed when its output fails validation", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+			),
+		);
+		const handler = registerMutationWithInvalidWriteOutput(registry);
+
+		const preview = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(preview.isError).not.toBe(true);
+
+		const confirmed = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: {
+				id: "txn-1",
+				confirmation_token: confirmationToken(preview),
+			},
+		});
+		expect(confirmed.isError).toBe(true);
+		expect(confirmed.structuredContent).toBeUndefined();
+		const text = JSON.stringify(confirmed.content);
+		expect(text).toContain("was committed to YNAB");
+		expect(text).toContain("Do not retry");
+		expect(text).toContain("Output validation failed");
+		expect(text).toContain('\\"id\\":42');
+
+		const reused = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1", confirmation_token: FIXED_TOKEN },
+		});
+		expect(reused.isError).toBe(true);
+		expect(JSON.stringify(reused.content)).toContain("already used");
+		expect(handler).toHaveBeenCalledTimes(2);
+	});
+
+	it("reports a direct write in enabled mode as committed when its output fails validation", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
+		);
+		registerMutationWithInvalidWriteOutput(registry);
+
+		const written = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(written.isError).toBe(true);
+		const text = JSON.stringify(written.content);
+		expect(text).toContain("was committed to YNAB");
+		expect(text).toContain("Output validation failed");
+
+		const dryRun = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1", dry_run: true },
+		});
+		expect(dryRun.isError).not.toBe(true);
 	});
 
 	it("routes handler exceptions through handleError with execution context", async () => {

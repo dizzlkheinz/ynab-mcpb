@@ -417,6 +417,32 @@ describe("diagnostics module", () => {
 					}
 				});
 
+				it("should show a malformed delta flag verbatim next to enabled:false", async () => {
+					const originalDelta = process.env.YNAB_MCP_ENABLE_DELTA;
+					process.env.YNAB_MCP_ENABLE_DELTA = "TRUE";
+					resetRuntimeConfig();
+
+					try {
+						await diagnosticManager.collectDiagnostics({ include_delta: true });
+
+						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
+							expect.objectContaining({
+								delta: expect.objectContaining({
+									enabled: false,
+									feature_flag: "TRUE",
+								}),
+							}),
+						);
+					} finally {
+						if (originalDelta === undefined) {
+							Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
+						} else {
+							process.env.YNAB_MCP_ENABLE_DELTA = originalDelta;
+						}
+						resetRuntimeConfig();
+					}
+				});
+
 				it("should skip delta metrics when include_delta is not explicitly true", async () => {
 					await diagnosticManager.collectDiagnostics({});
 
