@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.1] - 2026-10-26
+
+### Security
+
+- Updated dependencies (`@modelcontextprotocol/sdk` 1.32.2, `dotenv` 18.0.9) and their transitive packages, resolving 7 `npm audit` advisories (1 critical, 4 high, 2 moderate) in the MCP SDK's HTTP server stack. This server uses stdio and does not run that stack
+
 ### Fixed
 
 - With `YNAB_MCP_ENABLE_DELTA=true`, every read again asks YNAB for changes since the cached snapshot, as in 0.29.1. In 0.30.0, reads within the cache TTL were served without contacting YNAB, so changes made outside the server (for example in the YNAB app) could stay hidden for several minutes. Writes through the server still invalidate caches, and an invalidated in-flight read still cannot republish stale data
