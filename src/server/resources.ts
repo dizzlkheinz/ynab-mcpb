@@ -192,8 +192,8 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 			params,
 			{ ynabAPI, responseFormatter, cacheManager },
 		) => {
-			const budget_id = params["budget_id"];
-			if (!budget_id) {
+			const budgetId = params["budget_id"];
+			if (!budgetId) {
 				throw new McpError(
 					ErrorCode.InvalidParams,
 					"Missing budget_id parameter",
@@ -203,13 +203,13 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				"resources",
 				"budgets",
 				"get",
-				budget_id,
+				budgetId,
 			);
 			return cacheManager.wrap<ResourceContents[]>(cacheKey, {
 				ttl: CACHE_TTLS.BUDGETS,
 				loader: async () => {
 					try {
-						const budget = await getBudgetByIdCompat(ynabAPI, budget_id);
+						const budget = await getBudgetByIdCompat(ynabAPI, budgetId);
 						return [
 							{
 								uri,
@@ -220,7 +220,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 					} catch (error) {
 						const message =
 							error instanceof Error ? error.message : String(error);
-						throw new Error(`Failed to fetch budget ${budget_id}: ${message}`);
+						throw new Error(`Failed to fetch budget ${budgetId}: ${message}`);
 					}
 				},
 			});
@@ -237,8 +237,8 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 			params,
 			{ ynabAPI, responseFormatter, cacheManager },
 		) => {
-			const budget_id = params["budget_id"];
-			if (!budget_id) {
+			const budgetId = params["budget_id"];
+			if (!budgetId) {
 				throw new McpError(
 					ErrorCode.InvalidParams,
 					"Missing budget_id parameter",
@@ -248,13 +248,13 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				"resources",
 				"accounts",
 				"list",
-				budget_id,
+				budgetId,
 			);
 			return cacheManager.wrap<ResourceContents[]>(cacheKey, {
 				ttl: CACHE_TTLS.ACCOUNTS,
 				loader: async () => {
 					try {
-						const response = await ynabAPI.accounts.getAccounts(budget_id);
+						const response = await ynabAPI.accounts.getAccounts(budgetId);
 						return [
 							{
 								uri,
@@ -266,7 +266,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 						const message =
 							error instanceof Error ? error.message : String(error);
 						throw new Error(
-							`Failed to fetch accounts for budget ${budget_id}: ${message}`,
+							`Failed to fetch accounts for budget ${budgetId}: ${message}`,
 						);
 					}
 				},
@@ -284,8 +284,8 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 			params,
 			{ ynabAPI, responseFormatter, cacheManager },
 		) => {
-			const budget_id = params["budget_id"];
-			if (!budget_id) {
+			const budgetId = params["budget_id"];
+			if (!budgetId) {
 				throw new McpError(
 					ErrorCode.InvalidParams,
 					"Missing budget_id parameter",
@@ -295,13 +295,13 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				"resources",
 				"categories",
 				"list",
-				budget_id,
+				budgetId,
 			);
 			return cacheManager.wrap<ResourceContents[]>(cacheKey, {
 				ttl: CACHE_TTLS.CATEGORIES,
 				loader: async () => {
 					try {
-						const response = await ynabAPI.categories.getCategories(budget_id);
+						const response = await ynabAPI.categories.getCategories(budgetId);
 						const groups = response.data.category_groups;
 						const categories = groups.flatMap((group) =>
 							group.categories.map((cat) => ({
@@ -329,7 +329,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 						const message =
 							error instanceof Error ? error.message : String(error);
 						throw new Error(
-							`Failed to fetch categories for budget ${budget_id}: ${message}`,
+							`Failed to fetch categories for budget ${budgetId}: ${message}`,
 						);
 					}
 				},
@@ -347,8 +347,8 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 			params,
 			{ ynabAPI, responseFormatter, cacheManager },
 		) => {
-			const budget_id = params["budget_id"];
-			if (!budget_id) {
+			const budgetId = params["budget_id"];
+			if (!budgetId) {
 				throw new McpError(
 					ErrorCode.InvalidParams,
 					"Missing budget_id parameter",
@@ -358,13 +358,13 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				"resources",
 				"months",
 				"list",
-				budget_id,
+				budgetId,
 			);
 			return cacheManager.wrap<ResourceContents[]>(cacheKey, {
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
 					try {
-						const response = await listMonthsCompat(ynabAPI, budget_id);
+						const response = await listMonthsCompat(ynabAPI, budgetId);
 						return [
 							{
 								uri,
@@ -378,7 +378,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 						const message =
 							error instanceof Error ? error.message : String(error);
 						throw new Error(
-							`Failed to fetch months for budget ${budget_id}: ${message}`,
+							`Failed to fetch months for budget ${budgetId}: ${message}`,
 						);
 					}
 				},
@@ -397,9 +397,9 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 			params,
 			{ ynabAPI, responseFormatter, cacheManager },
 		) => {
-			const budget_id = params["budget_id"];
+			const budgetId = params["budget_id"];
 			const month = params["month"];
-			if (!budget_id) {
+			if (!budgetId) {
 				throw new McpError(
 					ErrorCode.InvalidParams,
 					"Missing budget_id parameter",
@@ -412,14 +412,14 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				"resources",
 				"months",
 				"get",
-				budget_id,
+				budgetId,
 				month,
 			);
 			return cacheManager.wrap<ResourceContents[]>(cacheKey, {
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
 					try {
-						const monthDetail = await getMonthCompat(ynabAPI, budget_id, month);
+						const monthDetail = await getMonthCompat(ynabAPI, budgetId, month);
 						return [
 							{
 								uri,
@@ -431,7 +431,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 						const message =
 							error instanceof Error ? error.message : String(error);
 						throw new Error(
-							`Failed to fetch month ${month} for budget ${budget_id}: ${message}`,
+							`Failed to fetch month ${month} for budget ${budgetId}: ${message}`,
 						);
 					}
 				},
@@ -449,15 +449,15 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 			params,
 			{ ynabAPI, responseFormatter, cacheManager },
 		) => {
-			const budget_id = params["budget_id"];
-			const account_id = params["account_id"];
-			if (!budget_id) {
+			const budgetId = params["budget_id"];
+			const accountId = params["account_id"];
+			if (!budgetId) {
 				throw new McpError(
 					ErrorCode.InvalidParams,
 					"Missing budget_id parameter",
 				);
 			}
-			if (!account_id) {
+			if (!accountId) {
 				throw new McpError(
 					ErrorCode.InvalidParams,
 					"Missing account_id parameter",
@@ -467,16 +467,16 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				"resources",
 				"accounts",
 				"get",
-				budget_id,
-				account_id,
+				budgetId,
+				accountId,
 			);
 			return cacheManager.wrap<ResourceContents[]>(cacheKey, {
 				ttl: CACHE_TTLS.ACCOUNTS,
 				loader: async () => {
 					try {
 						const response = await ynabAPI.accounts.getAccountById(
-							budget_id,
-							account_id,
+							budgetId,
+							accountId,
 						);
 						return [
 							{
@@ -489,7 +489,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 						const message =
 							error instanceof Error ? error.message : String(error);
 						throw new Error(
-							`Failed to fetch account ${account_id} in budget ${budget_id}: ${message}`,
+							`Failed to fetch account ${accountId} in budget ${budgetId}: ${message}`,
 						);
 					}
 				},

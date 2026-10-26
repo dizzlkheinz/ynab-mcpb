@@ -367,6 +367,46 @@ describe("CacheManager", () => {
 			expect(loader2).toHaveBeenCalledTimes(1);
 		});
 
+		it("should retain stale data and retry after a failed background refresh", async () => {
+			cache.set("key1", "stale-value", {
+				ttl: 1000,
+				staleWhileRevalidate: 2000,
+			});
+			vi.advanceTimersByTime(1500);
+			const loader = vi
+				.fn()
+				.mockRejectedValueOnce(new Error("Refresh failed"))
+				.mockResolvedValueOnce("fresh-value");
+
+			await expect(cache.wrap("key1", { loader })).resolves.toBe("stale-value");
+			await vi.runAllTimersAsync();
+			expect(cache.get("key1")).toBe("stale-value");
+
+			await expect(cache.wrap("key1", { loader })).resolves.toBe("stale-value");
+			await vi.runAllTimersAsync();
+			expect(loader).toHaveBeenCalledTimes(2);
+			expect(cache.get("key1")).toBe("fresh-value");
+		});
+
+		it("should serve stale data when a background loader throws synchronously", async () => {
+			cache.set("key1", "stale-value", {
+				ttl: 1000,
+				staleWhileRevalidate: 2000,
+			});
+			vi.advanceTimersByTime(1500);
+			const loader = vi.fn(() => {
+				throw new Error("Synchronous failure");
+			});
+
+			await expect(cache.wrap("key1", { loader })).resolves.toBe("stale-value");
+			await vi.runAllTimersAsync();
+			await expect(cache.wrap("key1", { loader })).resolves.toBe("stale-value");
+			await vi.runAllTimersAsync();
+			expect(loader).toHaveBeenCalledTimes(2);
+			vi.advanceTimersByTime(1501);
+			expect(cache.get("key1")).toBeNull();
+		});
+
 		it("should apply cache options from wrap call", async () => {
 			const loader = vi.fn().mockResolvedValue("loaded-value");
 

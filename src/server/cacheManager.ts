@@ -378,53 +378,28 @@ export class CacheManager {
 	}
 
 	/**
-	 * Wrap a loader function with caching and concurrent deduplication
+	 * Wrap a loader with caching, concurrent deduplication and background refresh.
+	 * Foreground failures propagate; failed background refreshes leave stale data
+	 * available until its existing stale window expires.
 	 */
 	async wrap<T>(
 		key: string,
 		options: CacheSetOptions & { loader: () => Promise<T> },
 	): Promise<T> {
-		// Check cache first and preserve existing entry for background refresh
 		const existingEntry = this.cache.get(key);
 		const cached = this.get<T>(key);
+		// Convert synchronous loader throws into rejections before registering the fetch.
+		const load = async () => options.loader();
 		if (cached !== null) {
-			// Check if this key was marked for background refresh (stale-while-revalidate)
 			if (this.pendingRefresh.has(key) && !this.pendingFetches.has(key)) {
-				// Start background refresh
-				const refreshPromise = options.loader().then(
-					(result) => {
-						// Preserve existing TTL/SWR if not specified in options
-						const refreshOptions: CacheSetOptions = {};
-						const ttl = options.ttl ?? existingEntry?.ttl;
-						if (ttl !== undefined) {
-							refreshOptions.ttl = ttl;
-						}
-						const staleWhileRevalidate =
-							options.staleWhileRevalidate ??
-							existingEntry?.staleWhileRevalidate;
-						if (staleWhileRevalidate !== undefined) {
-							refreshOptions.staleWhileRevalidate = staleWhileRevalidate;
-						}
-						// Cache the successful result
-						this.set(key, result, refreshOptions);
-						// Clean up
-						this.pendingFetches.delete(key);
-						this.pendingRefresh.delete(key);
-						return result;
-					},
-					(error) => {
-						// Clean up on error
-						this.pendingFetches.delete(key);
-						this.pendingRefresh.delete(key);
-						throw error;
-					},
-				);
+				const refreshOptions = this.getRefreshOptions(options, existingEntry);
+				const refreshPromise = this.loadAndCache(key, load(), refreshOptions);
 				this.pendingFetches.set(key, refreshPromise);
+				void this.observeBackgroundRefresh(refreshPromise);
 			}
 			return cached;
 		}
 
-		// Check if there's already a pending fetch for this key
 		const existingFetch = this.pendingFetches.get(key) as
 			| Promise<T>
 			| undefined;
@@ -432,27 +407,51 @@ export class CacheManager {
 			return existingFetch;
 		}
 
-		// Execute the loader
-		const fetchPromise = options.loader().then(
-			(result) => {
-				// Cache the successful result using provided options (no existing entry to preserve)
-				this.set(key, result, options);
-				// Clean up pending fetch
-				this.pendingFetches.delete(key);
-				this.pendingRefresh.delete(key);
-				return result;
-			},
-			(error) => {
-				// Clean up on error, don't cache failures
-				this.pendingFetches.delete(key);
-				this.pendingRefresh.delete(key);
-				throw error;
-			},
-		);
-
-		// Store the pending fetch
+		const fetchPromise = this.loadAndCache(key, load(), options);
 		this.pendingFetches.set(key, fetchPromise);
 		return fetchPromise;
+	}
+
+	/** Preserve the entry's TTL and stale window when refresh options omit them. */
+	private getRefreshOptions(
+		options: CacheSetOptions,
+		entry: CacheEntry<unknown> | undefined,
+	): CacheSetOptions {
+		const ttl = options.ttl ?? entry?.ttl;
+		const staleWhileRevalidate =
+			options.staleWhileRevalidate ?? entry?.staleWhileRevalidate;
+		return {
+			...(ttl !== undefined && { ttl }),
+			...(staleWhileRevalidate !== undefined && { staleWhileRevalidate }),
+		};
+	}
+
+	/** Cache only successful loads and release pending state on either outcome. */
+	private async loadAndCache<T>(
+		key: string,
+		loading: Promise<T>,
+		options: CacheSetOptions,
+	): Promise<T> {
+		try {
+			const result = await loading;
+			this.set(key, result, options);
+			return result;
+		} finally {
+			this.pendingFetches.delete(key);
+			this.pendingRefresh.delete(key);
+		}
+	}
+
+	/** Observe a detached refresh so its rejection cannot escape to the process. */
+	private async observeBackgroundRefresh(
+		refresh: Promise<unknown>,
+	): Promise<void> {
+		try {
+			await refresh;
+		} catch {
+			// loadAndCache releases pending state; the next stale read can retry.
+			// Foreground callers awaiting the original promise still receive the error.
+		}
 	}
 
 	/**

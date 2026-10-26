@@ -1420,9 +1420,9 @@ async function buildExecutionResult(
 	} = state.options;
 
 	// STEP 5: Balance reconciliation snapshot (only once per execution)
-	let balance_reconciliation: ExecutionResult["balance_reconciliation"];
+	let balanceReconciliation: ExecutionResult["balance_reconciliation"];
 	if (params.statement_balance !== undefined && params.statement_end_date) {
-		balance_reconciliation = await buildBalanceReconciliation({
+		balanceReconciliation = await buildBalanceReconciliation({
 			ynabAPI,
 			budgetId,
 			accountId,
@@ -1462,8 +1462,8 @@ async function buildExecutionResult(
 		recommendations,
 	};
 
-	if (balance_reconciliation !== undefined) {
-		result.balance_reconciliation = balance_reconciliation;
+	if (balanceReconciliation !== undefined) {
+		result.balance_reconciliation = balanceReconciliation;
 	}
 
 	const bulkDetails = state.bulkOperationDetails;

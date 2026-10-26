@@ -279,12 +279,16 @@ export function findMatches(
 	}
 
 	// Collect unmatched transactions
-	const unmatched_bank = bankTransactions.filter(
+	const unmatchedBank = bankTransactions.filter(
 		(_, i) => !usedBankIndices.has(i),
 	);
-	const unmatched_ynab = ynabTransactions.filter(
+	const unmatchedYnab = ynabTransactions.filter(
 		(txn) => !usedYnabIds.has(txn.id),
 	);
 
-	return { matches, unmatched_bank, unmatched_ynab };
+	return {
+		matches,
+		unmatched_bank: unmatchedBank,
+		unmatched_ynab: unmatchedYnab,
+	};
 }

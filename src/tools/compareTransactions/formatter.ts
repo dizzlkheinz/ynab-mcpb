@@ -22,12 +22,12 @@ export function findSuggestedPayee(
 		return {};
 	}
 
-	const lower_description = description.toLowerCase();
+	const lowerDescription = description.toLowerCase();
 
 	// Simple search: check if payee name is contained in the description
 	for (const payee of payees) {
-		const lower_payee_name = payee.name.toLowerCase();
-		if (lower_description.includes(lower_payee_name)) {
+		const lowerPayeeName = payee.name.toLowerCase();
+		if (lowerDescription.includes(lowerPayeeName)) {
 			return {
 				suggested_payee_id: payee.id,
 				suggested_payee_name: payee.name,
@@ -37,13 +37,13 @@ export function findSuggestedPayee(
 	}
 
 	// If no match, suggest the original description as the new payee name (cleaned up a bit)
-	const suggested_name = description
+	const suggestedName = description
 		.replace(/\d+/g, "") // Remove numbers
 		.replace(/\s+/g, " ") // Consolidate whitespace
 		.trim();
 
 	return {
-		suggested_payee_name: suggested_name,
+		suggested_payee_name: suggestedName,
 		suggestion_reason:
 			"No matching payee found. Suggested new payee name from description.",
 	};
@@ -143,21 +143,25 @@ export function buildComparisonResult(
 	parameters: { amount_tolerance?: number; date_tolerance_days?: number },
 	dateRange: { start: string; end: string },
 ): CallToolResult {
-	const { matches, unmatched_bank, unmatched_ynab } = matchResults;
+	const {
+		matches,
+		unmatched_bank: unmatchedBank,
+		unmatched_ynab: unmatchedYnab,
+	} = matchResults;
 
 	const summary = buildSummary(
 		bankTransactions,
 		ynabTransactions,
 		matches,
-		unmatched_bank,
-		unmatched_ynab,
+		unmatchedBank,
+		unmatchedYnab,
 		parameters,
 		dateRange,
 	);
 
 	const formattedMatches = formatMatches(matches);
-	const formattedUnmatchedBank = formatUnmatchedBank(unmatched_bank, payees);
-	const formattedUnmatchedYnab = formatUnmatchedYNAB(unmatched_ynab);
+	const formattedUnmatchedBank = formatUnmatchedBank(unmatchedBank, payees);
+	const formattedUnmatchedYnab = formatUnmatchedYNAB(unmatchedYnab);
 
 	const comparisonData = {
 		summary,

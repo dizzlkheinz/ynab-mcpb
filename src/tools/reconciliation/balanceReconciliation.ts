@@ -30,7 +30,7 @@ export async function buildBalanceReconciliation(args: {
 	const status =
 		discrepancy === 0 ? "PERFECTLY_RECONCILED" : "DISCREPANCY_FOUND";
 
-	const precision_calculations = {
+	const precisionCalculations = {
 		bank_statement_balance_milliunits: bankMilli,
 		ynab_calculated_balance_milliunits: ynabMilli,
 		discrepancy_milliunits: discrepancy,
@@ -38,12 +38,12 @@ export async function buildBalanceReconciliation(args: {
 		currency_decimal_digits: decimalDigits,
 	};
 
-	const discrepancy_analysis =
+	const discrepancyAnalysis =
 		discrepancy === 0 ? undefined : buildLikelyCauses(discrepancy);
 
 	const result: {
 		status: string;
-		precision_calculations: typeof precision_calculations;
+		precision_calculations: typeof precisionCalculations;
 		discrepancy_analysis?: ReturnType<typeof buildLikelyCauses>;
 		final_verification: {
 			balance_matches_exactly: boolean;
@@ -53,7 +53,7 @@ export async function buildBalanceReconciliation(args: {
 		};
 	} = {
 		status,
-		precision_calculations,
+		precision_calculations: precisionCalculations,
 		final_verification: {
 			balance_matches_exactly: discrepancy === 0,
 			all_transactions_accounted: discrepancy === 0,
@@ -62,8 +62,8 @@ export async function buildBalanceReconciliation(args: {
 		},
 	};
 
-	if (discrepancy_analysis !== undefined) {
-		result.discrepancy_analysis = discrepancy_analysis;
+	if (discrepancyAnalysis !== undefined) {
+		result.discrepancy_analysis = discrepancyAnalysis;
 	}
 
 	return result;
