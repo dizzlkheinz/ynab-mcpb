@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type * as ynab from "ynab";
 import {
-	type CompareTransactionsParams,
 	CompareTransactionsSchema,
 	handleCompareTransactions,
 } from "../../compareTransactions/index.js";
@@ -64,11 +63,11 @@ describe("compareTransactions index (main handler)", () => {
 		});
 
 		test("should apply default values through schema", () => {
-			const params = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test",
-			};
+			});
 
 			const parsed = CompareTransactionsSchema.parse(params);
 			expect(parsed.amount_tolerance).toBe(0.01);
@@ -162,11 +161,11 @@ describe("compareTransactions index (main handler)", () => {
 		});
 
 		test("should orchestrate CSV data processing correctly", async () => {
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
-			};
+			});
 
 			await handleCompareTransactions(mockYnabAPI, params);
 
@@ -188,11 +187,11 @@ describe("compareTransactions index (main handler)", () => {
 				"Date,Amount,Description\n2024-01-01,100.00,Test Transaction";
 			mockReadCSVFile.mockReturnValue(csvContent);
 
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_file_path: "/path/to/file.csv",
-			};
+			});
 
 			await handleCompareTransactions(mockYnabAPI, params);
 
@@ -218,12 +217,12 @@ describe("compareTransactions index (main handler)", () => {
 			};
 			mockAutoDetectCSVFormat.mockReturnValue(autoDetectedFormat);
 
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "2024-01-01,100.00,Test Transaction",
 				auto_detect_format: true,
-			};
+			});
 
 			await handleCompareTransactions(mockYnabAPI, params);
 
@@ -239,11 +238,11 @@ describe("compareTransactions index (main handler)", () => {
 		});
 
 		test("should call YNAB API correctly", async () => {
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
-			};
+			});
 
 			await handleCompareTransactions(mockYnabAPI, params);
 
@@ -259,12 +258,12 @@ describe("compareTransactions index (main handler)", () => {
 		});
 
 		test("should calculate date range correctly", async () => {
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n01/15/2024,100.00,Test Transaction",
 				date_tolerance_days: 3,
-			};
+			});
 
 			await handleCompareTransactions(mockYnabAPI, params);
 
@@ -291,12 +290,12 @@ describe("compareTransactions index (main handler)", () => {
 				.mockImplementation(() => {
 					throw new Error("toISOString should not be used for sinceDate");
 				});
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
 				date_tolerance_days: 0,
-			};
+			});
 
 			try {
 				await handleCompareTransactions(mockYnabAPI, params);
@@ -310,13 +309,13 @@ describe("compareTransactions index (main handler)", () => {
 		});
 
 		test("should pass filtered transactions to matcher", async () => {
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
 				amount_tolerance: 0.02,
 				date_tolerance_days: 7,
-			};
+			});
 
 			await handleCompareTransactions(mockYnabAPI, params);
 
@@ -336,13 +335,13 @@ describe("compareTransactions index (main handler)", () => {
 		});
 
 		test("should apply statement window filtering", async () => {
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
 				statement_start_date: "2024-01-01",
 				statement_date: "2024-01-31",
-			};
+			});
 
 			await handleCompareTransactions(mockYnabAPI, params);
 
@@ -350,17 +349,17 @@ describe("compareTransactions index (main handler)", () => {
 			expect(mockFindMatches).toHaveBeenCalled();
 
 			// Verify that the transactions passed to matcher would be within the window
-			const [bankTxns, ynabTxns] = mockFindMatches.mock.calls[0];
+			const [bankTxns, ynabTxns] = mockFindMatches.mock.calls[0]!;
 			expect(bankTxns).toEqual(mockBankTransactions);
 			expect(ynabTxns).toHaveLength(1); // Should include YNAB transaction within window
 		});
 
 		test("should build final result correctly", async () => {
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
-			};
+			});
 
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
@@ -393,11 +392,11 @@ describe("compareTransactions index (main handler)", () => {
 		test("should handle empty bank transactions correctly", async () => {
 			mockParseBankCSV.mockReturnValue([]);
 
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description", // Header only
-			};
+			});
 
 			await expect(
 				handleCompareTransactions(mockYnabAPI, params),
@@ -409,12 +408,12 @@ describe("compareTransactions index (main handler)", () => {
 				throw new Error("Auto-detection failed");
 			});
 
-			const params: CompareTransactionsParams = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
 				auto_detect_format: true,
-			};
+			});
 
 			// Should not throw, should fall back to provided format
 			await handleCompareTransactions(mockYnabAPI, params);

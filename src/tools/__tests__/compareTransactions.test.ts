@@ -56,11 +56,11 @@ describe("compareTransactions", () => {
 		});
 
 		it("should apply default values", () => {
-			const params = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
-			};
+			});
 
 			const parsed = CompareTransactionsSchema.parse(params);
 			expect(parsed.amount_tolerance).toBe(0.01);
@@ -116,11 +116,11 @@ describe("compareTransactions", () => {
 				}),
 			};
 
-			const params = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: csvData,
-			};
+			});
 
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
@@ -153,11 +153,11 @@ describe("compareTransactions", () => {
 				}),
 			};
 
-			const params = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_file_path: "/path/to/transactions.csv",
-			};
+			});
 
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
@@ -185,7 +185,7 @@ describe("compareTransactions", () => {
 				}),
 			};
 
-			const params = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: csvData,
@@ -197,7 +197,7 @@ describe("compareTransactions", () => {
 					has_header: true,
 					date_format: "MM/DD/YYYY",
 				},
-			};
+			});
 
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
@@ -223,7 +223,7 @@ describe("compareTransactions", () => {
 				}),
 			};
 
-			const params = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: csvData,
@@ -235,7 +235,7 @@ describe("compareTransactions", () => {
 					has_header: false,
 					date_format: "YYYY-MM-DD",
 				},
-			};
+			});
 
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
@@ -261,7 +261,7 @@ describe("compareTransactions", () => {
 				}),
 			};
 
-			const params = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: csvData,
@@ -273,7 +273,7 @@ describe("compareTransactions", () => {
 					has_header: true,
 					date_format: "MMM dd, yyyy",
 				},
-			};
+			});
 
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
@@ -301,11 +301,11 @@ describe("compareTransactions", () => {
 				}),
 			};
 
-			const params = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: csvData,
-			};
+			});
 
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
@@ -345,12 +345,12 @@ describe("compareTransactions", () => {
 				}),
 			};
 
-			const params = {
+			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
 				csv_data: csvData,
 				auto_detect_format: true,
-			};
+			});
 
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
