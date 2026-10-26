@@ -256,21 +256,67 @@ describe("ToolRegistry write safety enforcement", () => {
 		expect(handler).toHaveBeenCalledTimes(1);
 	});
 
-	it("rejects malformed confirmation tokens before validation", async () => {
+	it("rejects malformed confirmation tokens before default resolution and validation", async () => {
 		const registry = new ToolRegistry(
 			createDependencies(new WriteSafetyPolicy()),
 		);
-		const handler = registerMutation(registry, "ynab_create_transaction");
+		const handler = vi.fn(async () => result({}));
+		const defaultArgumentResolver = vi.fn(async () => ({}));
+		registry.register({
+			name: "ynab_create_transaction",
+			description: "Protected mutation",
+			inputSchema: z
+				.object({ id: z.string(), dry_run: z.boolean().optional() })
+				.strict(),
+			handler,
+			defaultArgumentResolver,
+			metadata: {
+				writeSafety: { mutation: true, preview: "dry-run" },
+			},
+		});
+		// Missing id would fail schema validation if the token check ran later
 		const malformed = await registry.executeTool({
 			name: "ynab_create_transaction",
 			accessToken: "token",
-			arguments: { id: "txn-1", confirmation_token: "short" },
+			arguments: { confirmation_token: "short" },
 		});
 		expect(malformed.isError).toBe(true);
 		expect(JSON.stringify(malformed.content)).toContain(
-			"confirmation_token must be a non-empty token string",
+			"confirmation_token must be the full token string returned by the preview call",
 		);
+		expect(defaultArgumentResolver).not.toHaveBeenCalled();
 		expect(handler).not.toHaveBeenCalled();
+	});
+
+	it("rejects confirmation tokens on tools that do not require confirmation", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
+		);
+		const mutationHandler = registerMutation(
+			registry,
+			"ynab_update_transaction",
+		);
+		const readHandler = vi.fn(async () => result({}));
+		registry.register({
+			name: "ynab_get_transaction",
+			description: "Read tool",
+			inputSchema: z.object({ id: z.string() }).strict(),
+			handler: readHandler,
+		});
+
+		for (const name of ["ynab_update_transaction", "ynab_get_transaction"]) {
+			const rejected = await registry.executeTool({
+				name,
+				accessToken: "token",
+				arguments: { id: "txn-1", confirmation_token: FIXED_TOKEN },
+			});
+			expect(rejected.isError).toBe(true);
+			expect(JSON.stringify(rejected.content)).toContain(
+				`confirmation_token is not accepted: ${name} does not require write confirmation`,
+			);
+		}
+		expect(mutationHandler).not.toHaveBeenCalled();
+		expect(readHandler).not.toHaveBeenCalled();
 	});
 
 	it("does not issue a confirmation token when the preview handler errors", async () => {

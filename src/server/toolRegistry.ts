@@ -194,8 +194,7 @@ export class ToolRegistry {
 			return;
 		}
 		if (
-			definition.metadata?.writeSafety?.mutation &&
-			this.deps.writeSafetyPolicy?.requiresConfirmation() &&
+			this.confirmationPolicyFor(definition) &&
 			!this.schemaHasProperty(definition, "dry_run")
 		) {
 			throw new Error(
@@ -374,30 +373,42 @@ export class ToolRegistry {
 
 	/**
 	 * Validates and removes confirmation_token from the provided arguments so it
-	 * never reaches the tool's input schema.
+	 * never reaches the tool's input schema. A token is only accepted by tools
+	 * that require write confirmation.
 	 */
 	private extractConfirmationToken(
 		tool: AnyRegisteredTool,
 		providedArguments: Record<string, unknown>,
 	): ExecutionStep<string | undefined> {
 		const confirmationValue = providedArguments["confirmation_token"];
+		delete providedArguments["confirmation_token"];
+		if (confirmationValue === undefined) {
+			return { ok: true, value: undefined };
+		}
+		if (!this.confirmationPolicyFor(tool)) {
+			return {
+				ok: false,
+				result: this.deps.errorHandler.createValidationError(
+					`Invalid parameters for ${tool.name}`,
+					`confirmation_token is not accepted: ${tool.name} does not require write confirmation`,
+				),
+			};
+		}
 		if (
-			confirmationValue !== undefined &&
-			(typeof confirmationValue !== "string" || confirmationValue.length < 16)
+			typeof confirmationValue !== "string" ||
+			confirmationValue.length < 16
 		) {
 			return {
 				ok: false,
 				result: this.deps.errorHandler.createValidationError(
 					`Invalid parameters for ${tool.name}`,
-					"confirmation_token must be a non-empty token string",
+					"confirmation_token must be the full token string returned by the preview call",
 				),
 			};
 		}
-		delete providedArguments["confirmation_token"];
 		return {
 			ok: true,
-			value:
-				typeof confirmationValue === "string" ? confirmationValue : undefined,
+			value: confirmationValue,
 		};
 	}
 
@@ -559,7 +570,7 @@ export class ToolRegistry {
 	 * and confirmed, otherwise undefined.
 	 */
 	private confirmationPolicyFor(
-		tool: AnyRegisteredTool,
+		tool: Pick<ToolDefinition, "metadata">,
 	): WriteSafetyPolicy | undefined {
 		const policy = this.deps.writeSafetyPolicy;
 		return tool.metadata?.writeSafety?.mutation === true &&
