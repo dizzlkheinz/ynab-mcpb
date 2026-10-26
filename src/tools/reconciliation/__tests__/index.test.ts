@@ -1,7 +1,9 @@
+import { promises as fsPromises } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { pathToFileURL } from "node:url";
+import { describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import type { DeltaCache } from "../../../server/deltaCache.js";
 import { DeltaFetcher } from "../../deltaFetcher.js";
@@ -130,6 +132,44 @@ describe("handleReconcileAccount", () => {
 			expect(text).not.toMatch(/Failed to read CSV file/);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("reports a real read error instead of an empty candidate path", async () => {
+		// A file:// URL yields two candidates: the literal URL and its path
+		const csvPath = join(tmpdir(), "statement.csv");
+		const csvUrl = pathToFileURL(csvPath).href;
+		const accessDenied = Object.assign(new Error("EACCES: permission denied"), {
+			code: "EACCES",
+		});
+		const readFile = vi
+			.spyOn(fsPromises, "readFile")
+			.mockImplementation(async (path) => {
+				if (String(path) === csvUrl) return "";
+				throw accessDenied;
+			});
+		const ynabAPI = buildEmptyAccountAPI();
+
+		try {
+			const result = await handleReconcileAccount(
+				ynabAPI,
+				{
+					budget_id: "budget-1",
+					account_id: "account-1",
+					csv_file_path: csvUrl,
+					statement_balance: -10,
+				},
+				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
+			);
+
+			expect(readFile).toHaveBeenCalledTimes(2);
+			expect(result.isError).toBe(true);
+			const text = JSON.stringify(result.content);
+			expect(text).toMatch(/Failed to read CSV file/);
+			expect(text).toMatch(/EACCES/);
+			expect(text).not.toMatch(/CSV content is empty/);
+		} finally {
+			readFile.mockRestore();
 		}
 	});
 

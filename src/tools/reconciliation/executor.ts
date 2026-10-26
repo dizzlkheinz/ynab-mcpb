@@ -449,6 +449,21 @@ function settleProgressTotal(
 	state.totalOperations = state.completedOperations + remainingOperations;
 }
 
+/**
+ * Report STEP 1 progress. Once a creation aligns the balance, creation stops
+ * and STEPS 2-3 are skipped, so the total settles to what has completed and
+ * this report reaches it (MCP progress can't repeat a value to finish later).
+ */
+async function reportCreateProgress(state: ExecutionState): Promise<void> {
+	if (state.balanceAligned) {
+		settleProgressTotal(state, 0);
+	}
+	await reportProgress(
+		state,
+		`Created ${state.completedOperations} of ${state.totalOperations} transactions`,
+	);
+}
+
 function applyClearedDelta(state: ExecutionState, delta: number): void {
 	if (delta === 0) return;
 	state.clearedDeltaMilli = addMilli(state.clearedDeltaMilli, delta);
@@ -706,16 +721,13 @@ async function createSequentialEntry(
 	recordCreateAction(state, recordArgs);
 	state.accountSnapshotDirty = true;
 	applyClearedDelta(state, entry.amountMilli);
-	// Report progress for sequential/fallback operations
-	state.completedOperations += 1;
-	await reportProgress(
-		state,
-		`Created ${state.completedOperations} of ${state.totalOperations} transactions`,
-	);
 	const trigger = options.chunkIndex
 		? `creating ${entry.bankTransaction.payee ?? "missing transaction"} (chunk ${options.chunkIndex})`
 		: `creating ${entry.bankTransaction.payee ?? "missing transaction"}`;
 	recordAlignmentIfNeeded(state, trigger);
+	// Report progress for sequential/fallback operations
+	state.completedOperations += 1;
+	await reportCreateProgress(state);
 }
 
 function recordSequentialFailure(
@@ -806,10 +818,7 @@ async function bulkCreateMissingTransactions(
 			bulkDetails.bulk_successes += 1;
 			// Report progress after successful chunk processing
 			state.completedOperations += chunk.length;
-			await reportProgress(
-				state,
-				`Created ${state.completedOperations} of ${state.totalOperations} transactions`,
-			);
+			await reportCreateProgress(state);
 		}
 	}
 }
@@ -970,9 +979,11 @@ async function updateMatchedTransactions(
 ): Promise<void> {
 	const { params, currencyCode } = state.options;
 	const transactionsToUpdate = collectMatchUpdates(state, matchPlan);
+	// STEP 3 is skipped once these updates align the balance
 	settleProgressTotal(
 		state,
-		transactionsToUpdate.length + state.plannedOperations.unclear,
+		transactionsToUpdate.length +
+			(state.balanceAligned ? 0 : state.plannedOperations.unclear),
 	);
 
 	if (params.dry_run || transactionsToUpdate.length === 0) {

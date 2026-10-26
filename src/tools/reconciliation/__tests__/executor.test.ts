@@ -497,6 +497,60 @@ describe("executeReconciliation (swallowed chunk failures)", () => {
 		expect(mocks.updateTransactions).toHaveBeenCalledTimes(2);
 	});
 
+	it("counts only successful chunks in the reconciliation_complete message", async () => {
+		// 101 already-cleared matches with the balance aligned up front, so
+		// STEP 4 sends two reconcile chunks (100 + 1)
+		const template = buildAnalysis().auto_matches[0]!;
+		const analysis = buildAligningAnalysis();
+		analysis.auto_matches = Array.from({ length: 101 }, (_, index) => ({
+			...template,
+			bankTransaction: { ...template.bankTransaction, id: `bank-${index}` },
+			ynabTransaction: {
+				...template.ynabTransaction!,
+				id: `ynab-${index}`,
+				cleared: "cleared",
+			},
+		}));
+		const params = buildFailureParams({ auto_adjust_dates: false });
+		const alignedAccount: AccountSnapshot = {
+			...failureAccount,
+			cleared_balance: -944250,
+		};
+
+		const { api, mocks } = createMockYnabAPI(alignedAccount);
+		mocks.updateTransactions
+			.mockImplementationOnce(async (_budgetId, body) => ({
+				data: {
+					transactions: (
+						body as { transactions: { id: string }[] }
+					).transactions.map((txn) => ({
+						id: txn.id,
+						amount: -45230,
+						cleared: "reconciled",
+					})),
+				},
+			}))
+			.mockRejectedValueOnce(new Error("socket hang up"));
+
+		const result = await executeReconciliation({
+			ynabAPI: api,
+			analysis,
+			params,
+			budgetId: "budget-fail",
+			accountId: "account-fail",
+			initialAccount: alignedAccount,
+			currencyCode: "USD",
+		});
+
+		expect(mocks.updateTransactions).toHaveBeenCalledTimes(2);
+		const complete = result.actions_taken.find(
+			(action) => action.type === "reconciliation_complete",
+		);
+		expect(complete?.reason).toMatch(/^Marked 100 of 101 matched/);
+		expect(complete?.reason).toContain("1 could not be reconciled");
+		expect(result.summary.transactions_updated).toBe(100);
+	});
+
 	it("reports only the transactions that were actually reconciled", async () => {
 		const analysis = buildAligningAnalysis();
 		const params = buildFailureParams();

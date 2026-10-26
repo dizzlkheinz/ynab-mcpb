@@ -510,7 +510,7 @@ describe("Reconciliation Progress Notifications", () => {
 			expect(lastCall.total).toBe(1);
 		});
 
-		it("should strictly increase progress when later steps are skipped after alignment", async () => {
+		it("should reach the total without repeating progress when later steps are skipped after alignment", async () => {
 			const unmatchedBank: BankTransaction[] = [
 				createBankTransaction({ payee: "Payee 1", amount: -10000 }),
 				createBankTransaction({ payee: "Payee 2", amount: -20000 }),
@@ -590,8 +590,10 @@ describe("Reconciliation Progress Notifications", () => {
 			expect(
 				mockYnabAPI.transactions!.updateTransactions,
 			).not.toHaveBeenCalled();
+			// The skipped steps drop out of the total, so the single report
+			// completes it without a repeated progress value
 			expect(progressCalls).toEqual([
-				expect.objectContaining({ progress: 3, total: 5 }),
+				expect.objectContaining({ progress: 3, total: 3 }),
 			]);
 			for (let i = 1; i < progressCalls.length; i++) {
 				expect(progressCalls[i]!.progress).toBeGreaterThan(
