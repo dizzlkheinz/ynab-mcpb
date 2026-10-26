@@ -44,6 +44,16 @@ Checklist:
 - You’re using a recent npm CLI (the workflow uses Node `24`).
 - For first-time scoped publishes, the workflow uses `npm publish --access public`.
 
+## Finishing a partially failed publish
+
+The workflow is safe to run again for the same tag. It skips `npm publish` when
+the version is already on npm, waits up to 10 minutes for npm to serve it, then
+publishes to the MCP Registry. To finish a release whose registry step failed:
+
+```bash
+gh workflow run publish.yml -f tag=vX.Y.Z
+```
+
 ## Local manual publish (optional)
 
 ```bash

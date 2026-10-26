@@ -42,11 +42,30 @@ jobs:
           npm run build
 
       - name: Publish to npm
-        run: npm publish --ignore-scripts --provenance --access public
+        # Skipped when the version already exists, so a rerun can finish the registry publish
+        run: |
+          PACKAGE="$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")"
+          if npm view "$PACKAGE" version > /dev/null 2>&1; then
+            echo "$PACKAGE is already on npm; skipping npm publish"
+          else
+            npm publish --ignore-scripts --provenance --access public
+          fi
 
       ### Publish to MCP Registry
       - name: Verify committed registry metadata
         run: npm run verify:metadata
+
+      - name: Wait for npm to serve the version
+        # The registry rejects a version npm does not serve yet, which can take several minutes
+        run: |
+          PACKAGE="$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")"
+          for attempt in $(seq 1 40); do
+            npm view "$PACKAGE" version > /dev/null 2>&1 && exit 0
+            echo "$PACKAGE not served by npm yet (attempt $attempt); retrying in 15s"
+            sleep 15
+          done
+          echo "$PACKAGE was not served by npm within 10 minutes"
+          exit 1
 
       - name: Install mcp-publisher
         run: |
@@ -56,9 +75,8 @@ jobs:
         run: ./mcp-publisher login github-oidc
 
       - name: Publish to MCP Registry
-        # npm can take a minute to serve a just-published version; the registry 404s until then
+        # The registry's own npm lookup can lag behind npm view briefly
         run: |
-          sleep 15
           for attempt in 1 2 3 4 5; do
             ./mcp-publisher publish && exit 0
             echo "mcp-publisher attempt $attempt failed; retrying in 30s"
