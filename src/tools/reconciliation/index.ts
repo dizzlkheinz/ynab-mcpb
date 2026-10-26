@@ -150,29 +150,7 @@ export async function handleReconcileAccount(
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
-			// Derive matching thresholds from match_strictness
-			const STRICTNESS_THRESHOLDS = {
-				loose: { autoMatch: 70, suggested: 55 },
-				normal: { autoMatch: 85, suggested: 60 },
-				strict: { autoMatch: 93, suggested: 75 },
-			} as const;
-			const strictness = params.match_strictness ?? "normal";
-			const { autoMatch: autoMatchThreshold, suggested: suggestionThreshold } =
-				STRICTNESS_THRESHOLDS[strictness];
-
-			// Build matching configuration from parameters (V2 Format)
-			const config: MatchingConfig = {
-				weights: {
-					date: 0.15,
-					payee: 0.35,
-				},
-				dateToleranceDays: params.date_tolerance_days ?? 7,
-				autoMatchThreshold,
-				suggestedMatchThreshold: suggestionThreshold,
-				minimumCandidateScore: 40,
-				exactDateBonus: 5,
-				exactPayeeBonus: 10,
-			};
+			const config = buildMatchingConfig(params);
 
 			const accountResult = await deltaFetcher.fetchAccountsFull(budgetId);
 			const accountData = accountResult.data.find(
@@ -184,18 +162,7 @@ export async function handleReconcileAccount(
 				);
 			}
 			const accountName = accountData.name;
-			const accountType = accountData.type;
-
-			const accountIsLiability =
-				accountType === "creditCard" ||
-				accountType === "lineOfCredit" ||
-				accountType === "mortgage" ||
-				accountType === "autoLoan" ||
-				accountType === "studentLoan" ||
-				accountType === "personalLoan" ||
-				accountType === "medicalDebt" ||
-				accountType === "otherDebt" ||
-				accountType === "otherLiability";
+			const accountIsLiability = LIABILITY_ACCOUNT_TYPES.has(accountData.type);
 
 			// Default inversion assumption: liability accounts typically show charges as positive
 			const shouldInvertBankAmounts = accountIsLiability;
@@ -204,123 +171,25 @@ export async function handleReconcileAccount(
 			// usually use negative balances in YNAB, but credit-balance statements can be positive.
 			const adjustedStatementBalance = params.statement_balance;
 
-			const budget = await getBudgetByIdCompat(ynabAPI, budgetId);
-			const currencyFormat = budget.currency_format as
-				| { iso_code?: string; decimal_digits?: number }
-				| undefined;
-			const currencyCode = currencyFormat?.iso_code ?? "USD";
-			const decimalDigits = currencyFormat?.decimal_digits ?? 2;
+			const { currencyCode, decimalDigits } = await getCurrencySettings(
+				ynabAPI,
+				budgetId,
+			);
 
 			const narrativeNotes: string[] = [];
-
-			// Prepare CSV parsing options from request
-			const dateFormat = mapCsvDateFormatToHint(params.csv_format?.date_format);
-			const csvOptions: ParseCSVOptions = {
-				columns: {
-					...(params.csv_format?.date_column !== undefined && {
-						date: String(params.csv_format.date_column),
-					}),
-					...(params.csv_format?.amount_column !== undefined && {
-						amount: String(params.csv_format.amount_column),
-					}),
-					...(params.csv_format?.debit_column !== undefined && {
-						debit: String(params.csv_format.debit_column),
-					}),
-					...(params.csv_format?.credit_column !== undefined && {
-						credit: String(params.csv_format.credit_column),
-					}),
-					...(params.csv_format?.description_column !== undefined && {
-						description: String(params.csv_format.description_column),
-					}),
-				},
-				...(dateFormat && { dateFormat }),
-				...(params.csv_format?.has_header !== undefined && {
-					header: params.csv_format.has_header,
-				}),
-				...(params.csv_format?.delimiter !== undefined && {
-					delimiter: params.csv_format.delimiter,
-				}),
-			};
-
-			// Load CSV content from either inline data or filesystem path
-			let csvContent = params.csv_data ?? "";
-			if (!csvContent && params.csv_file_path) {
-				const pathCandidates = resolveCsvPathCandidates(params.csv_file_path);
-				let lastReadError: unknown;
-
-				for (const candidatePath of pathCandidates) {
-					try {
-						csvContent = await fs.readFile(candidatePath, "utf8");
-						if (candidatePath !== params.csv_file_path) {
-							narrativeNotes.push(
-								`Read CSV using normalized path "${candidatePath}" from "${params.csv_file_path}".`,
-							);
-						}
-						break;
-					} catch (error) {
-						lastReadError = error;
-					}
-				}
-
-				if (!csvContent) {
-					const attemptedPaths =
-						pathCandidates.length > 0
-							? pathCandidates.join(", ")
-							: params.csv_file_path;
-					const message =
-						lastReadError instanceof Error && lastReadError.message
-							? lastReadError.message
-							: "Unknown error while reading CSV file";
-					throw new Error(
-						`Failed to read CSV file. Tried path(s): ${attemptedPaths}. ${message}. If this path is from another runtime (for example an uploaded sandbox file), pass the CSV via csv_data instead.`,
-					);
-				}
-			}
-
-			if (!csvContent.trim()) {
-				throw new Error(
-					"CSV content is empty after reading the provided source.",
-				);
-			}
+			const csvOptions = buildCsvParseOptions(params.csv_format);
+			const csvContent = await loadCsvContent(params, narrativeNotes);
 
 			// Initial parse without inversion for date window + sign detection
-			let rawCsvResult: CSVParseResult;
-			try {
-				rawCsvResult = parseCSV(csvContent, {
-					...csvOptions,
-					invertAmounts: false,
-				});
-			} catch (error) {
-				const message =
-					error instanceof Error && error.message
-						? error.message
-						: "Unknown error while parsing CSV";
-				throw new Error(`Failed to parse CSV data: ${message}`);
-			}
-
+			const parsedCsv = parseCsvOrThrow(csvContent, csvOptions);
 			const statementWindowEnd = normalizeStatementDate(
 				params.statement_end_date,
 			);
-			const statementWindowBounds = {
-				...(statementWindowEnd !== undefined && {
-					endDate: statementWindowEnd,
-				}),
-			};
-			const clampedCsv = clampCSVToStatementWindow(rawCsvResult, {
-				...statementWindowBounds,
-			});
-			rawCsvResult = clampedCsv.parseResult;
-			if (clampedCsv.excludedCount > 0) {
-				narrativeNotes.push(
-					`Filtered ${clampedCsv.excludedCount} CSV transaction(s) outside statement window ${formatStatementWindow(statementWindowBounds)}.`,
-				);
-			}
-
-			if (clampedCsv.windowApplied && rawCsvResult.transactions.length === 0) {
-				throw new Error(
-					`No CSV transactions remain after applying statement window ${formatStatementWindow(clampedCsv.windowApplied)}.`,
-				);
-			}
+			const rawCsvResult = applyStatementWindow(
+				parsedCsv,
+				statementWindowEnd,
+				narrativeNotes,
+			);
 
 			const effectiveStatementEndDate =
 				statementWindowEnd ??
@@ -335,19 +204,10 @@ export async function handleReconcileAccount(
 			}
 
 			// Fetch YNAB transactions for the account using inferred date window
-			let sinceDate: Date;
-			let dateWindowSource: "csv_min_date_with_buffer" | "fallback_90_days";
-
-			if (rawCsvResult.transactions.length > 0) {
-				sinceDate = inferSinceDateFromTransactions(rawCsvResult.transactions);
-				dateWindowSource = "csv_min_date_with_buffer";
-			} else {
-				sinceDate = fallbackSinceDate();
-				dateWindowSource = "fallback_90_days";
-				narrativeNotes.push(
-					"CSV contained no parsable transactions for date detection; fetched the last 90 days from YNAB.",
-				);
-			}
+			const { sinceDate, dateWindowSource } = resolveSinceDate(
+				rawCsvResult.transactions,
+				narrativeNotes,
+			);
 
 			const sinceDateString = sinceDate.toISOString().split("T")[0];
 			const transactionsResult =
@@ -361,40 +221,13 @@ export async function handleReconcileAccount(
 			const normalizedYNAB = normalizeYNABTransactions(ynabTransactions);
 
 			// Determine sign inversion: explicit override or auto-detect
-			const signConvention = params.sign_convention ?? "auto";
-			let finalInvertAmounts: boolean;
-			if (signConvention === "invert") {
-				finalInvertAmounts = true;
-				narrativeNotes.push(
-					"Using explicit sign_convention=invert; bank amounts will be negated.",
-				);
-			} else if (signConvention === "as_is") {
-				finalInvertAmounts = false;
-				narrativeNotes.push(
-					"Using explicit sign_convention=as_is; bank amounts used as-is.",
-				);
-			} else {
-				// Auto-detect sign convention; fall back to account-type default
-				finalInvertAmounts = shouldInvertBankAmounts;
-				if (rawCsvResult.transactions.length > 0 && normalizedYNAB.length > 0) {
-					const needsInversion = detectSignInversion(
-						rawCsvResult.transactions,
-						normalizedYNAB,
-					);
-
-					if (needsInversion !== null) {
-						if (needsInversion !== finalInvertAmounts) {
-							narrativeNotes.push(
-								needsInversion
-									? "Detected bank CSV amounts opposite YNAB; inverting bank amounts for matching."
-									: "Detected bank CSV amounts already align with YNAB; using CSV amounts as-is.",
-							);
-						}
-
-						finalInvertAmounts = needsInversion;
-					}
-				}
-			}
+			const finalInvertAmounts = resolveSignInversion(
+				params.sign_convention ?? "auto",
+				shouldInvertBankAmounts,
+				rawCsvResult.transactions,
+				normalizedYNAB,
+				narrativeNotes,
+			);
 
 			// If inversion is needed, negate amounts in-place instead of re-parsing
 			const parseResult: CSVParseResult = finalInvertAmounts
@@ -517,34 +350,9 @@ export async function handleReconcileAccount(
 			// Build response payload matching ReconcileAccountOutputSchema
 			// Always includes unmatched_only structured data for agent consumption.
 			// Include execution summary when reconciliation actions were performed.
-			let executionSummary:
-				| {
-						transactions_created: number;
-						transactions_updated: number;
-						dates_adjusted: number;
-						dry_run: boolean;
-						balance_status: "balanced" | "unbalanced" | "not_verified";
-						recommendations: string[];
-				  }
-				| undefined;
-			if (executionData) {
-				const balanceRecon = executionData.balance_reconciliation;
-				const balanceStatus: "balanced" | "unbalanced" | "not_verified" =
-					!wantsBalanceVerification
-						? "not_verified"
-						: balanceRecon?.status === "balanced"
-							? "balanced"
-							: "unbalanced";
-
-				executionSummary = {
-					transactions_created: executionData.summary.transactions_created,
-					transactions_updated: executionData.summary.transactions_updated,
-					dates_adjusted: executionData.summary.dates_adjusted,
-					dry_run: executionData.summary.dry_run,
-					balance_status: balanceStatus,
-					recommendations: executionData.recommendations,
-				};
-			}
+			const executionSummary = executionData
+				? buildExecutionSummary(executionData, wantsBalanceVerification)
+				: undefined;
 			const structured = {
 				unmatched_bank: payload.structured.unmatched.bank,
 				unmatched_ynab: payload.structured.unmatched.ynab,
@@ -644,6 +452,301 @@ Examples:
 		},
 	});
 };
+
+// Derive matching thresholds from match_strictness
+const STRICTNESS_THRESHOLDS = {
+	loose: { autoMatch: 70, suggested: 55 },
+	normal: { autoMatch: 85, suggested: 60 },
+	strict: { autoMatch: 93, suggested: 75 },
+} as const;
+
+const LIABILITY_ACCOUNT_TYPES = new Set<string>([
+	"creditCard",
+	"lineOfCredit",
+	"mortgage",
+	"autoLoan",
+	"studentLoan",
+	"personalLoan",
+	"medicalDebt",
+	"otherDebt",
+	"otherLiability",
+]);
+
+type SignConvention = "auto" | "invert" | "as_is";
+
+interface ReconcileExecutionSummary {
+	transactions_created: number;
+	transactions_updated: number;
+	dates_adjusted: number;
+	dry_run: boolean;
+	balance_status: "balanced" | "unbalanced" | "not_verified";
+	recommendations: string[];
+}
+
+/**
+ * Build matching configuration from parameters (V2 Format)
+ */
+function buildMatchingConfig(params: ReconcileAccountRequest): MatchingConfig {
+	const strictness = params.match_strictness ?? "normal";
+	const { autoMatch: autoMatchThreshold, suggested: suggestionThreshold } =
+		STRICTNESS_THRESHOLDS[strictness];
+
+	return {
+		weights: {
+			date: 0.15,
+			payee: 0.35,
+		},
+		dateToleranceDays: params.date_tolerance_days ?? 7,
+		autoMatchThreshold,
+		suggestedMatchThreshold: suggestionThreshold,
+		minimumCandidateScore: 40,
+		exactDateBonus: 5,
+		exactPayeeBonus: 10,
+	};
+}
+
+async function getCurrencySettings(
+	ynabAPI: ynab.API,
+	budgetId: string,
+): Promise<{ currencyCode: string; decimalDigits: number }> {
+	const budget = await getBudgetByIdCompat(ynabAPI, budgetId);
+	const currencyFormat = budget.currency_format as
+		| { iso_code?: string; decimal_digits?: number }
+		| undefined;
+	return {
+		currencyCode: currencyFormat?.iso_code ?? "USD",
+		decimalDigits: currencyFormat?.decimal_digits ?? 2,
+	};
+}
+
+/**
+ * Prepare CSV parsing options from request
+ */
+function buildCsvParseOptions(
+	csvFormat: ReconcileAccountRequest["csv_format"],
+): ParseCSVOptions {
+	const dateFormat = mapCsvDateFormatToHint(csvFormat?.date_format);
+	return {
+		columns: {
+			...(csvFormat?.date_column !== undefined && {
+				date: String(csvFormat.date_column),
+			}),
+			...(csvFormat?.amount_column !== undefined && {
+				amount: String(csvFormat.amount_column),
+			}),
+			...(csvFormat?.debit_column !== undefined && {
+				debit: String(csvFormat.debit_column),
+			}),
+			...(csvFormat?.credit_column !== undefined && {
+				credit: String(csvFormat.credit_column),
+			}),
+			...(csvFormat?.description_column !== undefined && {
+				description: String(csvFormat.description_column),
+			}),
+		},
+		...(dateFormat && { dateFormat }),
+		...(csvFormat?.has_header !== undefined && {
+			header: csvFormat.has_header,
+		}),
+		...(csvFormat?.delimiter !== undefined && {
+			delimiter: csvFormat.delimiter,
+		}),
+	};
+}
+
+/**
+ * Load CSV content from either inline data or filesystem path
+ */
+async function loadCsvContent(
+	params: ReconcileAccountRequest,
+	narrativeNotes: string[],
+): Promise<string> {
+	let csvContent = params.csv_data ?? "";
+	if (!csvContent && params.csv_file_path) {
+		csvContent = await readCsvFromPath(params.csv_file_path, narrativeNotes);
+	}
+
+	if (!csvContent.trim()) {
+		throw new Error("CSV content is empty after reading the provided source.");
+	}
+
+	return csvContent;
+}
+
+async function readCsvFromPath(
+	csvFilePath: string,
+	narrativeNotes: string[],
+): Promise<string> {
+	const pathCandidates = resolveCsvPathCandidates(csvFilePath);
+	let lastReadError: unknown;
+
+	for (const candidatePath of pathCandidates) {
+		try {
+			const csvContent = await fs.readFile(candidatePath, "utf8");
+			if (candidatePath !== csvFilePath) {
+				narrativeNotes.push(
+					`Read CSV using normalized path "${candidatePath}" from "${csvFilePath}".`,
+				);
+			}
+			if (csvContent) {
+				return csvContent;
+			}
+			break;
+		} catch (error) {
+			lastReadError = error;
+		}
+	}
+
+	const attemptedPaths =
+		pathCandidates.length > 0 ? pathCandidates.join(", ") : csvFilePath;
+	const message =
+		lastReadError instanceof Error && lastReadError.message
+			? lastReadError.message
+			: "Unknown error while reading CSV file";
+	throw new Error(
+		`Failed to read CSV file. Tried path(s): ${attemptedPaths}. ${message}. If this path is from another runtime (for example an uploaded sandbox file), pass the CSV via csv_data instead.`,
+	);
+}
+
+function parseCsvOrThrow(
+	csvContent: string,
+	csvOptions: ParseCSVOptions,
+): CSVParseResult {
+	try {
+		return parseCSV(csvContent, {
+			...csvOptions,
+			invertAmounts: false,
+		});
+	} catch (error) {
+		const message =
+			error instanceof Error && error.message
+				? error.message
+				: "Unknown error while parsing CSV";
+		throw new Error(`Failed to parse CSV data: ${message}`);
+	}
+}
+
+/**
+ * Drop CSV transactions outside the statement window, failing when none remain
+ */
+function applyStatementWindow(
+	parseResult: CSVParseResult,
+	statementWindowEnd: ReturnType<typeof normalizeStatementDate>,
+	narrativeNotes: string[],
+): CSVParseResult {
+	const statementWindowBounds = {
+		...(statementWindowEnd !== undefined && {
+			endDate: statementWindowEnd,
+		}),
+	};
+	const clampedCsv = clampCSVToStatementWindow(parseResult, {
+		...statementWindowBounds,
+	});
+	if (clampedCsv.excludedCount > 0) {
+		narrativeNotes.push(
+			`Filtered ${clampedCsv.excludedCount} CSV transaction(s) outside statement window ${formatStatementWindow(statementWindowBounds)}.`,
+		);
+	}
+
+	if (
+		clampedCsv.windowApplied &&
+		clampedCsv.parseResult.transactions.length === 0
+	) {
+		throw new Error(
+			`No CSV transactions remain after applying statement window ${formatStatementWindow(clampedCsv.windowApplied)}.`,
+		);
+	}
+
+	return clampedCsv.parseResult;
+}
+
+function resolveSinceDate(
+	transactions: BankTransaction[],
+	narrativeNotes: string[],
+): {
+	sinceDate: Date;
+	dateWindowSource: "csv_min_date_with_buffer" | "fallback_90_days";
+} {
+	if (transactions.length > 0) {
+		return {
+			sinceDate: inferSinceDateFromTransactions(transactions),
+			dateWindowSource: "csv_min_date_with_buffer",
+		};
+	}
+
+	narrativeNotes.push(
+		"CSV contained no parsable transactions for date detection; fetched the last 90 days from YNAB.",
+	);
+	return {
+		sinceDate: fallbackSinceDate(),
+		dateWindowSource: "fallback_90_days",
+	};
+}
+
+/**
+ * Decide whether bank amounts must be negated: explicit sign_convention wins;
+ * "auto" detects from data and falls back to the account-type default.
+ */
+function resolveSignInversion(
+	signConvention: SignConvention,
+	defaultInvert: boolean,
+	bankTransactions: BankTransaction[],
+	normalizedYNAB: ReturnType<typeof normalizeYNABTransactions>,
+	narrativeNotes: string[],
+): boolean {
+	if (signConvention === "invert") {
+		narrativeNotes.push(
+			"Using explicit sign_convention=invert; bank amounts will be negated.",
+		);
+		return true;
+	}
+	if (signConvention === "as_is") {
+		narrativeNotes.push(
+			"Using explicit sign_convention=as_is; bank amounts used as-is.",
+		);
+		return false;
+	}
+
+	if (bankTransactions.length === 0 || normalizedYNAB.length === 0) {
+		return defaultInvert;
+	}
+
+	const needsInversion = detectSignInversion(bankTransactions, normalizedYNAB);
+	if (needsInversion === null) {
+		return defaultInvert;
+	}
+
+	if (needsInversion !== defaultInvert) {
+		narrativeNotes.push(
+			needsInversion
+				? "Detected bank CSV amounts opposite YNAB; inverting bank amounts for matching."
+				: "Detected bank CSV amounts already align with YNAB; using CSV amounts as-is.",
+		);
+	}
+	return needsInversion;
+}
+
+function buildExecutionSummary(
+	executionData: LegacyReconciliationResult,
+	wantsBalanceVerification: boolean,
+): ReconcileExecutionSummary {
+	const balanceRecon = executionData.balance_reconciliation;
+	const balanceStatus: ReconcileExecutionSummary["balance_status"] =
+		!wantsBalanceVerification
+			? "not_verified"
+			: balanceRecon?.status === "balanced"
+				? "balanced"
+				: "unbalanced";
+
+	return {
+		transactions_created: executionData.summary.transactions_created,
+		transactions_updated: executionData.summary.transactions_updated,
+		dates_adjusted: executionData.summary.dates_adjusted,
+		dry_run: executionData.summary.dry_run,
+		balance_status: balanceStatus,
+		recommendations: executionData.recommendations,
+	};
+}
 
 function mapCsvDateFormatToHint(
 	format: string | undefined,
