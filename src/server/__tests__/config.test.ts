@@ -51,4 +51,25 @@ describe("Config Module", () => {
 		envWithoutLog.LOG_LEVEL = undefined; // Ensure LOG_LEVEL is not set
 		expect(loadConfig(envWithoutLog).LOG_LEVEL).toBe("info");
 	});
+
+	it("falls back per key when a runtime value is invalid", async () => {
+		const { getRuntimeConfig, isDeltaEnabled } = await import("../config");
+		process.env.YNAB_MCP_ENABLE_DELTA = "true";
+		process.env.LOG_LEVEL = "debug";
+		process.env.RATE_LIMIT_LOGGING = "yes";
+
+		const config = getRuntimeConfig();
+		expect(config.RATE_LIMIT_LOGGING).toBe(false);
+		expect(config.LOG_LEVEL).toBe("debug");
+		expect(isDeltaEnabled()).toBe(true);
+	});
+
+	it("treats an invalid delta flag as disabled", async () => {
+		const { getRuntimeConfig, isDeltaEnabled } = await import("../config");
+		process.env.YNAB_MCP_ENABLE_DELTA = "yes";
+		process.env.LOG_LEVEL = "loud";
+
+		expect(isDeltaEnabled()).toBe(false);
+		expect(getRuntimeConfig().LOG_LEVEL).toBe("info");
+	});
 });

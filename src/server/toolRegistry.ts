@@ -301,14 +301,16 @@ export class ToolRegistry {
 			);
 		}
 
-		const authFailure = await this.authenticate(tool, options.accessToken);
-		if (authFailure) {
-			return authFailure;
+		const auth = await this.authenticate(tool, options.accessToken);
+		if (!auth.ok) {
+			return auth.result;
 		}
 
+		const policy = this.confirmationPolicyFor(tool);
 		const providedArguments = { ...(options.arguments ?? {}) };
 		const confirmationToken = this.extractConfirmationToken(
 			tool,
+			policy,
 			providedArguments,
 		);
 		if (!confirmationToken.ok) {
@@ -339,6 +341,7 @@ export class ToolRegistry {
 			return await secured((validated) =>
 				this.runValidated(
 					tool,
+					policy,
 					options,
 					rawArguments,
 					validated,
@@ -353,39 +356,48 @@ export class ToolRegistry {
 	private async authenticate(
 		tool: AnyRegisteredTool,
 		accessToken: string,
-	): Promise<CallToolResult | undefined> {
+	): Promise<ExecutionStep<void>> {
 		if (!this.deps.validateAccessToken) {
-			return undefined;
+			return { ok: true, value: undefined };
 		}
 		try {
 			await this.deps.validateAccessToken(accessToken);
-			return undefined;
+			return { ok: true, value: undefined };
 		} catch (error) {
 			if (this.isCallToolResult(error)) {
-				return error;
+				return { ok: false, result: error };
 			}
-			return this.deps.errorHandler.handleError(
-				error,
-				`authenticating ${tool.name}`,
-			);
+			return {
+				ok: false,
+				result: this.deps.errorHandler.handleError(
+					error,
+					`authenticating ${tool.name}`,
+				),
+			};
 		}
 	}
 
 	/**
 	 * Validates and removes confirmation_token from the provided arguments so it
 	 * never reaches the tool's input schema. A token is only accepted by tools
-	 * that require write confirmation.
+	 * that require write confirmation. null and "" count as absent, since some
+	 * clients send every optional field that way.
 	 */
 	private extractConfirmationToken(
 		tool: AnyRegisteredTool,
+		policy: WriteSafetyPolicy | undefined,
 		providedArguments: Record<string, unknown>,
 	): ExecutionStep<string | undefined> {
 		const confirmationValue = providedArguments["confirmation_token"];
 		delete providedArguments["confirmation_token"];
-		if (confirmationValue === undefined) {
+		if (
+			confirmationValue === undefined ||
+			confirmationValue === null ||
+			confirmationValue === ""
+		) {
 			return { ok: true, value: undefined };
 		}
-		if (!this.confirmationPolicyFor(tool)) {
+		if (!policy) {
 			return {
 				ok: false,
 				result: this.deps.errorHandler.createValidationError(
@@ -467,12 +479,13 @@ export class ToolRegistry {
 	}
 
 	/**
-	 * Runs the handler for schema-validated input. Every failure past this point,
-	 * including write-safety checks and output validation, is reported as an
-	 * execution error rather than a parameter error.
+	 * Runs the handler for schema-validated input. Thrown failures, including
+	 * output validation, are reported as execution errors; a rejected
+	 * confirmation token is returned as a validation error.
 	 */
 	private async runValidated(
 		tool: AnyRegisteredTool,
+		policy: WriteSafetyPolicy | undefined,
 		options: ToolExecutionOptions,
 		rawArguments: Record<string, unknown>,
 		validated: Record<string, unknown>,
@@ -480,7 +493,6 @@ export class ToolRegistry {
 	): Promise<CallToolResult> {
 		try {
 			const context = this.buildExecutionContext(tool, options, rawArguments);
-			const policy = this.confirmationPolicyFor(tool);
 			if (!policy) {
 				return await this.invokeHandler(tool, validated, context);
 			}

@@ -6,7 +6,7 @@
  */
 
 import type { CacheManager } from "./cacheManager.js";
-import { isDeltaEnabled } from "./config.js";
+import { getRuntimeConfig, isDeltaEnabled } from "./config.js";
 import type { DeltaCache } from "./deltaCache.js";
 import type { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
 
@@ -328,14 +328,11 @@ export class DiagnosticManager {
 			const deltaHitRate =
 				totalDeltaRequests > 0 ? deltaStats.deltaHits / totalDeltaRequests : 0;
 			diagnostics["delta"] = {
-				// Effective value from the parsed runtime config. It can differ from
-				// feature_flag below (e.g. when config parsing fell back to defaults);
-				// that disagreement is the signal, so both are reported.
 				enabled: isDeltaEnabled(),
 				knowledge_entries: Object.keys(knowledgeStats.entries).length, // Canonical count from entries
 				knowledge_stats: knowledgeStats.entries,
-				// Raw env value, as set by the user
-				feature_flag: process.env["YNAB_MCP_ENABLE_DELTA"] ?? "false",
+				// String form of `enabled`, kept for output compatibility
+				feature_flag: getRuntimeConfig().YNAB_MCP_ENABLE_DELTA ?? "false",
 				delta_hits: deltaStats.deltaHits,
 				delta_misses: deltaStats.deltaMisses,
 				delta_hit_rate: Number(deltaHitRate.toFixed(4)),

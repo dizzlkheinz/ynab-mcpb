@@ -205,7 +205,11 @@ describe("diagnostics module", () => {
 							}),
 						);
 					} finally {
-						process.env.NODE_ENV = originalEnv;
+						if (originalEnv === undefined) {
+							Reflect.deleteProperty(process.env, "NODE_ENV");
+						} else {
+							process.env.NODE_ENV = originalEnv;
+						}
 					}
 				});
 			});
@@ -380,11 +384,10 @@ describe("diagnostics module", () => {
 					}
 				});
 
-				it("should report delta disabled when the env flag is not in effect", async () => {
+				it("should keep delta enabled when a sibling runtime key is invalid", async () => {
 					const originalDelta = process.env.YNAB_MCP_ENABLE_DELTA;
 					const originalRateLimitLogging = process.env.RATE_LIMIT_LOGGING;
 					process.env.YNAB_MCP_ENABLE_DELTA = "true";
-					// An invalid sibling key makes runtime config fall back to defaults
 					process.env.RATE_LIMIT_LOGGING = "yes";
 					resetRuntimeConfig();
 
@@ -394,7 +397,7 @@ describe("diagnostics module", () => {
 						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
 							expect.objectContaining({
 								delta: expect.objectContaining({
-									enabled: false,
+									enabled: true,
 									feature_flag: "true",
 								}),
 							}),

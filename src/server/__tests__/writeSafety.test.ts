@@ -360,6 +360,48 @@ describe("ToolRegistry write safety enforcement", () => {
 		expect(readHandler).not.toHaveBeenCalled();
 	});
 
+	it("treats a null or empty confirmation_token as absent", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+			),
+		);
+		const mutationHandler = registerMutation(
+			registry,
+			"ynab_create_transaction",
+		);
+		const readHandler = vi.fn(async () => result({}));
+		registry.register({
+			name: "ynab_get_transaction",
+			description: "Read tool",
+			inputSchema: z.object({ id: z.string() }).strict(),
+			handler: readHandler,
+		});
+
+		for (const empty of [null, ""]) {
+			const preview = await registry.executeTool({
+				name: "ynab_create_transaction",
+				accessToken: "token",
+				arguments: { id: "txn-1", confirmation_token: empty },
+			});
+			expect(preview.isError).not.toBe(true);
+			expect(confirmationToken(preview)).toBe(FIXED_TOKEN);
+			expect(mutationHandler).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					input: { id: "txn-1", dry_run: true },
+				}),
+			);
+
+			const read = await registry.executeTool({
+				name: "ynab_get_transaction",
+				accessToken: "token",
+				arguments: { id: "txn-1", confirmation_token: empty },
+			});
+			expect(read.isError).not.toBe(true);
+		}
+		expect(readHandler).toHaveBeenCalledTimes(2);
+	});
+
 	it("does not issue a confirmation token when the preview handler errors", async () => {
 		const registry = new ToolRegistry(
 			createDependencies(

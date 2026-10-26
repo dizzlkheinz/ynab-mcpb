@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `confirmation_token` is now rejected on tools that do not require write confirmation (read tools, or any tool when `YNAB_MCP_WRITE_MODE=enabled`) instead of being silently ignored
+- `confirmation_token` is now rejected on tools that do not require write confirmation (read tools, or any tool when `YNAB_MCP_WRITE_MODE=enabled`) instead of being silently ignored; `null` and `""` are treated as absent
+
+### Fixed
+
+- An invalid runtime env value (e.g. `RATE_LIMIT_LOGGING=yes`) now falls back to its own default instead of resetting every runtime setting, including `YNAB_MCP_ENABLE_DELTA` and `LOG_LEVEL`
 
 ## [0.29.1] - 2026-10-20
 

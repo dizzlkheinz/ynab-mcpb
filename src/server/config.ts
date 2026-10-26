@@ -77,22 +77,26 @@ export function resetAppConfig(): void {
  * Runtime-infrastructure settings that must be readable without YNAB
  * credentials. Standalone imports (tests, tooling) must not require
  * YNAB_ACCESS_TOKEN, so this schema only covers optional keys and never
- * throws.
+ * throws. Each key falls back to its default on its own, so one invalid value
+ * does not discard the valid ones.
  */
 const runtimeEnvSchema = z.object({
 	LOG_LEVEL: z
 		.enum(["trace", "debug", "info", "warn", "error", "fatal"])
-		.default("info"),
-	YNAB_EXPORT_PATH: z.string().optional(),
-	XDG_DOCUMENTS_DIR: z.string().optional(),
-	YNAB_MCP_ENABLE_DELTA: z.enum(["true", "false"]).optional(),
+		.default("info")
+		.catch("info"),
+	YNAB_EXPORT_PATH: z.string().optional().catch(undefined),
+	XDG_DOCUMENTS_DIR: z.string().optional().catch(undefined),
+	YNAB_MCP_ENABLE_DELTA: z.enum(["true", "false"]).optional().catch(undefined),
 	RATE_LIMIT_LOGGING: z
 		.enum(["true", "false"])
 		.optional()
+		.catch(undefined)
 		.transform((value) => value === "true"),
 	VERBOSE_TESTS: z
 		.enum(["true", "false"])
 		.optional()
+		.catch(undefined)
 		.transform((value) => value === "true"),
 });
 
@@ -107,10 +111,7 @@ let cachedRuntimeConfig: RuntimeConfig | undefined;
  */
 export function getRuntimeConfig(): RuntimeConfig {
 	if (!cachedRuntimeConfig) {
-		const result = runtimeEnvSchema.safeParse(process.env);
-		cachedRuntimeConfig = result.success
-			? result.data
-			: runtimeEnvSchema.parse({});
+		cachedRuntimeConfig = runtimeEnvSchema.parse(process.env);
 	}
 	return cachedRuntimeConfig;
 }

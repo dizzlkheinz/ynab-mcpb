@@ -43,7 +43,7 @@ describeIntegration("Delta fetcher scheduled transactions integration", () => {
 	afterEach(() => {
 		Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
 		if (previousNodeEnv === undefined) {
-			process.env.NODE_ENV = undefined;
+			Reflect.deleteProperty(process.env, "NODE_ENV");
 		} else {
 			process.env.NODE_ENV = previousNodeEnv;
 		}

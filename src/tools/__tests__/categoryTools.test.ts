@@ -75,7 +75,7 @@ describe("Category Tools", () => {
 	afterAll(() => {
 		// Restore original NODE_ENV value
 		if (originalNodeEnv === undefined) {
-			process.env.NODE_ENV = undefined;
+			Reflect.deleteProperty(process.env, "NODE_ENV");
 		} else {
 			process.env.NODE_ENV = originalNodeEnv;
 		}
