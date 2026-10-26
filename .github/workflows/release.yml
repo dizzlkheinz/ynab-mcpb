@@ -36,16 +36,16 @@ jobs:
       SKIP_ENV_VALIDATION: true
     steps:
       - name: Checkout (default ref)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Checkout (specified ref)
         if: ${{ inputs.ref != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           cache: npm
@@ -83,7 +83,7 @@ jobs:
         run: mcpb pack . "${{ steps.meta.outputs.file }}"
 
       - name: Upload or create release with asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
           name: ${{ inputs.release_tag || github.ref_name }}
