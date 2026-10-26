@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-10-26
+
 ### Changed
 
 - `confirmation_token` is now rejected on tools that do not require write confirmation (read tools, or any tool when `YNAB_MCP_WRITE_MODE=enabled`) instead of being silently ignored; `null` and `""` are treated as absent
