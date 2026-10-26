@@ -580,6 +580,9 @@ async function readCsvFromPath(
 ): Promise<string> {
 	const pathCandidates = resolveCsvPathCandidates(csvFilePath);
 	let lastReadError: unknown;
+	// A candidate that exists but can't be read (EACCES, EISDIR, ...) matters
+	// more than an empty candidate, so it must not be masked by one.
+	let lastAccessError: unknown;
 	let foundEmptyFile = false;
 
 	for (const candidatePath of pathCandidates) {
@@ -598,22 +601,29 @@ async function readCsvFromPath(
 			return csvContent;
 		} catch (error) {
 			lastReadError = error;
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+				lastAccessError = error;
+			}
 		}
 	}
 
-	if (foundEmptyFile) {
+	if (foundEmptyFile && lastAccessError === undefined) {
 		// The caller reports empty CSV content
 		return "";
 	}
 
+	const reportedError = lastAccessError ?? lastReadError;
 	const attemptedPaths =
 		pathCandidates.length > 0 ? pathCandidates.join(", ") : csvFilePath;
 	const message =
-		lastReadError instanceof Error && lastReadError.message
-			? lastReadError.message
+		reportedError instanceof Error && reportedError.message
+			? reportedError.message
 			: "Unknown error while reading CSV file";
+	const emptyNote = foundEmptyFile
+		? " Other candidate path(s) were empty."
+		: "";
 	throw new Error(
-		`Failed to read CSV file. Tried path(s): ${attemptedPaths}. ${message}. If this path is from another runtime (for example an uploaded sandbox file), pass the CSV via csv_data instead.`,
+		`Failed to read CSV file. Tried path(s): ${attemptedPaths}. ${message}.${emptyNote} If this path is from another runtime (for example an uploaded sandbox file), pass the CSV via csv_data instead.`,
 	);
 }
 

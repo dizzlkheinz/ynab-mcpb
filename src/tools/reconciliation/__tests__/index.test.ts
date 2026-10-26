@@ -3,8 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type * as ynab from "ynab";
+import type { DeltaCache } from "../../../server/deltaCache.js";
 import { DeltaFetcher } from "../../deltaFetcher.js";
 import { handleReconcileAccount, ReconcileAccountSchema } from "../index.js";
+
+// These tests stub ynabAPI directly, so the fetcher's delta cache is never used
+const unusedDeltaCache = {} as unknown as DeltaCache;
 
 describe("ReconcileAccountSchema", () => {
 	it("parses params and respects max_suggestions_in_output", () => {
@@ -117,7 +121,7 @@ describe("handleReconcileAccount", () => {
 					csv_file_path: csvPath,
 					statement_balance: -10,
 				},
-				{ deltaFetcher: new DeltaFetcher(ynabAPI, {} as any) },
+				{ deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache) },
 			);
 
 			expect(result.isError).toBe(true);
@@ -132,7 +136,7 @@ describe("handleReconcileAccount", () => {
 	it("always returns unmatched_only structured content", async () => {
 		const ynabAPI = buildEmptyAccountAPI();
 
-		const deltaFetcher = new DeltaFetcher(ynabAPI, {} as any);
+		const deltaFetcher = new DeltaFetcher(ynabAPI, unusedDeltaCache);
 
 		const result = await handleReconcileAccount(
 			ynabAPI,

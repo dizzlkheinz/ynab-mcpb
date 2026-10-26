@@ -1,7 +1,7 @@
 import type * as ynab from "ynab";
 import type { NewTransaction } from "ynab";
 import type { ProgressCallback } from "../../server/toolRegistry.js";
-import { addMilli, toMoneyValue } from "../../utils/money.js";
+import { addMilli } from "../../utils/money.js";
 import {
 	correlateResults,
 	generateCorrelationKey,
@@ -140,8 +140,16 @@ interface ExecutionState {
 	/** Progress total; shrinks as steps settle how much work they actually do */
 	totalOperations: number;
 	completedOperations: number;
+	/** Last progress value sent; MCP requires each notification to increase it */
+	lastReportedProgress: number;
 	clearedDeltaMilli: number;
 	balanceAligned: boolean;
+	/**
+	 * Set when a chunk of cleared-status updates failed. The remaining cleared
+	 * delta then reflects failed writes rather than missing bank transactions,
+	 * so the auto-unclear pass must not try to compensate for it.
+	 */
+	clearedUpdatesFailed: boolean;
 	accountSnapshotDirty: boolean;
 	bulkOperationDetails: BulkOperationDetails | undefined;
 }
@@ -250,11 +258,13 @@ export async function executeReconciliation(
 			plannedOperations.unclear,
 		balanceToleranceMilli: DEFAULT_TOLERANCE_CENTS * CENTS_TO_MILLI,
 		completedOperations: 0,
+		lastReportedProgress: 0,
 		clearedDeltaMilli: addMilli(
 			initialAccount.cleared_balance ?? 0,
 			-statementTargetMilli,
 		),
 		balanceAligned: false,
+		clearedUpdatesFailed: false,
 		accountSnapshotDirty: false,
 		bulkOperationDetails: undefined,
 	};
@@ -292,7 +302,6 @@ export async function executeReconciliation(
 
 	// STEP 3: Auto-unclear YNAB transactions missing from bank
 	await unclearMissingTransactions(state, orderedUnmatchedYNAB);
-	await finishProgress(state);
 
 	// STEP 4: Mark all matched transactions as reconciled when balance aligns
 	if (
@@ -401,17 +410,31 @@ function orderUnmatchedYnabInStatementWindow(
 // Shared state helpers
 // ============================================================================
 
+/**
+ * Send a progress notification. Progress is advisory, so a failing callback is
+ * ignored rather than allowed to abort or misreport work YNAB already applied.
+ */
 async function reportProgress(
 	state: ExecutionState,
 	message: string,
 ): Promise<void> {
 	const { sendProgress } = state.options;
-	if (sendProgress && state.totalOperations > 0) {
+	if (
+		!sendProgress ||
+		state.totalOperations <= 0 ||
+		state.completedOperations <= state.lastReportedProgress
+	) {
+		return;
+	}
+	state.lastReportedProgress = state.completedOperations;
+	try {
 		await sendProgress({
 			progress: state.completedOperations,
 			total: state.totalOperations,
 			message,
 		});
+	} catch {
+		// Progress notifications are non-critical; keep reconciling.
 	}
 }
 
@@ -424,21 +447,6 @@ function settleProgressTotal(
 	remainingOperations: number,
 ): void {
 	state.totalOperations = state.completedOperations + remainingOperations;
-}
-
-/** Settle the progress total and close out progress if the total shrank */
-async function finishProgress(state: ExecutionState): Promise<void> {
-	const previousTotal = state.totalOperations;
-	settleProgressTotal(state, 0);
-	if (
-		state.completedOperations > 0 &&
-		state.totalOperations !== previousTotal
-	) {
-		await reportProgress(
-			state,
-			`Completed ${state.completedOperations} of ${state.totalOperations} operations`,
-		);
-	}
 }
 
 function applyClearedDelta(state: ExecutionState, delta: number): void {
@@ -492,18 +500,10 @@ function recordAlignmentIfNeeded(
 
 function recordBalanceCheckpoint(state: ExecutionState, trigger: string): void {
 	const { currencyCode } = state.options;
-	const deltaDisplay = toMoneyValue(
-		state.clearedDeltaMilli,
-		currencyCode,
-	).value_display;
-	const toleranceDisplay = toMoneyValue(
-		state.balanceToleranceMilli,
-		currencyCode,
-	).value_display;
 	state.actions.push({
 		type: "balance_checkpoint",
 		transaction: null,
-		reason: `Cleared delta ${deltaDisplay} within ±${toleranceDisplay} after ${trigger} - halting newest-to-oldest pass`,
+		reason: `Cleared delta ${formatDisplay(state.clearedDeltaMilli, currencyCode)} within ±${formatDisplay(state.balanceToleranceMilli, currencyCode)} after ${trigger} - halting newest-to-oldest pass`,
 	});
 }
 
@@ -513,25 +513,31 @@ function httpStatusSuffix(ynabError: NormalizedYnabError): string {
 
 /**
  * Send updates in chunks of MAX_BULK_UPDATE_CHUNK, recording a failure action
- * per failed chunk and pausing between chunks to avoid rate limiting.
+ * per failed chunk and pausing between chunks to avoid rate limiting. Returns
+ * how many payloads were in chunks that failed without propagating.
  */
 async function runChunkedUpdates(
 	state: ExecutionState,
 	payloads: ynab.SaveTransactionWithIdOrImportId[],
 	config: ChunkedUpdateConfig,
-): Promise<void> {
+): Promise<number> {
 	const { ynabAPI, budgetId } = state.options;
 	const chunks = chunkArray(payloads, MAX_BULK_UPDATE_CHUNK);
+	let failedPayloads = 0;
 
 	for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
 		const chunk = chunks[chunkIdx];
 		if (!chunk) continue;
+		// Only the API call is guarded: once YNAB has applied a chunk, nothing
+		// that goes wrong while recording it may be treated as a failed chunk.
+		let updatedTransactions: ynab.TransactionDetail[] | undefined;
 		try {
 			const response = await ynabAPI.transactions.updateTransactions(budgetId, {
 				transactions: chunk,
 			});
-			await config.onChunkSuccess(response.data.transactions ?? []);
+			updatedTransactions = response.data.transactions ?? [];
 		} catch (error) {
+			failedPayloads += chunk.length;
 			const ynabError = normalizeYnabError(error);
 			const failureReason = ynabError.message || "Unknown error occurred";
 			state.actions.push({
@@ -545,12 +551,16 @@ async function runChunkedUpdates(
 			}
 			config.onChunkFailure?.(chunk);
 		}
+		if (updatedTransactions) {
+			await config.onChunkSuccess(updatedTransactions);
+		}
 
 		// Add delay between chunks to avoid rate limiting (except after last chunk)
 		if (chunkIdx < chunks.length - 1) {
 			await sleep(BATCH_DELAY_MS);
 		}
 	}
+	return failedPayloads;
 }
 
 // ============================================================================
@@ -771,15 +781,11 @@ async function bulkCreateMissingTransactions(
 			if (state.balanceAligned) break;
 			bulkDetails.chunks_processed += 1;
 			const chunkIndex = bulkDetails.chunks_processed;
+			// Only the API call falls back to sequential creation: once YNAB has
+			// created the chunk, retrying it would create every entry twice.
+			let responseData: ynab.SaveTransactionsResponseData;
 			try {
-				await processBulkChunk(state, bulkDetails, chunk, chunkIndex);
-				bulkDetails.bulk_successes += 1;
-				// Report progress after successful chunk processing
-				state.completedOperations += chunk.length;
-				await reportProgress(
-					state,
-					`Created ${state.completedOperations} of ${state.totalOperations} transactions`,
-				);
+				responseData = await sendBulkChunk(state, chunk);
 			} catch (error) {
 				await fallBackToSequential(
 					state,
@@ -788,7 +794,22 @@ async function bulkCreateMissingTransactions(
 					chunkIndex,
 					error,
 				);
+				continue;
 			}
+			recordBulkChunkResults(
+				state,
+				bulkDetails,
+				chunk,
+				chunkIndex,
+				responseData,
+			);
+			bulkDetails.bulk_successes += 1;
+			// Report progress after successful chunk processing
+			state.completedOperations += chunk.length;
+			await reportProgress(
+				state,
+				`Created ${state.completedOperations} of ${state.totalOperations} transactions`,
+			);
 		}
 	}
 }
@@ -822,18 +843,24 @@ function collectBulkBatch(
 	return { batch, nextIndex };
 }
 
-async function processBulkChunk(
+async function sendBulkChunk(
+	state: ExecutionState,
+	chunk: PreparedBulkCreateEntry[],
+): Promise<ynab.SaveTransactionsResponseData> {
+	const { ynabAPI, budgetId } = state.options;
+	const response = await ynabAPI.transactions.createTransactions(budgetId, {
+		transactions: chunk.map((entry) => entry.saveTransaction),
+	});
+	return response.data;
+}
+
+function recordBulkChunkResults(
 	state: ExecutionState,
 	bulkDetails: BulkOperationDetails,
 	chunk: PreparedBulkCreateEntry[],
 	chunkIndex: number,
-): Promise<void> {
-	const { ynabAPI, budgetId } = state.options;
-	const payload = chunk.map((entry) => entry.saveTransaction);
-	const response = await ynabAPI.transactions.createTransactions(budgetId, {
-		transactions: payload,
-	});
-	const responseData = response.data;
+	responseData: ynab.SaveTransactionsResponseData,
+): void {
 	const duplicateImportIds = new Set(responseData.duplicate_import_ids ?? []);
 	const correlationRequests = chunk.map((entry) =>
 		toCorrelationPayload(entry.saveTransaction),
@@ -992,6 +1019,7 @@ async function updateMatchedTransactions(
 				if (planned.flags.needsDateUpdate) state.summary.dates_adjusted -= 1;
 				if (planned.flags.needsClearedUpdate) {
 					clearedDelta = addMilli(clearedDelta, -ynabTransaction.amount);
+					state.clearedUpdatesFailed = true;
 				}
 			}
 			revertClearedDelta(state, clearedDelta, "failed update chunk");
@@ -1092,9 +1120,20 @@ async function unclearMissingTransactions(
 ): Promise<void> {
 	const { params } = state.options;
 	const shouldRunSanityPass =
-		params.auto_unclear_missing && !state.balanceAligned;
+		params.auto_unclear_missing &&
+		!state.balanceAligned &&
+		!state.clearedUpdatesFailed;
 
 	recordUnclearDiagnostics(state, orderedUnmatchedYNAB, shouldRunSanityPass);
+
+	if (params.auto_unclear_missing && state.clearedUpdatesFailed) {
+		state.actions.push({
+			type: "balance_checkpoint",
+			transaction: null,
+			reason:
+				"Skipped marking missing transactions uncleared - some cleared-status updates failed, so the remaining balance gap is not evidence of missing bank transactions. Re-run reconciliation after resolving the failures.",
+		});
+	}
 
 	if (!shouldRunSanityPass) {
 		return;
@@ -1161,7 +1200,7 @@ function recordUnclearDiagnostics(
 	state.actions.push({
 		type: "diagnostic_step3_entry",
 		transaction: null,
-		reason: `STEP 3 diagnostics: auto_unclear_missing=${params.auto_unclear_missing}, balanceAligned=${state.balanceAligned}, shouldRunSanityPass=${shouldRunSanityPass}, orderedUnmatchedYNAB.length=${orderedUnmatchedYNAB.length}`,
+		reason: `STEP 3 diagnostics: auto_unclear_missing=${params.auto_unclear_missing}, balanceAligned=${state.balanceAligned}, clearedUpdatesFailed=${state.clearedUpdatesFailed}, shouldRunSanityPass=${shouldRunSanityPass}, orderedUnmatchedYNAB.length=${orderedUnmatchedYNAB.length}`,
 	});
 
 	if (orderedUnmatchedYNAB.length === 0) {
@@ -1256,7 +1295,7 @@ async function reconcileMatchedTransactions(
 		return;
 	}
 
-	await runChunkedUpdates(state, transactionsToReconcile, {
+	const failedCount = await runChunkedUpdates(state, transactionsToReconcile, {
 		failureType: "batch_reconcile_failed",
 		failureVerb: "reconcile",
 		onChunkSuccess: (reconciledTransactions) => {
@@ -1279,10 +1318,18 @@ async function reconcileMatchedTransactions(
 		},
 	});
 
+	const reconciledCount = transactionsToReconcile.length - failedCount;
+	if (reconciledCount === 0) {
+		return;
+	}
+	const failureNote =
+		failedCount > 0
+			? ` (${failedCount} could not be reconciled - see batch_reconcile_failed)`
+			: "";
 	state.actions.push({
 		type: "reconciliation_complete",
 		transaction: null,
-		reason: `Marked ${transactionsToReconcile.length} matched transaction(s) as reconciled - balance aligned within tolerance`,
+		reason: `Marked ${reconciledCount} of ${transactionsToReconcile.length} matched transaction(s) as reconciled - balance aligned within tolerance${failureNote}`,
 	});
 }
 

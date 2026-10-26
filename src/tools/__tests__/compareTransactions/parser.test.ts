@@ -484,7 +484,7 @@ describe("parser", () => {
 			]);
 		});
 
-		test("should skip debit/credit rows where both values are blank or zero", () => {
+		test("should skip blank debit/credit rows but keep explicit zero amounts", () => {
 			const csvContent =
 				"Date,Description,Debit,Credit\n09/15/2023,Balance forward,,\n09/16/2023,Zero row,0.00,0.00\n09/17/2023,Real,12.00,";
 			const format: CSVFormat = {
@@ -499,9 +499,28 @@ describe("parser", () => {
 
 			const transactions = parseBankCSV(csvContent, format);
 
-			expect(transactions).toHaveLength(1);
-			expect(transactions[0].description).toBe("Real");
-			expect(transactions[0].amount).toBe(-12000);
+			expect(transactions.map((t) => [t.description, t.amount])).toEqual([
+				["Zero row", 0],
+				["Real", -12000],
+			]);
+		});
+
+		test("should treat signed credits as inflows", () => {
+			const csvContent =
+				"Date,Description,Debit,Credit\n09/15/2023,Minus,,-12.50\n09/16/2023,Parens,,(7.25)";
+			const format: CSVFormat = {
+				date_column: "Date",
+				description_column: "Description",
+				debit_column: "Debit",
+				credit_column: "Credit",
+				date_format: "MM/DD/YYYY",
+				has_header: true,
+				delimiter: ",",
+			};
+
+			const transactions = parseBankCSV(csvContent, format);
+
+			expect(transactions.map((t) => t.amount)).toEqual([12500, 7250]);
 		});
 
 		test("should reject named debit/credit columns when there is no header", () => {

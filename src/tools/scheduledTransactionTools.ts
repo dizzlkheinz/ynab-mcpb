@@ -296,11 +296,12 @@ export async function handleCreateScheduledTransaction(
 				request: { ...request, amount: milliunitsToAmount(params.amount) },
 			});
 		}
+		// Resolve before writing so a missing dependency can't fail a write that succeeded
+		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		const response = await api.scheduledTransactions.createScheduledTransaction(
 			budgetId,
 			{ scheduled_transaction: request },
 		);
-		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			scheduled_transaction: normalizeScheduledTransaction(
@@ -371,12 +372,12 @@ export async function handleUpdateScheduledTransaction(
 				},
 			});
 		}
+		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		const response = await api.scheduledTransactions.updateScheduledTransaction(
 			budgetId,
 			id,
 			{ scheduled_transaction: request },
 		);
-		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			scheduled_transaction: normalizeScheduledTransaction(
@@ -408,11 +409,11 @@ export async function handleDeleteScheduledTransaction(
 				request: { scheduled_transaction_id: params.scheduled_transaction_id },
 			});
 		}
+		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		await api.scheduledTransactions.deleteScheduledTransaction(
 			budgetId,
 			params.scheduled_transaction_id,
 		);
-		const deltaCache = requireDeltaCache(deps, DELTA_CACHE_REQUIRED);
 		deltaCache.forceFullRefresh(budgetId, "scheduled_transactions");
 		return asResult({
 			success: true,

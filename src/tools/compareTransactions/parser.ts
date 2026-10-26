@@ -532,20 +532,22 @@ function toColumnIndex(column: string | number): number {
 
 /**
  * Convert separate debit/credit values into one signed raw amount: debits
- * negative (whatever sign or parentheses the bank used), credits as given,
- * and "" when neither is non-zero so the row is skipped
+ * negative and credits positive, whatever sign or parentheses the bank used.
+ * Explicit zeros give "0"; "" only when neither cell holds a number, so blank
+ * rows such as "balance forward" lines are skipped.
  */
 function combineDebitCredit(debitVal: string, creditVal: string): string {
 	const debitMagnitude = debitVal.replace(/[^\d.]/g, "");
+	const creditMagnitude = creditVal.replace(/[^\d.]/g, "");
 	const debitNum = Number.parseFloat(debitMagnitude);
-	const creditNum = Number.parseFloat(creditVal.replace(/[^\d.-]/g, ""));
+	const creditNum = Number.parseFloat(creditMagnitude);
 	if (!Number.isNaN(debitNum) && debitNum !== 0) {
 		return `-${debitMagnitude}`;
 	}
 	if (!Number.isNaN(creditNum) && creditNum !== 0) {
-		return creditVal;
+		return creditMagnitude;
 	}
-	return "";
+	return Number.isNaN(debitNum) && Number.isNaN(creditNum) ? "" : "0";
 }
 
 /**
