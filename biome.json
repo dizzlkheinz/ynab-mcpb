@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
 	"files": {
 		"includes": [
 			"**",
@@ -13,6 +13,14 @@
 			"!**/test-results.json",
 			"!**/.vitest"
 		]
+	},
+	"markdown": {
+		"formatter": { "enabled": false },
+		"linter": { "enabled": false }
+	},
+	"yaml": {
+		"formatter": { "enabled": false },
+		"linter": { "enabled": false }
 	},
 	"linter": {
 		"rules": {

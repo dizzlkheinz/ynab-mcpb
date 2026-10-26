@@ -93,7 +93,7 @@ function filterByDateRange(
 	statementEndDate?: string,
 ): { inRange: YNABTransaction[]; outsideRange: YNABTransaction[] } {
 	// Validate dateToleranceDays is non-negative
-	const safeToleranceDays = dateToleranceDays < 0 ? 0 : dateToleranceDays;
+	const safeToleranceDays = Math.max(dateToleranceDays, 0);
 	if (dateToleranceDays < 0) {
 		console.warn(
 			`[filterByDateRange] dateToleranceDays must be non-negative, got ${dateToleranceDays}. Using 0.`,

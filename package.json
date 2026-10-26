@@ -48,10 +48,10 @@
 		"node": ">=24.0.0"
 	},
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.32.1",
+		"@modelcontextprotocol/sdk": "^1.32.2",
 		"chrono-node": "^2.10.3",
 		"date-fns": "^4.4.0",
-		"dotenv": "^18.0.8",
+		"dotenv": "^18.0.9",
 		"fuzzball": "^2.2.6",
 		"papaparse": "^5.7.0",
 		"ynab": "^4.5.0",
@@ -59,7 +59,7 @@
 		"zod-validation-error": "^5.0.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.15",
+		"@biomejs/biome": "^2.6.3",
 		"@types/node": "^26.6.5",
 		"@types/papaparse": "^5.5.2",
 		"@vitest/coverage-v8": "^5.0.5",
