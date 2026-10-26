@@ -50,6 +50,7 @@ describe("matcher", () => {
 						categoryName: "Auto: Gas",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -83,6 +84,7 @@ describe("matcher", () => {
 						categoryName: "Entertainment",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -115,6 +117,7 @@ describe("matcher", () => {
 						categoryName: "Dining",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -147,6 +150,7 @@ describe("matcher", () => {
 						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -183,6 +187,7 @@ describe("matcher", () => {
 						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -218,6 +223,7 @@ describe("matcher", () => {
 						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 					{
 						id: "y2",
@@ -227,6 +233,7 @@ describe("matcher", () => {
 						categoryName: "Shopping",
 						cleared: "cleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -262,6 +269,7 @@ describe("matcher", () => {
 						categoryName: "Dining",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 					{
 						id: "y2",
@@ -271,6 +279,7 @@ describe("matcher", () => {
 						categoryName: "Dining",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -302,6 +311,7 @@ describe("matcher", () => {
 						categoryName: "Auto: Gas",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -331,6 +341,7 @@ describe("matcher", () => {
 						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -365,6 +376,7 @@ describe("matcher", () => {
 						categoryName: "Dining",
 						cleared: "cleared",
 						approved: true,
+						memo: null,
 					},
 					{
 						id: "y2",
@@ -374,6 +386,7 @@ describe("matcher", () => {
 						categoryName: "Dining",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -402,6 +415,7 @@ describe("matcher", () => {
 						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 					{
 						id: "y2",
@@ -411,6 +425,7 @@ describe("matcher", () => {
 						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -441,6 +456,7 @@ describe("matcher", () => {
 						categoryName: "Auto: Gas",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -469,6 +485,7 @@ describe("matcher", () => {
 						categoryName: "Auto: Gas",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -498,6 +515,7 @@ describe("matcher", () => {
 						categoryName: "Shopping",
 						cleared: "uncleared",
 						approved: true,
+						memo: null,
 					},
 				];
 
@@ -544,6 +562,7 @@ describe("matcher", () => {
 					categoryName: "Auto: Gas",
 					cleared: "uncleared",
 					approved: true,
+					memo: null,
 				},
 				{
 					id: "y2",
@@ -553,6 +572,7 @@ describe("matcher", () => {
 					categoryName: "Entertainment",
 					cleared: "uncleared",
 					approved: true,
+					memo: null,
 				},
 			];
 
@@ -592,6 +612,7 @@ describe("matcher", () => {
 					categoryName: "Shopping",
 					cleared: "uncleared",
 					approved: true,
+					memo: null,
 				},
 			];
 
@@ -640,6 +661,7 @@ describe("matcher", () => {
 					categoryName: "Auto: Gas",
 					cleared: "uncleared",
 					approved: true,
+					memo: null,
 				},
 			];
 
@@ -686,6 +708,7 @@ describe("matcher", () => {
 					categoryName: "Shopping",
 					cleared: "uncleared",
 					approved: true,
+					memo: null,
 				},
 			];
 
@@ -731,6 +754,7 @@ describe("matcher", () => {
 					categoryName: "Shopping",
 					cleared: "uncleared",
 					approved: true,
+					memo: null,
 				},
 			];
 
@@ -763,6 +787,7 @@ describe("matcher", () => {
 					categoryName: "Misc",
 					cleared: "uncleared",
 					approved: true,
+					memo: null,
 				},
 			];
 
@@ -793,6 +818,7 @@ describe("matcher", () => {
 					categoryName: "Shopping",
 					cleared: "uncleared",
 					approved: true,
+					memo: null,
 				},
 			];
 

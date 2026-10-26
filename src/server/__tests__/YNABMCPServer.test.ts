@@ -17,9 +17,7 @@ import { createErrorHandler } from "../errorHandler.js";
 import type { ToolRegistry } from "../toolRegistry.js";
 import { YNABMCPServer } from "../YNABMCPServer.js";
 
-function parseCallToolJson<T = Record<string, unknown>>(
-	result: CallToolResult,
-): T {
+function parseCallToolJson<T = Record<string, any>>(result: CallToolResult): T {
 	const text = maybeTextOf(result.content?.[0]);
 	const raw =
 		typeof text === "string" ? text : (JSON.stringify(text ?? {}) ?? "{}");
@@ -370,7 +368,7 @@ describe("YNABMCPServer", () => {
 			expect(statsAfterSet.size).toBeGreaterThan(initialSize);
 
 			// Verify that common data types were cached
-			const allKeys = cacheManager.getAllKeys();
+			const allKeys = cacheManager.getKeys();
 			const hasAccountsCache = allKeys.some((key) =>
 				key.includes("accounts:list"),
 			);
@@ -772,7 +770,7 @@ describe("YNABMCPServer", () => {
 			// Use the shared expectedToolNames constant defined at the top of the test file
 
 			const actualToolNames = tools.map((tool) => tool.name).sort();
-			expect(actualToolNames).toEqual(expectedToolNames.sort());
+			expect(actualToolNames).toEqual([...expectedToolNames].sort());
 		});
 
 		it("should maintain same error handling behavior after refactoring", () => {
