@@ -3,7 +3,7 @@ import { toJSONSchema, z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import type { MCPToolAnnotations } from "../types/toolAnnotations.js";
 import { type ToolProfile, toolBelongsToProfile } from "./toolProfiles.js";
-import type { WriteSafetyPolicy } from "./writeSafety.js";
+import type { ConfirmationResult, WriteSafetyPolicy } from "./writeSafety.js";
 
 export type SecurityWrapperFactory = <T extends Record<string, unknown>>(
 	namespace: string,
@@ -119,6 +119,26 @@ interface RegisteredTool<
 	readonly security: Required<ToolSecurityOptions>;
 }
 
+type AnyRegisteredTool = RegisteredTool<
+	Record<string, unknown>,
+	Record<string, unknown>
+>;
+
+/** Outcome of a pre-execution step: a value to continue with, or a result to return. */
+type ExecutionStep<T> =
+	| { ok: true; value: T }
+	| { ok: false; result: CallToolResult };
+
+const CONFIRMATION_REJECTION_DETAILS: Record<
+	Exclude<ConfirmationResult, { ok: true }>["reason"],
+	string
+> = {
+	expired: "The confirmation token expired. Preview the request again.",
+	reused: "The confirmation token was already used. Preview the request again.",
+	invalid:
+		"The confirmation token does not match this tool and validated request.",
+};
+
 export interface ToolExecutionOptions {
 	name: string;
 	accessToken: string;
@@ -221,8 +241,7 @@ export class ToolRegistry {
 				tool.name,
 			) as Tool["inputSchema"];
 			const requiresConfirmation =
-				tool.metadata?.writeSafety?.mutation === true &&
-				this.deps.writeSafetyPolicy?.requiresConfirmation() === true;
+				this.confirmationPolicyFor(tool) !== undefined;
 			if (requiresConfirmation) {
 				inputSchema = this.withConfirmationToken(inputSchema);
 			}
@@ -283,62 +302,31 @@ export class ToolRegistry {
 			);
 		}
 
-		if (this.deps.validateAccessToken) {
-			try {
-				await this.deps.validateAccessToken(options.accessToken);
-			} catch (error) {
-				if (this.isCallToolResult(error)) {
-					return error;
-				}
-				return this.deps.errorHandler.handleError(
-					error,
-					`authenticating ${tool.name}`,
-				);
-			}
+		const authFailure = await this.authenticate(tool, options.accessToken);
+		if (authFailure) {
+			return authFailure;
 		}
 
 		const providedArguments = { ...(options.arguments ?? {}) };
-		const confirmationValue = providedArguments["confirmation_token"];
-		if (
-			confirmationValue !== undefined &&
-			(typeof confirmationValue !== "string" || confirmationValue.length < 16)
-		) {
-			return this.deps.errorHandler.createValidationError(
-				`Invalid parameters for ${tool.name}`,
-				"confirmation_token must be a non-empty token string",
-			);
+		const confirmationToken = this.extractConfirmationToken(
+			tool,
+			providedArguments,
+		);
+		if (!confirmationToken.ok) {
+			return confirmationToken.result;
 		}
-		const confirmationToken =
-			typeof confirmationValue === "string" ? confirmationValue : undefined;
-		delete providedArguments["confirmation_token"];
 
-		let defaults: Partial<Record<string, unknown>> | undefined;
-
-		if (tool.defaultArgumentResolver) {
-			try {
-				defaults = await tool.defaultArgumentResolver({
-					name: tool.name,
-					accessToken: options.accessToken,
-					rawArguments: providedArguments,
-				});
-			} catch (error) {
-				if (error instanceof DefaultArgumentResolutionError) {
-					return error.result;
-				}
-				if (this.isCallToolResult(error)) {
-					return error;
-				}
-				return this.deps.errorHandler.createValidationError(
-					"Invalid parameters",
-					error instanceof Error
-						? error.message
-						: "Unknown error during default argument resolution",
-				);
-			}
+		const defaults = await this.resolveDefaultArguments(
+			tool,
+			options.accessToken,
+			providedArguments,
+		);
+		if (!defaults.ok) {
+			return defaults.result;
 		}
 
 		const rawArguments: Record<string, unknown> = {
-			...(defaults ?? {}),
+			...(defaults.value ?? {}),
 			...providedArguments,
 		};
 
@@ -349,101 +337,235 @@ export class ToolRegistry {
 				tool.inputSchema,
 			)(options.accessToken)(rawArguments);
 
-			return await secured(async (validated) => {
-				try {
-					const context: ToolExecutionContext = {
-						accessToken: options.accessToken,
-						name: tool.name,
-						operation: tool.security.operation,
-						rawArguments,
-					};
-					if (this.deps.cacheHelpers) {
-						context.cache = this.deps.cacheHelpers;
-					}
-					if (options.sendProgress) {
-						context.sendProgress = options.sendProgress;
-					}
-					const isProtectedMutation =
-						tool.metadata?.writeSafety?.mutation === true &&
-						this.deps.writeSafetyPolicy?.requiresConfirmation() === true;
-					// dry_run is a policy control, not a material financial argument.
-					// Normalize it before hashing so preview always runs safely and a
-					// confirmed call always executes, regardless of a client's default.
-					const confirmationArguments = isProtectedMutation
-						? { ...validated, dry_run: false }
-						: validated;
-
-					if (isProtectedMutation && confirmationToken) {
-						const confirmation = this.deps.writeSafetyPolicy?.consume(
-							confirmationToken,
-							tool.name,
-							confirmationArguments,
-						);
-						if (!confirmation?.ok) {
-							const detail =
-								confirmation?.reason === "expired"
-									? "The confirmation token expired. Preview the request again."
-									: confirmation?.reason === "reused"
-										? "The confirmation token was already used. Preview the request again."
-										: "The confirmation token does not match this tool and validated request.";
-							return this.deps.errorHandler.createValidationError(
-								`Write confirmation rejected for ${tool.name}`,
-								detail,
-							);
-						}
-					}
-
-					const handlerInput = isProtectedMutation
-						? { ...validated, dry_run: !confirmationToken }
-						: validated;
-					const handlerResult = await tool.handler({
-						input: handlerInput,
-						context,
-					});
-					// Validate output against schema if present
-					// Skip validation if handler returned an error
-					if (handlerResult.isError) {
-						return handlerResult;
-					}
-					const validatedResult = this.validateOutput(tool.name, handlerResult);
-					if (
-						!isProtectedMutation ||
-						confirmationToken ||
-						validatedResult.isError
-					) {
-						return validatedResult;
-					}
-
-					const issued = this.deps.writeSafetyPolicy?.issue(
-						tool.name,
-						confirmationArguments,
-					);
-					if (!issued) {
-						return this.deps.errorHandler.createValidationError(
-							`Write preview failed for ${tool.name}`,
-							"Write safety policy was unavailable",
-						);
-					}
-					return {
-						...validatedResult,
-						content: [
-							...validatedResult.content,
-							{
-								type: "text",
-								text: `Preview complete. To execute this exact request, call ${tool.name} again with confirmation_token="${issued.token}" before ${issued.expiresAt}. The token is single-use.`,
-							},
-						],
-					};
-				} catch (handlerError) {
-					return this.deps.errorHandler.handleError(
-						handlerError,
-						`executing ${tool.name} - ${tool.security.operation}`,
-					);
-				}
-			});
+			return await secured((validated) =>
+				this.runValidated(
+					tool,
+					options,
+					rawArguments,
+					validated,
+					confirmationToken.value,
+				),
+			);
 		} catch (securityError) {
 			return this.normalizeSecurityError(securityError, tool);
 		}
+	}
+
+	private async authenticate(
+		tool: AnyRegisteredTool,
+		accessToken: string,
+	): Promise<CallToolResult | undefined> {
+		if (!this.deps.validateAccessToken) {
+			return undefined;
+		}
+		try {
+			await this.deps.validateAccessToken(accessToken);
+			return undefined;
+		} catch (error) {
+			if (this.isCallToolResult(error)) {
+				return error;
+			}
+			return this.deps.errorHandler.handleError(
+				error,
+				`authenticating ${tool.name}`,
+			);
+		}
+	}
+
+	/**
+	 * Validates and removes confirmation_token from the provided arguments so it
+	 * never reaches the tool's input schema.
+	 */
+	private extractConfirmationToken(
+		tool: AnyRegisteredTool,
+		providedArguments: Record<string, unknown>,
+	): ExecutionStep<string | undefined> {
+		const confirmationValue = providedArguments["confirmation_token"];
+		if (
+			confirmationValue !== undefined &&
+			(typeof confirmationValue !== "string" || confirmationValue.length < 16)
+		) {
+			return {
+				ok: false,
+				result: this.deps.errorHandler.createValidationError(
+					`Invalid parameters for ${tool.name}`,
+					"confirmation_token must be a non-empty token string",
+				),
+			};
+		}
+		delete providedArguments["confirmation_token"];
+		return {
+			ok: true,
+			value:
+				typeof confirmationValue === "string" ? confirmationValue : undefined,
+		};
+	}
+
+	private async resolveDefaultArguments(
+		tool: AnyRegisteredTool,
+		accessToken: string,
+		providedArguments: Record<string, unknown>,
+	): Promise<ExecutionStep<Partial<Record<string, unknown>> | undefined>> {
+		if (!tool.defaultArgumentResolver) {
+			return { ok: true, value: undefined };
+		}
+		try {
+			const value = await tool.defaultArgumentResolver({
+				name: tool.name,
+				accessToken,
+				rawArguments: providedArguments,
+			});
+			return { ok: true, value };
+		} catch (error) {
+			if (error instanceof DefaultArgumentResolutionError) {
+				return { ok: false, result: error.result };
+			}
+			if (this.isCallToolResult(error)) {
+				return { ok: false, result: error };
+			}
+			return {
+				ok: false,
+				result: this.deps.errorHandler.createValidationError(
+					"Invalid parameters",
+					error instanceof Error
+						? error.message
+						: "Unknown error during default argument resolution",
+				),
+			};
+		}
+	}
+
+	private buildExecutionContext(
+		tool: AnyRegisteredTool,
+		options: ToolExecutionOptions,
+		rawArguments: Record<string, unknown>,
+	): ToolExecutionContext {
+		const context: ToolExecutionContext = {
+			accessToken: options.accessToken,
+			name: tool.name,
+			operation: tool.security.operation,
+			rawArguments,
+		};
+		if (this.deps.cacheHelpers) {
+			context.cache = this.deps.cacheHelpers;
+		}
+		if (options.sendProgress) {
+			context.sendProgress = options.sendProgress;
+		}
+		return context;
+	}
+
+	/**
+	 * Runs the handler for schema-validated input. Every failure past this point,
+	 * including write-safety checks and output validation, is reported as an
+	 * execution error rather than a parameter error.
+	 */
+	private async runValidated(
+		tool: AnyRegisteredTool,
+		options: ToolExecutionOptions,
+		rawArguments: Record<string, unknown>,
+		validated: Record<string, unknown>,
+		confirmationToken: string | undefined,
+	): Promise<CallToolResult> {
+		try {
+			const context = this.buildExecutionContext(tool, options, rawArguments);
+			const policy = this.confirmationPolicyFor(tool);
+			if (!policy) {
+				return await this.invokeHandler(tool, validated, context);
+			}
+			return await this.runProtectedMutation(
+				tool,
+				policy,
+				validated,
+				context,
+				confirmationToken,
+			);
+		} catch (handlerError) {
+			return this.deps.errorHandler.handleError(
+				handlerError,
+				`executing ${tool.name} - ${tool.security.operation}`,
+			);
+		}
+	}
+
+	/**
+	 * Preview-mode flow for mutations: without a token the handler runs as a
+	 * dry run and a single-use token is issued; with a token the identical
+	 * request executes for real.
+	 */
+	private async runProtectedMutation(
+		tool: AnyRegisteredTool,
+		policy: WriteSafetyPolicy,
+		validated: Record<string, unknown>,
+		context: ToolExecutionContext,
+		confirmationToken: string | undefined,
+	): Promise<CallToolResult> {
+		// dry_run is a policy control, not a material financial argument.
+		// Normalize it before hashing so preview always runs safely and a
+		// confirmed call always executes, regardless of a client's default.
+		const confirmationArguments = { ...validated, dry_run: false };
+
+		if (confirmationToken) {
+			const confirmation = policy.consume(
+				confirmationToken,
+				tool.name,
+				confirmationArguments,
+			);
+			if (!confirmation.ok) {
+				return this.deps.errorHandler.createValidationError(
+					`Write confirmation rejected for ${tool.name}`,
+					CONFIRMATION_REJECTION_DETAILS[confirmation.reason],
+				);
+			}
+		}
+
+		const result = await this.invokeHandler(
+			tool,
+			{ ...validated, dry_run: !confirmationToken },
+			context,
+		);
+		if (confirmationToken || result.isError) {
+			return result;
+		}
+
+		const issued = policy.issue(tool.name, confirmationArguments);
+		return {
+			...result,
+			content: [
+				...result.content,
+				{
+					type: "text",
+					text: `Preview complete. To execute this exact request, call ${tool.name} again with confirmation_token="${issued.token}" before ${issued.expiresAt}. The token is single-use.`,
+				},
+			],
+		};
+	}
+
+	private async invokeHandler(
+		tool: AnyRegisteredTool,
+		input: Record<string, unknown>,
+		context: ToolExecutionContext,
+	): Promise<CallToolResult> {
+		const handlerResult = await tool.handler({ input, context });
+		// Skip output validation if handler returned an error
+		if (handlerResult.isError) {
+			return handlerResult;
+		}
+		return this.validateOutput(tool.name, handlerResult);
+	}
+
+	/**
+	 * Returns the write-safety policy when this tool's calls must be previewed
+	 * and confirmed, otherwise undefined.
+	 */
+	private confirmationPolicyFor(
+		tool: AnyRegisteredTool,
+	): WriteSafetyPolicy | undefined {
+		const policy = this.deps.writeSafetyPolicy;
+		return tool.metadata?.writeSafety?.mutation === true &&
+			policy?.requiresConfirmation() === true
+			? policy
+			: undefined;
 	}
 
 	private isCallToolResult(value: unknown): value is CallToolResult {

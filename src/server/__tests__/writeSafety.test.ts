@@ -219,7 +219,103 @@ describe("ToolRegistry write safety enforcement", () => {
 			},
 		});
 		expect(reused.isError).toBe(true);
+		expect(JSON.stringify(reused.content)).toContain("already used");
 		expect(handler).toHaveBeenCalledTimes(2);
+	});
+
+	it("rejects an expired confirmation token without calling the handler", async () => {
+		let now = 1_000;
+		const registry = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({
+					ttlMs: 100,
+					now: () => now,
+					tokenFactory: () => FIXED_TOKEN,
+				}),
+			),
+		);
+		const handler = registerMutation(registry, "ynab_create_transaction");
+		const preview = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1", amount: 10 },
+		});
+
+		now = 1_101;
+		const expired = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: {
+				id: "txn-1",
+				amount: 10,
+				confirmation_token: confirmationToken(preview),
+			},
+		});
+		expect(expired.isError).toBe(true);
+		expect(JSON.stringify(expired.content)).toContain("expired");
+		expect(handler).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects malformed confirmation tokens before validation", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy()),
+		);
+		const handler = registerMutation(registry, "ynab_create_transaction");
+		const malformed = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1", confirmation_token: "short" },
+		});
+		expect(malformed.isError).toBe(true);
+		expect(JSON.stringify(malformed.content)).toContain(
+			"confirmation_token must be a non-empty token string",
+		);
+		expect(handler).not.toHaveBeenCalled();
+	});
+
+	it("does not issue a confirmation token when the preview handler errors", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+			),
+		);
+		registerMutation(
+			registry,
+			"ynab_create_transaction",
+			vi.fn(async () => ({
+				isError: true,
+				content: [{ type: "text" as const, text: "preview failed" }],
+			})),
+		);
+		const preview = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(preview.isError).toBe(true);
+		expect(JSON.stringify(preview.content)).not.toContain(FIXED_TOKEN);
+	});
+
+	it("routes handler exceptions through handleError with execution context", async () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
+		);
+		registerMutation(
+			registry,
+			"ynab_update_transaction",
+			vi.fn(async () => {
+				throw new Error("boom");
+			}),
+		);
+		const failed = await registry.executeTool({
+			name: "ynab_update_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(failed.isError).toBe(true);
+		expect(JSON.stringify(failed.content)).toContain(
+			"executing ynab_update_transaction - ynab_update_transaction: boom",
+		);
 	});
 
 	it("rejects altered arguments and consumes the token", async () => {
@@ -245,6 +341,9 @@ describe("ToolRegistry write safety enforcement", () => {
 			},
 		});
 		expect(altered.isError).toBe(true);
+		expect(JSON.stringify(altered.content)).toContain(
+			"does not match this tool and validated request",
+		);
 		expect(handler).toHaveBeenCalledTimes(1);
 	});
 
