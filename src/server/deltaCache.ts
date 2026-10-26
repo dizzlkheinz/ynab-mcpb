@@ -139,13 +139,21 @@ export class DeltaCache {
 		// Snapshot and knowledge travel together. An expired snapshot can still
 		// seed a delta; it is never served as fresh after its TTL expires.
 		const previous = this.cacheManager.peek<DeltaCacheEntry<T>>(cacheKey);
+		// Also evicts an expired entry, so a failed refresh cannot leave it behind.
+		const previousFresh = this.cacheManager.has(cacheKey);
+		// In delta mode every read asks YNAB for changes since the snapshot, so
+		// edits made outside this server (e.g. the YNAB app) appear immediately.
+		const revalidate =
+			isDeltaEnabled() && !options.forceFullRefresh && previous !== undefined;
 		let fetchedEntry: DeltaCacheEntry<T> | undefined;
 		let usedDelta = false;
+		let mergedOntoFreshSnapshot = false;
 		const entry = await this.cacheManager.wrap<DeltaCacheEntry<T>>(cacheKey, {
 			ttl: effectiveTtl,
 			...(options.staleWhileRevalidate !== undefined && {
 				staleWhileRevalidate: options.staleWhileRevalidate,
 			}),
+			...(revalidate && { revalidate }),
 			loader: async () => {
 				const requestedKnowledge =
 					isDeltaEnabled() && !options.forceFullRefresh
@@ -172,6 +180,7 @@ export class DeltaCache {
 				let snapshot: T[];
 				if (!fullRefresh && previous) {
 					this.deltaHits++;
+					mergedOntoFreshSnapshot = previousFresh;
 					usedDelta = response.serverKnowledge !== requestedKnowledge;
 					if (usedDelta) this.mergeOperations++;
 					snapshot = usedDelta
@@ -200,7 +209,8 @@ export class DeltaCache {
 		}
 		return {
 			data: entry.snapshot,
-			wasCached: entry !== fetchedEntry,
+			// A delta merged onto a still-fresh snapshot reports as cached, as in 0.29.1.
+			wasCached: entry !== fetchedEntry || mergedOntoFreshSnapshot,
 			usedDelta: entry === fetchedEntry && usedDelta,
 			serverKnowledge: entry.serverKnowledge,
 		};
