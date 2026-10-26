@@ -404,135 +404,14 @@ export function parseBankCSV(
 
 	const transactions: BankTransaction[] = [];
 
-	for (let i = 0; i < records.length; i++) {
-		const record = records[i];
+	for (const [i, record] of records.entries()) {
 		const rowNumber = format.has_header ? i + 2 : i + 1; // Account for header row
 
 		try {
-			let rawDate: string;
-			let rawAmount: string;
-			let description: string;
-
-			if (format.has_header) {
-				// Record is an object when using headers
-				const recordObj = record as unknown as Record<string, string>;
-				rawDate = recordObj[format.date_column as string] || "";
-
-				if (format.amount_column) {
-					rawAmount = recordObj[format.amount_column as string] || "";
-				} else if (
-					format.debit_column !== undefined &&
-					format.credit_column !== undefined
-				) {
-					const debitVal = recordObj[format.debit_column as string] || "";
-					const creditVal = recordObj[format.credit_column as string] || "";
-					// Convert: debits negative, credits positive
-					// Check if debit has a value and is non-zero
-					const debitNum = Number.parseFloat(debitVal.replace(/[^\d.-]/g, ""));
-					const creditNum = Number.parseFloat(
-						creditVal.replace(/[^\d.-]/g, ""),
-					);
-					if (!Number.isNaN(debitNum) && debitNum !== 0) {
-						rawAmount = `-${debitVal}`;
-					} else if (!Number.isNaN(creditNum) && creditNum !== 0) {
-						rawAmount = creditVal;
-					} else {
-						rawAmount = "0";
-					}
-				} else {
-					throw new Error("No amount column configuration found");
-				}
-
-				description = recordObj[format.description_column as string] || "";
-			} else {
-				// Record is an array when not using headers, so use column indices
-				const recordArray = record as string[];
-				const dateIndex =
-					typeof format.date_column === "number"
-						? format.date_column
-						: Number.parseInt(format.date_column, 10);
-				const descIndex =
-					typeof format.description_column === "number"
-						? format.description_column
-						: Number.parseInt(format.description_column, 10);
-
-				// Validate indices are valid numbers (fallback to defaults if invalid)
-				const safeDateIndex = Number.isNaN(dateIndex) ? 0 : dateIndex;
-				const safeDescIndex = Number.isNaN(descIndex) ? 2 : descIndex;
-
-				rawDate = recordArray[safeDateIndex] || "";
-
-				if (format.amount_column !== undefined) {
-					const amountIndex =
-						typeof format.amount_column === "number"
-							? format.amount_column
-							: Number.parseInt(format.amount_column, 10);
-					const safeAmountIndex = Number.isNaN(amountIndex) ? 1 : amountIndex;
-					rawAmount = recordArray[safeAmountIndex] || "";
-				} else if (
-					format.debit_column !== undefined &&
-					format.credit_column !== undefined
-				) {
-					const debitIndex =
-						typeof format.debit_column === "number"
-							? format.debit_column
-							: Number.parseInt(format.debit_column, 10);
-					const creditIndex =
-						typeof format.credit_column === "number"
-							? format.credit_column
-							: Number.parseInt(format.credit_column, 10);
-
-					const debitVal = recordArray[debitIndex] || "";
-					const creditVal = recordArray[creditIndex] || "";
-
-					// Convert: debits negative, credits positive
-					// Check if debit has a value and is non-zero
-					const debitNum = Number.parseFloat(debitVal.replace(/[^\d.-]/g, ""));
-					const creditNum = Number.parseFloat(
-						creditVal.replace(/[^\d.-]/g, ""),
-					);
-					if (!Number.isNaN(debitNum) && debitNum !== 0) {
-						rawAmount = `-${debitVal}`;
-					} else if (!Number.isNaN(creditNum) && creditNum !== 0) {
-						rawAmount = creditVal;
-					} else {
-						rawAmount = "0";
-					}
-				} else {
-					throw new Error("No amount column configuration found");
-				}
-
-				description = recordArray[safeDescIndex] || "";
+			const transaction = parseBankRow(record, format, rowNumber, options);
+			if (transaction) {
+				transactions.push(transaction);
 			}
-
-			if (!rawDate || !rawAmount) {
-				if (options.debug) {
-					console.warn(`Skipping row ${rowNumber}: missing date or amount`);
-				}
-				continue;
-			}
-
-			const date = parseDate(rawDate, format.date_format);
-			let amount: Milli;
-			try {
-				amount = amountToMilliunits(rawAmount);
-			} catch (error) {
-				if (options.debug) {
-					console.warn(
-						`Skipping row ${rowNumber}: ${error instanceof Error ? error.message : "Invalid amount"}`,
-					);
-				}
-				continue;
-			}
-
-			transactions.push({
-				date,
-				amount,
-				description: description.trim(),
-				raw_amount: rawAmount,
-				raw_date: rawDate,
-				row_number: rowNumber,
-			});
 		} catch (error) {
 			if (options.debug) {
 				console.warn(`Error parsing row ${rowNumber}:`, error);
@@ -541,6 +420,137 @@ export function parseBankCSV(
 	}
 
 	return transactions;
+}
+
+interface RawRowFields {
+	rawDate: string;
+	rawAmount: string;
+	description: string;
+}
+
+/**
+ * Parse a single CSV record, returning null for rows that should be skipped.
+ * @throws {Error} when no amount column is configured or the date is unparseable
+ */
+function parseBankRow(
+	record: string[] | Record<string, string>,
+	format: CSVFormat,
+	rowNumber: number,
+	options: { debug?: boolean },
+): BankTransaction | null {
+	const { rawDate, rawAmount, description } = format.has_header
+		? // Record is an object when using headers
+			extractHeaderedFields(record as Record<string, string>, format)
+		: // Record is an array when not using headers, so use column indices
+			extractIndexedFields(record as string[], format);
+
+	if (!rawDate || !rawAmount) {
+		if (options.debug) {
+			console.warn(`Skipping row ${rowNumber}: missing date or amount`);
+		}
+		return null;
+	}
+
+	const date = parseDate(rawDate, format.date_format);
+	let amount: Milli;
+	try {
+		amount = amountToMilliunits(rawAmount);
+	} catch (error) {
+		if (options.debug) {
+			console.warn(
+				`Skipping row ${rowNumber}: ${error instanceof Error ? error.message : "Invalid amount"}`,
+			);
+		}
+		return null;
+	}
+
+	return {
+		date,
+		amount,
+		description: description.trim(),
+		raw_amount: rawAmount,
+		raw_date: rawDate,
+		row_number: rowNumber,
+	};
+}
+
+function extractHeaderedFields(
+	record: Record<string, string>,
+	format: CSVFormat,
+): RawRowFields {
+	const rawDate = record[format.date_column as string] || "";
+
+	let rawAmount: string;
+	if (format.amount_column) {
+		rawAmount = record[format.amount_column as string] || "";
+	} else if (
+		format.debit_column !== undefined &&
+		format.credit_column !== undefined
+	) {
+		rawAmount = combineDebitCredit(
+			record[format.debit_column as string] || "",
+			record[format.credit_column as string] || "",
+		);
+	} else {
+		throw new Error("No amount column configuration found");
+	}
+
+	const description = record[format.description_column as string] || "";
+	return { rawDate, rawAmount, description };
+}
+
+function extractIndexedFields(
+	record: string[],
+	format: CSVFormat,
+): RawRowFields {
+	const dateIndex = toColumnIndex(format.date_column);
+	const descIndex = toColumnIndex(format.description_column);
+
+	// Validate indices are valid numbers (fallback to defaults if invalid)
+	const safeDateIndex = Number.isNaN(dateIndex) ? 0 : dateIndex;
+	const safeDescIndex = Number.isNaN(descIndex) ? 2 : descIndex;
+
+	const rawDate = record[safeDateIndex] || "";
+
+	let rawAmount: string;
+	if (format.amount_column !== undefined) {
+		const amountIndex = toColumnIndex(format.amount_column);
+		const safeAmountIndex = Number.isNaN(amountIndex) ? 1 : amountIndex;
+		rawAmount = record[safeAmountIndex] || "";
+	} else if (
+		format.debit_column !== undefined &&
+		format.credit_column !== undefined
+	) {
+		rawAmount = combineDebitCredit(
+			record[toColumnIndex(format.debit_column)] || "",
+			record[toColumnIndex(format.credit_column)] || "",
+		);
+	} else {
+		throw new Error("No amount column configuration found");
+	}
+
+	const description = record[safeDescIndex] || "";
+	return { rawDate, rawAmount, description };
+}
+
+function toColumnIndex(column: string | number): number {
+	return typeof column === "number" ? column : Number.parseInt(column, 10);
+}
+
+/**
+ * Convert separate debit/credit values into one signed raw amount:
+ * debits negative, credits positive, "0" when neither is non-zero
+ */
+function combineDebitCredit(debitVal: string, creditVal: string): string {
+	const debitNum = Number.parseFloat(debitVal.replace(/[^\d.-]/g, ""));
+	const creditNum = Number.parseFloat(creditVal.replace(/[^\d.-]/g, ""));
+	if (!Number.isNaN(debitNum) && debitNum !== 0) {
+		return `-${debitVal}`;
+	}
+	if (!Number.isNaN(creditNum) && creditNum !== 0) {
+		return creditVal;
+	}
+	return "0";
 }
 
 /**
