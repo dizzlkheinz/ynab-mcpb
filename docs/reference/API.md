@@ -587,22 +587,26 @@ Compares bank transactions from CSV files with YNAB transactions to identify mis
 
 ### reconcile_account
 
-Performs comprehensive account reconciliation with bank statement data. The tool returns **two content entries**: a human-readable narrative for assistants and a structured JSON payload (`version: "2.0"`) that encodes MoneyValue objects, insights, and optional execution results.
+Performs comprehensive account reconciliation with bank statement data. The tool returns one text entry holding a JSON object, also sent as `structuredContent`, with two fields: `human`, a narrative report for assistants, and `structured`, the unmatched transactions and suggestions with MoneyValue amounts, plus the execution summary and per-operation results once the plan has run.
 
-**Parameters (selected):**
+**Parameters:**
 - `budget_id` (string, optional): Budget UUID. Omit to use the default budget
 - `account_id` (string, required)
 - `csv_file_path` or `csv_data` (one required)
+- `csv_format` (object, optional): `date_column`, `amount_column`, `debit_column`, `credit_column`, `description_column`, `date_format`, `has_header`, `delimiter`
 - `statement_balance` (number, required) – ending cleared balance from the statement in dollars
-- `statement_start_date`, `statement_end_date`, `statement_date` (string, optional)
-- Matching controls: `date_tolerance_days` (default 7), `auto_match_threshold` (default 85), `suggestion_threshold` (default 60). Amounts must match exactly (no tolerance parameter)
+- `statement_end_date` (string, optional): Last day of the statement. A date such as `01/31/2024` is read as that calendar date
+- Matching controls: `date_tolerance_days` (0–7, default 7) and `match_strictness` (`"loose"`, `"normal"` or `"strict"`, default `"normal"`; sets the auto-match and suggestion thresholds to 70/55, 85/60 or 93/75). Amounts must match exactly (no tolerance parameter)
+- `sign_convention` (`"auto"`, `"invert"` or `"as_is"`, default `"auto"`): How to treat CSV amount signs
 - Execution controls (optional):
   - `auto_create_transactions` (default `false`)
   - `auto_update_cleared_status` (default `false`)
   - `auto_unclear_missing` (default `false`)
   - `auto_adjust_dates` (default `false`)
   - `dry_run` (default `true`)
-- Other legacy options remain accepted for compatibility (`expected_bank_balance`, `require_exact_match`, etc.).
+- `max_suggestions_in_output` (integer ≥ 1, default 20): Limit on unmatched items and suggestions shown in the human report
+
+The schema is strict: any other parameter is rejected.
 
 **Example Request:**
 ```json
@@ -613,7 +617,6 @@ Performs comprehensive account reconciliation with bank statement data. The tool
     "account_id": "87654321-4321-4321-4321-210987654321",
     "csv_data": "Date,Description,Amount\n2025-10-20,Amazon,-23.47\n2025-10-22,Coffee Shop,-4.50\n2025-10-23,Grocery Store,-67.89",
     "statement_balance": -560.38,
-    "statement_start_date": "2025-10-01",
     "statement_end_date": "2025-10-31",
     "auto_create_transactions": true,
     "dry_run": true
@@ -621,277 +624,44 @@ Performs comprehensive account reconciliation with bank statement data. The tool
 }
 ```
 
-**Example Response (truncated):**
+**Example Response (`structuredContent`, truncated):**
 ```json
 {
-  "content": [
-    {
-      "type": "text",
-      "text": "📊 Checking Account Reconciliation Report\nStatement Range: 2025-10-01 to 2025-10-31\n\n• YNAB Cleared Balance: -$899.02\n• Statement Balance: -$921.24\n❌ Discrepancy: $22.22 (Statement shows more owed than YNAB)\n\nMatches: 5 auto, 1 suggested, 1 unmatched bank, 0 unmatched YNAB\n\nInsights:\n• [WARNING] 1 unmatched transaction at $22.22\n\nNext Steps:\n• Review 5 auto-matched transactions for approval\n• Add missing bank transaction\n\nDry run only — no YNAB changes were applied."
+  "human": "📊 Checking Account Reconciliation Report\n...\nDry run only — no YNAB changes were applied.",
+  "structured": {
+    "unmatched_bank": [
+      {
+        "id": "bank-3",
+        "date": "2025-10-23",
+        "amount": -67890,
+        "payee": "Grocery Store",
+        "sourceRow": 3,
+        "raw": { ... },
+        "amount_money": { "value_milliunits": -67890, "value_display": "-$67.89", "currency": "USD", "direction": "debit" }
+      }
+    ],
+    "unmatched_ynab": [],
+    "suggestions": [],
+    "execution_summary": {
+      "transactions_created": 1,
+      "transactions_updated": 0,
+      "dates_adjusted": 0,
+      "dry_run": true,
+      "balance_status": "unbalanced",
+      "recommendations": ["Dry run only — re-run with dry_run=false to apply these changes"]
     },
-    {
-      "type": "text",
-      "text": "{\n  \"version\": \"2.0\",\n  \"schema_url\": \"https://raw.githubusercontent.com/dizzlkheinz/ynab-mcp-mcpb/master/docs/schemas/reconciliation-v2.json\",\n  \"summary\": {\n    \"bank_transactions_count\": 7,\n    \"auto_matched\": 5,\n    \"current_cleared_balance\": {\n      \"value_milliunits\": -899020,\n      \"value_display\": \"-$899.02\",\n      \"currency\": \"USD\",\n      \"direction\": \"debit\"\n    },\n    \"discrepancy\": {\n      \"value_display\": \"$22.22\"\n    }\n  },\n  \"balance\": {\n    \"discrepancy_direction\": \"bank_higher\"\n  },\n  \"csv_format\": {\n    \"delimiter\": \",\",\n    \"decimal_separator\": \".\",\n    \"thousands_separator\": null,\n    \"date_format\": \"MM/DD/YYYY\",\n    \"header_row\": true,\n    \"date_column\": \"Date\",\n    \"amount_column\": \"Amount\",\n    \"payee_column\": \"Description\"\n  },\n  \"insights\": [ { \"id\": \"repeat-22.22\", \"type\": \"repeat_amount\" } ],\n  \"matches\": { ... },\n  \"unmatched\": { ... },\n  \"execution\": {\n    \"summary\": {\n      \"matches_found\": 6,\n      \"transactions_created\": 1,\n      \"transactions_updated\": 2,\n      \"dry_run\": false\n    },\n    \"account_balance\": {\n      \"before\": { \"cleared_balance\": { \"value_display\": \"-$899.02\" }, ... },\n      \"after\": { \"cleared_balance\": { \"value_display\": \"-$921.24\" }, ... }\n    },\n    \"recommendations\": [\"Review EvoCarShare discrepancy\"]\n  }\n}"
-    }
-  ]
-}
-```
-
-When execution flags are enabled and `dry_run` is `false`, the structured payload includes an `execution` block with created/updated transactions, recommendations, and MoneyValue snapshots. The human narrative also summarizes applied actions.
-
-**Key Output Sections:**
-- `summary` – counts and MoneyValue balances for the statement window
-- `balance` – MoneyValue snapshots plus discrepancy direction (`bank_higher`, `ynab_higher`, or `balanced`)
-- `insights` – repeat-amount, near-match, and anomaly callouts with evidence
-- `next_steps` – ordered suggestions for assistants to surface
-- `matches`, `unmatched` – detailed transaction lists with MoneyValue fields for amounts
-- `execution` (optional) – action totals, recommendations, and balance reconciliation metrics (MoneyValue)
-- `recommendations` (optional) – actionable suggestions with complete parameters for executing YNAB tool calls
-
-### Recommendations Field
-
-The `reconcile_account_v2` tool now includes an optional `recommendations` array with actionable suggestions for resolving discrepancies.
-
-#### Recommendation Types
-
-**Create Transaction**
-```json
-{
-  "id": "rec-123",
-  "action_type": "create_transaction",
-  "priority": "high",
-  "confidence": 0.95,
-  "message": "Create transaction for EvoCarShare",
-  "reason": "This transaction exactly matches your $22.22 discrepancy",
-  "estimated_impact": {
-    "value": 22.22,
-    "value_display": "$22.22",
-    "currency": "USD"
-  },
-  "account_id": "abc123",
-  "parameters": {
-    "account_id": "abc123",
-    "date": "2024-01-15",
-    "amount": 22.22,
-    "payee_name": "EvoCarShare",
-    "memo": "Car rental",
-    "cleared": "cleared",
-    "approved": true
+    "operations": [ { "status": "planned", "operation": { "kind": "create", ... } } ],
+    "errors": []
   }
 }
 ```
 
-**Update Cleared Status**
-```json
-{
-  "id": "rec-456",
-  "action_type": "update_cleared",
-  "priority": "low",
-  "confidence": 0.6,
-  "message": "Mark transaction as cleared",
-  "parameters": {
-    "transaction_id": "ynab-txn-789",
-    "cleared": "cleared"
-  }
-}
-```
-
-**Review Duplicate**
-```json
-{
-  "id": "rec-789",
-  "action_type": "review_duplicate",
-  "priority": "medium",
-  "confidence": 0.7,
-  "message": "Review possible duplicate",
-  "parameters": {
-    "candidate_ids": ["ynab-1", "ynab-2"],
-    "suggested_match_id": "ynab-1"
-  }
-}
-```
-
-#### Executing Recommendations
-
-Recommendations include complete parameters for YNAB MCP tool calls:
-
-**CRITICAL**: Recommendation `parameters.amount` values are already in **milliunits** (YNAB's internal format where 1 dollar = 1000 milliunits). Pass them as `amount_milliunits` when calling `create_transaction`. `estimated_impact.value` remains in decimal currency for human readability.
-
-```typescript
-// For create_transaction recommendations:
-// Recommendation amounts are already in milliunits; name the boundary explicitly.
-const rec = recommendations.find(r => r.action_type === 'create_transaction');
-if (rec) {
-  const { amount, ...parameters } = rec.parameters;
-  await create_transaction({
-    budget_id: 'your-budget-id',
-    ...parameters,
-    amount_milliunits: amount
-  });
-}
-
-// For update_cleared recommendations:
-const updateRec = recommendations.find(r => r.action_type === 'update_cleared');
-if (updateRec) {
-  await update_transaction({
-    budget_id: 'your-budget-id',
-    transaction_id: updateRec.parameters.transaction_id,
-    transaction: {
-      cleared: updateRec.parameters.cleared
-    }
-  });
-}
-```
-
-#### Recommendation Priority
-
-- **High**: Exact matches with 90%+ confidence, resolve immediately
-- **Medium**: Likely matches with 60-89% confidence, review before executing
-- **Low**: Suggestions requiring manual review, investigate further
-
-#### Best Practices for Executing Recommendations
-
-**Execution Order**
-
-Process recommendations in the order they're returned (already sorted by priority and confidence):
-
-```typescript
-for (const rec of recommendations) {
-  // High confidence (>0.9) can often be auto-executed
-  if (rec.confidence > 0.9 && rec.action_type === 'create_transaction') {
-    await executeRecommendation(rec);
-  } else {
-    // Lower confidence should be reviewed
-    await reviewAndExecute(rec);
-  }
-}
-```
-
-**Batch Execution**
-
-For multiple recommendations, execute in batches with review checkpoints:
-
-```typescript
-// Group by action type
-const groups = {
-  create: recommendations.filter(r => r.action_type === 'create_transaction'),
-  update: recommendations.filter(r => r.action_type === 'update_cleared'),
-  review: recommendations.filter(r => r.action_type === 'manual_review'),
-};
-
-// Execute high-confidence creates first
-for (const rec of groups.create.filter(r => r.confidence > 0.9)) {
-  await create_transaction({
-    budget_id: budgetId,
-    ...rec.parameters
-  });
-}
-
-// Review checkpoint: verify balance improvement
-const updatedAnalysis = await reconcile_account_v2({ ... });
-console.log('Balance after creates:', updatedAnalysis.balance_info.discrepancy);
-```
-
-**Error Handling and Rollback**
-
-Track executed recommendations for potential rollback:
-
-```typescript
-const executionLog = [];
-
-try {
-  for (const rec of recommendations) {
-    if (rec.action_type === 'create_transaction') {
-      const result = await create_transaction({
-        budget_id: budgetId,
-        ...rec.parameters
-      });
-
-      executionLog.push({
-        recommendation_id: rec.id,
-        transaction_id: result.transaction.id,
-        action: 'create_transaction'
-      });
-    }
-  }
-} catch (error) {
-  // Rollback: delete created transactions
-  for (const log of executionLog.reverse()) {
-    if (log.action === 'create_transaction') {
-      await delete_transaction({
-        budget_id: budgetId,
-        transaction_id: log.transaction_id
-      });
-    }
-  }
-  throw error;
-}
-```
-
-**Verification After Execution**
-
-Always re-run reconciliation after executing recommendations to verify balance improvement:
-
-```typescript
-// Execute recommendations
-await executeRecommendations(recommendations);
-
-// Verify discrepancy resolved
-const verifyAnalysis = await reconcile_account_v2({
-  budget_id: budgetId,
-  account_id: accountId,
-  csv_data: csvData,
-  statement_balance: statementBalance,
-  statement_date: statementDate
-});
-
-const beforeDiscrepancy = originalAnalysis.balance_info.discrepancy.value;
-const afterDiscrepancy = verifyAnalysis.balance_info.discrepancy.value;
-
-if (Math.abs(afterDiscrepancy) >= Math.abs(beforeDiscrepancy)) {
-  console.warn('Discrepancy not improved - review executed recommendations');
-}
-```
-
-**Handling Manual Review Recommendations**
-
-Manual review recommendations require investigation before action:
-
-```typescript
-for (const rec of recommendations.filter(r => r.action_type === 'manual_review')) {
-  console.log(`\n=== ${rec.message} ===`);
-  console.log(`Reason: ${rec.reason}`);
-  console.log(`Issue type: ${rec.parameters.issue_type}`);
-
-  if (rec.parameters.related_transactions) {
-    console.log('\nRelated transactions:');
-    for (const txn of rec.parameters.related_transactions) {
-      console.log(`  - [${txn.source}] ${txn.description} (ID: ${txn.id})`);
-    }
-  }
-
-  // Fetch full details for investigation
-  for (const txn of rec.parameters.related_transactions || []) {
-    if (txn.source === 'ynab') {
-      const details = await get_transaction({
-        budget_id: budgetId,
-        transaction_id: txn.id
-      });
-      console.log(`    Details:`, JSON.stringify(details, null, 2));
-    }
-  }
-}
-```
-
-**Progressive Execution Strategy**
-
-For large discrepancies with many recommendations:
-
-1. **Execute high-confidence creates** (confidence > 0.9, action_type = create_transaction)
-2. **Re-run reconciliation** to verify progress
-3. **Review remaining discrepancy** and adjust strategy
-4. **Process medium-confidence items** with manual review
-5. **Final verification** before marking account as reconciled
+**Structured fields:**
+- `unmatched_bank`, `unmatched_ynab` – transactions left unmatched, each with an `amount_money` MoneyValue beside the milliunit `amount`
+- `suggestions` – suggested matches with their candidates, confidence and match reason
+- `execution_summary` – created/updated/date-adjusted counts, `dry_run`, `balance_status` (`balanced`, `unbalanced` or `not_verified`) and recommendation strings
+- `operations` – each planned write and its status: `planned` in a dry run, otherwise `applied`, `uncertain` or `skipped`
+- `errors` – write errors; when there are any, the result is also marked `isError`
 
 ### get_transaction
 

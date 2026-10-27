@@ -171,13 +171,15 @@ Tools are organized by domain with some using modular sub-directories:
 All tools register through the centralized `ToolRegistry` for consistent validation, security, and error handling:
 
 ```typescript
+const budgetResolver = createBudgetResolver(context);
+
 registry.register({
   name: 'ynab_my_tool',
   description: 'Tool description',
   inputSchema: MyToolSchema,   // Zod input schema
   outputSchema: MyOutputSchema, // Zod output schema (structuredContent)
   handler: adapt(handleMyTool), // Handler function
-  defaultArgumentResolver: resolveBudgetId(), // Optional auto-resolution
+  defaultArgumentResolver: budgetResolver<z.infer<typeof MyToolSchema>>(), // Optional default budget_id
 });
 ```
 

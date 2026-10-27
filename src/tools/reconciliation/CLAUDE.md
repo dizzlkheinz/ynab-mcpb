@@ -55,37 +55,27 @@ CSV File → Parser → Matcher → Analyzer → Executor → Reporter
 
 **Critical Change**: Reconciliation now filters YNAB transactions to only those within the statement date range.
 
-```typescript
-// Extract date range from CSV transactions
-const csvDates = csvTransactions.map((t) => new Date(t.date).getTime());
-const minDate = new Date(Math.min(...csvDates));
-const maxDate = new Date(Math.max(...csvDates));
+`filterByDateRange` in `analyzer.ts` widens the CSV's earliest and latest
+YYYY-MM-DD dates by the date tolerance with `Date.UTC` date arithmetic, formats the
+bounds with `formatUTCISODate`, and keeps the YNAB transactions inside them:
 
-// Filter YNAB transactions to date range using Date.UTC for timezone safety
-const inRangeTransactions = ynabTransactions.filter((t) => {
-  const txDate = new Date(t.date);
-  const txTime = Date.UTC(
-    txDate.getFullYear(),
-    txDate.getMonth(),
-    txDate.getDate()
-  );
-  const minTime = Date.UTC(
-    minDate.getFullYear(),
-    minDate.getMonth(),
-    minDate.getDate()
-  );
-  const maxTime = Date.UTC(
-    maxDate.getFullYear(),
-    maxDate.getMonth(),
-    maxDate.getDate()
-  );
-  return txTime >= minTime && txTime <= maxTime;
-});
+```typescript
+import { formatUTCISODate, isDateInRange } from '../../utils/dateUtils.js';
+
+const [minYear, minMonth, minDay] = dateRange.minDate.split('-').map(Number);
+const minDateStr = formatUTCISODate(
+  new Date(Date.UTC(minYear, minMonth - 1, minDay - toleranceDays))
+);
+// maxDateStr likewise (or statement_end_date when it is YYYY-MM-DD)
+
+for (const txn of ynabTransactions) {
+  (isDateInRange(txn.date, minDateStr, maxDateStr) ? inRange : outsideRange).push(txn);
+}
 ```
 
 **Why Critical**: Prevents false "missing from bank" matches for transactions outside the statement period.
 
-**What Breaks**: Not using `Date.UTC()` → timezone bugs. Not filtering → false positives for transactions before/after statement period.
+**What Breaks**: Parsing YYYY-MM-DD with `new Date()` and reading it back with local getters → off-by-one-day bugs west of UTC. Not filtering → false positives for transactions before/after statement period.
 
 ### 2. Matching Algorithm
 
@@ -338,31 +328,29 @@ describe('matcher', () => {
 **Fix**: Always filter YNAB transactions to CSV date range:
 
 ```typescript
-const inRangeTransactions = filterToDateRange(
+const { inRange, outsideRange } = filterByDateRange(
   ynabTransactions,
-  csvMinDate,
-  csvMaxDate
+  { minDate: csvMinDate, maxDate: csvMaxDate },
+  dateToleranceDays,
+  statementEndDate
 );
 ```
 
-### 2. Not Using `Date.UTC()` for Date Comparison
+### 2. Comparing Dates Through `Date` Objects
 
-**Problem**: Using local time for date comparisons.
+**Problem**: Converting YYYY-MM-DD strings to `Date` and comparing them with local getters or `toISOString()`.
 
 **Impact**: Timezone bugs → transactions on boundary dates incorrectly included/excluded.
 
-**Fix**: Always use `Date.UTC()` for date comparisons:
+**Fix**: Keep dates as YYYY-MM-DD strings and compare them with `isDateInRange`. Do date arithmetic with `Date.UTC` and format the result with `formatUTCISODate`. Read user-supplied statement dates through `normalizeStatementDate` (`statementWindow.ts`):
 
 ```typescript
 // BAD
-const txTime = new Date(txDate).getTime();
+const txDate = new Date(t.date); // UTC midnight, read back in local time
+const inRange = txDate.getDate() >= start.getDate();
 
 // GOOD
-const txTime = Date.UTC(
-  txDate.getFullYear(),
-  txDate.getMonth(),
-  txDate.getDate()
-);
+const inRange = isDateInRange(t.date, minDateStr, maxDateStr);
 ```
 
 ### 3. Missing Milliunits Conversion

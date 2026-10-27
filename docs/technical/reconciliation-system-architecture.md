@@ -150,11 +150,11 @@ graph TD
     E -->|Liability| F[Negate statement_balance]
     E -->|Asset| G[Use statement_balance as-is]
 
-    F --> H{invert_bank_amounts set?}
+    F --> H{sign_convention?}
     G --> H
 
-    H -->|Yes| I[Use explicit value]
-    H -->|No| J[Auto-detect sign inversion]
+    H -->|invert or as_is| I[Use explicit value]
+    H -->|auto, the default| J[Auto-detect sign inversion]
 
     I --> K[analyzeReconciliation]
     J --> K
@@ -186,8 +186,10 @@ const config: MatchingConfig = {
     payee: 0.35,    // 35% weight
   },
   dateToleranceDays: params.date_tolerance_days ?? 7,
-  autoMatchThreshold: params.auto_match_threshold ?? 85,
-  suggestedMatchThreshold: params.suggestion_threshold ?? 60,
+  // From STRICTNESS_THRESHOLDS[params.match_strictness ?? 'normal']:
+  // loose 70/55, normal 85/60, strict 93/75
+  autoMatchThreshold,
+  suggestedMatchThreshold,
   minimumCandidateScore: 40,
   exactDateBonus: 5,
   exactPayeeBonus: 10,
@@ -1518,7 +1520,7 @@ const response = await ynabAPI.transactions.updateTransactions(budgetId, {
 
 ```typescript
 export const ReconcileAccountSchema = z.object({
-  budget_id: z.string().min(1),
+  budget_id: z.string().min(1).optional(),
   account_id: z.string().min(1),
 
   // CSV Input (one required)
@@ -1534,31 +1536,27 @@ export const ReconcileAccountSchema = z.object({
     date_format: z.string().optional(),
     has_header: z.boolean().optional(),
     delimiter: z.string().optional(),
-  }).optional(),
+  }).strict().optional(),
 
   // Statement Information
   statement_balance: z.number(),
-  statement_start_date: z.string().optional(),
   statement_end_date: z.string().optional(),
-  statement_date: z.string().optional(),
 
   // Matching Configuration (amounts must match exactly, no tolerance parameter)
-  date_tolerance_days: z.number().min(0).max(7).default(7),
-  auto_match_threshold: z.number().min(0).max(100).default(85),
-  suggestion_threshold: z.number().min(0).max(100).default(60),
+  date_tolerance_days: z.number().min(0).max(7).optional().default(7),
+  match_strictness: z.enum(['loose', 'normal', 'strict']).optional().default('normal'),
 
   // Automation Toggles
-  auto_create_transactions: z.boolean().default(false),
-  auto_update_cleared_status: z.boolean().default(false),
-  auto_unclear_missing: z.boolean().default(false),
-  auto_adjust_dates: z.boolean().default(false),
-  invert_bank_amounts: z.boolean().optional(),
-  dry_run: z.boolean().default(true),
+  auto_create_transactions: z.boolean().optional().default(false),
+  auto_update_cleared_status: z.boolean().optional().default(false),
+  auto_unclear_missing: z.boolean().optional().default(false),
+  auto_adjust_dates: z.boolean().optional().default(false),
+  dry_run: z.boolean().optional().default(true),
+  sign_convention: z.enum(['auto', 'invert', 'as_is']).optional().default('auto'),
 
   // Response Options
-  include_structured_data: z.boolean().default(false),
-  force_full_refresh: z.boolean().default(true),
-});
+  max_suggestions_in_output: z.number().int().min(1).optional().default(20),
+}).strict(); // plus a refine requiring csv_data or csv_file_path
 ```
 
 **Response Format:**
@@ -1568,17 +1566,19 @@ export const ReconcileAccountSchema = z.object({
   content: [
     {
       type: 'text',
-      text: responseFormatter.format({
-        human: formatHumanReadableReport(analysis, execution),
-        structured: {  // Only if include_structured_data = true
-          version: '2.0',
-          analysis: ReconciliationAnalysis,
-          execution: ExecutionResult,
-          audit_metadata: { ... },
-        },
-      }),
+      text: responseFormatter.format(payload),
     },
   ],
+  // payload = buildReconciliationPayload(analysis, options, execution):
+  // {
+  //   human: string,  // formatHumanReadableReport(...)
+  //   structured: {
+  //     unmatched_bank, unmatched_ynab, suggestions,
+  //     execution_summary, operations, errors,
+  //   },
+  // }
+  structuredContent: payload,
+  ...(execution.errors.length ? { isError: true } : {}),
 }
 ```
 
@@ -1863,8 +1863,7 @@ sequenceDiagram
 ```json
 {
   "date_tolerance_days": 3,
-  "auto_match_threshold": 95,
-  "suggestion_threshold": 75,
+  "match_strictness": "strict",
   "auto_create_transactions": false,
   "auto_update_cleared_status": false,
   "dry_run": true
@@ -1876,8 +1875,7 @@ sequenceDiagram
 ```json
 {
   "date_tolerance_days": 7,
-  "auto_match_threshold": 75,
-  "suggestion_threshold": 50,
+  "match_strictness": "loose",
   "auto_create_transactions": true,
   "auto_update_cleared_status": true,
   "auto_unclear_missing": true,
@@ -1892,8 +1890,7 @@ sequenceDiagram
   "auto_create_transactions": false,
   "auto_update_cleared_status": false,
   "auto_unclear_missing": false,
-  "dry_run": true,
-  "include_structured_data": true
+  "dry_run": true
 }
 ```
 
@@ -1905,8 +1902,8 @@ sequenceDiagram
 
 | Issue | Likely Cause | Solution |
 |-------|-------------|----------|
-| Low match rate (<50%) | CSV format not detected | Specify `csv_format.preset` explicitly |
-| All matches "none" | Sign inversion needed | Set `invert_bank_amounts: true` |
+| Low match rate (<50%) | CSV format not detected | Specify the `csv_format` columns (`date_column`, `amount_column`, `description_column`) explicitly |
+| All matches "none" | Sign inversion needed | Set `sign_convention: "invert"` |
 | Date parsing errors | Ambiguous date format | Specify `csv_format.date_format` |
 | Amount parsing errors | European number format | Parser auto-detects, check warnings |
 | Balance never aligns | Missing transactions | Check `unmatched_bank` and `unmatched_ynab` |
