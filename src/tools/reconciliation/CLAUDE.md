@@ -485,7 +485,7 @@ These fields help users understand why certain YNAB transactions weren't matched
 ### With Utils (`src/utils/`)
 
 - **money.ts**: Milliunits conversion for amount matching
-- **dateUtils.ts**: ISO date validation
+- **dateUtils.ts**: YYYY-MM-DD formatting (`formatUTCISODate`, `formatLocalISODate`) and inclusive range checks (`isDateInRange`)
 
 ## Related Documentation
 

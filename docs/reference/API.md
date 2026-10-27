@@ -981,7 +981,7 @@ Creates a split transaction from categorized receipt data and allocates taxes pr
 - `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `account_id` (string, required): The ID of the account
 - `payee_name` (string, required): Payee to assign to the transaction (e.g., the store name)
-- `date` (string, optional): Transaction date in ISO format (defaults to today in the server's local time zone when omitted)
+- `date` (string, optional): Transaction date in ISO format (defaults to today when omitted, taken as the earlier of the server's local and UTC dates so it is never in the future for YNAB)
 - `memo` (string, optional): Memo applied to the parent transaction
 - `receipt_subtotal` (number, optional): Pre-tax subtotal for validation (calculated automatically if omitted)
 - `receipt_tax` (number, required): Total tax collected on the receipt
