@@ -255,7 +255,7 @@ describe("YNABMCPServer isolated behavior", () => {
 		expect(textOf(result.content[0])).toContain('"rateLimitStats"');
 		expect(
 			stderr.mock.calls.some(([line]) =>
-				String(line).startsWith("[DEBUG] Rate limit acquire for "),
+				String(line).startsWith("[DEBUG] Rate limit"),
 			),
 		).toBe(false);
 	});

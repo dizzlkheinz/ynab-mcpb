@@ -784,14 +784,14 @@ Creates a split transaction from categorized receipt data and allocates taxes pr
         "category_name": "Baby Stuff",
         "items": [
           { "name": "Crib pillow", "amount": 12.99 },
-          { "name": "Bed linen", "amount": 24.99 }
+          { "name": "Bed linen", "amount": 49.99 }
         ]
       },
       {
         "category_id": "home-maintenance",
         "category_name": "Home Maintenance",
         "items": [
-          { "name": "Teapot", "amount": 19.99 },
+          { "name": "Teapot", "amount": 45.37 },
           { "name": "Toothbrush holder", "amount": 3.99 }
         ]
       }
@@ -810,11 +810,11 @@ Creates a split transaction from categorized receipt data and allocates taxes pr
     "cleared": "uncleared",
     "subtransactions": [
       { "memo": "Crib pillow", "amount": -12.99, "category_id": "baby-stuff" },
-      { "memo": "Bed linen", "amount": -24.99, "category_id": "baby-stuff" },
-      { "memo": "Tax - Baby Stuff", "amount": -6.11, "category_id": "baby-stuff" },
-      { "memo": "Teapot", "amount": -19.99, "category_id": "home-maintenance" },
+      { "memo": "Bed linen", "amount": -49.99, "category_id": "baby-stuff" },
+      { "memo": "Teapot", "amount": -45.37, "category_id": "home-maintenance" },
       { "memo": "Toothbrush holder", "amount": -3.99, "category_id": "home-maintenance" },
-      { "memo": "Tax - Home Maintenance", "amount": -5.99, "category_id": "home-maintenance" }
+      { "memo": "Tax - Baby Stuff", "amount": -6.638, "category_id": "baby-stuff" },
+      { "memo": "Tax - Home Maintenance", "amount": -5.202, "category_id": "home-maintenance" }
     ],
     "account_balance": 2534.87,
     "account_cleared_balance": 2450.22
@@ -827,16 +827,24 @@ Creates a split transaction from categorized receipt data and allocates taxes pr
       {
         "category_id": "baby-stuff",
         "category_name": "Baby Stuff",
-        "subtotal": 37.98,
-        "tax": 6.11,
-        "total": 44.09
+        "items": [
+          { "name": "Crib pillow", "amount": 12.99 },
+          { "name": "Bed linen", "amount": 49.99 }
+        ],
+        "subtotal": 62.98,
+        "tax": 6.638,
+        "total": 69.618
       },
       {
         "category_id": "home-maintenance",
         "category_name": "Home Maintenance",
-        "subtotal": 74.36,
-        "tax": 5.73,
-        "total": 80.09
+        "items": [
+          { "name": "Teapot", "amount": 45.37 },
+          { "name": "Toothbrush holder", "amount": 3.99 }
+        ],
+        "subtotal": 49.36,
+        "tax": 5.202,
+        "total": 54.562
       }
     ]
   }

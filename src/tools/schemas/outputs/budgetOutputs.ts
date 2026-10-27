@@ -1,14 +1,14 @@
 /**
  * @fileoverview Output schemas for budget-related tools.
  *
- * Defines Zod schemas and TypeScript types for responses from budget tools:
+ * Defines Zod schemas for responses from budget tools:
  * - `list_budgets`: Returns all budgets with metadata
  *
  * @see src/tools/budgetTools.ts:24-67 for handler implementation
  *
  * @example
  * ```typescript
- * const output: ListBudgetsOutput = {
+ * const output: z.infer<typeof ListBudgetsOutputSchema> = {
  *   budgets: [
  *     {
  *       id: 'budget-123',

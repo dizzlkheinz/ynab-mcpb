@@ -35,7 +35,7 @@ export const UserSchema = z.object({
  *
  * @example
  * ```typescript
- * const output: GetUserOutput = {
+ * const output: z.infer<typeof GetUserOutputSchema> = {
  *   user: { id: "abc123" }
  * };
  * ```
@@ -57,7 +57,7 @@ export const GetUserOutputSchema = z.object({
  *
  * @example
  * ```typescript
- * const output: GetDefaultBudgetOutput = {
+ * const output: z.infer<typeof GetDefaultBudgetOutputSchema> = {
  *   default_budget_id: "abc123",
  *   has_default: true,
  *   message: "Default budget ID: abc123"
@@ -83,7 +83,7 @@ export const GetDefaultBudgetOutputSchema = z.object({
  *
  * @example
  * ```typescript
- * const output: SetDefaultBudgetOutput = {
+ * const output: z.infer<typeof SetDefaultBudgetOutputSchema> = {
  *   success: true,
  *   message: "Default budget set to 'My Budget' and cache warming started",
  *   default_budget_id: "abc123",
@@ -109,7 +109,7 @@ export const SetDefaultBudgetOutputSchema = SuccessResponseSchema.extend({
  *
  * @example
  * ```typescript
- * const output: ClearCacheOutput = {
+ * const output: z.infer<typeof ClearCacheOutputSchema> = {
  *   success: true
  * };
  * ```
@@ -213,7 +213,7 @@ export const DeltaInfoSchema = z.object({
  *
  * @example
  * ```typescript
- * const output: DiagnosticInfoOutput = {
+ * const output: z.infer<typeof DiagnosticInfoOutputSchema> = {
  *   timestamp: "2025-01-17T12:34:56.789Z",
  *   server: {
  *     name: "ynab-mcp-server",
@@ -299,7 +299,7 @@ export const BudgetDetailSchema = z.object({
  *
  * @example
  * ```typescript
- * const output: GetBudgetOutput = {
+ * const output: z.infer<typeof GetBudgetOutputSchema> = {
  *   budget: {
  *     id: "abc123",
  *     name: "My Budget",

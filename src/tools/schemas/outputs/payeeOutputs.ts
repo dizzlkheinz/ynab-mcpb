@@ -1,7 +1,7 @@
 /**
  * @fileoverview Output schemas for payee-related tools.
  *
- * Defines Zod schemas and TypeScript types for responses from payee tools:
+ * Defines Zod schemas for responses from payee tools:
  * - `list_payees`: Returns all payees with pagination and cache metadata
  * - `get_payee`: Returns a single payee with cache metadata
  *
@@ -10,7 +10,7 @@
  *
  * @example
  * ```typescript
- * const listOutput: ListPayeesOutput = {
+ * const listOutput: z.infer<typeof ListPayeesOutputSchema> = {
  *   payees: [
  *     {
  *       id: 'payee-123',
@@ -35,7 +35,7 @@
  *   }
  * };
  *
- * const getOutput: GetPayeeOutput = {
+ * const getOutput: z.infer<typeof GetPayeeOutputSchema> = {
  *   payee: {
  *     id: 'payee-123',
  *     name: 'Whole Foods',
