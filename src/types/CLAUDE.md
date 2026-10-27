@@ -10,7 +10,7 @@ The `src/types/` directory provides:
 2. **ToolContext** - Central dependency injection object for tool handlers
 3. **Handler Signatures** - Type-safe handler function signatures
 4. **Error Classes** - Custom error types with context
-5. **Domain Types** - Reconciliation, caching, and configuration types
+5. **Domain Types** - Reconciliation and caching types
 
 ## Key Files & Responsibilities
 
@@ -453,7 +453,6 @@ const validated = MySchema.parse(input);
 
 - **ToolContext**: Created in YNABMCPServer, injected into tools
 - **Error Classes**: Used by errorHandler for consistent responses
-- **Configuration Types**: Define server configuration structure
 
 ### With Tools (`src/tools/`)
 
@@ -463,7 +462,7 @@ const validated = MySchema.parse(input);
 
 ### With Utils (`src/utils/`)
 
-- **Error Classes**: Defined in utils, exported from types
+- **Error Classes**: Defined in `src/utils/errors.ts`; `index.ts` re-exports only `ValidationError` (with `withToolErrorHandling` and `YNABErrorCode`) from `errorHandler.ts`
 - **Shared Interfaces**: Money, date, validation types
 
 ## Related Documentation

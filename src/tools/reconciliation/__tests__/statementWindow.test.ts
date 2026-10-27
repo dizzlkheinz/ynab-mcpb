@@ -70,6 +70,40 @@ describe("statementWindow helpers", () => {
 			},
 		);
 
+		it.each(["America/Los_Angeles", "Australia/Sydney"])(
+			"keeps the written date of ISO timestamps in %s",
+			(timeZone) => {
+				vi.stubEnv("TZ", timeZone);
+				try {
+					expect(normalizeStatementDate("2024-01-31 00:00:00Z")).toBe(
+						"2024-01-31",
+					);
+					expect(normalizeStatementDate("2024-01-31t00:00:00z")).toBe(
+						"2024-01-31",
+					);
+					expect(normalizeStatementDate("2024-01-31 23:30:00-05:00")).toBe(
+						"2024-01-31",
+					);
+				} finally {
+					vi.unstubAllEnvs();
+				}
+			},
+		);
+
+		it.each(["America/Los_Angeles", "Australia/Sydney"])(
+			"reads zoned non-ISO timestamps as their UTC date in %s",
+			(timeZone) => {
+				vi.stubEnv("TZ", timeZone);
+				try {
+					expect(normalizeStatementDate("Wed, 31 Jan 2024 00:00:00 GMT")).toBe(
+						"2024-01-31",
+					);
+				} finally {
+					vi.unstubAllEnvs();
+				}
+			},
+		);
+
 		it("keeps the calendar date of ISO timestamps", () => {
 			expect(normalizeStatementDate("2024-01-31T23:30:00-05:00")).toBe(
 				"2024-01-31",

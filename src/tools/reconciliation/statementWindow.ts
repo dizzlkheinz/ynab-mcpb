@@ -1,5 +1,6 @@
 import {
 	formatLocalISODate,
+	formatUTCISODate,
 	isDateInRange,
 	isValidISODate,
 } from "../../utils/dateUtils.js";
@@ -15,6 +16,8 @@ export interface ClampStatementWindowResult {
 	excludedCount: number;
 	windowApplied: StatementWindowBounds | null;
 }
+
+const EXPLICIT_ZONE = /(?:Z|GMT|UTC|[+-]\d{2}:?\d{2})(?:\s*\([^)]*\))?$/i;
 
 /**
  * Normalize user-provided statement dates to YYYY-MM-DD.
@@ -32,20 +35,24 @@ export function normalizeStatementDate(
 		return undefined;
 	}
 
-	// An ISO date, with or without a time, already names the calendar date
-	const isoDate = /^(\d{4}-\d{2}-\d{2})(?:$|T)/.exec(trimmed)?.[1];
+	// An ISO date, with or without a time ("T", "t" or RFC 3339's space),
+	// already names the calendar date
+	const isoDate = /^(\d{4}-\d{2}-\d{2})(?:$|[Tt ])/.exec(trimmed)?.[1];
 	if (isoDate) {
 		return isValidISODate(isoDate) ? isoDate : undefined;
 	}
 
-	// Other formats ("01/31/2024", "Jan 31, 2024") parse as local midnight, so
-	// format in local time to keep the date the user wrote
 	const parsed = new Date(trimmed);
 	if (Number.isNaN(parsed.getTime())) {
 		return undefined;
 	}
 
-	return formatLocalISODate(parsed);
+	// A string with an explicit zone ("Wed, 31 Jan 2024 00:00:00 GMT") names an
+	// instant; take its UTC date. Other formats ("01/31/2024", "Jan 31, 2024")
+	// parse as local midnight, so format in local time to keep the written date
+	return EXPLICIT_ZONE.test(trimmed)
+		? formatUTCISODate(parsed)
+		: formatLocalISODate(parsed);
 }
 
 export function formatStatementWindow(bounds: StatementWindowBounds): string {
