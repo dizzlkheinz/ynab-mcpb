@@ -648,6 +648,7 @@ export class ResourceManager {
 
 		// Templates are validated at registration and come from trusted internal sources.
 		// If external template registration is introduced, consider a ReDoS-safe matcher.
+		// nosemgrep
 		const regex = new RegExp(`^${regexPattern}$`);
 		const match = uri.match(regex);
 

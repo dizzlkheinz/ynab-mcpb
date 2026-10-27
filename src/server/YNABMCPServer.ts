@@ -181,7 +181,7 @@ export class YNABMCPServer {
 					try {
 						this.cacheManager.delete(key);
 					} catch (error) {
-						console.error(`Failed to invalidate cache key "${key}":`, error);
+						console.error("Failed to invalidate cache key:", key, error);
 					}
 				},
 				clear: () => {
