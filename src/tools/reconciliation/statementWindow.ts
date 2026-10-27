@@ -17,7 +17,10 @@ export interface ClampStatementWindowResult {
 	windowApplied: StatementWindowBounds | null;
 }
 
-const EXPLICIT_ZONE = /(?:Z|GMT|UTC|[+-]\d{2}:?\d{2})(?:\s*\([^)]*\))?$/i;
+// A time followed by a zone, optionally with a "(Pacific Standard Time)" name.
+// The time is required so "01-31-2024" is not read as a -20:24 offset.
+const EXPLICIT_ZONE =
+	/\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:Z|(?:GMT|UTC)(?:[+-]\d{2}:?\d{2})?|[+-]\d{2}:?\d{2})(?:\s*\([^)]*\))?$/i;
 
 /**
  * Normalize user-provided statement dates to YYYY-MM-DD.

@@ -63,6 +63,7 @@ describe("statementWindow helpers", () => {
 				vi.stubEnv("TZ", timeZone);
 				try {
 					expect(normalizeStatementDate("01/31/2024")).toBe("2024-01-31");
+					expect(normalizeStatementDate("01-31-2024")).toBe("2024-01-31");
 					expect(normalizeStatementDate("Jan 31, 2024")).toBe("2024-01-31");
 				} finally {
 					vi.unstubAllEnvs();
