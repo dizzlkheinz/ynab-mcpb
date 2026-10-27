@@ -17,10 +17,10 @@ export interface ClampStatementWindowResult {
 	windowApplied: StatementWindowBounds | null;
 }
 
-// A time followed by a zone, optionally with a "(Pacific Standard Time)" name.
-// The time is required so "01-31-2024" is not read as a -20:24 offset.
-const EXPLICIT_ZONE =
-	/\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:Z|(?:GMT|UTC)(?:[+-]\d{2}:?\d{2})?|[+-]\d{2}:?\d{2})(?:\s*\([^)]*\))?$/i;
+// Date-only forms without a time or zone, which Date parses as local midnight:
+// 01/31/2024, 01-31-2024, 2024/01/31, Jan 31, 2024, 31 Jan 2024, Wed, 31 Jan 2024
+const ZONELESS_DATE =
+	/^(?:(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s+)?(?:\d{1,2}([/-])\d{1,2}\1\d{4}|\d{4}\/\d{1,2}\/\d{1,2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+\d{4})$/i;
 
 /**
  * Normalize user-provided statement dates to YYYY-MM-DD.
@@ -50,12 +50,11 @@ export function normalizeStatementDate(
 		return undefined;
 	}
 
-	// A string with an explicit zone ("Wed, 31 Jan 2024 00:00:00 GMT") names an
-	// instant; take its UTC date. Other formats ("01/31/2024", "Jan 31, 2024")
-	// parse as local midnight, so format in local time to keep the written date
-	return EXPLICIT_ZONE.test(trimmed)
-		? formatUTCISODate(parsed)
-		: formatLocalISODate(parsed);
+	// Date-only forms parse as local midnight, so format in local time to keep
+	// the written date. Anything else (a time, a zone) keeps the UTC date
+	return ZONELESS_DATE.test(trimmed)
+		? formatLocalISODate(parsed)
+		: formatUTCISODate(parsed);
 }
 
 export function formatStatementWindow(bounds: StatementWindowBounds): string {
