@@ -491,6 +491,7 @@ Compares bank transactions from CSV files with YNAB transactions to identify mis
 - `csv_data` (string, optional): CSV data as string (alternative to csv_file_path)
 - `amount_tolerance` (number, optional): Amount difference tolerance as decimal (0.01 = 1%, default: 0.01)
 - `date_tolerance_days` (number, optional): Date difference tolerance in days (default: 5)
+- `statement_start_date`, `statement_date` (string, optional): Inclusive statement window as `YYYY-MM-DD`; other formats are rejected
 - `csv_format` (object, optional): CSV format configuration
   - `date_column` (string): Column name for transaction date when `has_header: true`, or column index as string when `has_header: false` (default: "Date")
   - `amount_column` (string): Column name for transaction amount when `has_header: true`, or column index as string when `has_header: false` (default: "Amount")
@@ -980,7 +981,7 @@ Creates a split transaction from categorized receipt data and allocates taxes pr
 - `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
 - `account_id` (string, required): The ID of the account
 - `payee_name` (string, required): Payee to assign to the transaction (e.g., the store name)
-- `date` (string, optional): Transaction date in ISO format (defaults to today when omitted)
+- `date` (string, optional): Transaction date in ISO format (defaults to today in the server's local time zone when omitted)
 - `memo` (string, optional): Memo applied to the parent transaction
 - `receipt_subtotal` (number, optional): Pre-tax subtotal for validation (calculated automatically if omitted)
 - `receipt_tax` (number, required): Total tax collected on the receipt

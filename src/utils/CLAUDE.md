@@ -17,7 +17,7 @@ The `src/utils/` directory provides:
 | File | Responsibility | Lines | Critical |
 |------|---------------|-------|----------|
 | **money.ts** | Dollar ↔ milliunit conversion, currency-aware helpers (`toMilli`, `fromMilli`), and amount formatting (CRITICAL!) | ~200 | CRITICAL |
-| **dateUtils.ts** | ISO date validation | ~20 | HIGH |
+| **dateUtils.ts** | ISO date validation and YYYY-MM-DD formatting (UTC and local) | ~35 | HIGH |
 | **baseError.ts** | Base error class for custom errors | ~50 | HIGH |
 | **errors.ts** | Custom error classes and utilities | ~200 | HIGH |
 | **validationError.ts** | Validation-specific error handling | ~100 | MEDIUM |
@@ -77,7 +77,7 @@ describe('amountToMilliunits', () => {
 });
 ```
 
-### 2. Date Validation
+### 2. Date Validation and Formatting
 
 YNAB requires ISO date format: `YYYY-MM-DD`
 
@@ -89,6 +89,23 @@ export function isValidISODate(dateString: string): boolean {
   return isValid(parsed);
 }
 ```
+
+Format dates with the shared helpers rather than inlining `toISOString()`:
+
+```typescript
+// UTC calendar date: for dates built with Date.UTC or parsed from YYYY-MM-DD
+export function formatISODate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+// Local calendar date: for "today" defaults, where the user's date matters
+export function formatLocalISODate(date: Date): string {
+  return format(date, 'yyyy-MM-dd');
+}
+```
+
+Use `formatLocalISODate(new Date())` for a default of "today"; `formatISODate(new Date())`
+returns tomorrow's date for users west of UTC late in the evening.
 
 **Why Important**: YNAB API rejects non-ISO dates. Date parsing errors cause transaction failures.
 
@@ -134,7 +151,7 @@ All utility functions are **pure**: same input → same output, no side effects.
 ```typescript
 // GOOD: Pure function
 export function formatISODate(date: Date): string {
-  return format(date, 'yyyy-MM-dd');
+  return date.toISOString().slice(0, 10);
 }
 
 // BAD: Impure function (mutates input)
@@ -243,7 +260,7 @@ export function addDays(dateString: string, days: number): string {
   );
   utcDate.setUTCDate(utcDate.getUTCDate() + days);
 
-  return utcDate.toISOString().slice(0, 10);
+  return formatISODate(utcDate);
 }
 ```
 
@@ -462,6 +479,7 @@ const time2 = Date.UTC(
 
 - **Money Conversion**: All transaction tools use `amountToMilliunits`/`milliunitsToAmount`
 - **Date Validation**: Date inputs are checked with `isValidISODate`
+- **Date Formatting**: `formatISODate` / `formatLocalISODate` instead of inline `toISOString()`
 - **Validation**: Input validation before API calls
 
 ### With Server (`src/server/`)

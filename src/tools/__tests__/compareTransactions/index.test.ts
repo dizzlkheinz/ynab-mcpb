@@ -74,6 +74,27 @@ describe("compareTransactions index (main handler)", () => {
 			expect(parsed.date_tolerance_days).toBe(5);
 			expect(parsed.auto_detect_format).toBe(false);
 		});
+
+		test("rejects statement dates that are not ISO dates", () => {
+			const base = {
+				budget_id: "budget-123",
+				account_id: "account-456",
+				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test",
+			};
+
+			expect(
+				CompareTransactionsSchema.safeParse({
+					...base,
+					statement_date: "01/31/2024",
+				}).success,
+			).toBe(false);
+			expect(
+				CompareTransactionsSchema.safeParse({
+					...base,
+					statement_start_date: "2024-02-30",
+				}).success,
+			).toBe(false);
+		});
 	});
 
 	describe("handleCompareTransactions orchestration", () => {
@@ -375,6 +396,40 @@ describe("compareTransactions index (main handler)", () => {
 				bankTxns.map((t: { description: string }) => t.description),
 			).toEqual(["Start", "End"]);
 			expect(ynabTxns.map((t: { id: string }) => t.id)).toEqual(["ynab-in"]);
+		});
+
+		test("keeps a YNAB transaction with a timestamped date on the last day of the range", async () => {
+			mockYnabAPI.transactions.getTransactionsByAccount = vi
+				.fn()
+				.mockResolvedValue({
+					data: {
+						transactions: [
+							{
+								id: "ynab-timestamped",
+								date: "2024-01-01T00:00:00Z",
+								amount: 100000,
+								payee_name: "Test Payee",
+								memo: null,
+								cleared: "cleared",
+								deleted: false,
+							},
+						],
+					},
+				});
+
+			const params = CompareTransactionsSchema.parse({
+				budget_id: "budget-123",
+				account_id: "account-456",
+				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
+				date_tolerance_days: 0,
+			});
+
+			await handleCompareTransactions(mockYnabAPI, params);
+
+			const [, ynabTxns] = mockFindMatches.mock.calls[0]!;
+			expect(ynabTxns.map((t: { id: string }) => t.id)).toEqual([
+				"ynab-timestamped",
+			]);
 		});
 
 		test("applies a statement window with only one bound", async () => {

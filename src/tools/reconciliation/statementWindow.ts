@@ -1,3 +1,4 @@
+import { formatISODate } from "../../utils/dateUtils.js";
 import type { CSVParseResult } from "./csvParser.js";
 
 export interface StatementWindowBounds {
@@ -36,7 +37,7 @@ export function normalizeStatementDate(
 		return undefined;
 	}
 
-	return parsed.toISOString().split("T")[0];
+	return formatISODate(parsed);
 }
 
 export function formatStatementWindow(bounds: StatementWindowBounds): string {

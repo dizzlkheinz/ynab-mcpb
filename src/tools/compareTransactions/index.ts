@@ -3,12 +3,16 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { ErrorHandler } from "../../server/errorHandler.js";
 import { withToolErrorHandling } from "../../types/index.js";
-import { formatISODate } from "../../utils/dateUtils.js";
+import { formatISODate, isValidISODate } from "../../utils/dateUtils.js";
 import { requireResolvedBudgetId } from "../adapters.js";
 import { buildComparisonResult } from "./formatter.js";
 import { findMatches } from "./matcher.js";
 import { autoDetectCSVFormat, parseBankCSV, readCSVFile } from "./parser.js";
 import type { YNABTransaction } from "./types.js";
+
+const dateSchema = z
+	.string()
+	.refine(isValidISODate, "Date must be a valid ISO date (YYYY-MM-DD)");
 
 /**
  * Schema for ynab:compare_transactions tool parameters
@@ -22,8 +26,8 @@ export const CompareTransactionsSchema = z
 		amount_tolerance: z.number().min(0).max(1).optional().default(0.01),
 		date_tolerance_days: z.number().min(0).max(7).optional().default(5),
 		enable_chronology_bonus: z.boolean().optional().default(false),
-		statement_start_date: z.string().optional(),
-		statement_date: z.string().optional(),
+		statement_start_date: dateSchema.optional(),
+		statement_date: dateSchema.optional(),
 		auto_detect_format: z.boolean().optional().default(false),
 		debug: z.boolean().optional().default(false),
 		csv_format: z
@@ -72,6 +76,20 @@ function parseDateOnly(date: string): Date {
 	}
 	const [, year, month, day] = match;
 	return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+}
+
+/**
+ * Earliest and latest of a non-empty list of dates
+ */
+function dateBounds(dates: Date[]): { min: Date; max: Date } {
+	let min = Number.POSITIVE_INFINITY;
+	let max = Number.NEGATIVE_INFINITY;
+	for (const date of dates) {
+		const time = date.getTime();
+		if (time < min) min = time;
+		if (time > max) max = time;
+	}
+	return { min: new Date(min), max: new Date(max) };
 }
 
 /**
@@ -138,9 +156,9 @@ export async function handleCompareTransactions(
 			}
 
 			// Calculate date range for YNAB query
-			const bankDates = bankTransactions.map((t) => t.date);
-			const minDate = new Date(Math.min(...bankDates.map((d) => d.getTime())));
-			const maxDate = new Date(Math.max(...bankDates.map((d) => d.getTime())));
+			const { min: minDate, max: maxDate } = dateBounds(
+				bankTransactions.map((t) => t.date),
+			);
 
 			// Add tolerance to date range
 			const dateToleranceDays = parsed.date_tolerance_days ?? 0;
@@ -160,9 +178,7 @@ export async function handleCompareTransactions(
 
 			// Filter YNAB transactions to the extended date range and convert for comparison
 			const ynabTransactions: YNABTransaction[] = response.data.transactions
-				.filter(
-					(txn) => inWindow(txn.date, sinceDate, endDateString) && !txn.deleted,
-				)
+				.filter((txn) => !txn.deleted)
 				.map((txn) => ({
 					id: txn.id,
 					date: parseDateOnly(txn.date),
@@ -171,7 +187,10 @@ export async function handleCompareTransactions(
 					memo: txn.memo,
 					cleared: txn.cleared,
 					original: txn,
-				}));
+				}))
+				.filter((t) =>
+					inWindow(formatISODate(t.date), sinceDate, endDateString),
+				);
 
 			// Filter candidates to statement window if provided
 			let filteredBankTransactions = bankTransactions;
@@ -203,13 +222,9 @@ export async function handleCompareTransactions(
 			let dateRange: { start: string; end: string };
 			if (parsed.statement_start_date || parsed.statement_date) {
 				// Use filtered bank transactions for date range when statement window filtering is applied
-				const filteredBankDates = filteredBankTransactions.map((t) => t.date);
-				if (filteredBankDates.length > 0) {
-					const filteredMinDate = new Date(
-						Math.min(...filteredBankDates.map((d) => d.getTime())),
-					);
-					const filteredMaxDate = new Date(
-						Math.max(...filteredBankDates.map((d) => d.getTime())),
+				if (filteredBankTransactions.length > 0) {
+					const { min: filteredMinDate, max: filteredMaxDate } = dateBounds(
+						filteredBankTransactions.map((t) => t.date),
 					);
 					dateRange = {
 						start: formatISODate(filteredMinDate),

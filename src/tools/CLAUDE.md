@@ -615,7 +615,7 @@ metadata: {
 ### With Utils (`src/utils/`)
 
 - **Money Conversion**: `amountToMilliunits()`, `milliunitsToAmount()`
-- **Date Utilities**: `isValidISODate()`
+- **Date Utilities**: `isValidISODate()`, `formatISODate()` (UTC), `formatLocalISODate()` (local "today")
 - **Validation**: `isValidISODate()` plus Zod input schemas
 
 ## Performance Considerations

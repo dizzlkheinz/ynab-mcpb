@@ -1446,6 +1446,37 @@ describe("transactionTools", () => {
 			);
 		});
 
+		it("should default the date to the local calendar date", async () => {
+			// West of UTC, so late evening locally is already tomorrow in UTC
+			vi.stubEnv("TZ", "America/Toronto");
+			vi.useFakeTimers();
+			try {
+				vi.setSystemTime(new Date(2025, 9, 13, 23, 30));
+				const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, {
+					budget_id: "budget-123",
+					account_id: "account-456",
+					payee_name: "IKEA",
+					receipt_tax: 0,
+					receipt_total: 20,
+					receipt_subtotal: 20,
+					categories: [
+						{
+							category_id: "category-home",
+							category_name: "Home",
+							items: [{ name: "Lamp", amount: 20 }],
+						},
+					],
+					dry_run: true,
+				} satisfies CreateReceiptSplitTransactionParams);
+
+				const parsed = JSON.parse(textOf(result.content[0]));
+				expect(parsed.transaction_preview.date).toBe("2025-10-13");
+			} finally {
+				vi.useRealTimers();
+				vi.unstubAllEnvs();
+			}
+		});
+
 		it("should create a split transaction and attach receipt summary", async () => {
 			(mockYnabAPI.transactions.createTransaction as any).mockResolvedValue({
 				data: {

@@ -32,22 +32,9 @@ export class RateLimiter {
 	}
 
 	/**
-	 * Check if a request is allowed for the given access token. The token is
-	 * hashed here (see hashToken); only the hash is stored or logged.
-	 */
-	isAllowed(token: string): RateLimitInfo {
-		return this.check(hashToken(token));
-	}
-
-	/**
-	 * Record a request for the given access token
-	 */
-	recordRequest(token: string): void {
-		this.record(hashToken(token));
-	}
-
-	/**
-	 * Get current rate limit status for an access token without logging a check
+	 * Get current rate limit status for an access token without recording or
+	 * logging a request. The token is hashed here (see hashToken); only the hash
+	 * is stored or logged.
 	 */
 	getStatus(token: string): RateLimitInfo {
 		return this.computeStatus(hashToken(token));
@@ -70,13 +57,23 @@ export class RateLimiter {
 
 	/**
 	 * Atomically check and record a request for an already-hashed key.
-	 * Returns rate limit info; if not limited, the request is recorded.
+	 * Returns rate limit info as of the check; if not limited, the request is
+	 * recorded. Logs one line per call.
 	 */
 	private acquire(key: string): RateLimitInfo {
-		const info = this.check(key);
+		const info = this.computeStatus(key);
+		const requests = this.requests.get(key) ?? [];
 		if (!info.isLimited) {
-			this.record(key);
+			requests.push(Date.now());
+			this.requests.set(key, requests);
 		}
+
+		if (this.config.enableLogging) {
+			console.error(
+				`Rate limit acquire for ${key}: ${requests.length}/${this.config.maxRequests} requests, limited: ${info.isLimited}`,
+			);
+		}
+
 		return info;
 	}
 
@@ -110,22 +107,6 @@ export class RateLimiter {
 	}
 
 	/**
-	 * Check and log the status of an already-hashed key
-	 */
-	private check(key: string): RateLimitInfo {
-		const info = this.computeStatus(key);
-
-		if (this.config.enableLogging) {
-			const used = this.requests.get(key)?.length ?? 0;
-			console.error(
-				`Rate limit check for ${key}: ${used}/${this.config.maxRequests} requests, remaining: ${info.remaining}, limited: ${info.isLimited}`,
-			);
-		}
-
-		return info;
-	}
-
-	/**
 	 * Prune expired requests and compute an already-hashed key's status without logging
 	 */
 	private computeStatus(key: string): RateLimitInfo {
@@ -150,23 +131,6 @@ export class RateLimiter {
 			resetTime,
 			isLimited,
 		};
-	}
-
-	/**
-	 * Record a request for an already-hashed key
-	 */
-	private record(key: string): void {
-		const now = Date.now();
-		const requests = this.requests.get(key) || [];
-
-		requests.push(now);
-		this.requests.set(key, requests);
-
-		if (this.config.enableLogging) {
-			console.error(
-				`Recorded request for ${key}: ${requests.length}/${this.config.maxRequests} requests`,
-			);
-		}
 	}
 
 	/**

@@ -227,17 +227,19 @@ describe("YNABMCPServer isolated behavior", () => {
 			const configured = new YNABMCPServer(false);
 			await configured.getYNABAPI().user.getUser();
 			const rateLimitLines = stderr.mock.calls.filter(([line]) =>
-				String(line).startsWith("Rate limit check for "),
+				String(line).startsWith("Rate limit acquire for "),
 			);
 			expect(rateLimitLines.length > 0).toBe(expected);
 			for (const [line] of rateLimitLines) {
-				expect(String(line)).toMatch(/^Rate limit check for token_[0-9a-f]+: /);
+				expect(String(line)).toMatch(
+					/^Rate limit acquire for token_[0-9a-f]+: /,
+				);
 				expect(String(line)).not.toContain("unit-test-token");
 			}
 		},
 	);
 
-	it("does not log rate limit checks when diagnostics read the status", async () => {
+	it("does not log rate limit acquires when diagnostics read the status", async () => {
 		vi.spyOn(config, "loadConfig").mockReturnValueOnce({
 			...config.loadConfig(),
 			RATE_LIMIT_LOGGING: true,
@@ -253,7 +255,7 @@ describe("YNABMCPServer isolated behavior", () => {
 		expect(textOf(result.content[0])).toContain('"rateLimitStats"');
 		expect(
 			stderr.mock.calls.some(([line]) =>
-				String(line).startsWith("Rate limit check for "),
+				String(line).startsWith("Rate limit acquire for "),
 			),
 		).toBe(false);
 	});

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { formatISODate, isValidISODate } from "../dateUtils.js";
+import {
+	formatISODate,
+	formatLocalISODate,
+	isValidISODate,
+} from "../dateUtils.js";
 
 describe("dateUtils", () => {
 	describe("isValidISODate", () => {
@@ -30,6 +34,18 @@ describe("dateUtils", () => {
 			// Late on Dec 31 UTC stays on Dec 31 regardless of host time zone
 			expect(formatISODate(new Date("2024-12-31T23:59:59Z"))).toBe(
 				"2024-12-31",
+			);
+		});
+	});
+
+	describe("formatLocalISODate", () => {
+		it("should format the local calendar date", () => {
+			// Built from local components, so the local date is the same in any zone
+			expect(formatLocalISODate(new Date(2024, 11, 31, 23, 59, 59))).toBe(
+				"2024-12-31",
+			);
+			expect(formatLocalISODate(new Date(2024, 0, 1, 0, 0, 1))).toBe(
+				"2024-01-01",
 			);
 		});
 	});

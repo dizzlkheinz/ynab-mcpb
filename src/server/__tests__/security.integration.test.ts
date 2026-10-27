@@ -377,8 +377,8 @@ describe("Security Integration", () => {
 			const testToken = "cleanup-test-token";
 
 			// Make some requests
-			testLimiter.recordRequest(testToken);
-			testLimiter.recordRequest(testToken);
+			testLimiter.forToken(testToken).tryAcquire();
+			testLimiter.forToken(testToken).tryAcquire();
 
 			expect(testLimiter.getStatus(testToken).remaining).toBe(3);
 

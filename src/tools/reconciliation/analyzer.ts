@@ -6,6 +6,7 @@
  */
 
 import type * as ynab from "ynab";
+import { formatISODate } from "../../utils/dateUtils.js";
 import { toMoneyValue } from "../../utils/money.js";
 import {
 	type CSVParseResult,
@@ -130,13 +131,13 @@ function filterByDateRange(
 	const minDateWithBuffer = new Date(
 		Date.UTC(minYear, minMonth - 1, minDay - safeToleranceDays),
 	);
-	const minDateStr = minDateWithBuffer.toISOString().split("T")[0] ?? "";
+	const minDateStr = formatISODate(minDateWithBuffer);
 
 	const maxDateStr = /^\d{4}-\d{2}-\d{2}$/.test(statementEndDate ?? "")
 		? (statementEndDate ?? dateRange.maxDate)
-		: (new Date(Date.UTC(maxYear, maxMonth - 1, maxDay + safeToleranceDays))
-				.toISOString()
-				.split("T")[0] ?? "");
+		: formatISODate(
+				new Date(Date.UTC(maxYear, maxMonth - 1, maxDay + safeToleranceDays)),
+			);
 
 	for (const txn of ynabTransactions) {
 		// Compare dates as strings (YYYY-MM-DD format sorts correctly)

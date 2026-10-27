@@ -47,8 +47,9 @@ npm run knip               # Unused files, exports and types (config: knip.json)
 ```
 
 knip is a pinned devDependency. CI runs `npm run knip` and fails on any finding; the
-pre-commit hook (`.githooks/local.sh`) runs it too and blocks the commit when nothing is
-left unstaged (otherwise its result is advisory). Export only what another file imports; an export used
+pre-commit hook (`.githooks/local.sh`) runs it too and blocks the commit only when there
+are no unstaged changes and no untracked, non-ignored files; otherwise its result is
+advisory and CI is the gate. Export only what another file imports; an export used
 only inside its own file is allowed.
 
 ### Packaging & Distribution
@@ -155,7 +156,7 @@ Tools are organized by domain with some using modular sub-directories:
 ### Utilities (`src/utils/`)
 
 - **money.ts** - Amount conversion (dollars ↔ milliunits)
-- **dateUtils.ts** - ISO date validation
+- **dateUtils.ts** - ISO date validation (`isValidISODate`) and YYYY-MM-DD formatting: `formatISODate` (UTC) and `formatLocalISODate` (local, for "today" defaults)
 - **money.ts** - Amount validation and utilities
 - **baseError.ts** - Base error class for custom errors
 - **errors.ts** - Custom error classes and error handling utilities
