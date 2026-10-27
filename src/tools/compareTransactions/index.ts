@@ -3,23 +3,13 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { ErrorHandler } from "../../server/errorHandler.js";
 import { withToolErrorHandling } from "../../types/index.js";
-import {
-	formatUTCISODate,
-	isDateInRange,
-	isValidISODate,
-} from "../../utils/dateUtils.js";
+import { formatUTCISODate, isDateInRange } from "../../utils/dateUtils.js";
 import { requireResolvedBudgetId } from "../adapters.js";
+import { optionalDateSchema } from "../schemas/common.js";
 import { buildComparisonResult } from "./formatter.js";
 import { findMatches } from "./matcher.js";
 import { autoDetectCSVFormat, parseBankCSV, readCSVFile } from "./parser.js";
 import type { YNABTransaction } from "./types.js";
-
-// An empty string means no bound, as clients often send one for an unused field
-const optionalDateSchema = z
-	.string()
-	.refine(isValidISODate, "Date must be a valid ISO date (YYYY-MM-DD)")
-	.or(z.literal(""))
-	.optional();
 
 /**
  * Schema for ynab:compare_transactions tool parameters

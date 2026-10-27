@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `reconcile_account` accepts `statement_end_date` only as a `YYYY-MM-DD` date, as its description documents, and rejects other values with a validation error. Formats such as `Jan 31, 2024`, `01/31/2024` or ISO timestamps used to be guessed through `new Date()`, which could land a day early depending on the server's time zone (`31-Jan-24`, `1/31/24`), read `01/02/2024` as January 2 even for day-first banks, and silently fell back to the CSV-inferred date when the value could not be parsed. An empty string is still treated as omitted. Dates inside the CSV are parsed as before
+
 ## [0.31.0] - 2026-10-27
 
 ### Removed

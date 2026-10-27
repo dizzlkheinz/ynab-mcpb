@@ -342,7 +342,7 @@ const { inRange, outsideRange } = filterByDateRange(
 
 **Impact**: Timezone bugs → transactions on boundary dates incorrectly included/excluded.
 
-**Fix**: Keep dates as YYYY-MM-DD strings and compare them with `isDateInRange`. Do date arithmetic with `Date.UTC` and format the result with `formatUTCISODate`. Read user-supplied statement dates through `normalizeStatementDate` (`statementWindow.ts`):
+**Fix**: Keep dates as YYYY-MM-DD strings and compare them with `isDateInRange`. Do date arithmetic with `Date.UTC` and format the result with `formatUTCISODate`. User-supplied statement dates are validated as `YYYY-MM-DD` by the input schema (`optionalDateSchema`), so use them as-is:
 
 ```typescript
 // BAD

@@ -107,8 +107,8 @@ export function formatLocalISODate(date: Date): string {
 Use `formatLocalISODate` for dates built from local parts or parsed from date-only
 non-ISO strings without a time or zone, such as `"Jan 31, 2024"`, which `Date` reads as
 local midnight; `formatUTCISODate` returns the previous day for those east of UTC. A
-string with a time or zone names an instant: use `formatUTCISODate` or handle it
-explicitly (see `normalizeStatementDate` in `reconciliation/statementWindow.ts`).
+string with a time or zone names an instant: use `formatUTCISODate`, or better,
+require `YYYY-MM-DD` in the input schema (`optionalDateSchema` in `tools/schemas/common.ts`).
 A default of "today" sent to YNAB should be the earlier of the two: the UTC date is
 tomorrow for users west of UTC late in the evening, and the local date can be in the
 future by UTC east of it.

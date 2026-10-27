@@ -65,6 +65,40 @@ describe("ReconcileAccountSchema", () => {
 			);
 		}
 	});
+
+	describe("statement_end_date", () => {
+		const base = {
+			budget_id: "budget-1",
+			account_id: "account-1",
+			csv_data: "Date,Description,Amount\n2025-01-01,Coffee,-10.00",
+			statement_balance: -10,
+		};
+
+		it("accepts a YYYY-MM-DD date, an empty string or no value", () => {
+			for (const statement_end_date of ["2024-01-31", "", undefined]) {
+				expect(
+					ReconcileAccountSchema.safeParse({ ...base, statement_end_date })
+						.success,
+				).toBe(true);
+			}
+		});
+
+		it.each([
+			"Jan 31, 2024",
+			"01/31/2024",
+			"2024-01-31T00:00:00Z",
+			"2024-02-30",
+			"not-a-date",
+		])("rejects %j", (statement_end_date) => {
+			const result = ReconcileAccountSchema.safeParse({
+				...base,
+				statement_end_date,
+			});
+
+			expect(result.success).toBe(false);
+			expect(result.error?.issues[0]?.message).toContain("YYYY-MM-DD");
+		});
+	});
 });
 
 const buildEmptyAccountAPI = () =>

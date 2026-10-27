@@ -26,7 +26,7 @@ import {
 	handleCompareTransactions,
 } from "../compareTransactions/index.js";
 import { resolveCsvPathCandidates } from "../csvFilePath.js";
-
+import { optionalDateSchema } from "../schemas/common.js";
 import {
 	CompareTransactionsOutputSchema,
 	ReconcileAccountOutputSchema,
@@ -51,7 +51,6 @@ import { detectSignInversion } from "./signDetector.js";
 import {
 	clampCSVToStatementWindow,
 	formatStatementWindow,
-	normalizeStatementDate,
 } from "./statementWindow.js";
 import type { BankTransaction } from "./types.js";
 import { normalizeYNABTransactions } from "./ynabAdapter.js";
@@ -86,7 +85,7 @@ export const ReconcileAccountSchema = z
 		statement_balance: z.number({
 			message: "Statement balance is required and must be a number",
 		}),
-		statement_end_date: z.string().optional(),
+		statement_end_date: optionalDateSchema,
 
 		// Matching configuration (optional)
 		date_tolerance_days: z.number().min(0).max(7).optional().default(7),
@@ -172,9 +171,7 @@ export async function handleReconcileAccount(
 
 			// Initial parse without inversion for date window + sign detection
 			const parsedCsv = parseCsvOrThrow(csvContent, csvOptions);
-			const statementWindowEnd = normalizeStatementDate(
-				params.statement_end_date,
-			);
+			const statementWindowEnd = params.statement_end_date || undefined;
 			const rawCsvResult = applyStatementWindow(
 				parsedCsv,
 				statementWindowEnd,
@@ -638,7 +635,7 @@ function parseCsvOrThrow(
  */
 function applyStatementWindow(
 	parseResult: CSVParseResult,
-	statementWindowEnd: ReturnType<typeof normalizeStatementDate>,
+	statementWindowEnd: string | undefined,
 	narrativeNotes: string[],
 ): CSVParseResult {
 	const statementWindowBounds = {
