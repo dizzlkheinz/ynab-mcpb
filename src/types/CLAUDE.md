@@ -16,7 +16,7 @@ The `src/types/` directory provides:
 
 | File | Responsibility | Lines | Critical |
 |------|---------------|-------|----------|
-| **index.ts** | Re-exports of the error classes and error-handling helpers | ~15 | HIGH |
+| **index.ts** | Re-exports of `ValidationError` and the error-handling helpers | ~15 | HIGH |
 | **toolRegistration.ts** | ToolContext, handler signatures (Handler, DeltaHandler, etc.) | ~200 | CRITICAL |
 | **toolAnnotations.ts** | MCP annotation types and interfaces | ~100 | MEDIUM |
 | **reconciliation.ts** | Reconciliation-specific type definitions | ~150 | MEDIUM |

@@ -297,8 +297,8 @@ describe("RateLimiter", () => {
 		});
 	});
 
-	describe("security considerations", () => {
-		it("should hash identifiers in logs to avoid token exposure", () => {
+	describe("logged identifiers", () => {
+		it("logs the already-hashed identifier without hashing it again", () => {
 			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
 				// Mock implementation for testing
 			});
@@ -309,23 +309,33 @@ describe("RateLimiter", () => {
 				enableLogging: true,
 			});
 
-			const sensitiveToken = "very-secret-token-12345";
-			loggingLimiter.isAllowed(sensitiveToken);
+			const identifier = hashToken("very-secret-token-12345");
+			loggingLimiter.tryAcquire(identifier);
+			loggingLimiter.markExhausted(identifier);
 
-			// Check that the actual token is not in the log
-			const logCalls = consoleSpy.mock.calls.flat();
-			const hasActualToken = logCalls.some(
-				(call) => typeof call === "string" && call.includes(sensitiveToken),
-			);
+			const logCalls = consoleSpy.mock.calls.flat().map(String);
+			expect(logCalls).toHaveLength(3);
+			for (const line of logCalls) {
+				expect(line).toContain(identifier);
+				expect(line).not.toContain(hashToken(identifier));
+			}
 
-			expect(hasActualToken).toBe(false);
+			consoleSpy.mockRestore();
+		});
 
-			// Check that a hashed version is used
-			const hasHashedToken = logCalls.some(
-				(call) => typeof call === "string" && call.includes("token_"),
-			);
+		it("does not log a check when only reading status", () => {
+			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
+				// Mock implementation for testing
+			});
 
-			expect(hasHashedToken).toBe(true);
+			const loggingLimiter = new RateLimiter({
+				maxRequests: 2,
+				windowMs: 1000,
+				enableLogging: true,
+			});
+
+			expect(loggingLimiter.getStatus(testIdentifier).remaining).toBe(2);
+			expect(consoleSpy).not.toHaveBeenCalled();
 
 			consoleSpy.mockRestore();
 		});

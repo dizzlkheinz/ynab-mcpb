@@ -10,8 +10,6 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../config.js", () => ({
 	getRuntimeConfig: () => ({
 		LOG_LEVEL: "error",
-		RATE_LIMIT_LOGGING: false,
-		VERBOSE_TESTS: false,
 		YNAB_MCP_ENABLE_DELTA: undefined,
 		YNAB_EXPORT_PATH: undefined,
 		XDG_DOCUMENTS_DIR: undefined,

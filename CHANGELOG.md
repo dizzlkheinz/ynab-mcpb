@@ -14,11 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Convenience re-exports from `dist/types/index.js` (`ServerConfig`, `AuthenticationConfig`, `ErrorHandler`, `RateLimiter`, `RequestLogger`, `SecurityMiddleware`, `ToolContext`, `ToolRegistry` and related types); import them from their own modules
   - Inferred output types and nested schemas re-exported from `dist/tools/schemas/outputs/index.js` (for example `ListBudgetsOutput`, `CacheInfoSchema`); the domain files under `dist/tools/schemas/outputs/` still export the schemas tools use
   - Reconciliation types re-exported from `dist/tools/reconciliation/index.js`; import them from `dist/tools/reconciliation/types.js`
-  - `getAppConfig`/`resetAppConfig` (`dist/server/config.js`), `YNABRequestError` and `BaseError` (`dist/utils/errors.js`), `formatAmount` (`dist/utils/money.js`), and other exports nothing imported
+  - `getAppConfig`/`resetAppConfig` (`dist/server/config.js`), `YNABRequestError` and `BaseError` (`dist/utils/errors.js`), `AuthenticationError`/`ConfigurationError` re-exported from `dist/types/index.js` (import them from `dist/utils/errors.js`), `formatAmount` (`dist/utils/money.js`), and other exports nothing imported
+  - `BankTransactionComparisonSchema`, `YNABTransactionComparisonSchema` and `ExportedTransactionFullSchema` (`dist/tools/schemas/outputs/comparisonOutputs.js`), which no tool output used
+
+### Changed
+
+- `VERBOSE_TESTS` only affects test output. The server no longer reads or validates it, so it no longer turns on rate limiter logging as it did through 0.29.1
 
 ### Fixed
 
-- `RATE_LIMIT_LOGGING=true`, `LOG_LEVEL=debug`, `LOG_LEVEL=trace` and `VERBOSE_TESTS=true` enable rate limiter logging to stderr again. In 0.30.0 and 0.30.1 the server's rate limiter ignored them, so it never logged
+- `RATE_LIMIT_LOGGING=true`, `LOG_LEVEL=debug` and `LOG_LEVEL=trace` enable rate limiter logging to stderr again. In 0.30.0 and 0.30.1 the server's rate limiter ignored them, so it never logged. Log lines identify the token by the same hash diagnostics use, and reading diagnostics no longer logs a rate limit check
+- Errors from the bundled server keep their class names (for example `ValidationError`) instead of minified ones, both in error output and in the startup check that recognizes configuration errors
 
 ## [0.30.1] - 2026-10-26
 

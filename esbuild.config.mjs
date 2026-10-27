@@ -32,6 +32,8 @@ const buildOptions = {
 	plugins: [ignoreZodLocalesPlugin],
 	treeShaking: true,
 	minify: true,
+	// Error classes take their name from constructor.name; keep it unminified.
+	keepNames: true,
 	sourcemap: false,
 	// Match the declared package and MCPB runtime floor.
 	target: "node24",

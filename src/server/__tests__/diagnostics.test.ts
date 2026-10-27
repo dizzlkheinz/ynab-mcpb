@@ -386,9 +386,9 @@ describe("diagnostics module", () => {
 
 				it("should keep delta enabled when a sibling runtime key is invalid", async () => {
 					const originalDelta = process.env["YNAB_MCP_ENABLE_DELTA"];
-					const originalRateLimitLogging = process.env["RATE_LIMIT_LOGGING"];
+					const originalLogLevel = process.env["LOG_LEVEL"];
 					process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
-					process.env["RATE_LIMIT_LOGGING"] = "yes";
+					process.env["LOG_LEVEL"] = "loud";
 					resetRuntimeConfig();
 
 					try {
@@ -405,7 +405,7 @@ describe("diagnostics module", () => {
 					} finally {
 						for (const [key, value] of [
 							["YNAB_MCP_ENABLE_DELTA", originalDelta],
-							["RATE_LIMIT_LOGGING", originalRateLimitLogging],
+							["LOG_LEVEL", originalLogLevel],
 						] as const) {
 							if (value === undefined) {
 								Reflect.deleteProperty(process.env, key);

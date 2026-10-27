@@ -32,9 +32,26 @@ export class RateLimiter {
 	}
 
 	/**
-	 * Check if a request is allowed for the given identifier (typically access token hash)
+	 * Check if a request is allowed for the given identifier. Callers pass an
+	 * already-hashed identifier (see hashToken); it is logged as given.
 	 */
 	isAllowed(identifier: string): RateLimitInfo {
+		const info = this.computeStatus(identifier);
+
+		if (this.config.enableLogging) {
+			const used = this.requests.get(identifier)?.length ?? 0;
+			console.error(
+				`Rate limit check for ${identifier}: ${used}/${this.config.maxRequests} requests, remaining: ${info.remaining}, limited: ${info.isLimited}`,
+			);
+		}
+
+		return info;
+	}
+
+	/**
+	 * Prune expired requests and compute the identifier's status without logging
+	 */
+	private computeStatus(identifier: string): RateLimitInfo {
 		const now = Date.now();
 		const windowStart = now - this.config.windowMs;
 
@@ -50,12 +67,6 @@ export class RateLimiter {
 		const remaining = Math.max(0, this.config.maxRequests - requests.length);
 		const resetTime = new Date((requests[0] ?? now) + this.config.windowMs);
 		const isLimited = requests.length >= this.config.maxRequests;
-
-		if (this.config.enableLogging) {
-			console.error(
-				`Rate limit check for ${hashToken(identifier)}: ${requests.length}/${this.config.maxRequests} requests, remaining: ${remaining}, limited: ${isLimited}`,
-			);
-		}
 
 		return {
 			remaining,
@@ -76,16 +87,16 @@ export class RateLimiter {
 
 		if (this.config.enableLogging) {
 			console.error(
-				`Recorded request for ${hashToken(identifier)}: ${requests.length}/${this.config.maxRequests} requests`,
+				`Recorded request for ${identifier}:${requests.length}/${this.config.maxRequests} requests`,
 			);
 		}
 	}
 
 	/**
-	 * Get current rate limit status for an identifier
+	 * Get current rate limit status for an identifier without logging a check
 	 */
 	getStatus(identifier: string): RateLimitInfo {
-		return this.isAllowed(identifier);
+		return this.computeStatus(identifier);
 	}
 
 	/**
@@ -114,7 +125,7 @@ export class RateLimiter {
 		);
 		this.requests.set(identifier, timestamps);
 		if (this.config.enableLogging) {
-			console.error(`Rate limit marked exhausted for ${hashToken(identifier)}`);
+			console.error(`Rate limit marked exhausted for ${identifier}`);
 		}
 	}
 

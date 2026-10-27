@@ -148,7 +148,7 @@ Tools are organized by domain with some using modular sub-directories:
 
 ### Type Definitions (`src/types/`)
 
-- **index.ts** - Re-exports of the error classes and error-handling helpers
+- **index.ts** - Re-exports of `ValidationError` and the error-handling helpers
 - **toolRegistration.ts** - ToolContext, handler signatures (Handler, DeltaHandler, NoInputHandler)
 - **toolAnnotations.ts** - MCP annotation types and interfaces
 - **reconciliation.ts** - Reconciliation-specific type definitions

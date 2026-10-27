@@ -203,52 +203,6 @@ export const MatchItemSchema = z.object({
 // ============================================================================
 
 /**
- * Bank transaction (internal type, used during matching).
- * Not part of the formatted output; see MissingInYNABItemSchema for output format.
- *
- * @remarks
- * **WARNING:** This is an internal schema used during the matching algorithm.
- * It is NOT part of the public tool output contract and may change without
- * maintaining backward compatibility. Do not rely on this schema for stable
- * integrations - use CompareTransactionsOutputSchema instead.
- *
- * @see src/tools/compareTransactions/types.ts - BankTransaction interface
- * @internal
- */
-export const BankTransactionComparisonSchema = z.object({
-	date: ISODateStringSchema,
-	amount: z.number(),
-	description: z.string(),
-	raw_amount: z.string(),
-	raw_date: z.string(),
-	row_number: z.number(),
-});
-
-/**
- * YNAB transaction (internal type, used during matching).
- * Not part of the formatted output; see MissingInBankItemSchema for output format.
- *
- * @remarks
- * **WARNING:** This is an internal schema used during the matching algorithm.
- * It is NOT part of the public tool output contract and may change without
- * maintaining backward compatibility. Do not rely on this schema for stable
- * integrations - use CompareTransactionsOutputSchema instead.
- *
- * @see src/tools/compareTransactions/types.ts - YNABTransaction interface
- * @internal
- */
-export const YNABTransactionComparisonSchema = z.object({
-	id: z.string(),
-	date: ISODateStringSchema,
-	amount: z.number(),
-	payee_name: z.string().nullable(),
-	memo: z.string().nullish(),
-	cleared: z.string(),
-	account_name: z.string().optional(),
-	category_name: z.string().optional(),
-});
-
-/**
  * Comparison configuration parameters.
  * Documents tolerance settings used for matching.
  */
@@ -288,27 +242,6 @@ export const DateRangeSchema = z
 			message: "Start date must be before or equal to end date",
 		},
 	);
-
-export const ExportedTransactionFullSchema = z.object({
-	id: z.string(),
-	date: z.string(),
-	amount: z.number(), // Decimal currency units
-	memo: z.string().nullish(),
-	cleared: z.string(),
-	approved: z.boolean(),
-	flag_color: z.string().nullable(),
-	account_id: z.string(),
-	payee_id: z.string().nullable(),
-	category_id: z.string().nullable(),
-	transfer_account_id: z.string().nullable(),
-	transfer_transaction_id: z.string().nullable(),
-	matched_transaction_id: z.string().nullable(),
-	import_id: z.string().nullable(),
-	deleted: z.boolean(),
-	account_name: z.string().optional(),
-	payee_name: z.string().nullable(),
-	category_name: z.string().nullable(),
-});
 
 // ============================================================================
 // MAIN OUTPUT SCHEMAS

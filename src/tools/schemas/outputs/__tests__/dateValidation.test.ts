@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	BankTransactionComparisonSchema,
-	DateRangeSchema,
-	ISODateStringSchema,
-} from "../comparisonOutputs.js";
+import { DateRangeSchema, ISODateStringSchema } from "../comparisonOutputs.js";
 
 describe("Date Validation in comparisonOutputs", () => {
 	describe("ISODateStringSchema", () => {
@@ -69,38 +65,6 @@ describe("Date Validation in comparisonOutputs", () => {
 			expect(() => ISODateStringSchema.parse("2024-01-5")).toThrow(
 				"Date must be in YYYY-MM-DD format",
 			);
-		});
-	});
-
-	describe("BankTransactionComparisonSchema", () => {
-		it("should accept valid bank transaction with valid date", () => {
-			const validTransaction = {
-				date: "2024-01-15",
-				amount: -2500,
-				description: "Grocery Store",
-				raw_amount: "-25.00",
-				raw_date: "01/15/2024",
-				row_number: 1,
-			};
-
-			expect(() =>
-				BankTransactionComparisonSchema.parse(validTransaction),
-			).not.toThrow();
-		});
-
-		it("should reject bank transaction with invalid date", () => {
-			const invalidTransaction = {
-				date: "2024-02-31", // Invalid: February doesn't have 31 days
-				amount: -2500,
-				description: "Grocery Store",
-				raw_amount: "-25.00",
-				raw_date: "02/31/2024",
-				row_number: 1,
-			};
-
-			expect(() =>
-				BankTransactionComparisonSchema.parse(invalidTransaction),
-			).toThrow("Invalid calendar date");
 		});
 	});
 

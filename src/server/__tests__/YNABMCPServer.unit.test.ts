@@ -3,12 +3,11 @@ import { textOf } from "../../__tests__/testUtils.js";
 import { ConfigurationError } from "../../utils/errors.js";
 import type { CacheManager } from "../cacheManager.js";
 import * as config from "../config.js";
+import { hashToken } from "../rateLimiter.js";
 
 vi.mock("../config.js", () => ({
 	getRuntimeConfig: () => ({
 		LOG_LEVEL: "error",
-		RATE_LIMIT_LOGGING: false,
-		VERBOSE_TESTS: false,
 		YNAB_MCP_ENABLE_DELTA: undefined,
 		YNAB_EXPORT_PATH: undefined,
 		XDG_DOCUMENTS_DIR: undefined,
@@ -210,7 +209,6 @@ describe("YNABMCPServer isolated behavior", () => {
 		[{ RATE_LIMIT_LOGGING: true }, true],
 		[{ LOG_LEVEL: "debug" as const }, true],
 		[{ LOG_LEVEL: "trace" as const }, true],
-		[{ VERBOSE_TESTS: true }, true],
 		[{}, false],
 	])(
 		"logs YNAB requests to stderr from config %o",
@@ -218,7 +216,6 @@ describe("YNABMCPServer isolated behavior", () => {
 			vi.spyOn(config, "loadConfig").mockReturnValueOnce({
 				...config.loadConfig(),
 				RATE_LIMIT_LOGGING: false,
-				VERBOSE_TESTS: false,
 				...overrides,
 			});
 			vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -234,8 +231,35 @@ describe("YNABMCPServer isolated behavior", () => {
 				String(line).startsWith("Rate limit check for "),
 			);
 			expect(rateLimitLines.length > 0).toBe(expected);
+			for (const [line] of rateLimitLines) {
+				expect(String(line)).toContain(
+					`Rate limit check for ${hashToken("unit-test-token")}:`,
+				);
+				expect(String(line)).not.toContain("unit-test-token");
+			}
 		},
 	);
+
+	it("does not log rate limit checks when diagnostics read the status", async () => {
+		vi.spyOn(config, "loadConfig").mockReturnValueOnce({
+			...config.loadConfig(),
+			RATE_LIMIT_LOGGING: true,
+		});
+		const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+		const configured = new YNABMCPServer(false);
+		const result = await configured.getToolRegistry().executeTool({
+			name: "ynab_diagnostic_info",
+			accessToken: "unit-test-token",
+			arguments: { include_security: true, response_format: "json" },
+		});
+		expect(result.isError).toBeFalsy();
+		expect(textOf(result.content[0])).toContain('"rateLimitStats"');
+		expect(
+			stderr.mock.calls.some(([line]) =>
+				String(line).startsWith("Rate limit check for "),
+			),
+		).toBe(false);
+	});
 
 	it.each([
 		"ynab_list_accounts",

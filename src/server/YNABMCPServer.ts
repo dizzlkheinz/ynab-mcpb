@@ -114,9 +114,7 @@ export class YNABMCPServer {
 
 		this.rateLimiter = new RateLimiter({
 			enableLogging:
-				this.configInstance.RATE_LIMIT_LOGGING ||
-				logLevel === "debug" ||
-				this.configInstance.VERBOSE_TESTS,
+				this.configInstance.RATE_LIMIT_LOGGING || logLevel === "debug",
 		});
 
 		// Initialize YNAB API
