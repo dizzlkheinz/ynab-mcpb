@@ -3,16 +3,23 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { ErrorHandler } from "../../server/errorHandler.js";
 import { withToolErrorHandling } from "../../types/index.js";
-import { formatISODate, isValidISODate } from "../../utils/dateUtils.js";
+import {
+	formatUTCISODate,
+	isDateInRange,
+	isValidISODate,
+} from "../../utils/dateUtils.js";
 import { requireResolvedBudgetId } from "../adapters.js";
 import { buildComparisonResult } from "./formatter.js";
 import { findMatches } from "./matcher.js";
 import { autoDetectCSVFormat, parseBankCSV, readCSVFile } from "./parser.js";
 import type { YNABTransaction } from "./types.js";
 
-const dateSchema = z
+// An empty string means no bound, as clients often send one for an unused field
+const optionalDateSchema = z
 	.string()
-	.refine(isValidISODate, "Date must be a valid ISO date (YYYY-MM-DD)");
+	.refine(isValidISODate, "Date must be a valid ISO date (YYYY-MM-DD)")
+	.or(z.literal(""))
+	.optional();
 
 /**
  * Schema for ynab:compare_transactions tool parameters
@@ -26,8 +33,8 @@ export const CompareTransactionsSchema = z
 		amount_tolerance: z.number().min(0).max(1).optional().default(0.01),
 		date_tolerance_days: z.number().min(0).max(7).optional().default(5),
 		enable_chronology_bonus: z.boolean().optional().default(false),
-		statement_start_date: dateSchema.optional(),
-		statement_date: dateSchema.optional(),
+		statement_start_date: optionalDateSchema,
+		statement_date: optionalDateSchema,
 		auto_detect_format: z.boolean().optional().default(false),
 		debug: z.boolean().optional().default(false),
 		csv_format: z
@@ -90,13 +97,6 @@ function dateBounds(dates: Date[]): { min: Date; max: Date } {
 		if (time > max) max = time;
 	}
 	return { min: new Date(min), max: new Date(max) };
-}
-
-/**
- * Whether an ISO date falls inside an optional, inclusive [start, end] window
- */
-function inWindow(iso: string, start?: string, end?: string): boolean {
-	return (!start || iso >= start) && (!end || iso <= end);
 }
 
 /**
@@ -168,8 +168,8 @@ export async function handleCompareTransactions(
 			endDate.setUTCDate(endDate.getUTCDate() + dateToleranceDays);
 
 			// Get YNAB transactions for the account in the date range
-			const sinceDate = formatISODate(startDate);
-			const endDateString = formatISODate(endDate);
+			const sinceDate = formatUTCISODate(startDate);
+			const endDateString = formatUTCISODate(endDate);
 			const response = await ynabAPI.transactions.getTransactionsByAccount(
 				budgetId,
 				parsed.account_id,
@@ -189,7 +189,7 @@ export async function handleCompareTransactions(
 					original: txn,
 				}))
 				.filter((t) =>
-					inWindow(formatISODate(t.date), sinceDate, endDateString),
+					isDateInRange(formatUTCISODate(t.date), sinceDate, endDateString),
 				);
 
 			// Filter candidates to statement window if provided
@@ -198,8 +198,8 @@ export async function handleCompareTransactions(
 
 			if (parsed.statement_start_date || parsed.statement_date) {
 				const inStatementWindow = (t: { date: Date }) =>
-					inWindow(
-						formatISODate(t.date),
+					isDateInRange(
+						formatUTCISODate(t.date),
 						parsed.statement_start_date,
 						parsed.statement_date,
 					);
@@ -227,8 +227,8 @@ export async function handleCompareTransactions(
 						filteredBankTransactions.map((t) => t.date),
 					);
 					dateRange = {
-						start: formatISODate(filteredMinDate),
-						end: formatISODate(filteredMaxDate),
+						start: formatUTCISODate(filteredMinDate),
+						end: formatUTCISODate(filteredMaxDate),
 					};
 				} else {
 					// Fallback to statement window if no filtered transactions
@@ -236,18 +236,18 @@ export async function handleCompareTransactions(
 						start:
 							parsed.statement_start_date ||
 							parsed.statement_date ||
-							formatISODate(minDate),
+							formatUTCISODate(minDate),
 						end:
 							parsed.statement_date ||
 							parsed.statement_start_date ||
-							formatISODate(maxDate),
+							formatUTCISODate(maxDate),
 					};
 				}
 			} else {
 				// Use original unfiltered date range when no statement window filtering
 				dateRange = {
-					start: formatISODate(minDate),
-					end: formatISODate(maxDate),
+					start: formatUTCISODate(minDate),
+					end: formatUTCISODate(maxDate),
 				};
 			}
 

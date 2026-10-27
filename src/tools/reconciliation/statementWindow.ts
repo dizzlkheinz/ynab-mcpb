@@ -1,4 +1,4 @@
-import { formatISODate } from "../../utils/dateUtils.js";
+import { formatLocalISODate, isDateInRange } from "../../utils/dateUtils.js";
 import type { CSVParseResult } from "./csvParser.js";
 
 export interface StatementWindowBounds {
@@ -28,16 +28,20 @@ export function normalizeStatementDate(
 		return undefined;
 	}
 
-	if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-		return trimmed;
+	// An ISO date, with or without a time, already names the calendar date
+	const isoDate = /^(\d{4}-\d{2}-\d{2})(?:$|T)/.exec(trimmed)?.[1];
+	if (isoDate) {
+		return isoDate;
 	}
 
+	// Other formats ("01/31/2024", "Jan 31, 2024") parse as local midnight, so
+	// format in local time to keep the date the user wrote
 	const parsed = new Date(trimmed);
 	if (Number.isNaN(parsed.getTime())) {
 		return undefined;
 	}
 
-	return formatISODate(parsed);
+	return formatLocalISODate(parsed);
 }
 
 export function formatStatementWindow(bounds: StatementWindowBounds): string {
@@ -65,16 +69,9 @@ export function clampCSVToStatementWindow(
 		};
 	}
 
-	const transactions = parseResult.transactions.filter((txn) => {
-		const date = txn.date;
-		if (start && date < start) {
-			return false;
-		}
-		if (end && date > end) {
-			return false;
-		}
-		return true;
-	});
+	const transactions = parseResult.transactions.filter((txn) =>
+		isDateInRange(txn.date, start, end),
+	);
 
 	const excludedCount = parseResult.transactions.length - transactions.length;
 	if (excludedCount <= 0) {

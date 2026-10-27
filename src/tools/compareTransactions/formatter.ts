@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { responseFormatter } from "../../server/responseFormatter.js";
-import { formatISODate } from "../../utils/dateUtils.js";
+import { formatUTCISODate } from "../../utils/dateUtils.js";
 import type {
 	BankTransaction,
 	TransactionMatch,
@@ -81,10 +81,10 @@ export function buildSummary(
  */
 export function formatMatches(matches: TransactionMatch[]) {
 	return matches.map((match) => ({
-		bank_date: formatISODate(match.bank_transaction.date),
+		bank_date: formatUTCISODate(match.bank_transaction.date),
 		bank_amount: (match.bank_transaction.amount / 1000).toFixed(2),
 		bank_description: match.bank_transaction.description,
-		ynab_date: formatISODate(match.ynab_transaction.date),
+		ynab_date: formatUTCISODate(match.ynab_transaction.date),
 		ynab_amount: (match.ynab_transaction.amount / 1000).toFixed(2),
 		ynab_payee: match.ynab_transaction.payee_name,
 		ynab_transaction: {
@@ -106,7 +106,7 @@ export function formatUnmatchedBank(
 	return unmatchedBank.map((txn) => {
 		const payeeSuggestion = findSuggestedPayee(txn.description, payees);
 		return {
-			date: formatISODate(txn.date),
+			date: formatUTCISODate(txn.date),
 			amount: (txn.amount / 1000).toFixed(2),
 			description: txn.description,
 			row_number: txn.row_number,
@@ -121,7 +121,7 @@ export function formatUnmatchedBank(
 export function formatUnmatchedYNAB(unmatchedYnab: YNABTransaction[]) {
 	return unmatchedYnab.map((txn) => ({
 		id: txn.id,
-		date: formatISODate(txn.date),
+		date: formatUTCISODate(txn.date),
 		amount: (txn.amount / 1000).toFixed(2),
 		payee_name: txn.payee_name,
 		memo: txn.memo,

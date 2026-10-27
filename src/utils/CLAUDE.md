@@ -94,7 +94,7 @@ Format dates with the shared helpers rather than inlining `toISOString()`:
 
 ```typescript
 // UTC calendar date: for dates built with Date.UTC or parsed from YYYY-MM-DD
-export function formatISODate(date: Date): string {
+export function formatUTCISODate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
@@ -104,8 +104,11 @@ export function formatLocalISODate(date: Date): string {
 }
 ```
 
-Use `formatLocalISODate(new Date())` for a default of "today"; `formatISODate(new Date())`
-returns tomorrow's date for users west of UTC late in the evening.
+Use `formatLocalISODate` for dates built from local parts or parsed from non-ISO strings
+such as `"Jan 31, 2024"`; `formatUTCISODate` returns the previous day for those east of UTC.
+A default of "today" sent to YNAB should be the earlier of the two: the UTC date is
+tomorrow for users west of UTC late in the evening, and the local date can be in the
+future by UTC east of it.
 
 **Why Important**: YNAB API rejects non-ISO dates. Date parsing errors cause transaction failures.
 
@@ -150,12 +153,12 @@ All utility functions are **pure**: same input → same output, no side effects.
 
 ```typescript
 // GOOD: Pure function
-export function formatISODate(date: Date): string {
+export function formatUTCISODate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
 // BAD: Impure function (mutates input)
-export function formatISODateImpure(date: Date): string {
+export function formatUTCISODateImpure(date: Date): string {
   date.setHours(0, 0, 0, 0); // Mutation!
   return format(date, 'yyyy-MM-dd');
 }
@@ -260,7 +263,7 @@ export function addDays(dateString: string, days: number): string {
   );
   utcDate.setUTCDate(utcDate.getUTCDate() + days);
 
-  return formatISODate(utcDate);
+  return formatUTCISODate(utcDate);
 }
 ```
 
@@ -479,7 +482,7 @@ const time2 = Date.UTC(
 
 - **Money Conversion**: All transaction tools use `amountToMilliunits`/`milliunitsToAmount`
 - **Date Validation**: Date inputs are checked with `isValidISODate`
-- **Date Formatting**: `formatISODate` / `formatLocalISODate` instead of inline `toISOString()`
+- **Date Formatting**: `formatUTCISODate` / `formatLocalISODate` instead of inline `toISOString()`
 - **Validation**: Input validation before API calls
 
 ### With Server (`src/server/`)

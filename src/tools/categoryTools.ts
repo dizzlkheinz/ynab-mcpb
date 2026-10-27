@@ -11,6 +11,7 @@ import {
 import { responseFormatter } from "../server/responseFormatter.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
+import { formatLocalISODate } from "../utils/dateUtils.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
@@ -270,10 +271,10 @@ export async function handleUpdateCategory(
 	params: UpdateCategoryParams,
 	_errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
+	// Current local month in YNAB format (YYYY-MM-01)
+	const currentMonth = `${formatLocalISODate(new Date()).slice(0, 7)}-01`;
 	try {
 		if (params.dry_run) {
-			const currentDate = new Date();
-			const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-01`;
 			const dryRunData = {
 				dry_run: true as const,
 				action: "ynab_update_category" as const,
@@ -294,9 +295,6 @@ export async function handleUpdateCategory(
 				structuredContent: dryRunData,
 			};
 		}
-		// Get current month in YNAB format (YYYY-MM-01)
-		const currentDate = new Date();
-		const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-01`;
 		const budgetId = requireResolvedBudgetId(params.budget_id);
 
 		const response = await ynabAPI.categories.updateMonthCategory(

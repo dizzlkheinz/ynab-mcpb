@@ -22,8 +22,20 @@ export function isValidISODate(dateString: string): boolean {
  * host time zone. Use for dates built with Date.UTC or parsed from date-only
  * strings.
  */
-export function formatISODate(date: Date): string {
+export function formatUTCISODate(date: Date): string {
 	return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Whether a YYYY-MM-DD date falls inside an optional, inclusive [start, end]
+ * range. ISO dates sort as text, so this compares strings.
+ */
+export function isDateInRange(
+	isoDate: string,
+	start?: string,
+	end?: string,
+): boolean {
+	return (!start || isoDate >= start) && (!end || isoDate <= end);
 }
 
 /**

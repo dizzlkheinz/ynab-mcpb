@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-	formatISODate,
 	formatLocalISODate,
+	formatUTCISODate,
+	isDateInRange,
 	isValidISODate,
 } from "../dateUtils.js";
 
@@ -28,13 +29,38 @@ describe("dateUtils", () => {
 		});
 	});
 
-	describe("formatISODate", () => {
+	describe("formatUTCISODate", () => {
 		it("should format the UTC calendar date", () => {
-			expect(formatISODate(new Date(Date.UTC(2024, 2, 15)))).toBe("2024-03-15");
+			expect(formatUTCISODate(new Date(Date.UTC(2024, 2, 15)))).toBe(
+				"2024-03-15",
+			);
 			// Late on Dec 31 UTC stays on Dec 31 regardless of host time zone
-			expect(formatISODate(new Date("2024-12-31T23:59:59Z"))).toBe(
+			expect(formatUTCISODate(new Date("2024-12-31T23:59:59Z"))).toBe(
 				"2024-12-31",
 			);
+		});
+	});
+
+	describe("isDateInRange", () => {
+		it("should include both bounds", () => {
+			expect(isDateInRange("2024-01-01", "2024-01-01", "2024-01-31")).toBe(
+				true,
+			);
+			expect(isDateInRange("2024-01-31", "2024-01-01", "2024-01-31")).toBe(
+				true,
+			);
+			expect(isDateInRange("2023-12-31", "2024-01-01", "2024-01-31")).toBe(
+				false,
+			);
+			expect(isDateInRange("2024-02-01", "2024-01-01", "2024-01-31")).toBe(
+				false,
+			);
+		});
+
+		it("should treat a missing or empty bound as open", () => {
+			expect(isDateInRange("1999-01-01", undefined, "2024-01-31")).toBe(true);
+			expect(isDateInRange("2099-01-01", "2024-01-01")).toBe(true);
+			expect(isDateInRange("2099-01-01", "", "")).toBe(true);
 		});
 	});
 

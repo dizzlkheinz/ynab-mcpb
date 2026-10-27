@@ -1446,36 +1446,46 @@ describe("transactionTools", () => {
 			);
 		});
 
-		it("should default the date to the local calendar date", async () => {
-			// West of UTC, so late evening locally is already tomorrow in UTC
-			vi.stubEnv("TZ", "America/Toronto");
-			vi.useFakeTimers();
-			try {
-				vi.setSystemTime(new Date(2025, 9, 13, 23, 30));
-				const result = await handleCreateReceiptSplitTransaction(mockYnabAPI, {
-					budget_id: "budget-123",
-					account_id: "account-456",
-					payee_name: "IKEA",
-					receipt_tax: 0,
-					receipt_total: 20,
-					receipt_subtotal: 20,
-					categories: [
+		it.each([
+			// West of UTC, late evening locally is already tomorrow in UTC
+			["America/Toronto", new Date(Date.UTC(2025, 9, 14, 3, 30)), "2025-10-13"],
+			// East of UTC, early morning locally is still yesterday in UTC
+			["Asia/Tokyo", new Date(Date.UTC(2025, 9, 13, 23, 30)), "2025-10-13"],
+		])(
+			"should default the date to the earlier of the local and UTC dates in %s",
+			async (timeZone, now, expected) => {
+				vi.stubEnv("TZ", timeZone);
+				vi.useFakeTimers();
+				try {
+					vi.setSystemTime(now);
+					const result = await handleCreateReceiptSplitTransaction(
+						mockYnabAPI,
 						{
-							category_id: "category-home",
-							category_name: "Home",
-							items: [{ name: "Lamp", amount: 20 }],
-						},
-					],
-					dry_run: true,
-				} satisfies CreateReceiptSplitTransactionParams);
+							budget_id: "budget-123",
+							account_id: "account-456",
+							payee_name: "IKEA",
+							receipt_tax: 0,
+							receipt_total: 20,
+							receipt_subtotal: 20,
+							categories: [
+								{
+									category_id: "category-home",
+									category_name: "Home",
+									items: [{ name: "Lamp", amount: 20 }],
+								},
+							],
+							dry_run: true,
+						} satisfies CreateReceiptSplitTransactionParams,
+					);
 
-				const parsed = JSON.parse(textOf(result.content[0]));
-				expect(parsed.transaction_preview.date).toBe("2025-10-13");
-			} finally {
-				vi.useRealTimers();
-				vi.unstubAllEnvs();
-			}
-		});
+					const parsed = JSON.parse(textOf(result.content[0]));
+					expect(parsed.transaction_preview.date).toBe(expected);
+				} finally {
+					vi.useRealTimers();
+					vi.unstubAllEnvs();
+				}
+			},
+		);
 
 		it("should create a split transaction and attach receipt summary", async () => {
 			(mockYnabAPI.transactions.createTransaction as any).mockResolvedValue({

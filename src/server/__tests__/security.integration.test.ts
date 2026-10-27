@@ -371,7 +371,6 @@ describe("Security Integration", () => {
 			const testLimiter = new RateLimiter({
 				maxRequests: 5,
 				windowMs: 50, // 50ms
-				enableLogging: false,
 			});
 
 			const testToken = "cleanup-test-token";

@@ -21,7 +21,7 @@
 		"format": "biome format --write .",
 		"format:check": "biome format .",
 		"type-check": "tsc --noEmit && tsc -p tsconfig.test.json",
-		"knip": "knip --no-progress",
+		"knip": "knip --no-progress && knip --production --config knip.production.json --no-progress",
 		"test": "vitest run --project unit",
 		"test:integration": "vitest run --project integration",
 		"test:live": "node scripts/run-live-integration-smoke.js",

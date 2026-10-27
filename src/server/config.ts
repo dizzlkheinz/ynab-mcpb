@@ -87,6 +87,10 @@ export function getRuntimeConfig(): RuntimeConfig {
 	return cachedRuntimeConfig;
 }
 
+/**
+ * Clear the cached runtime config so tests can change process.env between cases.
+ * @internal
+ */
 export function resetRuntimeConfig(): void {
 	cachedRuntimeConfig = undefined;
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CSVParseResult } from "../csvParser.js";
 import {
 	clampCSVToStatementWindow,
@@ -55,6 +55,25 @@ describe("statementWindow helpers", () => {
 
 		it("normalizes parseable date inputs", () => {
 			expect(normalizeStatementDate("Feb 28, 2026")).toBe("2026-02-28");
+		});
+
+		it.each(["Australia/Sydney", "America/Los_Angeles"])(
+			"keeps the written date of non-ISO inputs in %s",
+			(timeZone) => {
+				vi.stubEnv("TZ", timeZone);
+				try {
+					expect(normalizeStatementDate("01/31/2024")).toBe("2024-01-31");
+					expect(normalizeStatementDate("Jan 31, 2024")).toBe("2024-01-31");
+				} finally {
+					vi.unstubAllEnvs();
+				}
+			},
+		);
+
+		it("keeps the calendar date of ISO timestamps", () => {
+			expect(normalizeStatementDate("2024-01-31T23:30:00-05:00")).toBe(
+				"2024-01-31",
+			);
 		});
 
 		it("returns undefined for invalid dates", () => {

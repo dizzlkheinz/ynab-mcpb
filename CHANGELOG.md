@@ -19,23 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `BankTransactionComparisonSchema`, `YNABTransactionComparisonSchema` and `ExportedTransactionFullSchema` (`dist/tools/schemas/outputs/comparisonOutputs.js`), which no tool output used
   - Handler and schema re-exports from `dist/tools/transactionTools.js`; import them from `dist/tools/transactionReadTools.js`, `dist/tools/transactionWriteTools.js` or `dist/tools/transactionSchemas.js`
   - Re-exports of `normalizeYnabError`, `NormalizedYnabError` and `buildReconciliationPlan` from `dist/tools/reconciliation/executor.js`; import them from `executorErrors.js` and `plan.js`
-  - Functions only tests called: `executeReconciliation` (use `buildReconciliationPlan` with `executeReconciliationPlan`), `shouldPropagateYnabError`, `attachStatusToError`, `findBestMatch`, `formatBalanceInfo`, `formatTransactionList`, `sleep`, the `resolveBudgetId`/`validateBudgetId`/`createMissingBudgetError`/`createInvalidBudgetError` wrappers (use the `BudgetResolver` static methods), `appendCategoryIds`, `collectCategoryIdsFromSources`, `setsEqual`, `toMonthKey`, `CategorySource`, the `compareTransactions` `parseDate`/`amountToMilliunits`/`extractDateRangeFromCSV`/`calculateMatchScore`/`groupTransactionsByAmount`/`matchDuplicateAmounts`, `getDecimalDigits`, `getCurrencyCode`, `assertMilli`, `inWindow`, and every `dateUtils` export except `isValidISODate` and `formatISODate`. `formatISODate` now formats in UTC; `formatLocalISODate` formats a local date
+  - Functions only tests called: `executeReconciliation` (use `buildReconciliationPlan` with `executeReconciliationPlan`), `shouldPropagateYnabError`, `attachStatusToError`, `findBestMatch`, `formatBalanceInfo`, `formatTransactionList`, `sleep`, the `resolveBudgetId`/`validateBudgetId`/`createMissingBudgetError`/`createInvalidBudgetError` wrappers (use the `BudgetResolver` static methods), `appendCategoryIds`, `collectCategoryIdsFromSources`, `setsEqual`, `toMonthKey`, `CategorySource`, the `compareTransactions` `parseDate`/`amountToMilliunits`/`extractDateRangeFromCSV`/`calculateMatchScore`/`groupTransactionsByAmount`/`matchDuplicateAmounts`, `getDecimalDigits`, `getCurrencyCode`, `assertMilli`, `inWindow` (now `isDateInRange` in `dist/utils/dateUtils.js`), and every `dateUtils` export except `isValidISODate`
   - `dist/tools/reconciliation/payeeNormalizer.js`, which nothing imported
   - `hashToken` (`dist/server/rateLimiter.js`); `RateLimiter` now hashes the token itself
   - `RateLimiter.isAllowed` and `RateLimiter.recordRequest`; use `forToken(token).tryAcquire()`, which checks and records in one step, or `getStatus(token)` to read without recording
+- `formatISODate` (`dist/utils/dateUtils.js`), which formatted a date in local time. Use `formatLocalISODate` for the same result, or the new `formatUTCISODate` for the UTC date
+- The `RateLimiter` `enableLogging` option; pass a `log` function to receive its log lines
 
 ### Changed
 
 - `RateLimiter` methods take the access token and hash it themselves, so a raw token is never stored or logged. Callers no longer pre-hash it
-- Rate limiter logging writes one `Rate limit acquire` line per YNAB request instead of separate check and record lines
-- `compare_transactions` rejects `statement_start_date` and `statement_date` values that are not valid `YYYY-MM-DD` dates. Other formats used to be compared as text and silently filtered out the wrong transactions
+- Rate limiter logging writes one `[DEBUG] Rate limit acquire` line per YNAB request instead of separate check and record lines, through the request logger
+- `compare_transactions` rejects `statement_start_date` and `statement_date` values that are not valid `YYYY-MM-DD` dates. Other formats used to be compared as text and silently filtered out the wrong transactions. An empty string still means no bound
 - `VERBOSE_TESTS` only affects test output. The server no longer reads or validates it, so it no longer turns on rate limiter logging as it did through 0.29.1
 
 ### Fixed
 
 - `RATE_LIMIT_LOGGING=true`, `LOG_LEVEL=debug` and `LOG_LEVEL=trace` enable rate limiter logging to stderr again. In 0.30.0 and 0.30.1 the server's rate limiter ignored them, so it never logged. Log lines identify the token only by a hash, and reading diagnostics no longer logs a rate limit check. The value must be exactly `true` or `false`, as before
-- `create_receipt_split_transaction` defaults a missing `date` to today in the server's local time zone, not UTC, so a receipt entered in the evening west of UTC is no longer dated tomorrow
-- `compare_transactions` normalizes YNAB transaction dates before applying the date range, so a date returned with a time component is not dropped from the last day of the range
+- `create_receipt_split_transaction` defaults a missing `date` to the earlier of today's local and UTC dates, so a receipt entered in the evening west of UTC is no longer dated tomorrow, and an early-morning receipt east of UTC is never dated in the future for YNAB
+- `reconcile_account` reads a `statement_end_date` such as `01/31/2024` or `Jan 31, 2024` as that date. On a server east of UTC it used to become the day before, dropping the last day's transactions. A timestamp with an offset, such as `2024-01-31T23:30:00-05:00`, keeps its written date instead of moving to the UTC date
 - Errors from the bundled server keep their class names (for example `ValidationError`) instead of minified ones, both in error output and in the startup check that recognizes configuration errors
 
 ## [0.30.1] - 2026-10-26

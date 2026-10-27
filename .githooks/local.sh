@@ -1,6 +1,6 @@
 # Project-specific pre-commit checks, sourced by ../githooks/pre-commit.
 
-# Unused files, exports and types (config: knip.json), using the knip devDependency so
+# Unused files, exports and types (knip.json and knip.production.json), using the knip devDependency so
 # the hook needs no network. knip reads the working tree, so its result describes the
 # commit only when nothing is left unstaged; otherwise it is advisory and CI's
 # `npm run knip` is the gate.

@@ -120,7 +120,7 @@ export const ISODateStringSchema = z
  *
  * @remarks
  * The formatter uses `.toFixed(2)` to format amounts as decimal strings with exactly 2 decimal places.
- * Dates are formatted as ISO strings (YYYY-MM-DD) via `formatISODate` (UTC).
+ * Dates are formatted as ISO strings (YYYY-MM-DD) via `formatUTCISODate` (UTC).
  *
  * @see src/tools/compareTransactions/formatter.ts:92-102 - formatUnmatchedBank function
  */
@@ -145,7 +145,7 @@ export const MissingInYNABItemSchema = z.object({
  *
  * @remarks
  * The formatter uses `.toFixed(2)` to format amounts as decimal strings with exactly 2 decimal places.
- * Dates are formatted as ISO strings (YYYY-MM-DD) via `formatISODate` (UTC).
+ * Dates are formatted as ISO strings (YYYY-MM-DD) via `formatUTCISODate` (UTC).
  *
  * @see src/tools/compareTransactions/formatter.ts:108-116 - formatUnmatchedYNAB function
  */
@@ -169,7 +169,7 @@ export const MissingInBankItemSchema = z.object({
  *
  * @remarks
  * The formatter uses `.toFixed(2)` to format amounts as decimal strings with exactly 2 decimal places.
- * Dates are formatted as ISO strings (YYYY-MM-DD) via `formatISODate` (UTC).
+ * Dates are formatted as ISO strings (YYYY-MM-DD) via `formatUTCISODate` (UTC).
  *
  * @see src/tools/compareTransactions/formatter.ts:72-86 - formatMatches function
  */

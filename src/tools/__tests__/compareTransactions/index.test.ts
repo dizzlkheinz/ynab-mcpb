@@ -95,6 +95,17 @@ describe("compareTransactions index (main handler)", () => {
 				}).success,
 			).toBe(false);
 		});
+
+		test("treats empty statement dates as no bound", () => {
+			const parsed = CompareTransactionsSchema.safeParse({
+				budget_id: "budget-123",
+				account_id: "account-456",
+				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test",
+				statement_start_date: "",
+				statement_date: "",
+			});
+			expect(parsed.success).toBe(true);
+		});
 	});
 
 	describe("handleCompareTransactions orchestration", () => {

@@ -56,7 +56,7 @@ import {
 } from "./markdownFormatter.js";
 import { PromptManager } from "./prompts.js";
 import { RateLimiter } from "./rateLimiter.js";
-import { globalRequestLogger } from "./requestLogger.js";
+import { globalRequestLogger, resolveLogLevel } from "./requestLogger.js";
 import { ResourceManager } from "./resources.js";
 import { responseFormatter } from "./responseFormatter.js";
 import {
@@ -101,20 +101,15 @@ export class YNABMCPServer {
 		this.defaultBudgetId = this.configInstance.YNAB_DEFAULT_BUDGET_ID;
 
 		// Apply the validated log level to the global request logger
-		const levelAliases: Record<string, "error" | "warn" | "info" | "debug"> = {
-			trace: "debug",
-			debug: "debug",
-			info: "info",
-			warn: "warn",
-			error: "error",
-			fatal: "error",
-		};
-		const logLevel = levelAliases[this.configInstance.LOG_LEVEL] ?? "info";
-		globalRequestLogger.setConfig({ logLevel });
+		globalRequestLogger.setConfig({
+			logLevel: resolveLogLevel(this.configInstance.LOG_LEVEL),
+		});
 
+		// Rate limit lines are debug logs; RATE_LIMIT_LOGGING forces them on
+		const forceRateLimitLogging = this.configInstance.RATE_LIMIT_LOGGING;
 		this.rateLimiter = new RateLimiter({
-			enableLogging:
-				this.configInstance.RATE_LIMIT_LOGGING || logLevel === "debug",
+			log: (message) =>
+				globalRequestLogger.debug(message, forceRateLimitLogging),
 		});
 
 		// Initialize YNAB API

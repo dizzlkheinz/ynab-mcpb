@@ -6,7 +6,8 @@
 export interface RateLimitConfig {
 	maxRequests: number;
 	windowMs: number;
-	enableLogging?: boolean;
+	/** Receives one line per acquire or exhaustion; omit to stay silent */
+	log?: (message: string) => void;
 }
 
 export interface RateLimitInfo {
@@ -26,7 +27,6 @@ export class RateLimiter {
 		this.config = {
 			maxRequests: 200, // YNAB API limit
 			windowMs: 60 * 60 * 1000, // 1 hour
-			enableLogging: false,
 			...config,
 		};
 	}
@@ -68,11 +68,9 @@ export class RateLimiter {
 			this.requests.set(key, requests);
 		}
 
-		if (this.config.enableLogging) {
-			console.error(
-				`Rate limit acquire for ${key}: ${requests.length}/${this.config.maxRequests} requests, limited: ${info.isLimited}`,
-			);
-		}
+		this.config.log?.(
+			`Rate limit acquire for ${key}: ${requests.length}/${this.config.maxRequests} requests, limited: ${info.isLimited}`,
+		);
 
 		return info;
 	}
@@ -90,9 +88,7 @@ export class RateLimiter {
 			() => now,
 		);
 		this.requests.set(key, timestamps);
-		if (this.config.enableLogging) {
-			console.error(`Rate limit marked exhausted for ${key}`);
-		}
+		this.config.log?.(`Rate limit marked exhausted for ${key}`);
 	}
 
 	/**

@@ -13,7 +13,6 @@ describe("RateLimiter", () => {
 		rateLimiter = new RateLimiter({
 			maxRequests: 5,
 			windowMs: 1000, // 1 second for testing
-			enableLogging: false,
 		});
 	});
 
@@ -78,7 +77,6 @@ describe("RateLimiter", () => {
 			const shortWindowLimiter = new RateLimiter({
 				maxRequests: 2,
 				windowMs: 50, // 50ms
-				enableLogging: false,
 			});
 
 			// Max out the requests
@@ -189,7 +187,6 @@ describe("RateLimiter", () => {
 			const shortWindowLimiter = new RateLimiter({
 				maxRequests: 5,
 				windowMs: 50, // 50ms
-				enableLogging: false,
 			});
 
 			// Record some requests
@@ -219,7 +216,7 @@ describe("RateLimiter", () => {
 			const loggingLimiter = new RateLimiter({
 				maxRequests: 2,
 				windowMs: 1000,
-				enableLogging: true,
+				log: (message: string) => console.error(message),
 			});
 
 			loggingLimiter.forToken(testIdentifier).tryAcquire();
@@ -271,7 +268,6 @@ describe("RateLimiter", () => {
 			const ynabLimiter = new RateLimiter({
 				maxRequests: 200,
 				windowMs: 60 * 60 * 1000, // 1 hour
-				enableLogging: false,
 			});
 
 			// Make 150 requests
@@ -303,7 +299,7 @@ describe("RateLimiter", () => {
 			const loggingLimiter = new RateLimiter({
 				maxRequests: 2,
 				windowMs: 1000,
-				enableLogging: true,
+				log: (message: string) => console.error(message),
 			});
 
 			const token = "very-secret-token-12345";
@@ -347,7 +343,7 @@ describe("RateLimiter", () => {
 			const loggingLimiter = new RateLimiter({
 				maxRequests: 2,
 				windowMs: 1000,
-				enableLogging: true,
+				log: (message: string) => console.error(message),
 			});
 
 			expect(loggingLimiter.getStatus(testIdentifier).remaining).toBe(2);
@@ -363,7 +359,9 @@ describe("rate-limit token identifiers", () => {
 		const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
 			// Mock implementation for testing
 		});
-		new RateLimiter({ enableLogging: true }).forToken(token).tryAcquire();
+		new RateLimiter({ log: (message) => console.error(message) })
+			.forToken(token)
+			.tryAcquire();
 		const line = String(consoleSpy.mock.calls[0]?.[0] ?? "");
 		consoleSpy.mockRestore();
 		return /^Rate limit acquire for (\S+): /.exec(line)?.[1];
