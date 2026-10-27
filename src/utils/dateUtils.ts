@@ -16,3 +16,11 @@ export function isValidISODate(dateString: string): boolean {
 	const parsed = parse(dateString, "yyyy-MM-dd", new Date());
 	return isValid(parsed);
 }
+
+/**
+ * Formats a date as YYYY-MM-DD in UTC, so the result does not depend on the
+ * host time zone
+ */
+export function formatISODate(date: Date): string {
+	return date.toISOString().slice(0, 10);
+}

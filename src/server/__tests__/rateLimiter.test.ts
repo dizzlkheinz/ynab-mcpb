@@ -135,7 +135,7 @@ describe("RateLimiter", () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date("2026-05-10T12:00:00Z"));
 
-			rateLimiter.markExhausted(testIdentifier);
+			rateLimiter.forToken(testIdentifier).markExhausted();
 			vi.advanceTimersByTime(10);
 
 			const status = rateLimiter.getStatus(testIdentifier);
@@ -310,8 +310,9 @@ describe("RateLimiter", () => {
 			});
 
 			const token = "very-secret-token-12345";
-			loggingLimiter.tryAcquire(token);
-			loggingLimiter.markExhausted(token);
+			const handle = loggingLimiter.forToken(token);
+			handle.tryAcquire();
+			handle.markExhausted();
 
 			const logCalls = consoleSpy.mock.calls.flat().map(String);
 			const key = /^Rate limit check for (token_[0-9a-f]+): /.exec(
@@ -333,7 +334,7 @@ describe("RateLimiter", () => {
 		it("tracks a token the same way across every method", () => {
 			const limiter = new RateLimiter({ maxRequests: 2, windowMs: 1000 });
 
-			limiter.tryAcquire(testIdentifier);
+			limiter.forToken(testIdentifier).tryAcquire();
 			limiter.recordRequest(testIdentifier);
 			expect(limiter.getStatus(testIdentifier).isLimited).toBe(true);
 			expect(limiter.isAllowed("other-token").remaining).toBe(2);

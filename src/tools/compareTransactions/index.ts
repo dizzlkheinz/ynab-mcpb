@@ -3,9 +3,7 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { ErrorHandler } from "../../server/errorHandler.js";
 import { withToolErrorHandling } from "../../types/index.js";
-
-const formatISODate = (date: Date): string => date.toISOString().slice(0, 10);
-
+import { formatISODate } from "../../utils/dateUtils.js";
 import { requireResolvedBudgetId } from "../adapters.js";
 import { buildComparisonResult } from "./formatter.js";
 import { findMatches } from "./matcher.js";
@@ -162,14 +160,9 @@ export async function handleCompareTransactions(
 
 			// Filter YNAB transactions to the extended date range and convert for comparison
 			const ynabTransactions: YNABTransaction[] = response.data.transactions
-				.filter((txn) => {
-					const txnDateString = formatISODate(parseDateOnly(txn.date));
-					return (
-						txnDateString >= sinceDate &&
-						txnDateString <= endDateString &&
-						!txn.deleted
-					);
-				})
+				.filter(
+					(txn) => inWindow(txn.date, sinceDate, endDateString) && !txn.deleted,
+				)
 				.map((txn) => ({
 					id: txn.id,
 					date: parseDateOnly(txn.date),

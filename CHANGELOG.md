@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `RATE_LIMIT_LOGGING=true`, `LOG_LEVEL=debug` and `LOG_LEVEL=trace` enable rate limiter logging to stderr again. In 0.30.0 and 0.30.1 the server's rate limiter ignored them, so it never logged. Log lines identify the token by the same hash diagnostics use, and reading diagnostics no longer logs a rate limit check
+- `RATE_LIMIT_LOGGING=true`, `LOG_LEVEL=debug` and `LOG_LEVEL=trace` enable rate limiter logging to stderr again. In 0.30.0 and 0.30.1 the server's rate limiter ignored them, so it never logged. Log lines identify the token only by a hash, and reading diagnostics no longer logs a rate limit check. The value must be exactly `true` or `false`, as before
 - Errors from the bundled server keep their class names (for example `ValidationError`) instead of minified ones, both in error output and in the startup check that recognizes configuration errors
 
 ## [0.30.1] - 2026-10-26

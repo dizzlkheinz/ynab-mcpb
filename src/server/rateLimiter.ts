@@ -54,11 +54,25 @@ export class RateLimiter {
 	}
 
 	/**
-	 * Atomically check and record a request in one call.
+	 * Bind the limiter to one access token for the request path. The token is
+	 * hashed once here and the handle keeps only the hash.
+	 */
+	forToken(token: string): {
+		tryAcquire(): RateLimitInfo;
+		markExhausted(): void;
+	} {
+		const key = hashToken(token);
+		return {
+			tryAcquire: () => this.acquire(key),
+			markExhausted: () => this.exhaust(key),
+		};
+	}
+
+	/**
+	 * Atomically check and record a request for an already-hashed key.
 	 * Returns rate limit info; if not limited, the request is recorded.
 	 */
-	tryAcquire(token: string): RateLimitInfo {
-		const key = hashToken(token);
+	private acquire(key: string): RateLimitInfo {
 		const info = this.check(key);
 		if (!info.isLimited) {
 			this.record(key);
@@ -67,11 +81,10 @@ export class RateLimiter {
 	}
 
 	/**
-	 * Mark the access token's rate limit window as exhausted.
+	 * Mark an already-hashed key's rate limit window as exhausted.
 	 * Used when a real YNAB 429 response is received.
 	 */
-	markExhausted(token: string): void {
-		const key = hashToken(token);
+	private exhaust(key: string): void {
 		const now = Date.now();
 		// Fill the current window with maxRequests fresh timestamps to force
 		// isLimited = true even if the next check happens a few ms later.

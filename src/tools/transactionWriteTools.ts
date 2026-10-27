@@ -9,6 +9,7 @@ import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
 import { ValidationError, withToolErrorHandling } from "../types/index.js";
 import type { ToolContext } from "../types/toolRegistration.js";
+import { formatISODate } from "../utils/dateUtils.js";
 import { amountToMilliunits, milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
@@ -186,7 +187,7 @@ export async function handleCreateReceiptSplitTransaction(
 	params: CreateReceiptSplitTransactionParams,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const date = params.date ?? new Date().toISOString().slice(0, 10);
+	const date = params.date ?? formatISODate(new Date());
 
 	const categoryCalculations: ReceiptCategoryCalculation[] =
 		params.categories.map((category) => {

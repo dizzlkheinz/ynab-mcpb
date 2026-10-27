@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
-import { isValidISODate } from "../utils/dateUtils.js";
+import { formatISODate, isValidISODate } from "../utils/dateUtils.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
@@ -160,7 +160,7 @@ function weekStart(dateString: string): string {
 	const date = new Date(`${dateString}T00:00:00Z`);
 	const day = date.getUTCDay();
 	date.setUTCDate(date.getUTCDate() - (day === 0 ? 6 : day - 1));
-	return date.toISOString().slice(0, 10);
+	return formatISODate(date);
 }
 
 function groupIdentity(

@@ -4,6 +4,7 @@ import type {
 	BankTransaction as CanonicalBank,
 	NormalizedYNABTransaction,
 } from "../../types/reconciliation.js";
+import { formatISODate } from "../../utils/dateUtils.js";
 import {
 	DEFAULT_CONFIG,
 	findMatches as matchTransactions,
@@ -19,7 +20,7 @@ const bankView = (
 	index: number,
 ): CanonicalBank => ({
 	id: String(index),
-	date: transaction.date.toISOString().slice(0, 10),
+	date: formatISODate(transaction.date),
 	amount: transaction.amount,
 	payee: transaction.description,
 	sourceRow: transaction.row_number,
@@ -31,7 +32,7 @@ const bankView = (
 });
 const ynabView = (transaction: YNABTransaction): NormalizedYNABTransaction => ({
 	id: transaction.id,
-	date: transaction.date.toISOString().slice(0, 10),
+	date: formatISODate(transaction.date),
 	amount: transaction.amount,
 	payee: transaction.payee_name ?? null,
 	memo: transaction.memo ?? null,

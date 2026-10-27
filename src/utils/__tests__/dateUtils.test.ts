@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidISODate } from "../dateUtils.js";
+import { formatISODate, isValidISODate } from "../dateUtils.js";
 
 describe("dateUtils", () => {
 	describe("isValidISODate", () => {
@@ -21,6 +21,16 @@ describe("dateUtils", () => {
 			expect(isValidISODate("2024-02-30")).toBe(false); // Invalid date
 			expect(isValidISODate("2024-13-01")).toBe(false); // Invalid month
 			expect(isValidISODate("2023-02-29")).toBe(false); // Not a leap year
+		});
+	});
+
+	describe("formatISODate", () => {
+		it("should format the UTC calendar date", () => {
+			expect(formatISODate(new Date(Date.UTC(2024, 2, 15)))).toBe("2024-03-15");
+			// Late on Dec 31 UTC stays on Dec 31 regardless of host time zone
+			expect(formatISODate(new Date("2024-12-31T23:59:59Z"))).toBe(
+				"2024-12-31",
+			);
 		});
 	});
 });
