@@ -78,28 +78,6 @@ export const SuccessResponseSchema = z.object({
 });
 
 /**
- * ErrorDetailsSchema
- *
- * Structured schema for error responses.
- * Note: Most error handling is done by ErrorHandler (src/server/errorHandler.ts),
- * but this schema provides a standard structure for tools that need to return
- * error information as part of their normal output.
- *
- * Fields:
- * - error: Error message string
- * - code: Optional error code for categorization
- * - details: Optional additional error details or context
- *
- * Example usage:
- * ```typescript
- * {
- *   error: "Transaction not found",
- *   code: "NOT_FOUND",
- *   details: "Transaction ID 'xyz789' does not exist in budget 'abc123'"
- * }
- * ```
- */
-/**
  * PaginationMetadataSchema
  *
  * Standard pagination fields for list tools that support limit/offset.

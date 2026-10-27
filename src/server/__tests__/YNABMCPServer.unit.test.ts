@@ -209,21 +209,33 @@ describe("YNABMCPServer isolated behavior", () => {
 	it.each([
 		[{ RATE_LIMIT_LOGGING: true }, true],
 		[{ LOG_LEVEL: "debug" as const }, true],
+		[{ LOG_LEVEL: "trace" as const }, true],
 		[{ VERBOSE_TESTS: true }, true],
 		[{}, false],
-	])("enables rate limiter logging from config %o", (overrides, expected) => {
-		vi.spyOn(config, "loadConfig").mockReturnValueOnce({
-			...config.loadConfig(),
-			RATE_LIMIT_LOGGING: false,
-			VERBOSE_TESTS: false,
-			...overrides,
-		});
-		const configured = new YNABMCPServer(false);
-		const internals = configured as unknown as {
-			rateLimiter: { config: { enableLogging: boolean } };
-		};
-		expect(internals.rateLimiter.config.enableLogging).toBe(expected);
-	});
+	])(
+		"logs YNAB requests to stderr from config %o",
+		async (overrides, expected) => {
+			vi.spyOn(config, "loadConfig").mockReturnValueOnce({
+				...config.loadConfig(),
+				RATE_LIMIT_LOGGING: false,
+				VERBOSE_TESTS: false,
+				...overrides,
+			});
+			vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response(JSON.stringify({ data: { user: { id: "user-1" } } }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				}),
+			);
+			const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+			const configured = new YNABMCPServer(false);
+			await configured.getYNABAPI().user.getUser();
+			const rateLimitLines = stderr.mock.calls.filter(([line]) =>
+				String(line).startsWith("Rate limit check for "),
+			);
+			expect(rateLimitLines.length > 0).toBe(expected);
+		},
+	);
 
 	it.each([
 		"ynab_list_accounts",

@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Unused exports from the compiled modules under `dist/`. The package has no `exports` map, so code that deep-imported these will no longer resolve them. The documented entry points (the `ynab-mcp-server` CLI and `dist/index.js`) are unchanged
+  - `dist/tools/compareTransactions.js`; import from `dist/tools/compareTransactions/index.js` instead
+  - Convenience re-exports from `dist/types/index.js` (`ServerConfig`, `AuthenticationConfig`, `ErrorHandler`, `RateLimiter`, `RequestLogger`, `SecurityMiddleware`, `ToolContext`, `ToolRegistry` and related types); import them from their own modules
+  - Inferred output types and nested schemas re-exported from `dist/tools/schemas/outputs/index.js` (for example `ListBudgetsOutput`, `CacheInfoSchema`); the domain files under `dist/tools/schemas/outputs/` still export the schemas tools use
+  - Reconciliation types re-exported from `dist/tools/reconciliation/index.js`; import them from `dist/tools/reconciliation/types.js`
+  - `getAppConfig`/`resetAppConfig` (`dist/server/config.js`), `YNABRequestError` and `BaseError` (`dist/utils/errors.js`), `formatAmount` (`dist/utils/money.js`), and other exports nothing imported
+
 ### Fixed
 
-- `RATE_LIMIT_LOGGING=true`, `LOG_LEVEL=debug` and `VERBOSE_TESTS=true` enable rate limiter logging to stderr again. In 0.30.0 and 0.30.1 the server's rate limiter ignored them, so it never logged
+- `RATE_LIMIT_LOGGING=true`, `LOG_LEVEL=debug`, `LOG_LEVEL=trace` and `VERBOSE_TESTS=true` enable rate limiter logging to stderr again. In 0.30.0 and 0.30.1 the server's rate limiter ignored them, so it never logged
 
 ## [0.30.1] - 2026-10-26
 

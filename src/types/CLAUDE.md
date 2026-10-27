@@ -16,7 +16,7 @@ The `src/types/` directory provides:
 
 | File | Responsibility | Lines | Critical |
 |------|---------------|-------|----------|
-| **index.ts** | Shared types, error classes, server configuration | ~300 | HIGH |
+| **index.ts** | Re-exports of the error classes and error-handling helpers | ~15 | HIGH |
 | **toolRegistration.ts** | ToolContext, handler signatures (Handler, DeltaHandler, etc.) | ~200 | CRITICAL |
 | **toolAnnotations.ts** | MCP annotation types and interfaces | ~100 | MEDIUM |
 | **reconciliation.ts** | Reconciliation-specific type definitions | ~150 | MEDIUM |
@@ -312,14 +312,11 @@ When adding types for a specific domain (e.g., new reconciliation types):
    }
    ```
 
-2. **Export from `index.ts`**:
+2. **Import it from its own file** where it is used, and export only the types another
+   file imports; knip fails the commit on an unused export. Do not add it to
+   `src/types/index.ts` with `export *`:
    ```typescript
-   export * from './myDomain.js';
-   ```
-
-3. **Use in tool handlers**:
-   ```typescript
-   import type { MyDomainInput, MyDomainOutput } from '../types/index.js';
+   import type { MyDomainInput, MyDomainOutput } from '../types/myDomain.js';
    ```
 
 ## Testing Approach

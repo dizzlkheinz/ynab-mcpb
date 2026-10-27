@@ -1,16 +1,4 @@
-export class AuthenticationError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "AuthenticationError";
-	}
-}
-
-export class ConfigurationError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "ConfigurationError";
-	}
-}
+// The same classes production code throws and checks with instanceof
 
 // Re-export error handling types for convenience
 export {
@@ -18,3 +6,4 @@ export {
 	withToolErrorHandling,
 	YNABErrorCode,
 } from "../server/errorHandler.js";
+export { AuthenticationError, ConfigurationError } from "../utils/errors.js";

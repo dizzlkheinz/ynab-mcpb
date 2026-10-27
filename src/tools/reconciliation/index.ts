@@ -56,9 +56,6 @@ import {
 import type { BankTransaction } from "./types.js";
 import { normalizeYNABTransactions } from "./ynabAdapter.js";
 
-// Re-export types for external use
-export type * from "./types.js";
-
 /**
  * Schema for reconcile_account tool
  */

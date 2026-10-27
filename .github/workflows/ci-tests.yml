@@ -22,6 +22,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Verify source
         run: npm run type-check
+      - name: Check unused files, exports and types
+        run: npm run knip
       - name: Build and verify distribution
         run: npm run build
       - name: Inspect npm package

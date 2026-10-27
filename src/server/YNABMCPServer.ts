@@ -109,14 +109,13 @@ export class YNABMCPServer {
 			error: "error",
 			fatal: "error",
 		};
-		globalRequestLogger.setConfig({
-			logLevel: levelAliases[this.configInstance.LOG_LEVEL] ?? "info",
-		});
+		const logLevel = levelAliases[this.configInstance.LOG_LEVEL] ?? "info";
+		globalRequestLogger.setConfig({ logLevel });
 
 		this.rateLimiter = new RateLimiter({
 			enableLogging:
 				this.configInstance.RATE_LIMIT_LOGGING ||
-				this.configInstance.LOG_LEVEL === "debug" ||
+				logLevel === "debug" ||
 				this.configInstance.VERBOSE_TESTS,
 		});
 

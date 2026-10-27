@@ -53,12 +53,12 @@ export {
 };
 
 // ============================================================================
-// Re-exports for backward compatibility
+// Schema re-exports
 // ============================================================================
 
 /**
- * Re-export schemas and types from transactionSchemas.ts
- * These exports maintain backward compatibility for code that imports directly from transactionTools.ts
+ * Re-export schemas and types from transactionSchemas.ts so the transaction tests
+ * can import them alongside the handlers. knip flags any name nothing imports.
  */
 export {
 	type BulkTransactionInput,

@@ -43,11 +43,12 @@ npm run lint               # Biome linting
 npm run lint:fix           # Auto-fix Biome lint/format issues
 npm run format             # Format with Biome
 npm run format:check       # Check formatting without modifications
-npx --yes knip@6.43.0      # Unused files, exports and types (config: knip.json)
+npm run knip               # Unused files, exports and types (config: knip.json)
 ```
 
-The pre-commit hook runs that same pinned knip from `.githooks/local.sh` and blocks
-the commit on any finding. Export only what another file imports; an export used
+knip is a pinned devDependency. CI runs `npm run knip` and fails on any finding; the
+pre-commit hook (`.githooks/local.sh`) runs it too and blocks the commit when nothing is
+left unstaged (otherwise its result is advisory). Export only what another file imports; an export used
 only inside its own file is allowed.
 
 ### Packaging & Distribution
@@ -141,13 +142,13 @@ Tools are organized by domain with some using modular sub-directories:
   - payeeNormalizer.ts - Payee name normalization for matching
   - ynabAdapter.ts - YNAB API integration layer
 - **schemas/** - Zod schemas for input/output validation
-  - shared/commonOutputs.ts - Reusable base schemas (CacheMetadata, SuccessResponse, ErrorDetails)
+  - shared/commonOutputs.ts - Reusable base schemas (CacheMetadata, SuccessResponse, PaginationMetadata)
   - outputs/ - Shared output schema definitions; scheduled and analytics domains keep focused schemas beside their handlers
   - outputs/index.ts - Exports the tool output schemas passed to `registry.register()`
 
 ### Type Definitions (`src/types/`)
 
-- **index.ts** - Shared types, error classes, server configuration
+- **index.ts** - Re-exports of the error classes and error-handling helpers
 - **toolRegistration.ts** - ToolContext, handler signatures (Handler, DeltaHandler, NoInputHandler)
 - **toolAnnotations.ts** - MCP annotation types and interfaces
 - **reconciliation.ts** - Reconciliation-specific type definitions

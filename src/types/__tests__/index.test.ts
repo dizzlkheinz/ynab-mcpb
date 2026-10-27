@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
+import * as utilErrors from "../../utils/errors.js";
 import { AuthenticationError, ConfigurationError } from "../index";
 
 describe("Error Classes", () => {
+	it("are the classes production code checks with instanceof", () => {
+		expect(AuthenticationError).toBe(utilErrors.AuthenticationError);
+		expect(ConfigurationError).toBe(utilErrors.ConfigurationError);
+	});
+
 	describe("AuthenticationError", () => {
 		it("should create error with correct name and message", () => {
 			const message = "Invalid access token";
