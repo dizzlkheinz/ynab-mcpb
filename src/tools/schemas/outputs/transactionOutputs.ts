@@ -167,9 +167,3 @@ export const GetTransactionOutputSchema = CacheMetadataSchema.extend({
 });
 
 // Export inferred TypeScript types
-export type Transaction = z.infer<typeof TransactionSchema>;
-export type TransactionPreview = z.infer<typeof TransactionPreviewSchema>;
-export type ListTransactionsOutput = z.infer<
-	typeof ListTransactionsOutputSchema
->;
-export type GetTransactionOutput = z.infer<typeof GetTransactionOutputSchema>;

@@ -131,29 +131,6 @@ export interface ReconciliationAnalysis {
 }
 
 /**
- * Reconciliation action types
- */
-export type ReconciliationActionType =
-	| "match"
-	| "add"
-	| "unclear"
-	| "delete"
-	| "ignore";
-
-/**
- * Reconciliation action
- */
-export interface ReconciliationAction {
-	type: ReconciliationActionType;
-	bank_txn_id?: string;
-	ynab_txn_id?: string;
-	mark_cleared?: boolean;
-	create_as_cleared?: boolean;
-	reason?: string;
-	metadata?: Record<string, unknown>;
-}
-
-/**
  * Matching algorithm configuration (V2)
  */
 export interface MatchingConfig {
@@ -177,18 +154,6 @@ export interface MatchingConfig {
 	/** Relative amount tolerance, used only by read-only comparison. */
 	amountTolerance?: number;
 	chronologyBonus?: boolean;
-}
-
-/**
- * Parsed CSV data from compareTransactions
- */
-export interface ParsedCSVData {
-	transactions: BankTransaction[];
-	format_detected: string;
-	delimiter: string;
-	total_rows: number;
-	valid_rows: number;
-	errors: string[];
 }
 
 /**

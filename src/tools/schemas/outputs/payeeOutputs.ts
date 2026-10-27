@@ -99,6 +99,3 @@ export const GetPayeeOutputSchema = CacheMetadataSchema.extend({
 });
 
 // Export inferred TypeScript types
-export type Payee = z.infer<typeof PayeeSchema>;
-export type ListPayeesOutput = z.infer<typeof ListPayeesOutputSchema>;
-export type GetPayeeOutput = z.infer<typeof GetPayeeOutputSchema>;

@@ -12,13 +12,6 @@ import { findMatches } from "./matcher.js";
 import { autoDetectCSVFormat, parseBankCSV, readCSVFile } from "./parser.js";
 import type { YNABTransaction } from "./types.js";
 
-// Re-export core types for consumers
-export type {
-	BankTransaction,
-	TransactionMatch,
-	YNABTransaction,
-} from "./types.js";
-
 /**
  * Schema for ynab:compare_transactions tool parameters
  */

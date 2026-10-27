@@ -95,4 +95,3 @@ export function buildReconciliationPayload(
 		},
 	};
 }
-export type DualChannelPayload = ReturnType<typeof buildReconciliationPayload>;

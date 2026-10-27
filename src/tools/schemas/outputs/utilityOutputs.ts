@@ -44,8 +44,6 @@ export const GetUserOutputSchema = z.object({
 	user: UserSchema,
 });
 
-export type GetUserOutput = z.infer<typeof GetUserOutputSchema>;
-
 // ============================================================================
 // GET DEFAULT BUDGET OUTPUT
 // ============================================================================
@@ -71,10 +69,6 @@ export const GetDefaultBudgetOutputSchema = z.object({
 	has_default: z.boolean(),
 	message: z.string(),
 });
-
-export type GetDefaultBudgetOutput = z.infer<
-	typeof GetDefaultBudgetOutputSchema
->;
 
 // ============================================================================
 // SET DEFAULT BUDGET OUTPUT
@@ -102,10 +96,6 @@ export const SetDefaultBudgetOutputSchema = SuccessResponseSchema.extend({
 	cache_warm_started: z.boolean(),
 });
 
-export type SetDefaultBudgetOutput = z.infer<
-	typeof SetDefaultBudgetOutputSchema
->;
-
 // ============================================================================
 // CLEAR CACHE OUTPUT
 // ============================================================================
@@ -127,8 +117,6 @@ export type SetDefaultBudgetOutput = z.infer<
 export const ClearCacheOutputSchema = SuccessResponseSchema.pick({
 	success: true,
 });
-
-export type ClearCacheOutput = z.infer<typeof ClearCacheOutputSchema>;
 
 // ============================================================================
 // DIAGNOSTIC INFO OUTPUT
@@ -251,8 +239,6 @@ export const DiagnosticInfoOutputSchema = z.object({
 	delta: DeltaInfoSchema.optional(),
 });
 
-export type DiagnosticInfoOutput = z.infer<typeof DiagnosticInfoOutputSchema>;
-
 // ============================================================================
 // GET BUDGET OUTPUT
 // ============================================================================
@@ -343,5 +329,3 @@ export const BudgetDetailSchema = z.object({
 export const GetBudgetOutputSchema = z.object({
 	budget: BudgetDetailSchema,
 });
-
-export type GetBudgetOutput = z.infer<typeof GetBudgetOutputSchema>;

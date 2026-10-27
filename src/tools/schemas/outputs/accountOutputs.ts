@@ -137,6 +137,3 @@ export const GetAccountOutputSchema = CacheMetadataSchema.extend({
 });
 
 // Export inferred TypeScript types
-export type Account = z.infer<typeof AccountSchema>;
-export type ListAccountsOutput = z.infer<typeof ListAccountsOutputSchema>;
-export type GetAccountOutput = z.infer<typeof GetAccountOutputSchema>;

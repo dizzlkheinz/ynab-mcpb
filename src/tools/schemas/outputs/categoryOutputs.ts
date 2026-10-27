@@ -213,7 +213,3 @@ export const GetCategoryOutputSchema = CacheMetadataSchema.extend({
 });
 
 // Export inferred TypeScript types
-export type Category = z.infer<typeof CategorySchema>;
-export type CategoryGroup = z.infer<typeof CategoryGroupSchema>;
-export type ListCategoriesOutput = z.infer<typeof ListCategoriesOutputSchema>;
-export type GetCategoryOutput = z.infer<typeof GetCategoryOutputSchema>;

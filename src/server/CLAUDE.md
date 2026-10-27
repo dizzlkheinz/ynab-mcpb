@@ -484,7 +484,7 @@ const token = config.YNAB_ACCESS_TOKEN; // From env var
 ### With Types (`src/types/`)
 
 - **ToolContext**: Central DI object for tool dependencies
-- **Handler Signatures**: Handler, DeltaHandler, WriteHandler, NoInputHandler
+- **Handler Signatures**: Handler, DeltaHandler, NoInputHandler
 - **Error Classes**: BaseError, ValidationError, custom errors
 
 ### With Utils (`src/utils/`)

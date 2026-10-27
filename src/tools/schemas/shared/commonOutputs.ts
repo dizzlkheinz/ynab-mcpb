@@ -53,8 +53,6 @@ export const CacheMetadataSchema = z.object({
 		.describe("Indicates if delta merge optimization was applied for budgets"),
 });
 
-export type CacheMetadata = z.infer<typeof CacheMetadataSchema>;
-
 /**
  * SuccessResponseSchema
  *
@@ -78,41 +76,6 @@ export const SuccessResponseSchema = z.object({
 	success: z.boolean().describe("Indicates operation success"),
 	message: z.string().describe("Human-readable success message"),
 });
-
-export type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
-
-/**
- * ConfirmationResponseSchema
- *
- * Extended success response schema with optional additional details.
- * Used by tools that need to return success confirmation along with
- * structured context or metadata about the operation.
- *
- * Fields:
- * - success: Boolean indicating operation success
- * - message: Human-readable success message
- * - details: Optional record of additional confirmation details
- *
- * Example usage:
- * ```typescript
- * {
- *   success: true,
- *   message: "Account reconciled successfully",
- *   details: {
- *     cleared_balance: 1250.50,
- *     reconciliation_date: "2025-01-15"
- *   }
- * }
- * ```
- */
-export const ConfirmationResponseSchema = SuccessResponseSchema.extend({
-	details: z
-		.record(z.string(), z.unknown())
-		.optional()
-		.describe("Additional confirmation details as key-value pairs"),
-});
-
-export type ConfirmationResponse = z.infer<typeof ConfirmationResponseSchema>;
 
 /**
  * ErrorDetailsSchema
@@ -152,16 +115,3 @@ export const PaginationMetadataSchema = z.object({
 		.optional()
 		.describe("Offset for next page, if has_more is true"),
 });
-
-export type PaginationMetadata = z.infer<typeof PaginationMetadataSchema>;
-
-export const ErrorDetailsSchema = z.object({
-	error: z.string().describe("Error message"),
-	code: z.string().optional().describe("Error code for categorization"),
-	details: z
-		.string()
-		.optional()
-		.describe("Additional error context or details"),
-});
-
-export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;

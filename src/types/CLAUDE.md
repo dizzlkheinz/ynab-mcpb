@@ -74,14 +74,7 @@ export type DeltaHandler<TInput extends Record<string, unknown>> = (
   errorHandler?: ErrorHandler
 ) => Promise<CallToolResult>;
 
-// Write handler (updates delta cache and server knowledge)
-export type WriteHandler<TInput extends Record<string, unknown>> = (
-  api: ynab.API,
-  deltaCache: DeltaCache,
-  serverKnowledgeStore: ServerKnowledgeStore,
-  params: TInput,
-  errorHandler?: ErrorHandler
-) => Promise<CallToolResult>;
+// Write tools use Handler; YNABClient invalidates caches around each mutating request.
 
 // No-input handler (e.g., list_budgets, get_user)
 export type NoInputHandler = (
@@ -294,10 +287,9 @@ When adding a new error type:
    }
    ```
 
-2. **Export from `src/types/index.ts`**:
-   ```typescript
-   export { MyNewError } from '../utils/errors.js';
-   ```
+2. **Import it from `src/utils/errors.ts`** where it is thrown. Re-export it from
+   `src/types/index.ts` only if code imports it from there; knip fails the commit on
+   an unused re-export.
 
 3. **Use in error handling**:
    ```typescript

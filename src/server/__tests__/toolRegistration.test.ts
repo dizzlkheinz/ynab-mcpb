@@ -16,12 +16,6 @@ vi.mock("../config.js", () => ({
 		YNAB_EXPORT_PATH: undefined,
 		XDG_DOCUMENTS_DIR: undefined,
 	}),
-	getAppConfig: () => ({
-		LOG_LEVEL: "error",
-		RATE_LIMIT_LOGGING: false,
-		VERBOSE_TESTS: false,
-		YNAB_MCP_ENABLE_DELTA: undefined,
-	}),
 	isDeltaEnabled: () => false,
 	loadConfig: () => ({
 		YNAB_ACCESS_TOKEN: "test-token-for-registration-tests",

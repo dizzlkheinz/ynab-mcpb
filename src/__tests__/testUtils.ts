@@ -194,90 +194,6 @@ export function validateToolResult(result: CallToolResult): void {
 }
 
 /**
- * Determines whether a tool call result represents an error.
- *
- * Inspects the first content item (must be of type `text`) and treats the result as an error
- * if that text parses to a JSON object containing an `error` property.
- *
- * @returns `true` if the first text content parses as a JSON object with an `error` field, `false` otherwise.
- */
-export function isErrorResult(result: CallToolResult): boolean {
-	if (!result.content || result.content.length === 0) {
-		return false;
-	}
-
-	const content = result.content[0];
-	if (content?.type !== "text") {
-		return false;
-	}
-
-	try {
-		const parsed = JSON.parse(content.text);
-		return parsed && typeof parsed === "object" && "error" in parsed;
-	} catch {
-		return false;
-	}
-}
-
-/**
- * Extracts a human-readable error message from a CallToolResult when the result contains an error.
- *
- * @returns A human-readable error message extracted from `result` (falls back to the raw text), or an empty string if no error message is available.
- */
-export function getErrorMessage(result: CallToolResult): string {
-	if (!isErrorResult(result)) {
-		return "";
-	}
-
-	const content = result.content[0];
-	if (content?.type !== "text") {
-		return "";
-	}
-
-	try {
-		const parsed = JSON.parse(content.text);
-		const error = parsed?.error;
-		if (typeof error === "string" && error.length > 0) {
-			return error;
-		}
-		if (error && typeof error === "object") {
-			const { message, userMessage, details, suggestions, name } =
-				error as Record<string, unknown>;
-
-			let errorMessage = "";
-			if (typeof message === "string" && message.length > 0) {
-				errorMessage = message;
-			} else if (typeof userMessage === "string" && userMessage.length > 0) {
-				errorMessage = userMessage;
-			} else if (typeof name === "string" && name.length > 0) {
-				errorMessage = name;
-			}
-
-			// Include details if available
-			if (typeof details === "string" && details.length > 0) {
-				errorMessage += `\n\n${details}`;
-			}
-
-			// Include suggestions if available
-			if (Array.isArray(suggestions) && suggestions.length > 0) {
-				const suggestionsText = suggestions
-					.filter((s) => typeof s === "string")
-					.map((s, i) => `${i + 1}. ${s}`)
-					.join("\n");
-				if (suggestionsText) {
-					errorMessage += `\n\nSuggestions:\n${suggestionsText}`;
-				}
-			}
-
-			if (errorMessage) return errorMessage;
-		}
-		return content.text;
-	} catch {
-		return content.text;
-	}
-}
-
-/**
  * Text of a tool-result or resource content item. Fails the test when the
  * item is missing or carries no text (an image or blob item, for example).
  */
@@ -461,40 +377,6 @@ export async function waitFor(
 }
 
 /**
- * Generate test data
- */
-export const TestData = {
-	/**
-	 * Generate a unique test account name
-	 */
-	generateAccountName(): string {
-		return `Test Account ${Date.now()}`;
-	},
-
-	/**
-	 * Generate a test transaction
-	 */
-	generateTransaction(accountId: string, categoryId?: string) {
-		return {
-			account_id: accountId,
-			category_id: categoryId,
-			payee_name: `Test Payee ${Date.now()}`,
-			amount: -5000, // $5.00 outflow
-			memo: `Test transaction ${Date.now()}`,
-			date: new Date().toISOString().split("T")[0], // Today's date
-			cleared: "uncleared" as const,
-		};
-	},
-
-	/**
-	 * Generate test amounts in milliunits
-	 */
-	generateAmount(dollars: number): number {
-		return Math.round(dollars * 1000);
-	},
-};
-
-/**
  * Determine whether a value represents a rate-limit (HTTP 429 / "too many requests") error.
  *
  * Inspects common error shapes and messages to identify rate-limit responses.
@@ -596,61 +478,6 @@ export function isAuthError(error: any): boolean {
 	}
 
 	return hasAuthMessage;
-}
-
-/**
- * Detects rate limit responses that are embedded in a CallToolResult (text JSON with an error object).
- * Returns true and optionally skips the current test when a rate limit is found.
- */
-export function skipIfRateLimitedResult(
-	result: CallToolResult,
-	context?: { skip?: () => void },
-): boolean {
-	const markSkipped = () => {
-		console.warn(
-			"[rate-limit] Skipping test due to YNAB API rate limit (embedded payload)",
-		);
-		context?.skip?.();
-	};
-
-	const content = result.content?.[0];
-	const text = content && content.type === "text" ? content.text : "";
-
-	try {
-		const parsed =
-			typeof text === "string" && text.trim().length > 0
-				? JSON.parse(text)
-				: null;
-		const candidates: any[] = [];
-
-		if (parsed && typeof parsed === "object") {
-			const parsedObj = parsed as Record<string, unknown>;
-			if ("error" in parsedObj) candidates.push(parsedObj["error"]);
-			if ("data" in parsedObj) {
-				const data = (parsedObj as any).data;
-				candidates.push(data?.error ?? data);
-			}
-			candidates.push(parsed);
-		}
-
-		if (typeof text === "string") {
-			candidates.push(text);
-		}
-
-		for (const candidate of candidates) {
-			if (isRateLimitError(candidate)) {
-				markSkipped();
-				return true;
-			}
-		}
-	} catch (parseError) {
-		if (isRateLimitError(parseError) || isRateLimitError(text)) {
-			markSkipped();
-			return true;
-		}
-		// If parsing fails and no rate limit markers are present, fall through.
-	}
-	return false;
 }
 
 /**

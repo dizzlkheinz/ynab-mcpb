@@ -56,14 +56,6 @@ import {
 import type { BankTransaction } from "./types.js";
 import { normalizeYNABTransactions } from "./ynabAdapter.js";
 
-export { analyzeReconciliation } from "./analyzer.js";
-export { findBestMatch, findMatches } from "./matcher.js";
-export {
-	fuzzyMatch,
-	normalizedMatch,
-	normalizePayee,
-	payeeSimilarity,
-} from "./payeeNormalizer.js";
 // Re-export types for external use
 export type * from "./types.js";
 

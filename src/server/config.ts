@@ -55,24 +55,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 	return result.data;
 }
 
-let cachedConfig: AppConfig | undefined;
-
-/**
- * Returns the memoized application config, loading it from the environment on
- * first use. Tests that mutate relevant environment variables should call
- * `resetAppConfig()` to force a reload.
- */
-export function getAppConfig(): AppConfig {
-	if (!cachedConfig) {
-		cachedConfig = loadConfig();
-	}
-	return cachedConfig;
-}
-
-export function resetAppConfig(): void {
-	cachedConfig = undefined;
-}
-
 /**
  * Runtime-infrastructure settings that must be readable without YNAB
  * credentials. Standalone imports (tests, tooling) must not require

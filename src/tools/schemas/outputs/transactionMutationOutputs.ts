@@ -60,8 +60,6 @@ export const SubtransactionSchema = TransactionLineOutputSchema.required({
 	deleted: true,
 });
 
-export type Subtransaction = z.infer<typeof SubtransactionSchema>;
-
 /**
  * Transaction with account balance information.
  * Extends base transaction schema with balance tracking.
@@ -79,10 +77,6 @@ export const TransactionWithBalanceSchema = TransactionSchema.extend({
 	subtransactions: z.array(SubtransactionSchema).optional(),
 });
 
-export type TransactionWithBalance = z.infer<
-	typeof TransactionWithBalanceSchema
->;
-
 /**
  * Individual receipt line item.
  * Used in create_receipt_split_transaction for itemized receipt breakdown.
@@ -95,8 +89,6 @@ export const ReceiptItemSchema = z.object({
 	amount: z.number(),
 	memo: z.string().optional(),
 });
-
-export type ReceiptItem = z.infer<typeof ReceiptItemSchema>;
 
 /**
  * Category-level receipt breakdown.
@@ -113,10 +105,6 @@ export const ReceiptCategoryBreakdownSchema = z.object({
 	total: z.number(),
 });
 
-export type ReceiptCategoryBreakdown = z.infer<
-	typeof ReceiptCategoryBreakdownSchema
->;
-
 /**
  * Complete receipt breakdown summary.
  * Includes category-level breakdowns and totals.
@@ -129,8 +117,6 @@ export const ReceiptSummarySchema = z.object({
 	total: z.number(),
 	categories: z.array(ReceiptCategoryBreakdownSchema),
 });
-
-export type ReceiptSummary = z.infer<typeof ReceiptSummarySchema>;
 
 /**
  * Summary statistics for bulk operations.
@@ -146,8 +132,6 @@ export const BulkOperationSummarySchema = z.object({
 	duplicates: z.number().optional(),
 	failed: z.number(),
 });
-
-export type BulkOperationSummary = z.infer<typeof BulkOperationSummarySchema>;
 
 /**
  * Individual result in bulk operation.
@@ -180,8 +164,6 @@ export const BulkResultSchema = z
 	})
 	.passthrough(); // Allow additional correlation metadata fields
 
-export type BulkResult = z.infer<typeof BulkResultSchema>;
-
 /**
  * Transaction diff fields for bulk update dry-run before/after comparison.
  * Contains only the fields that changed between current and updated state.
@@ -213,8 +195,6 @@ export const TransactionDiffFieldsSchema = TransactionSchema.pick({
 			.nullish(),
 	});
 
-export type TransactionDiffFields = z.infer<typeof TransactionDiffFieldsSchema>;
-
 /**
  * Before/after preview for bulk update dry-run.
  * Shows changed fields for each transaction in dry-run mode.
@@ -226,8 +206,6 @@ export const DryRunPreviewItemSchema = z.object({
 	before: z.union([z.literal("unavailable"), TransactionDiffFieldsSchema]),
 	after: TransactionDiffFieldsSchema,
 });
-
-export type DryRunPreviewItem = z.infer<typeof DryRunPreviewItemSchema>;
 
 /**
  * Warning in dry-run responses.
@@ -241,8 +219,6 @@ export const DryRunWarningSchema = z.object({
 	message: z.string(),
 	sample_ids: z.array(z.string()).optional(),
 });
-
-export type DryRunWarning = z.infer<typeof DryRunWarningSchema>;
 
 // ============================================================================
 // MAIN OUTPUT SCHEMAS
@@ -285,10 +261,6 @@ export const CreateTransactionOutputSchema = z.union([
 	}),
 ]);
 
-export type CreateTransactionOutput = z.infer<
-	typeof CreateTransactionOutputSchema
->;
-
 /**
  * Transaction preview item for bulk create dry-run.
  * Shows planned transaction details before execution.
@@ -305,10 +277,6 @@ export const CreateTransactionPreviewSchema = TransactionSchema.partial()
 		request_index: z.number(),
 		date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 	});
-
-export type CreateTransactionPreview = z.infer<
-	typeof CreateTransactionPreviewSchema
->;
 
 /**
  * Bulk transaction creation output.
@@ -387,10 +355,6 @@ export const CreateTransactionsOutputSchema = z.union([
 		.passthrough(), // Allow top-level metadata like batch_id, execution_id
 ]);
 
-export type CreateTransactionsOutput = z.infer<
-	typeof CreateTransactionsOutputSchema
->;
-
 /**
  * Single transaction update output.
  * Returns updated transaction with new account balances.
@@ -425,10 +389,6 @@ export const UpdateTransactionOutputSchema = z.union([
 		updated_cleared_balance: z.number().optional(),
 	}),
 ]);
-
-export type UpdateTransactionOutput = z.infer<
-	typeof UpdateTransactionOutputSchema
->;
 
 /**
  * Bulk transaction update output.
@@ -504,10 +464,6 @@ export const UpdateTransactionsOutputSchema = z.union([
 		.passthrough(), // Allow top-level metadata like batch_id, execution_id
 ]);
 
-export type UpdateTransactionsOutput = z.infer<
-	typeof UpdateTransactionsOutputSchema
->;
-
 /**
  * Transaction deletion output.
  * Returns deletion confirmation with updated account balances.
@@ -548,10 +504,6 @@ export const DeleteTransactionOutputSchema = z.union([
 	}),
 ]);
 
-export type DeleteTransactionOutput = z.infer<
-	typeof DeleteTransactionOutputSchema
->;
-
 /**
  * Transaction preview schema for dry-run responses.
  * Contains essential transaction fields before the transaction is created.
@@ -583,10 +535,6 @@ export const TransactionDryRunPreviewSchema = TransactionSchema.omit({
 			.nullish(),
 	});
 
-export type TransactionDryRunPreview = z.infer<
-	typeof TransactionDryRunPreviewSchema
->;
-
 /**
  * Subtransaction preview schema for dry-run responses.
  * Contains subtransaction fields before they are created by the server.
@@ -604,8 +552,6 @@ export const SubtransactionPreviewSchema = SubtransactionSchema.omit({
 	transaction_id: true,
 	deleted: true,
 });
-
-export type SubtransactionPreview = z.infer<typeof SubtransactionPreviewSchema>;
 
 /**
  * Receipt split transaction creation output.
@@ -666,10 +612,6 @@ export const CreateReceiptSplitTransactionOutputSchema = z.union([
 	}),
 ]);
 
-export type CreateReceiptSplitTransactionOutput = z.infer<
-	typeof CreateReceiptSplitTransactionOutputSchema
->;
-
 /**
  * Create account dry-run request schema.
  * Documents the planned account creation operation before execution.
@@ -682,10 +624,6 @@ export const CreateAccountDryRunRequestSchema = z.object({
 	type: z.string(),
 	balance: z.number(),
 });
-
-export type CreateAccountDryRunRequest = z.infer<
-	typeof CreateAccountDryRunRequestSchema
->;
 
 /**
  * Account creation output.
@@ -724,8 +662,6 @@ export const CreateAccountOutputSchema = z.union([
 	}),
 ]);
 
-export type CreateAccountOutput = z.infer<typeof CreateAccountOutputSchema>;
-
 /**
  * Update category dry-run request schema.
  * Documents the planned category update operation before execution.
@@ -738,10 +674,6 @@ export const UpdateCategoryDryRunRequestSchema = z.object({
 	budgeted: z.number(),
 	month: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
-
-export type UpdateCategoryDryRunRequest = z.infer<
-	typeof UpdateCategoryDryRunRequestSchema
->;
 
 /**
  * Category budget update output.
@@ -781,5 +713,3 @@ export const UpdateCategoryOutputSchema = z.union([
 		updated_month: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 	}),
 ]);
-
-export type UpdateCategoryOutput = z.infer<typeof UpdateCategoryOutputSchema>;

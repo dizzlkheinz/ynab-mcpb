@@ -8,7 +8,7 @@ The `src/tools/schemas/` directory provides:
 
 1. **Input Validation** - Type-safe validation of tool inputs
 2. **Output Validation** - Ensure API responses match expected structure
-3. **Shared Schemas** - Common validation patterns (emptyObject, looseObject)
+3. **Shared Schemas** - Common validation patterns (emptyObject)
 4. **Type Generation** - Zod schemas generate TypeScript types
 5. **Runtime Safety** - Bridge between TypeScript types and runtime values
 
@@ -16,7 +16,7 @@ The `src/tools/schemas/` directory provides:
 
 ```
 src/tools/schemas/
-├── common.ts               # Shared schemas (emptyObject, looseObject)
+├── common.ts               # Shared schema (emptyObject)
 └── outputs/                # Output validation schemas
     ├── budgetOutputs.ts              # Budget response schemas
     ├── accountOutputs.ts             # Account response schemas
@@ -35,7 +35,7 @@ src/tools/schemas/
 
 | File | Responsibility | Lines | Critical |
 |------|---------------|-------|----------|
-| **common.ts** | Shared schemas (emptyObject, looseObject) | ~50 | HIGH |
+| **common.ts** | Shared schema (emptyObject) | ~50 | HIGH |
 | **outputs/*.ts** | Output validation schemas for each tool domain | ~100-200 each | MEDIUM |
 
 ## Critical Patterns & Conventions
@@ -81,9 +81,6 @@ import { z } from 'zod';
 
 // Empty object schema (for tools with no input)
 export const emptyObjectSchema = z.object({}).strict();
-
-// Loose object schema (for passthrough scenarios)
-export const looseObjectSchema = z.object({}).passthrough();
 ```
 
 **Usage**:

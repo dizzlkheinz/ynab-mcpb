@@ -572,13 +572,3 @@ export interface CategorySource {
 		| null
 		| undefined;
 }
-
-/**
- * Interface for transaction cache invalidation options
- */
-export interface TransactionCacheInvalidationOptions {
-	affectedCategoryIds?: Set<string>;
-	invalidateAllCategories?: boolean;
-	accountTotalsChanged?: boolean;
-	invalidateMonths?: boolean;
-}

@@ -37,60 +37,6 @@ export interface DiagnosticOptions {
 }
 
 /**
- * Diagnostic data structure
- */
-export interface DiagnosticData {
-	timestamp: string;
-	server?: {
-		name: string;
-		version: string;
-		node_version: string;
-		platform: string;
-		arch: string;
-		pid: number;
-		uptime_ms: number;
-		uptime_readable: string;
-		env: {
-			node_env: string;
-		};
-	};
-	memory?: {
-		rss_mb: number;
-		heap_used_mb: number;
-		heap_total_mb: number;
-		external_mb: number;
-		array_buffers_mb: number;
-		description: {
-			rss: string;
-			heap_used: string;
-			heap_total: string;
-			external: string;
-			array_buffers: string;
-		};
-	};
-	environment?: {
-		token_present: boolean;
-		token_length: number;
-		token_preview: string | null;
-		ynab_env_keys_present: string[];
-		working_directory: string;
-	};
-	security?: unknown;
-	cache?: {
-		entries: number;
-		estimated_size_kb: number;
-		keys: string[];
-		hits?: number;
-		misses?: number;
-		evictions?: number;
-		lastCleanup?: string | null;
-		maxEntries?: number;
-		hitRate?: string;
-		performance_summary?: string;
-	};
-}
-
-/**
  * Injectable dependencies for diagnostic manager
  */
 export interface DiagnosticDependencies {

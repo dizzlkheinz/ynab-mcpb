@@ -156,14 +156,3 @@ export const amountToMilliunits = (amount: number): number => {
 	}
 	return Math.round(amount * 1000);
 };
-
-/**
- * Formats a milliunit amount as a currency string with 2 decimal places.
- */
-export const formatAmount = (
-	milliunits: number,
-	currencySymbol = "$",
-): string => {
-	const amount = milliunitsToAmount(milliunits);
-	return `${currencySymbol}${amount.toFixed(2)}`;
-};

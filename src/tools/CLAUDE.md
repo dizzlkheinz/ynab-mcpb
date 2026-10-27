@@ -30,7 +30,6 @@ src/tools/
 ├── utilityTools.ts             # User info and amount conversion
 ├── adapters.ts                 # Tool adapter implementations
 ├── toolCategories.ts           # Tool categorization and annotations
-├── compareTransactions.ts      # CSV comparison re-export facade
 ├── exportTransactions.ts       # Transaction export to JSON files
 ├── deltaFetcher.ts             # Delta request utilities
 ├── transactionModel.ts         # Shared transaction model and output conversion
@@ -55,7 +54,7 @@ src/tools/
 │   ├── payeeNormalizer.ts      # Payee name normalization
 │   └── ynabAdapter.ts          # YNAB API integration layer
 └── schemas/                    # Zod schemas for input/output validation
-    ├── common.ts               # Shared schemas (emptyObject, looseObject)
+    ├── common.ts               # Shared schema (emptyObject)
     └── outputs/                # Output validation schemas (11 files)
 ```
 
@@ -146,9 +145,8 @@ const CreateTransactionSchema = z
   })
   .strict(); // CRITICAL: Always use .strict()
 
-// Shared schemas (in schemas/common.ts)
+// Shared schema (in schemas/common.ts)
 export const emptyObjectSchema = z.object({}).strict();
-export const looseObjectSchema = z.object({}).passthrough();
 
 // Output schemas (in schemas/outputs/)
 export const BudgetOutputSchema = z.object({
@@ -613,7 +611,7 @@ metadata: {
 ### With Types (`src/types/`)
 
 - **ToolContext**: Central DI object with all shared dependencies
-- **Handler Signatures**: Handler, DeltaHandler, WriteHandler, NoInputHandler
+- **Handler Signatures**: Handler, DeltaHandler, NoInputHandler
 - **Reconciliation Types**: ReconcileInput, ReconcileResult, etc.
 
 ### With Utils (`src/utils/`)

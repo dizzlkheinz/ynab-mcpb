@@ -12,11 +12,7 @@ import type { DeltaCache } from "../server/deltaCache.js";
 import type { DiagnosticManager } from "../server/diagnostics.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import type { ServerKnowledgeStore } from "../server/serverKnowledgeStore.js";
-import type {
-	DefaultArgumentResolver,
-	ToolExecutionPayload,
-	ToolRegistry,
-} from "../server/toolRegistry.js";
+import type { ToolRegistry } from "../server/toolRegistry.js";
 import type { DeltaFetcher } from "../tools/deltaFetcher.js";
 
 /**
@@ -45,13 +41,6 @@ export type ToolFactory = (
 	registry: ToolRegistry,
 	context: ToolContext,
 ) => void;
-
-/**
- * Common adapter signature used within tool factories.
- */
-export type Adapter<TInput extends Record<string, unknown>> = (
-	payload: ToolExecutionPayload<TInput>,
-) => Promise<CallToolResult>;
 
 /**
  * Generic handler signature used by adapter helpers.
@@ -83,25 +72,9 @@ export type DeltaHandler<TInput extends Record<string, unknown>> = (
 ) => Promise<CallToolResult>;
 
 /**
- * Handler signature for write operations that update caches and knowledge stores.
- */
-export type WriteHandler<TInput extends Record<string, unknown>> = (
-	api: ynab.API,
-	params: TInput,
-	errorHandler?: ErrorHandler,
-) => Promise<CallToolResult>;
-
-/**
  * Handler signature for tools that do not accept input parameters.
  */
 export type NoInputHandler = (
 	api: ynab.API,
 	errorHandler?: ErrorHandler,
 ) => Promise<CallToolResult>;
-
-/**
- * Helper type for default argument resolver factories.
- */
-export type BudgetIdResolverFactory = <
-	TInput extends { budget_id?: string | undefined },
->() => DefaultArgumentResolver<TInput>;

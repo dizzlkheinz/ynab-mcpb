@@ -87,5 +87,3 @@ export const ListBudgetsOutputSchema = CacheMetadataSchema.extend({
 });
 
 // Export inferred TypeScript types
-export type BudgetSummary = z.infer<typeof BudgetSummarySchema>;
-export type ListBudgetsOutput = z.infer<typeof ListBudgetsOutputSchema>;

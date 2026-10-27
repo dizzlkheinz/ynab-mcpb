@@ -43,7 +43,12 @@ npm run lint               # Biome linting
 npm run lint:fix           # Auto-fix Biome lint/format issues
 npm run format             # Format with Biome
 npm run format:check       # Check formatting without modifications
+npx --yes knip@6.43.0      # Unused files, exports and types (config: knip.json)
 ```
+
+The pre-commit hook runs that same pinned knip from `.githooks/local.sh` and blocks
+the commit on any finding. Export only what another file imports; an export used
+only inside its own file is allowed.
 
 ### Packaging & Distribution
 
@@ -94,7 +99,7 @@ The architecture is modular and service-oriented:
 - `ToolContext` (`src/types/toolRegistration.ts`) centralizes shared deps (ynabAPI, deltaFetcher/cache, knowledge store, default budget accessors, cache/diagnostic managers).
 - Adapter helpers (`src/tools/adapters.ts`): `adapt` (also used by write tools), `adaptNoInput`, `adaptWithDelta`, `adaptWithDeltaAndProgress`, and `createBudgetResolver` to inject default budget IDs; covered by unit tests in `src/tools/__tests__/adapters.test.ts`.
 - Domain factories (`register*Tools`) live in each tool file: budget, account, transaction, category, payee, month, utility, reconciliation. `setupToolRegistry` now delegates to these factories.
-- Shared schemas: `emptyObjectSchema`, `looseObjectSchema` in `src/tools/schemas/common.ts`.
+- Shared schema: `emptyObjectSchema` in `src/tools/schemas/common.ts`.
 - Output schemas: All 35 tools have Zod output schemas registered via `outputSchema`. The registry converts to JSON Schema for `tools/list` and validates handler output for `structuredContent`.
 - Server-owned inline tools that stay in `YNABMCPServer`: `ynab_set_default_budget`, `ynab_get_default_budget`, `ynab_diagnostic_info`, `ynab_clear_cache` (they depend on server internals).
 
@@ -104,7 +109,7 @@ Tools are organized by domain with some using modular sub-directories:
 
 - **budgetTools.ts** - Budget listing and retrieval
 - **accountTools.ts** - Account management
-- **transactionTools.ts** - Transaction tool facade (registration + compatibility re-exports)
+- **transactionTools.ts** - Transaction tool facade (registration + schema re-exports)
 - **transactionReadTools.ts** - Read-only transaction handlers (list/get/export)
 - **transactionWriteTools.ts** - Write transaction handlers (create/update/delete)
 - **transactionSchemas.ts** - Transaction Zod schemas (extracted v0.18.4, 453 lines)
@@ -115,7 +120,6 @@ Tools are organized by domain with some using modular sub-directories:
 - **utilityTools.ts** - User info and amount conversion
 - **adapters.ts** - Tool adapter implementations
 - **toolCategories.ts** - Tool categorization utilities
-- **compareTransactions.ts** - Transaction comparison tool entry point
 - **exportTransactions.ts** - Transaction export to JSON files
 - **deltaFetcher.ts** - Delta request utilities for efficient API updates
 
@@ -139,12 +143,12 @@ Tools are organized by domain with some using modular sub-directories:
 - **schemas/** - Zod schemas for input/output validation
   - shared/commonOutputs.ts - Reusable base schemas (CacheMetadata, SuccessResponse, ErrorDetails)
   - outputs/ - Shared output schema definitions; scheduled and analytics domains keep focused schemas beside their handlers
-  - outputs/index.ts - Central export point for all output schemas and TypeScript types
+  - outputs/index.ts - Exports the tool output schemas passed to `registry.register()`
 
 ### Type Definitions (`src/types/`)
 
 - **index.ts** - Shared types, error classes, server configuration
-- **toolRegistration.ts** - ToolContext, handler signatures (Handler, DeltaHandler, WriteHandler, NoInputHandler)
+- **toolRegistration.ts** - ToolContext, handler signatures (Handler, DeltaHandler, NoInputHandler)
 - **toolAnnotations.ts** - MCP annotation types and interfaces
 - **reconciliation.ts** - Reconciliation-specific type definitions
 
@@ -454,7 +458,7 @@ Output schemas live in `src/tools/schemas/outputs/` organized by domain:
 
 - `CacheMetadataSchema` (`schemas/shared/commonOutputs.ts`) — `cached`, `cache_info`, `usedDelta` fields, extended by read-only tool outputs
 - `SuccessResponseSchema` — `success` + `message` fields, extended by write tool outputs
-- `index.ts` — Central export point for all output schemas and TypeScript types
+- `index.ts` — Exports the tool output schemas passed to `registry.register()`; nested schemas and inferred types stay in their domain files
 
 ### Schema Patterns
 

@@ -256,8 +256,3 @@ export const ListMonthsOutputSchema = CacheMetadataSchema.merge(
 });
 
 // Export inferred TypeScript types
-export type MonthCategory = z.infer<typeof MonthCategorySchema>;
-export type MonthDetail = z.infer<typeof MonthDetailSchema>;
-export type MonthSummary = z.infer<typeof MonthSummarySchema>;
-export type GetMonthOutput = z.infer<typeof GetMonthOutputSchema>;
-export type ListMonthsOutput = z.infer<typeof ListMonthsOutputSchema>;
