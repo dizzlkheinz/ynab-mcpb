@@ -39,6 +39,12 @@ describe("dateUtils", () => {
 				"2024-12-31",
 			);
 		});
+
+		it("should keep the whole date for years past 9999", () => {
+			expect(formatUTCISODate(new Date(Date.UTC(10000, 0, 31)))).toBe(
+				"+010000-01-31",
+			);
+		});
 	});
 
 	describe("isDateInRange", () => {

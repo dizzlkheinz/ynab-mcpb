@@ -23,7 +23,9 @@ export function isValidISODate(dateString: string): boolean {
  * strings.
  */
 export function formatUTCISODate(date: Date): string {
-	return date.toISOString().slice(0, 10);
+	const iso = date.toISOString();
+	// Not slice(0, 10): years past 9999 are written as +010000
+	return iso.slice(0, iso.indexOf("T"));
 }
 
 /**
