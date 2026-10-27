@@ -9,6 +9,7 @@ import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
 import { ValidationError, withToolErrorHandling } from "../types/index.js";
 import type { ToolContext } from "../types/toolRegistration.js";
+import { formatLocalISODate, formatUTCISODate } from "../utils/dateUtils.js";
 import { amountToMilliunits, milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
@@ -181,12 +182,26 @@ export async function handleCreateTransaction(
 	}
 }
 
+/**
+ * Today's date for a transaction, as the earlier of the local and UTC dates.
+ * The UTC date is tomorrow for users west of UTC late in the evening, and the
+ * local date is ahead of UTC east of it early in the morning; YNAB rejects
+ * future dates and does not document which time zone it judges them in.
+ */
+function defaultTransactionDate(): string {
+	const now = new Date();
+	const local = formatLocalISODate(now);
+	const utc = formatUTCISODate(now);
+	// biome-ignore lint/complexity/useMathMinMax: Math.min would turn these date strings into NaN
+	return local < utc ? local : utc;
+}
+
 export async function handleCreateReceiptSplitTransaction(
 	ynabAPI: ynab.API,
 	params: CreateReceiptSplitTransactionParams,
 	errorHandler?: ErrorHandler,
 ): Promise<CallToolResult> {
-	const date = params.date ?? new Date().toISOString().slice(0, 10);
+	const date = params.date ?? defaultTransactionDate();
 
 	const categoryCalculations: ReceiptCategoryCalculation[] =
 		params.categories.map((category) => {

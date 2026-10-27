@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AuthenticationError, ConfigurationError } from "../index";
+import { AuthenticationError, ConfigurationError } from "../errors.js";
 
 describe("Error Classes", () => {
 	describe("AuthenticationError", () => {

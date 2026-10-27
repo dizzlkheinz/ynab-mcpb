@@ -1,0 +1,5 @@
+{
+	"$schema": "node_modules/knip/schema.json",
+	"project": ["src/**/*.ts!", "!src/**/__tests__/**!"],
+	"ignoreExportsUsedInFile": true
+}

@@ -10,20 +10,8 @@
  */
 
 import type { ToolFactory } from "../types/toolRegistration.js";
-import {
-	handleGetTransaction,
-	handleListTransactions,
-	registerTransactionReadTools,
-} from "./transactionReadTools.js";
-import {
-	handleCreateReceiptSplitTransaction,
-	handleCreateTransaction,
-	handleCreateTransactions,
-	handleDeleteTransaction,
-	handleUpdateTransaction,
-	handleUpdateTransactions,
-	registerTransactionWriteTools,
-} from "./transactionWriteTools.js";
+import { registerTransactionReadTools } from "./transactionReadTools.js";
+import { registerTransactionWriteTools } from "./transactionWriteTools.js";
 
 // ============================================================================
 // Registration facade — called by YNABMCPServer.setupToolRegistry()
@@ -36,76 +24,3 @@ export const registerTransactionTools: ToolFactory = (registry, context) => {
 	registerTransactionReadTools(registry, context);
 	registerTransactionWriteTools(registry, context);
 };
-
-// ============================================================================
-// Re-export handler functions for consumers
-// ============================================================================
-
-export {
-	handleCreateReceiptSplitTransaction,
-	handleCreateTransaction,
-	handleCreateTransactions,
-	handleDeleteTransaction,
-	handleGetTransaction,
-	handleListTransactions,
-	handleUpdateTransaction,
-	handleUpdateTransactions,
-};
-
-// ============================================================================
-// Re-exports for backward compatibility
-// ============================================================================
-
-/**
- * Re-export schemas and types from transactionSchemas.ts
- * These exports maintain backward compatibility for code that imports directly from transactionTools.ts
- */
-export {
-	type BulkCreateResponse,
-	type BulkTransactionInput,
-	type BulkTransactionResult,
-	type BulkUpdateResponse,
-	type BulkUpdateResult,
-	type BulkUpdateTransactionInput,
-	type CategorySource,
-	type CorrelationPayload,
-	type CorrelationPayloadInput,
-	type CreateReceiptSplitTransactionParams,
-	CreateReceiptSplitTransactionSchema,
-	type CreateTransactionParams,
-	CreateTransactionSchema,
-	type CreateTransactionsParams,
-	CreateTransactionsSchema,
-	type DeleteTransactionParams,
-	DeleteTransactionSchema,
-	type GetTransactionParams,
-	GetTransactionSchema,
-	type ListTransactionsParams,
-	ListTransactionsSchema,
-	type ReceiptCategoryCalculation,
-	type SubtransactionInput,
-	type TransactionCacheInvalidationOptions,
-	type UpdateTransactionParams,
-	UpdateTransactionSchema,
-	type UpdateTransactionsParams,
-	UpdateTransactionsSchema,
-} from "./transactionSchemas.js";
-
-/**
- * Re-export utility functions from transactionUtils.ts
- * These exports maintain backward compatibility for code that imports directly from transactionTools.ts
- */
-export {
-	appendCategoryIds,
-	collectCategoryIdsFromSources,
-	correlateResults,
-	ensureTransaction,
-	estimatePayloadSize,
-	finalizeBulkUpdateResponse,
-	finalizeResponse,
-	generateCorrelationKey,
-	handleTransactionError,
-	setsEqual,
-	toCorrelationPayload,
-	toMonthKey,
-} from "./transactionUtils.js";

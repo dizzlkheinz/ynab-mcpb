@@ -74,6 +74,38 @@ describe("compareTransactions index (main handler)", () => {
 			expect(parsed.date_tolerance_days).toBe(5);
 			expect(parsed.auto_detect_format).toBe(false);
 		});
+
+		test("rejects statement dates that are not ISO dates", () => {
+			const base = {
+				budget_id: "budget-123",
+				account_id: "account-456",
+				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test",
+			};
+
+			expect(
+				CompareTransactionsSchema.safeParse({
+					...base,
+					statement_date: "01/31/2024",
+				}).success,
+			).toBe(false);
+			expect(
+				CompareTransactionsSchema.safeParse({
+					...base,
+					statement_start_date: "2024-02-30",
+				}).success,
+			).toBe(false);
+		});
+
+		test("treats empty statement dates as no bound", () => {
+			const parsed = CompareTransactionsSchema.safeParse({
+				budget_id: "budget-123",
+				account_id: "account-456",
+				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test",
+				statement_start_date: "",
+				statement_date: "",
+			});
+			expect(parsed.success).toBe(true);
+		});
 	});
 
 	describe("handleCompareTransactions orchestration", () => {
@@ -326,6 +358,39 @@ describe("compareTransactions index (main handler)", () => {
 		});
 
 		test("should apply statement window filtering", async () => {
+			const bankTxn = (date: string, description: string) => ({
+				...mockBankTransactions[0],
+				date: new Date(`${date}T00:00:00Z`),
+				raw_date: date,
+				description,
+			});
+			const ynabTxn = (id: string, date: string) => ({
+				id,
+				date,
+				amount: 100000,
+				payee_name: "Test Payee",
+				memo: null,
+				cleared: "cleared",
+				deleted: false,
+			});
+			mockParseBankCSV.mockReturnValue([
+				bankTxn("2023-12-31", "Before"),
+				bankTxn("2024-01-01", "Start"),
+				bankTxn("2024-01-31", "End"),
+				bankTxn("2024-02-01", "After"),
+			]);
+			mockYnabAPI.transactions.getTransactionsByAccount = vi
+				.fn()
+				.mockResolvedValue({
+					data: {
+						transactions: [
+							ynabTxn("ynab-before", "2023-12-30"),
+							ynabTxn("ynab-in", "2024-01-15"),
+							ynabTxn("ynab-after", "2024-02-02"),
+						],
+					},
+				});
+
 			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
@@ -336,13 +401,75 @@ describe("compareTransactions index (main handler)", () => {
 
 			await handleCompareTransactions(mockYnabAPI, params);
 
-			// The matcher should be called (statement window filtering happens before this)
-			expect(mockFindMatches).toHaveBeenCalled();
-
-			// Verify that the transactions passed to matcher would be within the window
+			// Both sides are clamped to the inclusive statement window before matching
 			const [bankTxns, ynabTxns] = mockFindMatches.mock.calls[0]!;
-			expect(bankTxns).toEqual(mockBankTransactions);
-			expect(ynabTxns).toHaveLength(1); // Should include YNAB transaction within window
+			expect(
+				bankTxns.map((t: { description: string }) => t.description),
+			).toEqual(["Start", "End"]);
+			expect(ynabTxns.map((t: { id: string }) => t.id)).toEqual(["ynab-in"]);
+		});
+
+		test("keeps a YNAB transaction with a timestamped date on the last day of the range", async () => {
+			mockYnabAPI.transactions.getTransactionsByAccount = vi
+				.fn()
+				.mockResolvedValue({
+					data: {
+						transactions: [
+							{
+								id: "ynab-timestamped",
+								date: "2024-01-01T00:00:00Z",
+								amount: 100000,
+								payee_name: "Test Payee",
+								memo: null,
+								cleared: "cleared",
+								deleted: false,
+							},
+						],
+					},
+				});
+
+			const params = CompareTransactionsSchema.parse({
+				budget_id: "budget-123",
+				account_id: "account-456",
+				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
+				date_tolerance_days: 0,
+			});
+
+			await handleCompareTransactions(mockYnabAPI, params);
+
+			const [, ynabTxns] = mockFindMatches.mock.calls[0]!;
+			expect(ynabTxns.map((t: { id: string }) => t.id)).toEqual([
+				"ynab-timestamped",
+			]);
+		});
+
+		test("applies a statement window with only one bound", async () => {
+			mockParseBankCSV.mockReturnValue([
+				{
+					...mockBankTransactions[0],
+					date: new Date("2023-12-31T00:00:00Z"),
+					description: "Before",
+				},
+				{
+					...mockBankTransactions[0],
+					date: new Date("2024-03-01T00:00:00Z"),
+					description: "Later",
+				},
+			]);
+
+			const params = CompareTransactionsSchema.parse({
+				budget_id: "budget-123",
+				account_id: "account-456",
+				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
+				statement_start_date: "2024-01-01",
+			});
+
+			await handleCompareTransactions(mockYnabAPI, params);
+
+			const [bankTxns] = mockFindMatches.mock.calls[0]!;
+			expect(
+				bankTxns.map((t: { description: string }) => t.description),
+			).toEqual(["Later"]);
 		});
 
 		test("should build final result correctly", async () => {

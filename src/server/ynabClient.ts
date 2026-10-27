@@ -1,6 +1,6 @@
 import * as ynab from "ynab";
 import type { CacheManager } from "./cacheManager.js";
-import { hashToken, RateLimitError, type RateLimiter } from "./rateLimiter.js";
+import { RateLimitError, type RateLimiter } from "./rateLimiter.js";
 import type { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
 
 export interface YNABClientDependencies {
@@ -19,14 +19,14 @@ export class YNABClient extends ynab.API {
 	constructor(accessToken: string, dependencies: YNABClientDependencies) {
 		super(accessToken);
 		const fetch = dependencies.fetch ?? globalThis.fetch.bind(globalThis);
-		const tokenKey = hashToken(accessToken);
+		const rateLimit = dependencies.rateLimiter.forToken(accessToken);
 		this._configuration = new ynab.Configuration({
 			accessToken,
 			fetchApi: async (
 				input: Parameters<typeof globalThis.fetch>[0],
 				init?: Parameters<typeof globalThis.fetch>[1],
 			) => {
-				const status = dependencies.rateLimiter.tryAcquire(tokenKey);
+				const status = rateLimit.tryAcquire();
 				if (status.isLimited) {
 					throw new RateLimitError(
 						"YNAB API rate limit exceeded. Wait before making another API request.",
@@ -75,8 +75,7 @@ export class YNABClient extends ynab.API {
 				invalidate();
 				try {
 					const response = await fetch(input, init);
-					if (response.status === 429)
-						dependencies.rateLimiter.markExhausted(tokenKey);
+					if (response.status === 429) rateLimit.markExhausted();
 					return response;
 				} finally {
 					invalidate();

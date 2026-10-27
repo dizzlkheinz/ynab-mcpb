@@ -7,11 +7,7 @@
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { BudgetResolver } from "../server/budgetResolver.js";
-import {
-	handleToolError as _handleToolError,
-	withToolErrorHandling as _withToolErrorHandling,
-	type ErrorHandler,
-} from "../server/errorHandler.js";
+import type { ErrorHandler } from "../server/errorHandler.js";
 import type {
 	DefaultArgumentResolver,
 	ProgressCallback,
@@ -83,29 +79,6 @@ export function createAdapters(context: ToolContext) {
 					execContext.sendProgress,
 					errorHandler,
 				),
-	};
-}
-
-/**
- * Creates error handling helpers bound to the ErrorHandler instance from context.
- * Tool files use these instead of the bare standalone functions to route errors
- * through the injected ErrorHandler rather than the static singleton.
- */
-export function createErrorHelpers(context: ToolContext) {
-	const { errorHandler } = context;
-	return {
-		withToolErrorHandling: <T>(
-			operation: () => Promise<T>,
-			toolName: string,
-			operationName: string,
-		): Promise<T | CallToolResult> =>
-			_withToolErrorHandling(operation, toolName, operationName, errorHandler),
-		handleToolError: (
-			error: unknown,
-			toolName: string,
-			operation: string,
-		): CallToolResult =>
-			_handleToolError(error, toolName, operation, errorHandler),
 	};
 }
 

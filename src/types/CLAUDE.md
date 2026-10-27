@@ -10,13 +10,13 @@ The `src/types/` directory provides:
 2. **ToolContext** - Central dependency injection object for tool handlers
 3. **Handler Signatures** - Type-safe handler function signatures
 4. **Error Classes** - Custom error types with context
-5. **Domain Types** - Reconciliation, caching, and configuration types
+5. **Domain Types** - Reconciliation and caching types
 
 ## Key Files & Responsibilities
 
 | File | Responsibility | Lines | Critical |
 |------|---------------|-------|----------|
-| **index.ts** | Shared types, error classes, server configuration | ~300 | HIGH |
+| **index.ts** | Re-exports of `ValidationError` and the error-handling helpers | ~15 | HIGH |
 | **toolRegistration.ts** | ToolContext, handler signatures (Handler, DeltaHandler, etc.) | ~200 | CRITICAL |
 | **toolAnnotations.ts** | MCP annotation types and interfaces | ~100 | MEDIUM |
 | **reconciliation.ts** | Reconciliation-specific type definitions | ~150 | MEDIUM |
@@ -74,14 +74,7 @@ export type DeltaHandler<TInput extends Record<string, unknown>> = (
   errorHandler?: ErrorHandler
 ) => Promise<CallToolResult>;
 
-// Write handler (updates delta cache and server knowledge)
-export type WriteHandler<TInput extends Record<string, unknown>> = (
-  api: ynab.API,
-  deltaCache: DeltaCache,
-  serverKnowledgeStore: ServerKnowledgeStore,
-  params: TInput,
-  errorHandler?: ErrorHandler
-) => Promise<CallToolResult>;
+// Write tools use Handler; YNABClient invalidates caches around each mutating request.
 
 // No-input handler (e.g., list_budgets, get_user)
 export type NoInputHandler = (
@@ -294,10 +287,9 @@ When adding a new error type:
    }
    ```
 
-2. **Export from `src/types/index.ts`**:
-   ```typescript
-   export { MyNewError } from '../utils/errors.js';
-   ```
+2. **Import it from `src/utils/errors.ts`** where it is thrown. Re-export it from
+   `src/types/index.ts` only if code imports it from there; knip fails the commit on
+   an unused re-export.
 
 3. **Use in error handling**:
    ```typescript
@@ -320,14 +312,11 @@ When adding types for a specific domain (e.g., new reconciliation types):
    }
    ```
 
-2. **Export from `index.ts`**:
+2. **Import it from its own file** where it is used, and export only the types another
+   file imports; knip fails the commit on an unused export. Do not add it to
+   `src/types/index.ts` with `export *`:
    ```typescript
-   export * from './myDomain.js';
-   ```
-
-3. **Use in tool handlers**:
-   ```typescript
-   import type { MyDomainInput, MyDomainOutput } from '../types/index.js';
+   import type { MyDomainInput, MyDomainOutput } from '../types/myDomain.js';
    ```
 
 ## Testing Approach
@@ -464,7 +453,6 @@ const validated = MySchema.parse(input);
 
 - **ToolContext**: Created in YNABMCPServer, injected into tools
 - **Error Classes**: Used by errorHandler for consistent responses
-- **Configuration Types**: Define server configuration structure
 
 ### With Tools (`src/tools/`)
 
@@ -474,7 +462,7 @@ const validated = MySchema.parse(input);
 
 ### With Utils (`src/utils/`)
 
-- **Error Classes**: Defined in utils, exported from types
+- **Error Classes**: Defined in `src/utils/errors.ts`; `index.ts` re-exports only `ValidationError` (with `withToolErrorHandling` and `YNABErrorCode`) from `errorHandler.ts`
 - **Shared Interfaces**: Money, date, validation types
 
 ## Related Documentation

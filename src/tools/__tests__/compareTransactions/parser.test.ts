@@ -1,12 +1,9 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
-	amountToMilliunits,
 	autoDetectCSVFormat,
 	detectDateFormat,
-	extractDateRangeFromCSV,
 	parseBankCSV,
-	parseDate,
 	readCSVFile,
 } from "../../compareTransactions/parser.js";
 import type { CSVFormat } from "../../compareTransactions/types.js";
@@ -21,96 +18,6 @@ const mockReadFileSync = vi.mocked(readFileSync);
 describe("parser", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-	});
-
-	describe("parseDate", () => {
-		test("should parse MM/DD/YYYY format", () => {
-			const result = parseDate("09/15/2023", "MM/DD/YYYY");
-			expect(result.getFullYear()).toBe(2023);
-			expect(result.getMonth()).toBe(8); // 0-indexed
-			expect(result.getDate()).toBe(15);
-		});
-
-		test("should parse YYYY-MM-DD format", () => {
-			const result = parseDate("2023-09-15", "YYYY-MM-DD");
-			expect(result.getFullYear()).toBe(2023);
-			expect(result.getMonth()).toBe(8);
-			expect(result.getDate()).toBe(15);
-		});
-
-		test("should parse MMM dd, yyyy format", () => {
-			const result = parseDate("Sep 15, 2023", "MMM dd, yyyy");
-			expect(result.getFullYear()).toBe(2023);
-			expect(result.getMonth()).toBe(8);
-			expect(result.getDate()).toBe(15);
-		});
-
-		test("should handle single digit dates", () => {
-			const result = parseDate("9/5/2023", "M/D/YYYY");
-			expect(result.getFullYear()).toBe(2023);
-			expect(result.getMonth()).toBe(8);
-			expect(result.getDate()).toBe(5);
-		});
-
-		test("should throw error for invalid date", () => {
-			expect(() => parseDate("invalid-date", "MM/DD/YYYY")).toThrow(
-				"Unable to parse date: invalid-date with format: MM/DD/YYYY",
-			);
-		});
-
-		test("should fallback to native Date parsing for unrecognized formats", () => {
-			const result = parseDate("2023-09-15", "UNKNOWN_FORMAT");
-			expect(result.getFullYear()).toBe(2023);
-			expect(result.getMonth()).toBe(8);
-			// Native Date parsing might interpret '2023-09-15' differently, so check valid date range
-			expect(result.getDate()).toBeGreaterThanOrEqual(14);
-			expect(result.getDate()).toBeLessThanOrEqual(15);
-		});
-
-		test("should handle whitespace in dates", () => {
-			const result = parseDate("  09/15/2023  ", "MM/DD/YYYY");
-			expect(result.getFullYear()).toBe(2023);
-			expect(result.getMonth()).toBe(8);
-			expect(result.getDate()).toBe(15);
-		});
-	});
-
-	describe("amountToMilliunits", () => {
-		test("should convert positive amounts", () => {
-			expect(amountToMilliunits("123.45")).toBe(123450);
-		});
-
-		test("should convert negative amounts", () => {
-			expect(amountToMilliunits("-123.45")).toBe(-123450);
-		});
-
-		test("should handle parentheses for negative amounts", () => {
-			expect(amountToMilliunits("(123.45)")).toBe(-123450);
-		});
-
-		test("should handle currency symbols", () => {
-			expect(amountToMilliunits("$123.45")).toBe(123450);
-		});
-
-		test("should handle commas in amounts", () => {
-			expect(amountToMilliunits("1,234.56")).toBe(1234560);
-		});
-
-		test("should handle positive sign", () => {
-			expect(amountToMilliunits("+123.45")).toBe(123450);
-		});
-
-		test("should handle zero amounts", () => {
-			expect(amountToMilliunits("0.00")).toBe(0);
-		});
-
-		test("should handle amounts with spaces", () => {
-			expect(amountToMilliunits("  123.45  ")).toBe(123450);
-		});
-
-		test("should handle very large amounts", () => {
-			expect(amountToMilliunits("999999.99")).toBe(999999990);
-		});
 	});
 
 	describe("detectDateFormat", () => {
@@ -848,49 +755,6 @@ describe("parser", () => {
 			expect(transactions[0]!.amount).toBe(-50000);
 			expect(transactions[1]!.description).toBe("Store;Purchase");
 			expect(transactions[1]!.amount).toBe(-25000);
-		});
-	});
-
-	describe("extractDateRangeFromCSV", () => {
-		test("should extract min and max dates from CSV transactions", () => {
-			const csvContent = `Date,Description,Debit,Credit,Balance
-11/10/2025,DOLLARAMA # 109,10.91,,
-10/15/2025,Uber Trip,30.50,,
-09/22/2025,CIRCLE K # 05844 A,18.84,,`;
-
-			const format: CSVFormat = {
-				date_column: "Date",
-				description_column: "Description",
-				debit_column: "Debit",
-				credit_column: "Credit",
-				date_format: "MM/DD/YYYY",
-				has_header: true,
-				delimiter: ",",
-			};
-
-			const { minDate, maxDate } = extractDateRangeFromCSV(csvContent, format);
-
-			expect(minDate).toBe("2025-09-22");
-			expect(maxDate).toBe("2025-11-10");
-		});
-
-		test("should handle single transaction", () => {
-			const csvContent = `Date,Description,Amount
-10/15/2025,Test,100.00`;
-
-			const format: CSVFormat = {
-				date_column: "Date",
-				description_column: "Description",
-				amount_column: "Amount",
-				date_format: "MM/DD/YYYY",
-				has_header: true,
-				delimiter: ",",
-			};
-
-			const { minDate, maxDate } = extractDateRangeFromCSV(csvContent, format);
-
-			expect(minDate).toBe("2025-10-15");
-			expect(maxDate).toBe("2025-10-15");
 		});
 	});
 

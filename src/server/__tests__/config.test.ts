@@ -55,12 +55,12 @@ describe("Config Module", () => {
 	it("falls back per key when a runtime value is invalid", async () => {
 		const { getRuntimeConfig, isDeltaEnabled } = await import("../config");
 		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
-		process.env["LOG_LEVEL"] = "debug";
-		process.env["RATE_LIMIT_LOGGING"] = "yes";
+		process.env["LOG_LEVEL"] = "loud";
+		process.env["YNAB_EXPORT_PATH"] = "/tmp/exports";
 
 		const config = getRuntimeConfig();
-		expect(config.RATE_LIMIT_LOGGING).toBe(false);
-		expect(config.LOG_LEVEL).toBe("debug");
+		expect(config.LOG_LEVEL).toBe("info");
+		expect(config.YNAB_EXPORT_PATH).toBe("/tmp/exports");
 		expect(isDeltaEnabled()).toBe(true);
 	});
 

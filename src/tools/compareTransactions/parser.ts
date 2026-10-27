@@ -2,12 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolveCsvPathCandidates } from "../csvFilePath.js";
 
-import {
-	type ParseCSVOptions,
-	parseAmount,
-	parseDate as parseCanonicalDate,
-	parseCSV,
-} from "../reconciliation/csvParser.js";
+import { type ParseCSVOptions, parseCSV } from "../reconciliation/csvParser.js";
 import type { BankTransaction, CSVFormat } from "./types.js";
 
 export function dateFormatHint(
@@ -19,21 +14,6 @@ export function dateFormatHint(
 		: normalized?.startsWith("D")
 			? "DMY"
 			: "MDY";
-}
-export function parseDate(date: string, format: string): Date {
-	const result = parseCanonicalDate(date, dateFormatHint(format));
-	if (!result)
-		throw new Error(`Unable to parse date: ${date} with format: ${format}`);
-	return new Date(
-		result.getUTCFullYear(),
-		result.getUTCMonth(),
-		result.getUTCDate(),
-	);
-}
-export function amountToMilliunits(amount: string): number {
-	const parsed = parseAmount(amount);
-	if (!parsed.valid) throw new Error(`Invalid amount value: ${amount}`);
-	return parsed.valueMilliunits;
 }
 export function detectDateFormat(date?: string): string {
 	return date?.match(/^\d{4}-/)
@@ -143,31 +123,4 @@ export function readCSVFile(filePath: string): string {
 			lastReadError instanceof Error ? lastReadError.message : "Unknown error"
 		}`,
 	);
-}
-
-/**
- * Extract date range from CSV bank statement
- * Returns min and max dates in YYYY-MM-DD format
- */
-export function extractDateRangeFromCSV(
-	csvContent: string,
-	format: CSVFormat,
-): { minDate: string; maxDate: string } {
-	const transactions = parseBankCSV(csvContent, format);
-
-	if (transactions.length === 0) {
-		throw new Error("No transactions found in CSV");
-	}
-
-	// Extract all dates (already Date objects from parseBankCSV)
-	const dates = transactions.map((txn) => txn.date.getTime());
-
-	// Find min and max
-	const minDateObj = new Date(Math.min(...dates));
-	const maxDateObj = new Date(Math.max(...dates));
-
-	return {
-		minDate: minDateObj.toISOString().slice(0, 10),
-		maxDate: maxDateObj.toISOString().slice(0, 10),
-	};
 }

@@ -1,3 +1,9 @@
+import {
+	formatLocalISODate,
+	formatUTCISODate,
+	isDateInRange,
+	isValidISODate,
+} from "../../utils/dateUtils.js";
 import type { CSVParseResult } from "./csvParser.js";
 
 export interface StatementWindowBounds {
@@ -10,6 +16,11 @@ export interface ClampStatementWindowResult {
 	excludedCount: number;
 	windowApplied: StatementWindowBounds | null;
 }
+
+// Date-only forms without a time or zone, which Date parses as local midnight:
+// 01/31/2024, 01-31-2024, 2024/01/31, Jan 31, 2024, 31 Jan 2024, Wed, 31 Jan 2024
+const ZONELESS_DATE =
+	/^(?:(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s+)?(?:\d{1,2}([/-])\d{1,2}\1\d{4}|\d{4}\/\d{1,2}\/\d{1,2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+\d{4})$/i;
 
 /**
  * Normalize user-provided statement dates to YYYY-MM-DD.
@@ -27,8 +38,11 @@ export function normalizeStatementDate(
 		return undefined;
 	}
 
-	if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-		return trimmed;
+	// An ISO date, with or without a time ("T", "t" or RFC 3339's space),
+	// already names the calendar date
+	const isoDate = /^(\d{4}-\d{2}-\d{2})(?:$|[Tt ])/.exec(trimmed)?.[1];
+	if (isoDate) {
+		return isValidISODate(isoDate) ? isoDate : undefined;
 	}
 
 	const parsed = new Date(trimmed);
@@ -36,7 +50,11 @@ export function normalizeStatementDate(
 		return undefined;
 	}
 
-	return parsed.toISOString().split("T")[0];
+	// Date-only forms parse as local midnight, so format in local time to keep
+	// the written date. Anything else (a time, a zone) keeps the UTC date
+	return ZONELESS_DATE.test(trimmed)
+		? formatLocalISODate(parsed)
+		: formatUTCISODate(parsed);
 }
 
 export function formatStatementWindow(bounds: StatementWindowBounds): string {
@@ -64,16 +82,9 @@ export function clampCSVToStatementWindow(
 		};
 	}
 
-	const transactions = parseResult.transactions.filter((txn) => {
-		const date = txn.date;
-		if (start && date < start) {
-			return false;
-		}
-		if (end && date > end) {
-			return false;
-		}
-		return true;
-	});
+	const transactions = parseResult.transactions.filter((txn) =>
+		isDateInRange(txn.date, start, end),
+	);
 
 	const excludedCount = parseResult.transactions.length - transactions.length;
 	if (excludedCount <= 0) {

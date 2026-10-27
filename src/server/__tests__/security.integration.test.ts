@@ -371,14 +371,13 @@ describe("Security Integration", () => {
 			const testLimiter = new RateLimiter({
 				maxRequests: 5,
 				windowMs: 50, // 50ms
-				enableLogging: false,
 			});
 
 			const testToken = "cleanup-test-token";
 
 			// Make some requests
-			testLimiter.recordRequest(testToken);
-			testLimiter.recordRequest(testToken);
+			testLimiter.forToken(testToken).tryAcquire();
+			testLimiter.forToken(testToken).tryAcquire();
 
 			expect(testLimiter.getStatus(testToken).remaining).toBe(3);
 

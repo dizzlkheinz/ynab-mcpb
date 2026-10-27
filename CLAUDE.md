@@ -43,7 +43,16 @@ npm run lint               # Biome linting
 npm run lint:fix           # Auto-fix Biome lint/format issues
 npm run format             # Format with Biome
 npm run format:check       # Check formatting without modifications
+npm run knip               # Unused files, exports and types (knip.json, then knip.production.json)
 ```
+
+knip is a pinned devDependency. CI runs `npm run knip` and fails on any finding; the
+pre-commit hook (`.githooks/local.sh`) runs it too and blocks the commit only when there
+are no unstaged changes and no untracked, non-ignored files; otherwise its result is
+advisory and CI is the gate. Export only what another file imports; an export used
+only inside its own file is allowed. The second, production-mode run ignores test files,
+so it also fails on an export that only tests import. Tag a deliberate test seam (such
+as `resetRuntimeConfig`) with `@internal`, which production mode skips.
 
 ### Packaging & Distribution
 
@@ -94,7 +103,7 @@ The architecture is modular and service-oriented:
 - `ToolContext` (`src/types/toolRegistration.ts`) centralizes shared deps (ynabAPI, deltaFetcher/cache, knowledge store, default budget accessors, cache/diagnostic managers).
 - Adapter helpers (`src/tools/adapters.ts`): `adapt` (also used by write tools), `adaptNoInput`, `adaptWithDelta`, `adaptWithDeltaAndProgress`, and `createBudgetResolver` to inject default budget IDs; covered by unit tests in `src/tools/__tests__/adapters.test.ts`.
 - Domain factories (`register*Tools`) live in each tool file: budget, account, transaction, category, payee, month, utility, reconciliation. `setupToolRegistry` now delegates to these factories.
-- Shared schemas: `emptyObjectSchema`, `looseObjectSchema` in `src/tools/schemas/common.ts`.
+- Shared schema: `emptyObjectSchema` in `src/tools/schemas/common.ts`.
 - Output schemas: All 35 tools have Zod output schemas registered via `outputSchema`. The registry converts to JSON Schema for `tools/list` and validates handler output for `structuredContent`.
 - Server-owned inline tools that stay in `YNABMCPServer`: `ynab_set_default_budget`, `ynab_get_default_budget`, `ynab_diagnostic_info`, `ynab_clear_cache` (they depend on server internals).
 
@@ -104,7 +113,7 @@ Tools are organized by domain with some using modular sub-directories:
 
 - **budgetTools.ts** - Budget listing and retrieval
 - **accountTools.ts** - Account management
-- **transactionTools.ts** - Transaction tool facade (registration + compatibility re-exports)
+- **transactionTools.ts** - Transaction tool facade (registers the read and write tools)
 - **transactionReadTools.ts** - Read-only transaction handlers (list/get/export)
 - **transactionWriteTools.ts** - Write transaction handlers (create/update/delete)
 - **transactionSchemas.ts** - Transaction Zod schemas (extracted v0.18.4, 453 lines)
@@ -115,7 +124,6 @@ Tools are organized by domain with some using modular sub-directories:
 - **utilityTools.ts** - User info and amount conversion
 - **adapters.ts** - Tool adapter implementations
 - **toolCategories.ts** - Tool categorization utilities
-- **compareTransactions.ts** - Transaction comparison tool entry point
 - **exportTransactions.ts** - Transaction export to JSON files
 - **deltaFetcher.ts** - Delta request utilities for efficient API updates
 
@@ -127,31 +135,30 @@ Tools are organized by domain with some using modular sub-directories:
   - matcher.ts - Fuzzy matching engine with configurable scoring
   - analyzer.ts - Transaction analysis and discrepancy detection
   - executor.ts - Bulk transaction operations (create/update/unclear)
-  - executorErrors.ts - YNAB error normalization and propagation logic
+  - executorErrors.ts - YNAB error normalization
   - executorHelpers.ts - Executor utilities (chunking, sorting, recommendations)
   - balanceReconciliation.ts - Balance verification and likely-cause analysis
   - outputBuilder.ts - Dual-channel payload builder (human narrative + structured JSON)
   - recommendationEngine.ts - Smart reconciliation recommendations
   - reportFormatter.ts - Human-readable reconciliation reports
   - signDetector.ts - Auto-detection of debit/credit sign conventions
-  - payeeNormalizer.ts - Payee name normalization for matching
   - ynabAdapter.ts - YNAB API integration layer
 - **schemas/** - Zod schemas for input/output validation
-  - shared/commonOutputs.ts - Reusable base schemas (CacheMetadata, SuccessResponse, ErrorDetails)
+  - shared/commonOutputs.ts - Reusable base schemas (CacheMetadata, SuccessResponse, PaginationMetadata)
   - outputs/ - Shared output schema definitions; scheduled and analytics domains keep focused schemas beside their handlers
-  - outputs/index.ts - Central export point for all output schemas and TypeScript types
+  - outputs/index.ts - Exports the tool output schemas passed to `registry.register()`
 
 ### Type Definitions (`src/types/`)
 
-- **index.ts** - Shared types, error classes, server configuration
-- **toolRegistration.ts** - ToolContext, handler signatures (Handler, DeltaHandler, WriteHandler, NoInputHandler)
+- **index.ts** - Re-exports of `ValidationError` and the error-handling helpers
+- **toolRegistration.ts** - ToolContext, handler signatures (Handler, DeltaHandler, NoInputHandler)
 - **toolAnnotations.ts** - MCP annotation types and interfaces
 - **reconciliation.ts** - Reconciliation-specific type definitions
 
 ### Utilities (`src/utils/`)
 
 - **money.ts** - Amount conversion (dollars ↔ milliunits)
-- **dateUtils.ts** - Date formatting and validation
+- **dateUtils.ts** - ISO date validation (`isValidISODate`) and YYYY-MM-DD formatting: `formatUTCISODate` (UTC) and `formatLocalISODate` (local, for "today" defaults)
 - **money.ts** - Amount validation and utilities
 - **baseError.ts** - Base error class for custom errors
 - **errors.ts** - Custom error classes and error handling utilities
@@ -164,13 +171,15 @@ Tools are organized by domain with some using modular sub-directories:
 All tools register through the centralized `ToolRegistry` for consistent validation, security, and error handling:
 
 ```typescript
+const budgetResolver = createBudgetResolver(context);
+
 registry.register({
   name: 'ynab_my_tool',
   description: 'Tool description',
   inputSchema: MyToolSchema,   // Zod input schema
   outputSchema: MyOutputSchema, // Zod output schema (structuredContent)
   handler: adapt(handleMyTool), // Handler function
-  defaultArgumentResolver: resolveBudgetId(), // Optional auto-resolution
+  defaultArgumentResolver: budgetResolver<z.infer<typeof MyToolSchema>>(), // Optional default budget_id
 });
 ```
 
@@ -454,7 +463,7 @@ Output schemas live in `src/tools/schemas/outputs/` organized by domain:
 
 - `CacheMetadataSchema` (`schemas/shared/commonOutputs.ts`) — `cached`, `cache_info`, `usedDelta` fields, extended by read-only tool outputs
 - `SuccessResponseSchema` — `success` + `message` fields, extended by write tool outputs
-- `index.ts` — Central export point for all output schemas and TypeScript types
+- `index.ts` — Exports the tool output schemas passed to `registry.register()`; nested schemas stay in their domain files
 
 ### Schema Patterns
 

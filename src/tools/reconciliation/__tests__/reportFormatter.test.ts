@@ -1,16 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ExecutionResult } from "../executor.js";
 import {
-	formatBalanceInfo,
 	formatHumanReadableReport,
-	formatTransactionList,
 	type ReportFormatterOptions,
 } from "../reportFormatter.js";
 import type {
 	BankTransaction,
 	ReconciliationAnalysis,
 	ReconciliationInsight,
-	YNABTransaction,
 } from "../types.js";
 
 /**
@@ -84,25 +81,6 @@ const createBankTransaction = (
 	payee,
 	sourceRow: 1,
 	raw: { date, amount: String(amount), description: payee },
-});
-
-/**
- * Create test YNAB transaction
- */
-const createYNABTransaction = (
-	id: string,
-	amount: number,
-	payee: string,
-	date = "2025-10-15",
-): YNABTransaction => ({
-	id,
-	date,
-	amount,
-	payee,
-	categoryName: "General",
-	memo: null,
-	cleared: "uncleared",
-	approved: true,
 });
 
 /**
@@ -494,75 +472,6 @@ describe("reportFormatter", () => {
 			const report = formatHumanReadableReport(analysis);
 
 			expect(report).toContain("Account Reconciliation Report");
-		});
-	});
-
-	describe("formatBalanceInfo", () => {
-		it("should format balance info correctly", () => {
-			const balanceInfo = {
-				current_cleared: makeMoney(-899.02),
-				current_uncleared: makeMoney(-50.0),
-				current_total: makeMoney(-949.02),
-				target_statement: makeMoney(-921.24),
-				discrepancy: makeMoney(22.22),
-				on_track: false,
-			};
-
-			const formatted = formatBalanceInfo(balanceInfo);
-
-			expect(formatted).toContain("Current Cleared:  -$899.02");
-			expect(formatted).toContain("Current Total:    -$949.02");
-			expect(formatted).toContain("Target Statement: -$921.24");
-			expect(formatted).toContain("Discrepancy:      $22.22");
-		});
-	});
-
-	describe("formatTransactionList", () => {
-		it("should format bank transactions", () => {
-			const transactions = [
-				createBankTransaction("1", -45.23, "Shell Gas", "2025-10-15"),
-				createBankTransaction("2", -60.0, "Amazon", "2025-10-20"),
-			];
-
-			const formatted = formatTransactionList(transactions);
-
-			expect(formatted).toContain("2025-10-15");
-			expect(formatted).toContain("Shell Gas");
-			expect(formatted).toContain("-$45.23");
-			expect(formatted).toContain("Amazon");
-		});
-
-		it("should format YNAB transactions", () => {
-			const transactions = [
-				createYNABTransaction("1", -45230, "Shell", "2025-10-15"),
-				createYNABTransaction("2", -60000, "Amazon", "2025-10-20"),
-			];
-
-			const formatted = formatTransactionList(transactions);
-
-			expect(formatted).toContain("2025-10-15");
-			expect(formatted).toContain("Shell");
-			expect(formatted).toContain("-$45.23");
-			expect(formatted).toContain("Amazon");
-			expect(formatted).toContain("-$60.00");
-		});
-
-		it("should truncate long lists", () => {
-			const transactions: BankTransaction[] = [];
-			for (let i = 0; i < 20; i++) {
-				transactions.push(
-					createBankTransaction(`${i}`, -10.0, `Payee ${i}`, "2025-10-15"),
-				);
-			}
-
-			const formatted = formatTransactionList(transactions, 5);
-
-			expect(formatted).toContain("... and 15 more");
-		});
-
-		it("should handle empty list", () => {
-			const formatted = formatTransactionList([]);
-			expect(formatted).toBe("");
 		});
 	});
 

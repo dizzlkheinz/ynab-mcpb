@@ -1,76 +1,8 @@
 /**
- * Unified date utilities for YNAB MCP Server
- *
- * All date formatting should use these utilities to ensure consistency
- * and prevent bugs like the duplicate month issue.
- *
- * Uses date-fns internally for robust date operations while providing
- * YNAB-specific business logic.
+ * ISO date (YYYY-MM-DD) validation and formatting for YNAB MCP Server
  */
 
-import { format, isValid, parse, subMonths } from "date-fns";
-
-/**
- * Formats a date as YYYY-MM-01 (YNAB month format)
- * @param date The date to format
- * @returns Formatted date string in YYYY-MM-01 format
- */
-export function formatYNABMonth(date: Date): string {
-	return format(date, "yyyy-MM-'01'");
-}
-
-/**
- * Formats a date as YYYY-MM-DD (ISO date format)
- * @param date The date to format
- * @returns Formatted date string in YYYY-MM-DD format
- */
-export function formatISODate(date: Date): string {
-	return format(date, "yyyy-MM-dd");
-}
-
-/**
- * Gets the current month in YNAB format (YYYY-MM-01)
- * @returns Current month formatted as YYYY-MM-01
- */
-export function getCurrentMonth(): string {
-	return formatYNABMonth(new Date());
-}
-
-/**
- * Gets today's date in ISO format (YYYY-MM-DD)
- * @returns Today's date formatted as YYYY-MM-DD
- */
-export function getToday(): string {
-	return formatISODate(new Date());
-}
-
-/**
- * Generates an array of historical months going backwards from a start date
- * @param monthCount Number of months to generate
- * @param startDate The starting date (defaults to current date)
- * @returns Array of month strings in YYYY-MM-01 format, ordered newest to oldest
- */
-export function getHistoricalMonths(
-	monthCount: number,
-	startDate?: Date,
-): string[] {
-	const baseDate = startDate || new Date();
-
-	return Array.from({ length: monthCount }, (_, i) => {
-		const date = subMonths(baseDate, i);
-		return formatYNABMonth(date);
-	});
-}
-
-/**
- * Subtracts months from a date
- * @param date The base date
- * @param months Number of months to subtract
- * @returns New date with months subtracted
- */
-export function subtractMonths(date: Date, months: number): Date {
-	return subMonths(date, months);
-}
+import { format, isValid, parse } from "date-fns";
 
 /**
  * Validates if a string is in YYYY-MM-DD format
@@ -86,26 +18,32 @@ export function isValidISODate(dateString: string): boolean {
 }
 
 /**
- * Validates if a string is in YYYY-MM-01 format (YNAB month format)
- * @param monthString The string to validate
- * @returns True if valid YNAB month format
+ * Formats a date as YYYY-MM-DD in UTC, so the result does not depend on the
+ * host time zone. Use for dates built with Date.UTC or parsed from date-only
+ * strings.
  */
-export function isValidYNABMonth(monthString: string): boolean {
-	if (!/^\d{4}-\d{2}-01$/.test(monthString)) {
-		return false;
-	}
-	const parsed = parse(monthString, "yyyy-MM-'01'", new Date());
-	return isValid(parsed);
+export function formatUTCISODate(date: Date): string {
+	const iso = date.toISOString();
+	// Not slice(0, 10): years past 9999 are written as +010000
+	return iso.slice(0, iso.indexOf("T"));
 }
 
 /**
- * Converts a YYYY-MM format to YYYY-MM-01 format
- * @param yearMonth String in YYYY-MM format
- * @returns String in YYYY-MM-01 format
+ * Whether a YYYY-MM-DD date falls inside an optional, inclusive [start, end]
+ * range. ISO dates sort as text, so this compares strings.
  */
-export function yearMonthToYNABMonth(yearMonth: string): string {
-	if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
-		throw new Error("Invalid year-month format. Expected YYYY-MM");
-	}
-	return `${yearMonth}-01`;
+export function isDateInRange(
+	isoDate: string,
+	start?: string,
+	end?: string,
+): boolean {
+	return (!start || isoDate >= start) && (!end || isoDate <= end);
+}
+
+/**
+ * Formats a date as YYYY-MM-DD in the host's local time zone. Use for "today"
+ * defaults, where the user's calendar date matters rather than UTC's.
+ */
+export function formatLocalISODate(date: Date): string {
+	return format(date, "yyyy-MM-dd");
 }

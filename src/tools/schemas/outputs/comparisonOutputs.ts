@@ -120,7 +120,7 @@ export const ISODateStringSchema = z
  *
  * @remarks
  * The formatter uses `.toFixed(2)` to format amounts as decimal strings with exactly 2 decimal places.
- * Dates are formatted as ISO strings (YYYY-MM-DD) via `.toISOString().split('T')[0]`.
+ * Dates are formatted as ISO strings (YYYY-MM-DD) via `formatUTCISODate` (UTC).
  *
  * @see src/tools/compareTransactions/formatter.ts:92-102 - formatUnmatchedBank function
  */
@@ -139,15 +139,13 @@ export const MissingInYNABItemSchema = z.object({
 	suggestion_reason: z.string().optional(),
 });
 
-export type MissingInYNABItem = z.infer<typeof MissingInYNABItemSchema>;
-
 /**
  * YNAB transaction missing from bank CSV (formatted output).
  * Represents transactions that exist in YNAB but not in the bank file.
  *
  * @remarks
  * The formatter uses `.toFixed(2)` to format amounts as decimal strings with exactly 2 decimal places.
- * Dates are formatted as ISO strings (YYYY-MM-DD) via `.toISOString().split('T')[0]`.
+ * Dates are formatted as ISO strings (YYYY-MM-DD) via `formatUTCISODate` (UTC).
  *
  * @see src/tools/compareTransactions/formatter.ts:108-116 - formatUnmatchedYNAB function
  */
@@ -165,15 +163,13 @@ export const MissingInBankItemSchema = z.object({
 	cleared: z.string(),
 });
 
-export type MissingInBankItem = z.infer<typeof MissingInBankItemSchema>;
-
 /**
  * Matched transaction pair (formatted output).
  * Links a bank transaction to a YNAB transaction with confidence metrics.
  *
  * @remarks
  * The formatter uses `.toFixed(2)` to format amounts as decimal strings with exactly 2 decimal places.
- * Dates are formatted as ISO strings (YYYY-MM-DD) via `.toISOString().split('T')[0]`.
+ * Dates are formatted as ISO strings (YYYY-MM-DD) via `formatUTCISODate` (UTC).
  *
  * @see src/tools/compareTransactions/formatter.ts:72-86 - formatMatches function
  */
@@ -202,89 +198,9 @@ export const MatchItemSchema = z.object({
 	match_reasons: z.array(z.string()),
 });
 
-export type MatchItem = z.infer<typeof MatchItemSchema>;
-
 // ============================================================================
 // INTERNAL SCHEMAS (for reference, not used in main output validation)
 // ============================================================================
-
-/**
- * Bank transaction (internal type, used during matching).
- * Not part of the formatted output; see MissingInYNABItemSchema for output format.
- *
- * @remarks
- * **WARNING:** This is an internal schema used during the matching algorithm.
- * It is NOT part of the public tool output contract and may change without
- * maintaining backward compatibility. Do not rely on this schema for stable
- * integrations - use CompareTransactionsOutputSchema instead.
- *
- * @see src/tools/compareTransactions/types.ts - BankTransaction interface
- * @internal
- */
-export const BankTransactionComparisonSchema = z.object({
-	date: ISODateStringSchema,
-	amount: z.number(),
-	description: z.string(),
-	raw_amount: z.string(),
-	raw_date: z.string(),
-	row_number: z.number(),
-});
-
-export type BankTransactionComparison = z.infer<
-	typeof BankTransactionComparisonSchema
->;
-
-/**
- * YNAB transaction (internal type, used during matching).
- * Not part of the formatted output; see MissingInBankItemSchema for output format.
- *
- * @remarks
- * **WARNING:** This is an internal schema used during the matching algorithm.
- * It is NOT part of the public tool output contract and may change without
- * maintaining backward compatibility. Do not rely on this schema for stable
- * integrations - use CompareTransactionsOutputSchema instead.
- *
- * @see src/tools/compareTransactions/types.ts - YNABTransaction interface
- * @internal
- */
-export const YNABTransactionComparisonSchema = z.object({
-	id: z.string(),
-	date: ISODateStringSchema,
-	amount: z.number(),
-	payee_name: z.string().nullable(),
-	memo: z.string().nullish(),
-	cleared: z.string(),
-	account_name: z.string().optional(),
-	category_name: z.string().optional(),
-});
-
-export type YNABTransactionComparison = z.infer<
-	typeof YNABTransactionComparisonSchema
->;
-
-/**
- * Matched transaction pair (internal type, used during matching).
- * Not part of the formatted output; see MatchItemSchema for output format.
- *
- * @remarks
- * **WARNING:** This is an internal schema used during the matching algorithm.
- * It is NOT part of the public tool output contract and may change without
- * maintaining backward compatibility. Do not rely on this schema for stable
- * integrations - use CompareTransactionsOutputSchema instead.
- *
- * @see src/tools/compareTransactions/types.ts - TransactionMatch interface
- * @internal
- */
-export const TransactionMatchComparisonSchema = z.object({
-	bank_transaction: BankTransactionComparisonSchema,
-	ynab_transaction: YNABTransactionComparisonSchema,
-	match_score: z.number().min(0).max(100),
-	match_reasons: z.array(z.string()),
-});
-
-export type TransactionMatchComparison = z.infer<
-	typeof TransactionMatchComparisonSchema
->;
 
 /**
  * Comparison configuration parameters.
@@ -294,8 +210,6 @@ export const ComparisonParametersSchema = z.object({
 	amount_tolerance: z.number().optional(),
 	date_tolerance_days: z.number().optional(),
 });
-
-export type ComparisonParameters = z.infer<typeof ComparisonParametersSchema>;
 
 /**
  * Date range for comparison analysis.
@@ -328,151 +242,6 @@ export const DateRangeSchema = z
 			message: "Start date must be before or equal to end date",
 		},
 	);
-
-export type DateRange = z.infer<typeof DateRangeSchema>;
-
-/**
- * Export metadata and configuration (written to disk).
- * Documents export settings and timestamp.
- *
- * @remarks
- * This schema represents the export_info object written to the JSON file.
- * Note: The tool response does NOT include this object - see ExportTransactionsOutputSchema for the tool response format.
- *
- * @see src/tools/exportTransactions.ts:184-197 - Export info construction
- */
-export const ExportInfoSchema = z.object({
-	exported_at: z.string(),
-	total_transactions: z.number(),
-	minimal: z.boolean(),
-	filters: z.object({
-		budget_id: z.string().optional(),
-		account_id: z.string().nullable(),
-		category_id: z.string().nullable(),
-		since_date: z.string().nullable(),
-		type: z.string().nullable(),
-	}),
-});
-
-export type ExportInfo = z.infer<typeof ExportInfoSchema>;
-
-/**
- * Exported transaction schema (written to disk, no export_mode discriminator).
- * The actual JSON file does not include an export_mode field on each transaction.
- *
- * @remarks
- * IMPORTANT: `amount` is exported in decimal currency units for user-facing
- * readability. For example, -25500 YNAB milliunits is exported as -25.5.
- *
- * Minimal mode includes: id, date, amount, payee_name, cleared
- * Full mode includes: all transaction fields
- *
- * @see src/tools/exportTransactions.ts:198-232 - Transaction export logic
- * @see src/tools/exportTransactions.ts:204 - Amount field converted from transaction.amount
- */
-export const ExportedTransactionMinimalSchema = z.object({
-	id: z.string(),
-	date: z.string(),
-	amount: z.number(), // Decimal currency units
-	payee_name: z.string().nullable(),
-	cleared: z.string(),
-});
-
-export const ExportedTransactionFullSchema = z.object({
-	id: z.string(),
-	date: z.string(),
-	amount: z.number(), // Decimal currency units
-	memo: z.string().nullish(),
-	cleared: z.string(),
-	approved: z.boolean(),
-	flag_color: z.string().nullable(),
-	account_id: z.string(),
-	payee_id: z.string().nullable(),
-	category_id: z.string().nullable(),
-	transfer_account_id: z.string().nullable(),
-	transfer_transaction_id: z.string().nullable(),
-	matched_transaction_id: z.string().nullable(),
-	import_id: z.string().nullable(),
-	deleted: z.boolean(),
-	account_name: z.string().optional(),
-	payee_name: z.string().nullable(),
-	category_name: z.string().nullable(),
-});
-
-export const ExportedTransactionSchema = z.union([
-	ExportedTransactionMinimalSchema,
-	ExportedTransactionFullSchema,
-]);
-
-export type ExportedTransaction = z.infer<typeof ExportedTransactionSchema>;
-
-/**
- * Complete exported file structure (written to disk).
- * Represents the full JSON file structure created by export_transactions tool.
- *
- * @remarks
- * This is the structure of the file written to disk, NOT the tool response.
- * For the tool response format, see ExportTransactionsOutputSchema.
- *
- * @see src/tools/exportTransactions.ts:184-233 - Export data construction and file writing
- *
- * @example
- * // Minimal export file
- * {
- *   export_info: {
- *     exported_at: "2025-11-18T10:30:00Z",
- *     total_transactions: 150,
- *     minimal: true,
- *     filters: {
- *       budget_id: "budget-123",
- *       account_id: "account-456",
- *       category_id: null,
- *       since_date: "2025-01-01",
- *       type: null,
- *       minimal: true
- *     }
- *   },
- *   transactions: [
- *     { id: "txn-1", date: "2025-11-15", amount: -25.5, payee_name: "Grocery Store", cleared: "cleared" },
- *     ...
- *   ]
- * }
- *
- * @example
- * // Full export file
- * {
- *   export_info: {
- *     exported_at: "2025-11-18T10:30:00Z",
- *     total_transactions: 150,
- *     minimal: false,
- *     filters: { ... }
- *   },
- *   transactions: [
- *     {
- *       id: "txn-1",
- *       date: "2025-11-15",
- *       amount: -25.5,
- *       memo: "Weekly groceries",
- *       cleared: "cleared",
- *       approved: true,
- *       flag_color: null,
- *       account_id: "account-456",
- *       payee_id: "payee-789",
- *       payee_name: "Grocery Store",
- *       category_id: "category-123",
- *       category_name: "Food",
- *       ...
- *     },
- *     ...
- *   ]
- * }
- */
-export const ExportFileSchema = z.object({
-	export_info: ExportInfoSchema,
-	transactions: z.array(ExportedTransactionSchema),
-});
-
-export type ExportFile = z.infer<typeof ExportFileSchema>;
 
 // ============================================================================
 // MAIN OUTPUT SCHEMAS
@@ -546,10 +315,6 @@ export const CompareTransactionsOutputSchema = z.object({
 	missing_in_bank: z.array(MissingInBankItemSchema),
 });
 
-export type CompareTransactionsOutput = z.infer<
-	typeof CompareTransactionsOutputSchema
->;
-
 /**
  * Transaction export tool response (MCP tool result).
  * Returns export location, mode, and preview of exported data.
@@ -614,7 +379,3 @@ export const ExportTransactionsOutputSchema = z.object({
 		}),
 	),
 });
-
-export type ExportTransactionsOutput = z.infer<
-	typeof ExportTransactionsOutputSchema
->;

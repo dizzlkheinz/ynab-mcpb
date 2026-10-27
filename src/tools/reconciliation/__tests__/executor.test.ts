@@ -1,18 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { type MoneyValue, toMoneyValue } from "../../../utils/money.js";
-import type { NormalizedYnabError } from "../executor.js";
 import {
 	type AccountSnapshot,
-	buildReconciliationPlan,
 	type ExecutionOptions,
-	executeReconciliation,
 	executeReconciliationPlan,
-	normalizeYnabError,
-	shouldPropagateYnabError,
 } from "../executor.js";
+import { normalizeYnabError } from "../executorErrors.js";
 import type { ReconcileAccountRequest } from "../index.js";
+import { buildReconciliationPlan } from "../plan.js";
 import type { ReconciliationAnalysis } from "../types.js";
+import { executeReconciliation } from "./executeReconciliation.js";
 
 const buildAnalysis = (): ReconciliationAnalysis => ({
 	success: true,
@@ -229,12 +227,11 @@ describe("error normalization helpers", () => {
 		expect(err.message).toContain("Too many requests");
 	});
 
-	it("retains status from Error-like objects and propagates HTTP code decisions", () => {
+	it("retains status from Error-like objects", () => {
 		const err = normalizeYnabError(
 			Object.assign(new Error("Nope"), { status: 503 }),
 		);
 		expect(err.status).toBe(503);
-		expect(shouldPropagateYnabError(err as NormalizedYnabError)).toBe(true);
 	});
 });
 

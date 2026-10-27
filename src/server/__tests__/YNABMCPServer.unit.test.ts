@@ -7,17 +7,9 @@ import * as config from "../config.js";
 vi.mock("../config.js", () => ({
 	getRuntimeConfig: () => ({
 		LOG_LEVEL: "error",
-		RATE_LIMIT_LOGGING: false,
-		VERBOSE_TESTS: false,
 		YNAB_MCP_ENABLE_DELTA: undefined,
 		YNAB_EXPORT_PATH: undefined,
 		XDG_DOCUMENTS_DIR: undefined,
-	}),
-	getAppConfig: () => ({
-		LOG_LEVEL: "error",
-		RATE_LIMIT_LOGGING: false,
-		VERBOSE_TESTS: false,
-		YNAB_MCP_ENABLE_DELTA: undefined,
 	}),
 	isDeltaEnabled: () => false,
 	loadConfig: () => ({
@@ -210,6 +202,62 @@ describe("YNABMCPServer isolated behavior", () => {
 		const second = new YNABMCPServer(false);
 		expect(first.getDefaultBudget()).toBe("first-budget");
 		expect(second.getDefaultBudget()).toBe("second-budget");
+	});
+
+	it.each([
+		[{ RATE_LIMIT_LOGGING: true }, true],
+		[{ LOG_LEVEL: "debug" as const }, true],
+		[{ LOG_LEVEL: "trace" as const }, true],
+		[{}, false],
+	])(
+		"logs YNAB requests to stderr from config %o",
+		async (overrides, expected) => {
+			vi.spyOn(config, "loadConfig").mockReturnValueOnce({
+				...config.loadConfig(),
+				RATE_LIMIT_LOGGING: false,
+				...overrides,
+			});
+			vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response(JSON.stringify({ data: { user: { id: "user-1" } } }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				}),
+			);
+			const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+			const configured = new YNABMCPServer(false);
+			await configured.getYNABAPI().user.getUser();
+			const rateLimitLines = stderr.mock.calls.filter(([line]) =>
+				String(line).startsWith("[DEBUG] Rate limit acquire for "),
+			);
+			expect(rateLimitLines.length > 0).toBe(expected);
+			for (const [line] of rateLimitLines) {
+				expect(String(line)).toMatch(
+					/^\[DEBUG\] Rate limit acquire for token_[0-9a-f]+: /,
+				);
+				expect(String(line)).not.toContain("unit-test-token");
+			}
+		},
+	);
+
+	it("does not log rate limit acquires when diagnostics read the status", async () => {
+		vi.spyOn(config, "loadConfig").mockReturnValueOnce({
+			...config.loadConfig(),
+			RATE_LIMIT_LOGGING: true,
+		});
+		const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+		const configured = new YNABMCPServer(false);
+		const result = await configured.getToolRegistry().executeTool({
+			name: "ynab_diagnostic_info",
+			accessToken: "unit-test-token",
+			arguments: { include_security: true, response_format: "json" },
+		});
+		expect(result.isError).toBeFalsy();
+		expect(textOf(result.content[0])).toContain('"rateLimitStats"');
+		expect(
+			stderr.mock.calls.some(([line]) =>
+				String(line).startsWith("[DEBUG] Rate limit"),
+			),
+		).toBe(false);
 	});
 
 	it.each([

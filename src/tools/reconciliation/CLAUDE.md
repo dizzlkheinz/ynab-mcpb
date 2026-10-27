@@ -25,7 +25,7 @@ CSV File → Parser → Matcher → Analyzer → Executor → Reporter
 
 ### Component Flow
 
-1. **CSV Parser** - Parse bank CSV, auto-detect sign convention, normalize payees
+1. **CSV Parser** - Parse bank CSV and auto-detect sign convention
 2. **Matcher** - Fuzzy match CSV transactions to YNAB transactions (85% threshold)
 3. **Analyzer** - Analyze matches, detect discrepancies, duplicates, missing transactions
 4. **Executor** - Execute bulk create/update/unclear operations with progress tracking
@@ -39,14 +39,13 @@ CSV File → Parser → Matcher → Analyzer → Executor → Reporter
 | **matcher.ts** | Fuzzy matching engine with configurable scoring | ~500 | CRITICAL |
 | **analyzer.ts** | Transaction analysis and discrepancy detection | ~600 | CRITICAL |
 | **executor.ts** | Bulk transaction operations (create/update/unclear) | ~580 | HIGH |
-| **executorErrors.ts** | YNAB error normalization and propagation | ~120 | HIGH |
+| **executorErrors.ts** | YNAB error normalization | ~80 | HIGH |
 | **executorHelpers.ts** | Executor utilities (chunking, sorting, recommendations) | ~150 | MEDIUM |
 | **balanceReconciliation.ts** | Balance verification and likely-cause analysis | ~130 | HIGH |
 | **outputBuilder.ts** | Dual-channel payload builder (human + structured) | ~370 | MEDIUM |
 | **recommendationEngine.ts** | Smart reconciliation recommendations | ~300 | MEDIUM |
 | **reportFormatter.ts** | Human-readable reconciliation reports | ~400 | MEDIUM |
 | **signDetector.ts** | Auto-detection of debit/credit sign conventions | ~130 | HIGH |
-| **payeeNormalizer.ts** | Payee name normalization for matching | ~150 | MEDIUM |
 | **ynabAdapter.ts** | YNAB API integration layer | ~300 | HIGH |
 | **types.ts** | Reconciliation domain types (BankTransaction, MatchCandidate, MatchingConfig, recommendations) | ~300 | HIGH |
 
@@ -56,37 +55,27 @@ CSV File → Parser → Matcher → Analyzer → Executor → Reporter
 
 **Critical Change**: Reconciliation now filters YNAB transactions to only those within the statement date range.
 
-```typescript
-// Extract date range from CSV transactions
-const csvDates = csvTransactions.map((t) => new Date(t.date).getTime());
-const minDate = new Date(Math.min(...csvDates));
-const maxDate = new Date(Math.max(...csvDates));
+`filterByDateRange` in `analyzer.ts` widens the CSV's earliest and latest
+YYYY-MM-DD dates by the date tolerance with `Date.UTC` date arithmetic, formats the
+bounds with `formatUTCISODate`, and keeps the YNAB transactions inside them:
 
-// Filter YNAB transactions to date range using Date.UTC for timezone safety
-const inRangeTransactions = ynabTransactions.filter((t) => {
-  const txDate = new Date(t.date);
-  const txTime = Date.UTC(
-    txDate.getFullYear(),
-    txDate.getMonth(),
-    txDate.getDate()
-  );
-  const minTime = Date.UTC(
-    minDate.getFullYear(),
-    minDate.getMonth(),
-    minDate.getDate()
-  );
-  const maxTime = Date.UTC(
-    maxDate.getFullYear(),
-    maxDate.getMonth(),
-    maxDate.getDate()
-  );
-  return txTime >= minTime && txTime <= maxTime;
-});
+```typescript
+import { formatUTCISODate, isDateInRange } from '../../utils/dateUtils.js';
+
+const [minYear, minMonth, minDay] = dateRange.minDate.split('-').map(Number);
+const minDateStr = formatUTCISODate(
+  new Date(Date.UTC(minYear, minMonth - 1, minDay - toleranceDays))
+);
+// maxDateStr likewise (or statement_end_date when it is YYYY-MM-DD)
+
+for (const txn of ynabTransactions) {
+  (isDateInRange(txn.date, minDateStr, maxDateStr) ? inRange : outsideRange).push(txn);
+}
 ```
 
 **Why Critical**: Prevents false "missing from bank" matches for transactions outside the statement period.
 
-**What Breaks**: Not using `Date.UTC()` → timezone bugs. Not filtering → false positives for transactions before/after statement period.
+**What Breaks**: Parsing YYYY-MM-DD with `new Date()` and reading it back with local getters → off-by-one-day bugs west of UTC. Not filtering → false positives for transactions before/after statement period.
 
 ### 2. Matching Algorithm
 
@@ -207,30 +196,6 @@ function detectSignConvention(transactions: CSVTransaction[]): SignConvention {
 
 **What Breaks**: Wrong detection → all amounts inverted (debits become credits).
 
-### 6. Payee Normalization
-
-Payee names are normalized for better matching:
-
-```typescript
-function normalizePayee(payee: string): string {
-  return (
-    payee
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '') // Remove special chars
-      .replace(/\s+/g, ' ') // Collapse whitespace
-      .trim()
-  );
-}
-
-// Example:
-// "AMAZON.CA*2X3Y4Z" → "amazonca2x3y4z"
-// "Tim Hortons #1234" → "tim hortons 1234"
-```
-
-**Why Important**: Merchant names vary (location codes, punctuation). Normalization improves fuzzy matching.
-
-**What Breaks**: Over-normalization → lost information. Under-normalization → missed matches.
-
 ## Configuration
 
 Default configuration values:
@@ -312,7 +277,7 @@ Progress is already implemented for bulk operations. To add to new operations:
 - **Location**: `src/tools/reconciliation/__tests__/*.test.ts`
 - **Mock**: YNAB API, file system
 - **Coverage**: 80% minimum
-- **Focus**: Matching logic, sign detection, payee normalization
+- **Focus**: Matching logic, sign detection, CSV parsing
 
 ### Integration Tests
 
@@ -325,21 +290,29 @@ Progress is already implemented for bulk operations. To add to new operations:
 
 ```typescript
 describe('matcher', () => {
-  it('should match transactions with 85%+ score', () => {
-    const csvTx = {
+  it('should auto-match an exact amount and payee on the same date', () => {
+    const bankTxn: BankTransaction = {
+      id: 'b1',
       date: '2025-01-31',
-      amount: 25500, // milliunits
-      payee: 'AMAZON.CA*2X3Y4Z',
+      amount: -25500, // milliunits (-25.50)
+      payee: 'Shell Gas Station',
+      sourceRow: 2,
+      raw: { date: '2025-01-31', amount: '-25.50', description: 'Shell Gas Station' },
+    };
+    const ynabTxn: YNABTransaction = {
+      id: 'y1',
+      date: '2025-01-31',
+      amount: -25500,
+      payee: 'Shell Gas Station',
+      memo: null,
+      categoryName: 'Auto: Gas',
+      cleared: 'uncleared',
+      approved: true,
     };
 
-    const ynabTx = {
-      date: '2025-01-31',
-      amount: 25500,
-      payee_name: 'Amazon',
-    };
-
-    const score = calculateMatchScore(csvTx, ynabTx);
-    expect(score).toBeGreaterThan(85);
+    // Omitting the config uses DEFAULT_CONFIG
+    const [match] = findMatches([bankTxn], [ynabTxn]);
+    expect(match!.confidence).toBe('high');
   });
 });
 ```
@@ -355,31 +328,29 @@ describe('matcher', () => {
 **Fix**: Always filter YNAB transactions to CSV date range:
 
 ```typescript
-const inRangeTransactions = filterToDateRange(
+const { inRange, outsideRange } = filterByDateRange(
   ynabTransactions,
-  csvMinDate,
-  csvMaxDate
+  { minDate: csvMinDate, maxDate: csvMaxDate },
+  dateToleranceDays,
+  statementEndDate
 );
 ```
 
-### 2. Not Using `Date.UTC()` for Date Comparison
+### 2. Comparing Dates Through `Date` Objects
 
-**Problem**: Using local time for date comparisons.
+**Problem**: Converting YYYY-MM-DD strings to `Date` and comparing them with local getters or `toISOString()`.
 
 **Impact**: Timezone bugs → transactions on boundary dates incorrectly included/excluded.
 
-**Fix**: Always use `Date.UTC()` for date comparisons:
+**Fix**: Keep dates as YYYY-MM-DD strings and compare them with `isDateInRange`. Do date arithmetic with `Date.UTC` and format the result with `formatUTCISODate`. Read user-supplied statement dates through `normalizeStatementDate` (`statementWindow.ts`):
 
 ```typescript
 // BAD
-const txTime = new Date(txDate).getTime();
+const txDate = new Date(t.date); // UTC midnight, read back in local time
+const inRange = txDate.getDate() >= start.getDate();
 
 // GOOD
-const txTime = Date.UTC(
-  txDate.getFullYear(),
-  txDate.getMonth(),
-  txDate.getDate()
-);
+const inRange = isDateInRange(t.date, minDateStr, maxDateStr);
 ```
 
 ### 3. Missing Milliunits Conversion
@@ -486,7 +457,6 @@ These fields help users understand why certain YNAB transactions weren't matched
 2. **Progress Notifications**: Every chunk (100 transactions) emits progress
 3. **Date Range Filtering**: Reduces YNAB transaction set for faster matching
 4. **Fuzzy Matching**: Uses optimized token-set-ratio algorithm
-5. **Payee Normalization**: Caches normalized payees to avoid re-computation
 
 ## Integration Points
 
@@ -503,7 +473,7 @@ These fields help users understand why certain YNAB transactions weren't matched
 ### With Utils (`src/utils/`)
 
 - **money.ts**: Milliunits conversion for amount matching
-- **dateUtils.ts**: Date formatting and validation
+- **dateUtils.ts**: YYYY-MM-DD formatting (`formatUTCISODate`, `formatLocalISODate`) and inclusive range checks (`isDateInRange`)
 
 ## Related Documentation
 

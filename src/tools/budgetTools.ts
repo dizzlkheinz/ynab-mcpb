@@ -29,8 +29,6 @@ export const ListBudgetsSchema = z
 	})
 	.strict();
 
-export type ListBudgetsParams = z.infer<typeof ListBudgetsSchema>;
-
 /**
  * Schema for ynab:get_budget tool parameters
  */

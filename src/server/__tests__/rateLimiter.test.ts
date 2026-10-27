@@ -3,7 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hashToken, RateLimitError, RateLimiter } from "../rateLimiter.js";
+import { RateLimitError, RateLimiter } from "../rateLimiter.js";
 
 describe("RateLimiter", () => {
 	let rateLimiter: RateLimiter;
@@ -13,7 +13,6 @@ describe("RateLimiter", () => {
 		rateLimiter = new RateLimiter({
 			maxRequests: 5,
 			windowMs: 1000, // 1 second for testing
-			enableLogging: false,
 		});
 	});
 
@@ -22,9 +21,9 @@ describe("RateLimiter", () => {
 		vi.restoreAllMocks();
 	});
 
-	describe("isAllowed", () => {
+	describe("tryAcquire", () => {
 		it("should allow requests within the limit", () => {
-			const result = rateLimiter.isAllowed(testIdentifier);
+			const result = rateLimiter.getStatus(testIdentifier);
 
 			expect(result.isLimited).toBe(false);
 			expect(result.remaining).toBe(5);
@@ -33,11 +32,11 @@ describe("RateLimiter", () => {
 
 		it("should track requests correctly", () => {
 			// Make 3 requests
-			rateLimiter.recordRequest(testIdentifier);
-			rateLimiter.recordRequest(testIdentifier);
-			rateLimiter.recordRequest(testIdentifier);
+			rateLimiter.forToken(testIdentifier).tryAcquire();
+			rateLimiter.forToken(testIdentifier).tryAcquire();
+			rateLimiter.forToken(testIdentifier).tryAcquire();
 
-			const result = rateLimiter.isAllowed(testIdentifier);
+			const result = rateLimiter.getStatus(testIdentifier);
 
 			expect(result.isLimited).toBe(false);
 			expect(result.remaining).toBe(2);
@@ -46,10 +45,10 @@ describe("RateLimiter", () => {
 		it("should limit requests when max is reached", () => {
 			// Make 5 requests (the limit)
 			for (let i = 0; i < 5; i++) {
-				rateLimiter.recordRequest(testIdentifier);
+				rateLimiter.forToken(testIdentifier).tryAcquire();
 			}
 
-			const result = rateLimiter.isAllowed(testIdentifier);
+			const result = rateLimiter.getStatus(testIdentifier);
 
 			expect(result.isLimited).toBe(true);
 			expect(result.remaining).toBe(0);
@@ -61,12 +60,12 @@ describe("RateLimiter", () => {
 
 			// Max out identifier1
 			for (let i = 0; i < 5; i++) {
-				rateLimiter.recordRequest(identifier1);
+				rateLimiter.forToken(identifier1).tryAcquire();
 			}
 
 			// identifier2 should still be allowed
-			const result1 = rateLimiter.isAllowed(identifier1);
-			const result2 = rateLimiter.isAllowed(identifier2);
+			const result1 = rateLimiter.getStatus(identifier1);
+			const result2 = rateLimiter.getStatus(identifier2);
 
 			expect(result1.isLimited).toBe(true);
 			expect(result2.isLimited).toBe(false);
@@ -78,29 +77,28 @@ describe("RateLimiter", () => {
 			const shortWindowLimiter = new RateLimiter({
 				maxRequests: 2,
 				windowMs: 50, // 50ms
-				enableLogging: false,
 			});
 
 			// Max out the requests
-			shortWindowLimiter.recordRequest(testIdentifier);
-			shortWindowLimiter.recordRequest(testIdentifier);
+			shortWindowLimiter.forToken(testIdentifier).tryAcquire();
+			shortWindowLimiter.forToken(testIdentifier).tryAcquire();
 
-			expect(shortWindowLimiter.isAllowed(testIdentifier).isLimited).toBe(true);
+			expect(shortWindowLimiter.getStatus(testIdentifier).isLimited).toBe(true);
 
 			// Wait for window to expire
 			await new Promise((resolve) => setTimeout(resolve, 60));
 
 			// Should be allowed again
-			const result = shortWindowLimiter.isAllowed(testIdentifier);
+			const result = shortWindowLimiter.getStatus(testIdentifier);
 			expect(result.isLimited).toBe(false);
 			expect(result.remaining).toBe(2);
 		});
 	});
 
-	describe("recordRequest", () => {
+	describe("recording", () => {
 		it("should record requests correctly", () => {
-			rateLimiter.recordRequest(testIdentifier);
-			rateLimiter.recordRequest(testIdentifier);
+			rateLimiter.forToken(testIdentifier).tryAcquire();
+			rateLimiter.forToken(testIdentifier).tryAcquire();
 
 			const status = rateLimiter.getStatus(testIdentifier);
 			expect(status.remaining).toBe(3);
@@ -109,7 +107,7 @@ describe("RateLimiter", () => {
 		it("should handle rapid successive requests", () => {
 			// Record requests rapidly
 			for (let i = 0; i < 10; i++) {
-				rateLimiter.recordRequest(testIdentifier);
+				rateLimiter.forToken(testIdentifier).tryAcquire();
 			}
 
 			const status = rateLimiter.getStatus(testIdentifier);
@@ -120,7 +118,7 @@ describe("RateLimiter", () => {
 
 	describe("getStatus", () => {
 		it("should return current status without modifying state", () => {
-			rateLimiter.recordRequest(testIdentifier);
+			rateLimiter.forToken(testIdentifier).tryAcquire();
 
 			const status1 = rateLimiter.getStatus(testIdentifier);
 			const status2 = rateLimiter.getStatus(testIdentifier);
@@ -135,7 +133,7 @@ describe("RateLimiter", () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date("2026-05-10T12:00:00Z"));
 
-			rateLimiter.markExhausted(testIdentifier);
+			rateLimiter.forToken(testIdentifier).markExhausted();
 			vi.advanceTimersByTime(10);
 
 			const status = rateLimiter.getStatus(testIdentifier);
@@ -148,16 +146,16 @@ describe("RateLimiter", () => {
 		it("should reset specific identifier", () => {
 			// Max out requests
 			for (let i = 0; i < 5; i++) {
-				rateLimiter.recordRequest(testIdentifier);
+				rateLimiter.forToken(testIdentifier).tryAcquire();
 			}
 
-			expect(rateLimiter.isAllowed(testIdentifier).isLimited).toBe(true);
+			expect(rateLimiter.getStatus(testIdentifier).isLimited).toBe(true);
 
 			// Reset
 			rateLimiter.reset(testIdentifier);
 
 			// Should be allowed again
-			const result = rateLimiter.isAllowed(testIdentifier);
+			const result = rateLimiter.getStatus(testIdentifier);
 			expect(result.isLimited).toBe(false);
 			expect(result.remaining).toBe(5);
 		});
@@ -168,19 +166,19 @@ describe("RateLimiter", () => {
 
 			// Max out both identifiers
 			for (let i = 0; i < 5; i++) {
-				rateLimiter.recordRequest(identifier1);
-				rateLimiter.recordRequest(identifier2);
+				rateLimiter.forToken(identifier1).tryAcquire();
+				rateLimiter.forToken(identifier2).tryAcquire();
 			}
 
-			expect(rateLimiter.isAllowed(identifier1).isLimited).toBe(true);
-			expect(rateLimiter.isAllowed(identifier2).isLimited).toBe(true);
+			expect(rateLimiter.getStatus(identifier1).isLimited).toBe(true);
+			expect(rateLimiter.getStatus(identifier2).isLimited).toBe(true);
 
 			// Reset all
 			rateLimiter.reset();
 
 			// Both should be allowed again
-			expect(rateLimiter.isAllowed(identifier1).isLimited).toBe(false);
-			expect(rateLimiter.isAllowed(identifier2).isLimited).toBe(false);
+			expect(rateLimiter.getStatus(identifier1).isLimited).toBe(false);
+			expect(rateLimiter.getStatus(identifier2).isLimited).toBe(false);
 		});
 	});
 
@@ -189,12 +187,11 @@ describe("RateLimiter", () => {
 			const shortWindowLimiter = new RateLimiter({
 				maxRequests: 5,
 				windowMs: 50, // 50ms
-				enableLogging: false,
 			});
 
 			// Record some requests
-			shortWindowLimiter.recordRequest(testIdentifier);
-			shortWindowLimiter.recordRequest(testIdentifier);
+			shortWindowLimiter.forToken(testIdentifier).tryAcquire();
+			shortWindowLimiter.forToken(testIdentifier).tryAcquire();
 
 			expect(shortWindowLimiter.getStatus(testIdentifier).remaining).toBe(3);
 
@@ -219,17 +216,14 @@ describe("RateLimiter", () => {
 			const loggingLimiter = new RateLimiter({
 				maxRequests: 2,
 				windowMs: 1000,
-				enableLogging: true,
+				log: (message: string) => console.error(message),
 			});
 
-			loggingLimiter.isAllowed(testIdentifier);
-			loggingLimiter.recordRequest(testIdentifier);
+			loggingLimiter.forToken(testIdentifier).tryAcquire();
 
+			expect(consoleSpy).toHaveBeenCalledTimes(1);
 			expect(consoleSpy).toHaveBeenCalledWith(
-				expect.stringContaining("Rate limit check"),
-			);
-			expect(consoleSpy).toHaveBeenCalledWith(
-				expect.stringContaining("Recorded request"),
+				expect.stringContaining("Rate limit acquire"),
 			);
 
 			consoleSpy.mockRestore();
@@ -240,8 +234,8 @@ describe("RateLimiter", () => {
 				// Mock implementation for testing
 			});
 
-			rateLimiter.isAllowed(testIdentifier);
-			rateLimiter.recordRequest(testIdentifier);
+			rateLimiter.getStatus(testIdentifier);
+			rateLimiter.forToken(testIdentifier).tryAcquire();
 
 			expect(consoleSpy).not.toHaveBeenCalled();
 
@@ -274,12 +268,11 @@ describe("RateLimiter", () => {
 			const ynabLimiter = new RateLimiter({
 				maxRequests: 200,
 				windowMs: 60 * 60 * 1000, // 1 hour
-				enableLogging: false,
 			});
 
 			// Make 150 requests
 			for (let i = 0; i < 150; i++) {
-				ynabLimiter.recordRequest(testIdentifier);
+				ynabLimiter.forToken(testIdentifier).tryAcquire();
 			}
 
 			const status = ynabLimiter.getStatus(testIdentifier);
@@ -288,7 +281,7 @@ describe("RateLimiter", () => {
 
 			// Make 50 more requests to hit the limit
 			for (let i = 0; i < 50; i++) {
-				ynabLimiter.recordRequest(testIdentifier);
+				ynabLimiter.forToken(testIdentifier).tryAcquire();
 			}
 
 			const limitedStatus = ynabLimiter.getStatus(testIdentifier);
@@ -297,8 +290,8 @@ describe("RateLimiter", () => {
 		});
 	});
 
-	describe("security considerations", () => {
-		it("should hash identifiers in logs to avoid token exposure", () => {
+	describe("logged identifiers", () => {
+		it("logs only the hash of the token it is given", () => {
 			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
 				// Mock implementation for testing
 			});
@@ -306,26 +299,55 @@ describe("RateLimiter", () => {
 			const loggingLimiter = new RateLimiter({
 				maxRequests: 2,
 				windowMs: 1000,
-				enableLogging: true,
+				log: (message: string) => console.error(message),
 			});
 
-			const sensitiveToken = "very-secret-token-12345";
-			loggingLimiter.isAllowed(sensitiveToken);
+			const token = "very-secret-token-12345";
+			const handle = loggingLimiter.forToken(token);
+			handle.tryAcquire();
+			handle.markExhausted();
 
-			// Check that the actual token is not in the log
-			const logCalls = consoleSpy.mock.calls.flat();
-			const hasActualToken = logCalls.some(
-				(call) => typeof call === "string" && call.includes(sensitiveToken),
-			);
+			const logCalls = consoleSpy.mock.calls.flat().map(String);
+			const key = /^Rate limit acquire for (token_[0-9a-f]+): /.exec(
+				logCalls[0] ?? "",
+			)?.[1];
+			expect(key).toBeDefined();
+			expect(logCalls).toEqual([
+				`Rate limit acquire for ${key}: 1/2 requests, limited: false`,
+				`Rate limit marked exhausted for ${key}`,
+			]);
+			for (const line of logCalls) {
+				expect(line).not.toContain(token);
+			}
 
-			expect(hasActualToken).toBe(false);
+			consoleSpy.mockRestore();
+		});
 
-			// Check that a hashed version is used
-			const hasHashedToken = logCalls.some(
-				(call) => typeof call === "string" && call.includes("token_"),
-			);
+		it("tracks a token the same way across every method", () => {
+			const limiter = new RateLimiter({ maxRequests: 2, windowMs: 1000 });
 
-			expect(hasHashedToken).toBe(true);
+			limiter.forToken(testIdentifier).tryAcquire();
+			limiter.forToken(testIdentifier).tryAcquire();
+			expect(limiter.getStatus(testIdentifier).isLimited).toBe(true);
+			expect(limiter.getStatus("other-token").remaining).toBe(2);
+
+			limiter.reset(testIdentifier);
+			expect(limiter.getStatus(testIdentifier).remaining).toBe(2);
+		});
+
+		it("does not log a check when only reading status", () => {
+			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
+				// Mock implementation for testing
+			});
+
+			const loggingLimiter = new RateLimiter({
+				maxRequests: 2,
+				windowMs: 1000,
+				log: (message: string) => console.error(message),
+			});
+
+			expect(loggingLimiter.getStatus(testIdentifier).remaining).toBe(2);
+			expect(consoleSpy).not.toHaveBeenCalled();
 
 			consoleSpy.mockRestore();
 		});
@@ -333,11 +355,24 @@ describe("RateLimiter", () => {
 });
 
 describe("rate-limit token identifiers", () => {
+	const loggedKey = (token: string): string | undefined => {
+		const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
+			// Mock implementation for testing
+		});
+		new RateLimiter({ log: (message) => console.error(message) })
+			.forToken(token)
+			.tryAcquire();
+		const line = String(consoleSpy.mock.calls[0]?.[0] ?? "");
+		consoleSpy.mockRestore();
+		return /^Rate limit acquire for (\S+): /.exec(line)?.[1];
+	};
+
 	it("uses a consistent identifier for the same token", () => {
-		expect(hashToken("same-token")).toBe(hashToken("same-token"));
+		expect(loggedKey("same-token")).toBe(loggedKey("same-token"));
 	});
 	it("separates different tokens without exposing their values", () => {
-		expect(hashToken("token-1")).not.toBe(hashToken("token-2"));
-		expect(hashToken("token-1")).not.toContain("token-1");
+		expect(loggedKey("token-1")).not.toBe(loggedKey("token-2"));
+		expect(loggedKey("token-1")).toMatch(/^token_[0-9a-f]+$/);
+		expect(loggedKey("token-1")).not.toContain("token-1");
 	});
 });

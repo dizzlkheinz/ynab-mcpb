@@ -484,13 +484,13 @@ const token = config.YNAB_ACCESS_TOKEN; // From env var
 ### With Types (`src/types/`)
 
 - **ToolContext**: Central DI object for tool dependencies
-- **Handler Signatures**: Handler, DeltaHandler, WriteHandler, NoInputHandler
+- **Handler Signatures**: Handler, DeltaHandler, NoInputHandler
 - **Error Classes**: BaseError, ValidationError, custom errors
 
 ### With Utils (`src/utils/`)
 
 - **Money Conversion**: milliunits ↔ dollars conversion
-- **Date Utilities**: ISO date formatting, validation
+- **Date Utilities**: ISO date validation and YYYY-MM-DD formatting
 - **Validation**: Amount validation, error formatting
 
 ## Performance Considerations

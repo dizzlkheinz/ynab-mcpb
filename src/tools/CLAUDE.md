@@ -30,7 +30,6 @@ src/tools/
 ├── utilityTools.ts             # User info and amount conversion
 ├── adapters.ts                 # Tool adapter implementations
 ├── toolCategories.ts           # Tool categorization and annotations
-├── compareTransactions.ts      # CSV comparison re-export facade
 ├── exportTransactions.ts       # Transaction export to JSON files
 ├── deltaFetcher.ts             # Delta request utilities
 ├── transactionModel.ts         # Shared transaction model and output conversion
@@ -45,17 +44,16 @@ src/tools/
 │   ├── matcher.ts              # Fuzzy matching engine
 │   ├── analyzer.ts             # Transaction analysis
 │   ├── executor.ts             # Bulk transaction operations
-│   ├── executorErrors.ts       # YNAB error normalization/propagation
+│   ├── executorErrors.ts       # YNAB error normalization
 │   ├── executorHelpers.ts      # Executor utilities (chunking, sorting)
 │   ├── balanceReconciliation.ts # Balance verification and likely causes
 │   ├── outputBuilder.ts        # Dual-channel payload builder
 │   ├── recommendationEngine.ts # Smart reconciliation recommendations
 │   ├── reportFormatter.ts      # Human-readable reports
 │   ├── signDetector.ts         # Auto-detection of debit/credit signs
-│   ├── payeeNormalizer.ts      # Payee name normalization
 │   └── ynabAdapter.ts          # YNAB API integration layer
 └── schemas/                    # Zod schemas for input/output validation
-    ├── common.ts               # Shared schemas (emptyObject, looseObject)
+    ├── common.ts               # Shared schema (emptyObject)
     └── outputs/                # Output validation schemas (11 files)
 ```
 
@@ -146,9 +144,8 @@ const CreateTransactionSchema = z
   })
   .strict(); // CRITICAL: Always use .strict()
 
-// Shared schemas (in schemas/common.ts)
+// Shared schema (in schemas/common.ts)
 export const emptyObjectSchema = z.object({}).strict();
-export const looseObjectSchema = z.object({}).passthrough();
 
 // Output schemas (in schemas/outputs/)
 export const BudgetOutputSchema = z.object({
@@ -288,7 +285,6 @@ Transaction tooling is split into focused modules for maintainability:
 
 5. **transactionTools.ts**
    - Facade that calls read/write registration factories
-   - Backward-compatible re-exports
 
 ### Why Refactored
 
@@ -613,13 +609,13 @@ metadata: {
 ### With Types (`src/types/`)
 
 - **ToolContext**: Central DI object with all shared dependencies
-- **Handler Signatures**: Handler, DeltaHandler, WriteHandler, NoInputHandler
+- **Handler Signatures**: Handler, DeltaHandler, NoInputHandler
 - **Reconciliation Types**: ReconcileInput, ReconcileResult, etc.
 
 ### With Utils (`src/utils/`)
 
 - **Money Conversion**: `amountToMilliunits()`, `milliunitsToAmount()`
-- **Date Utilities**: `formatISODate()`, `isValidISODate()`
+- **Date Utilities**: `isValidISODate()`, `formatUTCISODate()` (UTC), `formatLocalISODate()` (local "today")
 - **Validation**: `isValidISODate()` plus Zod input schemas
 
 ## Performance Considerations

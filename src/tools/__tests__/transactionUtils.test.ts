@@ -14,12 +14,9 @@ import type {
 	BulkCreateResponse,
 	BulkTransactionInput,
 	BulkUpdateResponse,
-	CategorySource,
 	CorrelationPayloadInput,
 } from "../transactionSchemas.js";
 import {
-	appendCategoryIds,
-	collectCategoryIdsFromSources,
 	correlateResults,
 	ensureTransaction,
 	estimatePayloadSize,
@@ -27,9 +24,7 @@ import {
 	finalizeResponse,
 	generateCorrelationKey,
 	handleTransactionError,
-	setsEqual,
 	toCorrelationPayload,
-	toMonthKey,
 } from "../transactionUtils.js";
 
 // Mock the responseFormatter module
@@ -70,157 +65,6 @@ describe("transactionUtils", () => {
 			const transaction = { id: "", amount: 0 };
 			const result = ensureTransaction(transaction, "Error message");
 			expect(result).toBe(transaction);
-		});
-	});
-
-	describe("appendCategoryIds", () => {
-		it("should not add anything when source is undefined", () => {
-			const target = new Set<string>();
-			appendCategoryIds(undefined, target);
-			expect(target.size).toBe(0);
-		});
-
-		it("should add category_id from source", () => {
-			const source: CategorySource = { category_id: "cat-123" };
-			const target = new Set<string>();
-			appendCategoryIds(source, target);
-			expect(target).toEqual(new Set(["cat-123"]));
-		});
-
-		it("should add category IDs from subtransactions", () => {
-			const source: CategorySource = {
-				subtransactions: [{ category_id: "cat-1" }, { category_id: "cat-2" }],
-			};
-			const target = new Set<string>();
-			appendCategoryIds(source, target);
-			expect(target).toEqual(new Set(["cat-1", "cat-2"]));
-		});
-
-		it("should add both main category and subtransaction categories", () => {
-			const source: CategorySource = {
-				category_id: "cat-main",
-				subtransactions: [{ category_id: "cat-1" }, { category_id: "cat-2" }],
-			};
-			const target = new Set<string>();
-			appendCategoryIds(source, target);
-			expect(target).toEqual(new Set(["cat-main", "cat-1", "cat-2"]));
-		});
-
-		it("should handle null category_id values", () => {
-			const source: CategorySource = {
-				category_id: null,
-				subtransactions: [{ category_id: null }, { category_id: "cat-1" }],
-			};
-			const target = new Set<string>();
-			appendCategoryIds(source, target);
-			expect(target).toEqual(new Set(["cat-1"]));
-		});
-
-		it("should handle empty subtransactions array", () => {
-			const source: CategorySource = {
-				category_id: "cat-123",
-				subtransactions: [],
-			};
-			const target = new Set<string>();
-			appendCategoryIds(source, target);
-			expect(target).toEqual(new Set(["cat-123"]));
-		});
-
-		it("should not add duplicates to existing set", () => {
-			const source: CategorySource = {
-				category_id: "cat-1",
-				subtransactions: [{ category_id: "cat-1" }],
-			};
-			const target = new Set(["cat-1"]);
-			appendCategoryIds(source, target);
-			expect(target).toEqual(new Set(["cat-1"]));
-		});
-	});
-
-	describe("collectCategoryIdsFromSources", () => {
-		it("should collect from no sources", () => {
-			const result = collectCategoryIdsFromSources();
-			expect(result).toEqual(new Set());
-		});
-
-		it("should collect from single source", () => {
-			const source: CategorySource = { category_id: "cat-1" };
-			const result = collectCategoryIdsFromSources(source);
-			expect(result).toEqual(new Set(["cat-1"]));
-		});
-
-		it("should collect from multiple sources", () => {
-			const source1: CategorySource = { category_id: "cat-1" };
-			const source2: CategorySource = {
-				subtransactions: [{ category_id: "cat-2" }, { category_id: "cat-3" }],
-			};
-			const result = collectCategoryIdsFromSources(source1, source2);
-			expect(result).toEqual(new Set(["cat-1", "cat-2", "cat-3"]));
-		});
-
-		it("should handle undefined sources", () => {
-			const source1: CategorySource = { category_id: "cat-1" };
-			const result = collectCategoryIdsFromSources(
-				source1,
-				undefined,
-				undefined,
-			);
-			expect(result).toEqual(new Set(["cat-1"]));
-		});
-
-		it("should deduplicate category IDs across sources", () => {
-			const source1: CategorySource = { category_id: "cat-1" };
-			const source2: CategorySource = { category_id: "cat-1" };
-			const result = collectCategoryIdsFromSources(source1, source2);
-			expect(result).toEqual(new Set(["cat-1"]));
-		});
-	});
-
-	describe("setsEqual", () => {
-		it("should return true for two empty sets", () => {
-			expect(setsEqual(new Set(), new Set())).toBe(true);
-		});
-
-		it("should return true for identical sets", () => {
-			expect(setsEqual(new Set([1, 2, 3]), new Set([1, 2, 3]))).toBe(true);
-		});
-
-		it("should return true regardless of insertion order", () => {
-			expect(setsEqual(new Set([1, 2, 3]), new Set([3, 2, 1]))).toBe(true);
-		});
-
-		it("should return false for sets with different sizes", () => {
-			expect(setsEqual(new Set([1, 2]), new Set([1, 2, 3]))).toBe(false);
-		});
-
-		it("should return false for sets with different elements", () => {
-			expect(setsEqual(new Set([1, 2, 3]), new Set([1, 2, 4]))).toBe(false);
-		});
-
-		it("should work with string sets", () => {
-			expect(setsEqual(new Set(["a", "b"]), new Set(["b", "a"]))).toBe(true);
-		});
-
-		it("should return false for sets with partial overlap", () => {
-			expect(setsEqual(new Set([1, 2]), new Set([2, 3]))).toBe(false);
-		});
-	});
-
-	describe("toMonthKey", () => {
-		it("should convert date to month key", () => {
-			expect(toMonthKey("2024-03-15")).toBe("2024-03-01");
-		});
-
-		it("should handle first day of month", () => {
-			expect(toMonthKey("2024-01-01")).toBe("2024-01-01");
-		});
-
-		it("should handle last day of month", () => {
-			expect(toMonthKey("2024-12-31")).toBe("2024-12-01");
-		});
-
-		it("should handle different years", () => {
-			expect(toMonthKey("2025-06-20")).toBe("2025-06-01");
 		});
 	});
 

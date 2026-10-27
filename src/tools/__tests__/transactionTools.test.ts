@@ -4,6 +4,10 @@ import { maybeTextOf, textOf } from "../../__tests__/testUtils.js";
 import type { ReadDeps } from "../../types/toolRegistration.js";
 import type { DeltaFetcher } from "../deltaFetcher.js";
 import {
+	handleGetTransaction as handleGetTransactionImpl,
+	handleListTransactions as handleListTransactionsImpl,
+} from "../transactionReadTools.js";
+import {
 	type BulkTransactionInput,
 	type CreateReceiptSplitTransactionParams,
 	CreateReceiptSplitTransactionSchema,
@@ -12,18 +16,18 @@ import {
 	CreateTransactionsSchema,
 	DeleteTransactionSchema,
 	GetTransactionSchema,
+	ListTransactionsSchema,
+	UpdateTransactionSchema,
+	UpdateTransactionsSchema,
+} from "../transactionSchemas.js";
+import {
 	handleCreateReceiptSplitTransaction,
 	handleCreateTransaction,
 	handleCreateTransactions,
 	handleDeleteTransaction,
-	handleGetTransaction as handleGetTransactionImpl,
-	handleListTransactions as handleListTransactionsImpl,
 	handleUpdateTransaction,
 	handleUpdateTransactions,
-	ListTransactionsSchema,
-	UpdateTransactionSchema,
-	UpdateTransactionsSchema,
-} from "../transactionTools.js";
+} from "../transactionWriteTools.js";
 
 // Mock the YNAB API without global service fallbacks.
 const mockYnabAPI = {
@@ -1441,6 +1445,47 @@ describe("transactionTools", () => {
 				true,
 			);
 		});
+
+		it.each([
+			// West of UTC, late evening locally is already tomorrow in UTC
+			["America/Toronto", new Date(Date.UTC(2025, 9, 14, 3, 30)), "2025-10-13"],
+			// East of UTC, early morning locally is still yesterday in UTC
+			["Asia/Tokyo", new Date(Date.UTC(2025, 9, 13, 23, 30)), "2025-10-13"],
+		])(
+			"should default the date to the earlier of the local and UTC dates in %s",
+			async (timeZone, now, expected) => {
+				vi.stubEnv("TZ", timeZone);
+				vi.useFakeTimers();
+				try {
+					vi.setSystemTime(now);
+					const result = await handleCreateReceiptSplitTransaction(
+						mockYnabAPI,
+						{
+							budget_id: "budget-123",
+							account_id: "account-456",
+							payee_name: "IKEA",
+							receipt_tax: 0,
+							receipt_total: 20,
+							receipt_subtotal: 20,
+							categories: [
+								{
+									category_id: "category-home",
+									category_name: "Home",
+									items: [{ name: "Lamp", amount: 20 }],
+								},
+							],
+							dry_run: true,
+						} satisfies CreateReceiptSplitTransactionParams,
+					);
+
+					const parsed = JSON.parse(textOf(result.content[0]));
+					expect(parsed.transaction_preview.date).toBe(expected);
+				} finally {
+					vi.useRealTimers();
+					vi.unstubAllEnvs();
+				}
+			},
+		);
 
 		it("should create a split transaction and attach receipt summary", async () => {
 			(mockYnabAPI.transactions.createTransaction as any).mockResolvedValue({

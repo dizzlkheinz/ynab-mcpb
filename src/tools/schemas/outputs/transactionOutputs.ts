@@ -1,7 +1,7 @@
 /**
  * @fileoverview Output schemas for transaction-related tools.
  *
- * Defines Zod schemas and TypeScript types for responses from transaction tools:
+ * Defines Zod schemas for responses from transaction tools:
  * - `list_transactions`: Returns transactions with two modes (normal and preview for large responses)
  * - `get_transaction`: Returns a single transaction with cache metadata
  *
@@ -15,7 +15,7 @@
  * @example
  * ```typescript
  * // Normal mode (count <= 100)
- * const listOutput: ListTransactionsOutput = {
+ * const listOutput: z.infer<typeof ListTransactionsOutputSchema> = {
  *   total_count: 50,
  *   cached: true,
  *   cache_info: {
@@ -44,7 +44,7 @@
  * };
  *
  * // Preview mode (count > 100)
- * const previewOutput: ListTransactionsOutput = {
+ * const previewOutput: z.infer<typeof ListTransactionsOutputSchema> = {
  *   message: 'Large result set detected',
  *   suggestion: 'Use filter parameters to narrow results',
  *   showing: 'First 50 transactions:',
@@ -63,7 +63,7 @@
  * };
  *
  * // Get single transaction
- * const getOutput: GetTransactionOutput = {
+ * const getOutput: z.infer<typeof GetTransactionOutputSchema> = {
  *   transaction: {
  *     id: 'txn-123',
  *     date: '2025-11-17',
@@ -165,11 +165,3 @@ export const GetTransactionOutputSchema = CacheMetadataSchema.extend({
 	/** Single transaction object */
 	transaction: TransactionSchema.describe("Transaction details"),
 });
-
-// Export inferred TypeScript types
-export type Transaction = z.infer<typeof TransactionSchema>;
-export type TransactionPreview = z.infer<typeof TransactionPreviewSchema>;
-export type ListTransactionsOutput = z.infer<
-	typeof ListTransactionsOutputSchema
->;
-export type GetTransactionOutput = z.infer<typeof GetTransactionOutputSchema>;

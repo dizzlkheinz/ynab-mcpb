@@ -18,8 +18,6 @@ export const MoneyValueSchema = z.object({
 	direction: z.enum(["credit", "debit", "balanced"]),
 });
 
-export type MoneyValue = z.infer<typeof MoneyValueSchema>;
-
 /**
  * ISO 8601 date string with calendar validation.
  * Ensures dates are in YYYY-MM-DD format and represent valid calendar dates.
@@ -88,8 +86,6 @@ export const BankTransactionSchema = z.object({
 	amount_money: MoneyValueSchema, // Added by adapter
 });
 
-export type BankTransaction = z.infer<typeof BankTransactionSchema>;
-
 /**
  * Simplified YNAB transaction for reconciliation matching (output format with money formatting).
  * Contains essential fields for transaction comparison.
@@ -112,8 +108,6 @@ export const YNABTransactionSimpleSchema = z.object({
 	amount_money: MoneyValueSchema, // Added by adapter
 });
 
-export type YNABTransactionSimple = z.infer<typeof YNABTransactionSimpleSchema>;
-
 /**
  * Potential match candidate with confidence scoring.
  * Represents a possible match between bank and YNAB transactions.
@@ -126,8 +120,6 @@ export const MatchCandidateSchema = z.object({
 	match_reason: z.string(),
 	explanation: z.string(),
 });
-
-export type MatchCandidate = z.infer<typeof MatchCandidateSchema>;
 
 /**
  * Transaction match result with confidence and candidates.
@@ -153,8 +145,6 @@ export const TransactionMatchSchema = z.object({
 	recommendation: z.string().optional(),
 });
 
-export type TransactionMatch = z.infer<typeof TransactionMatchSchema>;
-
 export const ExecutionSummaryOutputSchema = z.object({
 	transactions_created: z.number().int(),
 	transactions_updated: z.number().int(),
@@ -163,10 +153,6 @@ export const ExecutionSummaryOutputSchema = z.object({
 	balance_status: z.enum(["balanced", "unbalanced", "not_verified"]).optional(),
 	recommendations: z.array(z.string()).optional(),
 });
-
-export type ExecutionSummaryOutput = z.infer<
-	typeof ExecutionSummaryOutputSchema
->;
 
 export const StructuredReconciliationUnmatchedOnlySchema = z
 	.object({
@@ -194,17 +180,9 @@ export const StructuredReconciliationUnmatchedOnlySchema = z
 	})
 	.strict();
 
-export type StructuredReconciliationUnmatchedOnly = z.infer<
-	typeof StructuredReconciliationUnmatchedOnlySchema
->;
-
 export const ReconcileAccountOutputSchema = z
 	.object({
 		human: z.string(),
 		structured: StructuredReconciliationUnmatchedOnlySchema,
 	})
 	.strict();
-
-export type ReconcileAccountOutput = z.infer<
-	typeof ReconcileAccountOutputSchema
->;

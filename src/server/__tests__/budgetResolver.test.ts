@@ -1,12 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it } from "vitest";
-import {
-	BudgetResolver,
-	createInvalidBudgetError,
-	createMissingBudgetError,
-	resolveBudgetId,
-	validateBudgetId,
-} from "../budgetResolver.js";
+import { BudgetResolver } from "../budgetResolver.js";
 
 describe("BudgetResolver", () => {
 	const validUuid = "123e4567-e89b-12d3-a456-426614174000";
@@ -366,41 +360,6 @@ describe("BudgetResolver", () => {
 				expect(errorText).toContain(details);
 				expect(errorText).toContain("UUID v4 format");
 				expect(errorText).toContain("ynab_list_budgets");
-			});
-		});
-	});
-
-	describe("convenience functions", () => {
-		describe("resolveBudgetId function", () => {
-			it("should work the same as BudgetResolver.resolveBudgetId", () => {
-				const classResult = BudgetResolver.resolveBudgetId(validUuid);
-				const functionResult = resolveBudgetId(validUuid);
-				expect(functionResult).toEqual(classResult);
-			});
-		});
-
-		describe("validateBudgetId function", () => {
-			it("should work the same as BudgetResolver.validateBudgetId", () => {
-				const classResult = BudgetResolver.validateBudgetId(validUuid);
-				const functionResult = validateBudgetId(validUuid);
-				expect(functionResult).toEqual(classResult);
-			});
-		});
-
-		describe("createMissingBudgetError function", () => {
-			it("should work the same as BudgetResolver.createMissingBudgetError", () => {
-				const classResult = BudgetResolver.createMissingBudgetError();
-				const functionResult = createMissingBudgetError();
-				expect(functionResult).toEqual(classResult);
-			});
-		});
-
-		describe("createInvalidBudgetError function", () => {
-			it("should work the same as BudgetResolver.createInvalidBudgetError", () => {
-				const details = "Test details";
-				const classResult = BudgetResolver.createInvalidBudgetError(details);
-				const functionResult = createInvalidBudgetError(details);
-				expect(functionResult).toEqual(classResult);
 			});
 		});
 	});

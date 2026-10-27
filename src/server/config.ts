@@ -38,10 +38,6 @@ const envSchema = z.object({
 		.enum(["true", "false"])
 		.optional()
 		.transform((value) => value === "true"),
-	VERBOSE_TESTS: z
-		.enum(["true", "false"])
-		.optional()
-		.transform((value) => value === "true"),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
@@ -53,24 +49,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 		throw new ValidationError(validationError.toString());
 	}
 	return result.data;
-}
-
-let cachedConfig: AppConfig | undefined;
-
-/**
- * Returns the memoized application config, loading it from the environment on
- * first use. Tests that mutate relevant environment variables should call
- * `resetAppConfig()` to force a reload.
- */
-export function getAppConfig(): AppConfig {
-	if (!cachedConfig) {
-		cachedConfig = loadConfig();
-	}
-	return cachedConfig;
-}
-
-export function resetAppConfig(): void {
-	cachedConfig = undefined;
 }
 
 /**
@@ -91,8 +69,6 @@ const runtimeEnvSchema = z.object({
 	YNAB_EXPORT_PATH: envShape.YNAB_EXPORT_PATH.catch(undefined),
 	XDG_DOCUMENTS_DIR: envShape.XDG_DOCUMENTS_DIR.catch(undefined),
 	YNAB_MCP_ENABLE_DELTA: envShape.YNAB_MCP_ENABLE_DELTA.catch(undefined),
-	RATE_LIMIT_LOGGING: envShape.RATE_LIMIT_LOGGING.catch(false),
-	VERBOSE_TESTS: envShape.VERBOSE_TESTS.catch(false),
 });
 
 export type RuntimeConfig = z.infer<typeof runtimeEnvSchema>;
@@ -101,7 +77,7 @@ let cachedRuntimeConfig: RuntimeConfig | undefined;
 
 /**
  * Returns the memoized runtime config for infrastructure modules (logging,
- * rate limiting, exports). Never throws, so modules can read these values
+ * delta requests, exports). Never throws, so modules can read these values
  * at import time without YNAB credentials present.
  */
 export function getRuntimeConfig(): RuntimeConfig {
@@ -111,6 +87,10 @@ export function getRuntimeConfig(): RuntimeConfig {
 	return cachedRuntimeConfig;
 }
 
+/**
+ * Clear the cached runtime config so tests can change process.env between cases.
+ * @internal
+ */
 export function resetRuntimeConfig(): void {
 	cachedRuntimeConfig = undefined;
 }

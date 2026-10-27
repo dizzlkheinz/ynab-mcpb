@@ -35,7 +35,7 @@ export const UserSchema = z.object({
  *
  * @example
  * ```typescript
- * const output: GetUserOutput = {
+ * const output: z.infer<typeof GetUserOutputSchema> = {
  *   user: { id: "abc123" }
  * };
  * ```
@@ -43,8 +43,6 @@ export const UserSchema = z.object({
 export const GetUserOutputSchema = z.object({
 	user: UserSchema,
 });
-
-export type GetUserOutput = z.infer<typeof GetUserOutputSchema>;
 
 // ============================================================================
 // GET DEFAULT BUDGET OUTPUT
@@ -59,7 +57,7 @@ export type GetUserOutput = z.infer<typeof GetUserOutputSchema>;
  *
  * @example
  * ```typescript
- * const output: GetDefaultBudgetOutput = {
+ * const output: z.infer<typeof GetDefaultBudgetOutputSchema> = {
  *   default_budget_id: "abc123",
  *   has_default: true,
  *   message: "Default budget ID: abc123"
@@ -71,10 +69,6 @@ export const GetDefaultBudgetOutputSchema = z.object({
 	has_default: z.boolean(),
 	message: z.string(),
 });
-
-export type GetDefaultBudgetOutput = z.infer<
-	typeof GetDefaultBudgetOutputSchema
->;
 
 // ============================================================================
 // SET DEFAULT BUDGET OUTPUT
@@ -89,7 +83,7 @@ export type GetDefaultBudgetOutput = z.infer<
  *
  * @example
  * ```typescript
- * const output: SetDefaultBudgetOutput = {
+ * const output: z.infer<typeof SetDefaultBudgetOutputSchema> = {
  *   success: true,
  *   message: "Default budget set to 'My Budget' and cache warming started",
  *   default_budget_id: "abc123",
@@ -101,10 +95,6 @@ export const SetDefaultBudgetOutputSchema = SuccessResponseSchema.extend({
 	default_budget_id: z.string(),
 	cache_warm_started: z.boolean(),
 });
-
-export type SetDefaultBudgetOutput = z.infer<
-	typeof SetDefaultBudgetOutputSchema
->;
 
 // ============================================================================
 // CLEAR CACHE OUTPUT
@@ -119,7 +109,7 @@ export type SetDefaultBudgetOutput = z.infer<
  *
  * @example
  * ```typescript
- * const output: ClearCacheOutput = {
+ * const output: z.infer<typeof ClearCacheOutputSchema> = {
  *   success: true
  * };
  * ```
@@ -127,8 +117,6 @@ export type SetDefaultBudgetOutput = z.infer<
 export const ClearCacheOutputSchema = SuccessResponseSchema.pick({
 	success: true,
 });
-
-export type ClearCacheOutput = z.infer<typeof ClearCacheOutputSchema>;
 
 // ============================================================================
 // DIAGNOSTIC INFO OUTPUT
@@ -225,7 +213,7 @@ export const DeltaInfoSchema = z.object({
  *
  * @example
  * ```typescript
- * const output: DiagnosticInfoOutput = {
+ * const output: z.infer<typeof DiagnosticInfoOutputSchema> = {
  *   timestamp: "2025-01-17T12:34:56.789Z",
  *   server: {
  *     name: "ynab-mcp-server",
@@ -250,8 +238,6 @@ export const DiagnosticInfoOutputSchema = z.object({
 	cache: CacheInfoSchema.optional(),
 	delta: DeltaInfoSchema.optional(),
 });
-
-export type DiagnosticInfoOutput = z.infer<typeof DiagnosticInfoOutputSchema>;
 
 // ============================================================================
 // GET BUDGET OUTPUT
@@ -313,7 +299,7 @@ export const BudgetDetailSchema = z.object({
  *
  * @example
  * ```typescript
- * const output: GetBudgetOutput = {
+ * const output: z.infer<typeof GetBudgetOutputSchema> = {
  *   budget: {
  *     id: "abc123",
  *     name: "My Budget",
@@ -343,5 +329,3 @@ export const BudgetDetailSchema = z.object({
 export const GetBudgetOutputSchema = z.object({
 	budget: BudgetDetailSchema,
 });
-
-export type GetBudgetOutput = z.infer<typeof GetBudgetOutputSchema>;

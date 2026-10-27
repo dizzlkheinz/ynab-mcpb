@@ -180,7 +180,8 @@ function getExportPath(): string {
 		mkdirSync(targetPath, { recursive: true });
 	} catch (error) {
 		console.warn(
-			`Failed to create export directory ${targetPath}, using platform default:`,
+			"Failed to create export directory, using platform default:",
+			targetPath,
 			error,
 		);
 		// Fallback to platform-specific default if custom path fails

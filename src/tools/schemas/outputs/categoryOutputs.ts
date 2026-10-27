@@ -1,7 +1,7 @@
 /**
  * @fileoverview Output schemas for category-related tools.
  *
- * Defines Zod schemas and TypeScript types for responses from category tools:
+ * Defines Zod schemas for responses from category tools:
  * - `list_categories`: Returns all categories and category groups with cache metadata
  * - `get_category`: Returns a single category with cache metadata
  *
@@ -14,7 +14,7 @@
  *
  * @example
  * ```typescript
- * const listOutput: ListCategoriesOutput = {
+ * const listOutput: z.infer<typeof ListCategoriesOutputSchema> = {
  *   categories: [
  *     {
  *       id: 'category-123',
@@ -50,7 +50,7 @@
  *   }
  * };
  *
- * const getOutput: GetCategoryOutput = {
+ * const getOutput: z.infer<typeof GetCategoryOutputSchema> = {
  *   category: {
  *     id: 'category-123',
  *     category_group_id: 'group-456',
@@ -211,9 +211,3 @@ export const GetCategoryOutputSchema = CacheMetadataSchema.extend({
 	/** Single category object */
 	category: CategorySchema.describe("Category details"),
 });
-
-// Export inferred TypeScript types
-export type Category = z.infer<typeof CategorySchema>;
-export type CategoryGroup = z.infer<typeof CategoryGroupSchema>;
-export type ListCategoriesOutput = z.infer<typeof ListCategoriesOutputSchema>;
-export type GetCategoryOutput = z.infer<typeof GetCategoryOutputSchema>;

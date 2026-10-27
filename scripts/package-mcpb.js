@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 function run(command, args, options = {}) {
+	// Every caller passes process.execPath with fixed arguments; no user input.
+	// nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
 	const result = spawnSync(command, args, { stdio: "inherit", ...options });
 	if (result.error) throw result.error;
 	if (result.status !== 0) process.exit(result.status ?? 1);

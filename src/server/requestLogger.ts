@@ -38,9 +38,15 @@ const LOG_LEVEL_ALIASES: Record<string, LoggerConfig["logLevel"]> = {
 	fatal: "error",
 };
 
-function defaultLogLevel(): LoggerConfig["logLevel"] {
-	const raw = getRuntimeConfig().LOG_LEVEL as string | undefined;
+/** Map a configured LOG_LEVEL (including trace and fatal) to a logger level */
+export function resolveLogLevel(
+	raw: string | undefined,
+): LoggerConfig["logLevel"] {
 	return LOG_LEVEL_ALIASES[raw ?? "info"] ?? "info";
+}
+
+function defaultLogLevel(): LoggerConfig["logLevel"] {
+	return resolveLogLevel(getRuntimeConfig().LOG_LEVEL as string | undefined);
 }
 
 export class RequestLogger {
@@ -65,6 +71,17 @@ export class RequestLogger {
 			...this.config,
 			...config,
 		};
+	}
+
+	/**
+	 * Write a debug line to stderr when the log level is debug, or always when
+	 * `force` is set. Debug lines are not stored as request logs, so they do not
+	 * depend on `enabled`.
+	 */
+	debug(message: string, force = false): void {
+		if (force || this.shouldLog("debug")) {
+			console.error(`[DEBUG] ${message}`);
+		}
 	}
 
 	/**

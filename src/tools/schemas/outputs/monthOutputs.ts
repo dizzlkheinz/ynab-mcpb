@@ -1,7 +1,7 @@
 /**
  * @fileoverview Output schemas for month-related tools.
  *
- * Defines Zod schemas and TypeScript types for responses from month tools:
+ * Defines Zod schemas for responses from month tools:
  * - `get_month`: Returns detailed month data including categories with cache metadata
  * - `list_months`: Returns summary of all months without category details
  *
@@ -13,7 +13,7 @@
  *
  * @example
  * ```typescript
- * const getOutput: GetMonthOutput = {
+ * const getOutput: z.infer<typeof GetMonthOutputSchema> = {
  *   month: {
  *     month: '2025-11-01',
  *     note: 'November budget',
@@ -47,7 +47,7 @@
  *   }
  * };
  *
- * const listOutput: ListMonthsOutput = {
+ * const listOutput: z.infer<typeof ListMonthsOutputSchema> = {
  *   months: [
  *     {
  *       month: '2025-11-01',
@@ -254,10 +254,3 @@ export const ListMonthsOutputSchema = CacheMetadataSchema.merge(
 	/** Array of month summary objects */
 	months: z.array(MonthSummarySchema).describe("List of months"),
 });
-
-// Export inferred TypeScript types
-export type MonthCategory = z.infer<typeof MonthCategorySchema>;
-export type MonthDetail = z.infer<typeof MonthDetailSchema>;
-export type MonthSummary = z.infer<typeof MonthSummarySchema>;
-export type GetMonthOutput = z.infer<typeof GetMonthOutputSchema>;
-export type ListMonthsOutput = z.infer<typeof ListMonthsOutputSchema>;

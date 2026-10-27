@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { findBestMatch, findMatches } from "../matcher.js";
+import { findMatches } from "../matcher.js";
 import type {
 	BankTransaction,
 	MatchingConfig,
@@ -25,7 +25,7 @@ describe("matcher", () => {
 		};
 	});
 
-	describe("findBestMatch", () => {
+	describe("matching a single bank transaction", () => {
 		describe("high confidence matches (≥90%)", () => {
 			it("should return high confidence for exact match", () => {
 				const bankTxn: BankTransaction = {
@@ -54,7 +54,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidence).toBe("high");
 				expect(match.confidenceScore).toBeGreaterThanOrEqual(90);
@@ -88,7 +88,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidence).toBe("high");
 				expect(match.confidenceScore).toBeGreaterThanOrEqual(90);
@@ -121,7 +121,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidence).toBe("high");
 				expect(match.confidenceScore).toBeGreaterThanOrEqual(90);
@@ -154,7 +154,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidence).toBe("high");
 				expect(match.confidenceScore).toBeGreaterThanOrEqual(90);
@@ -191,7 +191,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidenceScore).toBeGreaterThanOrEqual(65);
 				expect(match.confidenceScore).toBeLessThan(config.autoMatchThreshold);
@@ -237,7 +237,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidenceScore).toBeGreaterThanOrEqual(65);
 				expect(match.confidenceScore).toBeLessThan(config.autoMatchThreshold);
@@ -283,7 +283,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.candidates).toBeDefined();
 				expect(match.candidates?.length).toBeGreaterThan(0);
@@ -315,7 +315,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidence).toBe("none");
 				expect(match.confidenceScore).toBe(0);
@@ -345,7 +345,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidence).toBe("none");
 				expect(match.bestMatch).toBeNull();
@@ -390,7 +390,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				// Should prefer uncleared transaction
 				expect(match.bestMatch?.ynabTransaction.id).toBe("y2");
@@ -429,7 +429,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				// Should prefer closer date
 				expect(match.bestMatch?.ynabTransaction.id).toBe("y2");
@@ -460,7 +460,7 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidence).not.toBe("none");
 				expect(match.bestMatch?.ynabTransaction).toBeDefined();
@@ -489,41 +489,9 @@ describe("matcher", () => {
 					},
 				];
 
-				const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+				const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 				expect(match.confidence).toBe("none");
-			});
-		});
-
-		describe("used IDs", () => {
-			it("should skip already-used YNAB transaction IDs", () => {
-				const bankTxn: BankTransaction = {
-					id: "b1",
-					date: "2025-10-15",
-					amount: -50000,
-					payee: "Store",
-					sourceRow: 2,
-					raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
-				};
-
-				const ynabTxns: YNABTransaction[] = [
-					{
-						id: "y1",
-						date: "2025-10-15",
-						amount: -50000,
-						payee: "Store",
-						categoryName: "Shopping",
-						cleared: "uncleared",
-						approved: true,
-						memo: null,
-					},
-				];
-
-				const usedIds = new Set(["y1"]);
-				const match = findBestMatch(bankTxn, ynabTxns, usedIds, config);
-
-				expect(match.confidence).toBe("none");
-				expect(match.bestMatch).toBeNull();
 			});
 		});
 	});
@@ -729,7 +697,7 @@ describe("matcher", () => {
 				raw: { date: "2025-10-15", amount: "-50.00", description: "Store" },
 			};
 
-			const match = findBestMatch(bankTxn, [], new Set(), config);
+			const match = findMatches([bankTxn], [], config)[0]!;
 
 			expect(match.confidence).toBe("none");
 			expect(match.bestMatch).toBeNull();
@@ -758,7 +726,7 @@ describe("matcher", () => {
 				},
 			];
 
-			const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+			const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 			// Should still match based on amount and date
 			expect(match.confidence).not.toBe("none");
@@ -791,7 +759,7 @@ describe("matcher", () => {
 				},
 			];
 
-			const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+			const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 			expect(match.confidence).toBe("high");
 		});
 
@@ -822,7 +790,7 @@ describe("matcher", () => {
 				},
 			];
 
-			const match = findBestMatch(bankTxn, ynabTxns, new Set(), config);
+			const match = findMatches([bankTxn], ynabTxns, config)[0]!;
 
 			expect(match.confidence).toBe("high");
 		});

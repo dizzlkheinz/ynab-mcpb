@@ -4,9 +4,9 @@ import type {
 	BankTransaction as CanonicalBank,
 	NormalizedYNABTransaction,
 } from "../../types/reconciliation.js";
+import { formatUTCISODate } from "../../utils/dateUtils.js";
 import {
 	DEFAULT_CONFIG,
-	findBestMatch,
 	findMatches as matchTransactions,
 } from "../reconciliation/matcher.js";
 import type {
@@ -20,7 +20,7 @@ const bankView = (
 	index: number,
 ): CanonicalBank => ({
 	id: String(index),
-	date: transaction.date.toISOString().slice(0, 10),
+	date: formatUTCISODate(transaction.date),
 	amount: transaction.amount,
 	payee: transaction.description,
 	sourceRow: transaction.row_number,
@@ -32,7 +32,7 @@ const bankView = (
 });
 const ynabView = (transaction: YNABTransaction): NormalizedYNABTransaction => ({
 	id: transaction.id,
-	date: transaction.date.toISOString().slice(0, 10),
+	date: formatUTCISODate(transaction.date),
 	amount: transaction.amount,
 	payee: transaction.payee_name ?? null,
 	memo: transaction.memo ?? null,
@@ -52,50 +52,6 @@ const config = (
 	autoMatchThreshold: 60,
 	suggestedMatchThreshold: 60,
 });
-export function calculateMatchScore(
-	bank: BankTransaction,
-	ynab: YNABTransaction,
-	amountTolerance: number,
-	dateTolerance: number,
-): { score: number; reasons: string[] } {
-	const result = findBestMatch(
-		bankView(bank, 0),
-		[ynabView(ynab)],
-		new Set(),
-		config(amountTolerance, dateTolerance),
-	);
-	return {
-		score: result.confidenceScore,
-		reasons: result.bestMatch?.matchReasons ?? [],
-	};
-}
-export function groupTransactionsByAmount(
-	transactions: (BankTransaction | YNABTransaction)[],
-): Map<number, (BankTransaction | YNABTransaction)[]> {
-	const groups = new Map<number, (BankTransaction | YNABTransaction)[]>();
-	for (const transaction of transactions)
-		groups.set(transaction.amount, [
-			...(groups.get(transaction.amount) ?? []),
-			transaction,
-		]);
-	return groups;
-}
-export function matchDuplicateAmounts(
-	bank: BankTransaction[],
-	ynab: YNABTransaction[],
-	_amount: number,
-	amountTolerance: number,
-	dateTolerance: number,
-	chronologyBonus = false,
-): TransactionMatch[] {
-	return findMatches(
-		bank,
-		ynab,
-		amountTolerance,
-		dateTolerance,
-		chronologyBonus,
-	).matches;
-}
 export function findMatches(
 	bank: BankTransaction[],
 	ynab: YNABTransaction[],

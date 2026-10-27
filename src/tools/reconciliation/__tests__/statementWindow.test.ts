@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CSVParseResult } from "../csvParser.js";
 import {
 	clampCSVToStatementWindow,
@@ -57,8 +57,56 @@ describe("statementWindow helpers", () => {
 			expect(normalizeStatementDate("Feb 28, 2026")).toBe("2026-02-28");
 		});
 
+		const timeZones = ["America/Los_Angeles", "Australia/Sydney"];
+		// Each names 2024-01-31. Date-only forms keep the written date; ISO
+		// timestamps keep their date prefix; others keep their UTC date
+		const inputs = [
+			"01/31/2024",
+			"1/31/2024",
+			"01-31-2024",
+			"2024/01/31",
+			"Jan 31, 2024",
+			"January 31 2024",
+			"Jan. 31, 2024",
+			"31 Jan 2024",
+			"Wednesday, January 31, 2024",
+			"2024-01-31 00:00:00Z",
+			"2024-01-31t00:00:00z",
+			"2024-01-31 23:30:00-05:00",
+			"2024-01-31Z",
+			"Wed, 31 Jan 2024 00:00:00 GMT",
+			"Wed, 31 Jan 2024 GMT",
+			"Jan 31, 2024 UTC",
+			"Jan 31, 2024 12:00 AM UTC",
+			"Jan 31, 2024 00:00 UT",
+			"Jan 31, 2024 EST",
+			"Jan 31, 2024 11:59 PM GMT",
+			"Jan 31, 2024 12:00 PM PST",
+			"Wed Jan 31 2024 00:00:00 GMT-0800 (Pacific Standard Time)",
+		];
+		it.each(
+			timeZones.flatMap((timeZone) =>
+				inputs.map((input) => [timeZone, input] as const),
+			),
+		)("in %s reads %j as 2024-01-31", (timeZone, input) => {
+			vi.stubEnv("TZ", timeZone);
+			try {
+				expect(normalizeStatementDate(input)).toBe("2024-01-31");
+			} finally {
+				vi.unstubAllEnvs();
+			}
+		});
+
+		it("keeps the calendar date of ISO timestamps", () => {
+			expect(normalizeStatementDate("2024-01-31T23:30:00-05:00")).toBe(
+				"2024-01-31",
+			);
+		});
+
 		it("returns undefined for invalid dates", () => {
 			expect(normalizeStatementDate("not-a-date")).toBeUndefined();
+			expect(normalizeStatementDate("2024-02-30")).toBeUndefined();
+			expect(normalizeStatementDate("2024-13-45T00:00:00Z")).toBeUndefined();
 		});
 	});
 

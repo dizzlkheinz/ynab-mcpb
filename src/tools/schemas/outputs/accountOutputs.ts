@@ -1,7 +1,7 @@
 /**
  * @fileoverview Output schemas for account-related tools.
  *
- * Defines Zod schemas and TypeScript types for responses from account tools:
+ * Defines Zod schemas for responses from account tools:
  * - `list_accounts`: Returns all accounts with pagination and cache metadata
  * - `get_account`: Returns a single account with cache metadata
  *
@@ -10,7 +10,7 @@
  *
  * @example
  * ```typescript
- * const listOutput: ListAccountsOutput = {
+ * const listOutput: z.infer<typeof ListAccountsOutputSchema> = {
  *   accounts: [
  *     {
  *       id: 'account-123',
@@ -37,7 +37,7 @@
  *   }
  * };
  *
- * const getOutput: GetAccountOutput = {
+ * const getOutput: z.infer<typeof GetAccountOutputSchema> = {
  *   account: {
  *     id: 'account-123',
  *     name: 'Checking Account',
@@ -135,8 +135,3 @@ export const GetAccountOutputSchema = CacheMetadataSchema.extend({
 	/** Single account object */
 	account: AccountSchema.describe("Account details"),
 });
-
-// Export inferred TypeScript types
-export type Account = z.infer<typeof AccountSchema>;
-export type ListAccountsOutput = z.infer<typeof ListAccountsOutputSchema>;
-export type GetAccountOutput = z.infer<typeof GetAccountOutputSchema>;

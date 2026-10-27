@@ -12,20 +12,13 @@ import {
 } from "./executorHelpers.js";
 import type { ReconcileAccountRequest } from "./index.js";
 import {
-	buildReconciliationPlan,
 	type PlannedOperation,
 	type ReconciliationPlan,
 	transactionFingerprint,
 } from "./plan.js";
 import type { ReconciliationAnalysis } from "./types.js";
 
-export type { NormalizedYnabError } from "./executorErrors.js";
-export {
-	normalizeYnabError,
-	shouldPropagateYnabError,
-} from "./executorErrors.js";
 export type { ExecutionSummary } from "./executorHelpers.js";
-export { buildReconciliationPlan } from "./plan.js";
 
 export interface OperationResult {
 	operation: PlannedOperation;
@@ -69,13 +62,6 @@ export interface ExecutionResult {
 	balance_reconciliation?: Awaited<
 		ReturnType<typeof buildBalanceReconciliation>
 	>;
-}
-
-/** Compatibility entrypoint. Both direct calls and confirmed previews use the same plan. */
-export async function executeReconciliation(
-	options: ExecutionOptions,
-): Promise<ExecutionResult> {
-	return executeReconciliationPlan(buildReconciliationPlan(options), options);
 }
 
 /** Correlate each acknowledgment once, including out-of-order bulk responses. */

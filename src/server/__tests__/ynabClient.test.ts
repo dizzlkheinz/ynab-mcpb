@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CacheManager } from "../cacheManager.js";
 import { ErrorHandler } from "../errorHandler.js";
-import { hashToken, RateLimiter } from "../rateLimiter.js";
+import { RateLimiter } from "../rateLimiter.js";
 import { ServerKnowledgeStore } from "../serverKnowledgeStore.js";
 import { YNABClient } from "../ynabClient.js";
 
@@ -39,7 +39,7 @@ describe("YNAB network and cache boundary", () => {
 		await read();
 		await read();
 		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(limiter.getStatus(hashToken("mock-token")).remaining).toBe(1);
+		expect(limiter.getStatus("mock-token").remaining).toBe(1);
 		await api.user.getUser();
 		const error = await api.user.getUser().catch((cause: unknown) => cause);
 		const result = new ErrorHandler({ format: JSON.stringify }).handleError(
@@ -58,7 +58,7 @@ describe("YNAB network and cache boundary", () => {
 			response({ error: { id: "429", name: "too_many_requests" } }, 429),
 		);
 		await expect(api.user.getUser()).rejects.toBeDefined();
-		expect(limiter.getStatus(hashToken("mock-token")).isLimited).toBe(true);
+		expect(limiter.getStatus("mock-token").isLimited).toBe(true);
 		await expect(api.user.getUser()).rejects.toThrow();
 		expect(fetch).toHaveBeenCalledTimes(1);
 	});
@@ -161,8 +161,6 @@ describe("YNAB network and cache boundary", () => {
 		await api.transactions.deleteTransaction("a", "tx");
 		await other.user.getUser();
 		expect(otherCache.get("accounts:get:a:checking")).toBe(42);
-		expect(otherLimiter.getStatus(hashToken("other-token")).remaining).toBe(
-			199,
-		);
+		expect(otherLimiter.getStatus("other-token").remaining).toBe(199);
 	});
 });
