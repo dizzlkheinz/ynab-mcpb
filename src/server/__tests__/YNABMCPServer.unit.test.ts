@@ -213,6 +213,25 @@ describe("YNABMCPServer isolated behavior", () => {
 	});
 
 	it.each([
+		[{ RATE_LIMIT_LOGGING: true }, true],
+		[{ LOG_LEVEL: "debug" as const }, true],
+		[{ VERBOSE_TESTS: true }, true],
+		[{}, false],
+	])("enables rate limiter logging from config %o", (overrides, expected) => {
+		vi.spyOn(config, "loadConfig").mockReturnValueOnce({
+			...config.loadConfig(),
+			RATE_LIMIT_LOGGING: false,
+			VERBOSE_TESTS: false,
+			...overrides,
+		});
+		const configured = new YNABMCPServer(false);
+		const internals = configured as unknown as {
+			rateLimiter: { config: { enableLogging: boolean } };
+		};
+		expect(internals.rateLimiter.config.enableLogging).toBe(expected);
+	});
+
+	it.each([
 		"ynab_list_accounts",
 		"ynab_list_transactions",
 		"ynab_list_categories",

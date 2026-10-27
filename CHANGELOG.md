@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `RATE_LIMIT_LOGGING=true`, `LOG_LEVEL=debug` and `VERBOSE_TESTS=true` enable rate limiter logging to stderr again. In 0.30.0 and 0.30.1 the server's rate limiter ignored them, so it never logged
+
 ## [0.30.1] - 2026-10-26
 
 ### Security

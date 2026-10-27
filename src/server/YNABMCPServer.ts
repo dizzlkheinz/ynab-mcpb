@@ -77,7 +77,7 @@ import { YNABClient } from "./ynabClient.js";
  */
 export class YNABMCPServer {
 	private readonly cacheManager = new CacheManager();
-	private readonly rateLimiter = new RateLimiter();
+	private readonly rateLimiter: RateLimiter;
 	private server: Server;
 	private ynabAPI: ynab.API;
 	private exitOnError: boolean;
@@ -111,6 +111,13 @@ export class YNABMCPServer {
 		};
 		globalRequestLogger.setConfig({
 			logLevel: levelAliases[this.configInstance.LOG_LEVEL] ?? "info",
+		});
+
+		this.rateLimiter = new RateLimiter({
+			enableLogging:
+				this.configInstance.RATE_LIMIT_LOGGING ||
+				this.configInstance.LOG_LEVEL === "debug" ||
+				this.configInstance.VERBOSE_TESTS,
 		});
 
 		// Initialize YNAB API
