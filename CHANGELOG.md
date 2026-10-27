@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-10-27
+
 ### Removed
 
 - Unused exports from the compiled modules under `dist/`. The package has no `exports` map, so code that deep-imported these will no longer resolve them. The documented entry points (the `ynab-mcp-server` CLI and `dist/index.js`) are unchanged
