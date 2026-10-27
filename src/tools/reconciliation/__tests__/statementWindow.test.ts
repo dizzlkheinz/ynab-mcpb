@@ -78,6 +78,8 @@ describe("statementWindow helpers", () => {
 
 		it("returns undefined for invalid dates", () => {
 			expect(normalizeStatementDate("not-a-date")).toBeUndefined();
+			expect(normalizeStatementDate("2024-02-30")).toBeUndefined();
+			expect(normalizeStatementDate("2024-13-45T00:00:00Z")).toBeUndefined();
 		});
 	});
 

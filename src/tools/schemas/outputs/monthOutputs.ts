@@ -254,5 +254,3 @@ export const ListMonthsOutputSchema = CacheMetadataSchema.merge(
 	/** Array of month summary objects */
 	months: z.array(MonthSummarySchema).describe("List of months"),
 });
-
-// Export inferred TypeScript types

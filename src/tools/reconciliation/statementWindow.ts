@@ -1,4 +1,8 @@
-import { formatLocalISODate, isDateInRange } from "../../utils/dateUtils.js";
+import {
+	formatLocalISODate,
+	isDateInRange,
+	isValidISODate,
+} from "../../utils/dateUtils.js";
 import type { CSVParseResult } from "./csvParser.js";
 
 export interface StatementWindowBounds {
@@ -31,7 +35,7 @@ export function normalizeStatementDate(
 	// An ISO date, with or without a time, already names the calendar date
 	const isoDate = /^(\d{4}-\d{2}-\d{2})(?:$|T)/.exec(trimmed)?.[1];
 	if (isoDate) {
-		return isoDate;
+		return isValidISODate(isoDate) ? isoDate : undefined;
 	}
 
 	// Other formats ("01/31/2024", "Jan 31, 2024") parse as local midnight, so

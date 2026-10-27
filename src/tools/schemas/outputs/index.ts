@@ -10,7 +10,7 @@
  * reconciliation analysis, and comparison/export operations.
  *
  * Only the tool output schemas registered with the ToolRegistry are exported here;
- * nested schemas and inferred types stay in their domain files.
+ * nested schemas stay in their domain files.
  *
  * @example
  * ```typescript

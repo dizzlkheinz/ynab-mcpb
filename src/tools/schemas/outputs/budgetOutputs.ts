@@ -85,5 +85,3 @@ export const ListBudgetsOutputSchema = CacheMetadataSchema.extend({
 	/** Array of budget summaries */
 	budgets: z.array(BudgetSummarySchema).describe("List of budgets"),
 });
-
-// Export inferred TypeScript types

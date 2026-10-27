@@ -165,5 +165,3 @@ export const GetTransactionOutputSchema = CacheMetadataSchema.extend({
 	/** Single transaction object */
 	transaction: TransactionSchema.describe("Transaction details"),
 });
-
-// Export inferred TypeScript types

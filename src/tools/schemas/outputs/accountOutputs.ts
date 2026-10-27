@@ -135,5 +135,3 @@ export const GetAccountOutputSchema = CacheMetadataSchema.extend({
 	/** Single account object */
 	account: AccountSchema.describe("Account details"),
 });
-
-// Export inferred TypeScript types

@@ -1907,7 +1907,7 @@ sequenceDiagram
 | Date parsing errors | Ambiguous date format | Specify `csv_format.date_format` |
 | Amount parsing errors | European number format | Parser auto-detects, check warnings |
 | Balance never aligns | Missing transactions | Check `unmatched_bank` and `unmatched_ynab` |
-| Operation marked `uncertain` | A write failed or YNAB did not acknowledge it | Check the account in YNAB before retrying; `operation_results` shows what was applied |
+| Operation marked `uncertain` | A write failed or YNAB did not acknowledge it | Check the account in YNAB before retrying; `structured.operations` in the response shows what was applied |
 
 ### C.2 Diagnostic Output
 

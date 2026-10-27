@@ -463,7 +463,7 @@ Output schemas live in `src/tools/schemas/outputs/` organized by domain:
 
 - `CacheMetadataSchema` (`schemas/shared/commonOutputs.ts`) — `cached`, `cache_info`, `usedDelta` fields, extended by read-only tool outputs
 - `SuccessResponseSchema` — `success` + `message` fields, extended by write tool outputs
-- `index.ts` — Exports the tool output schemas passed to `registry.register()`; nested schemas and inferred types stay in their domain files
+- `index.ts` — Exports the tool output schemas passed to `registry.register()`; nested schemas stay in their domain files
 
 ### Schema Patterns
 

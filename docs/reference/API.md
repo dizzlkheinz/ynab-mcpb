@@ -631,11 +631,11 @@ The schema is strict: any other parameter is rejected.
   "structured": {
     "unmatched_bank": [
       {
-        "id": "bank-3",
+        "id": "3f1c2b9e-8d4a-4e6b-9a7c-5b2d1e0f4a63",
         "date": "2025-10-23",
         "amount": -67890,
         "payee": "Grocery Store",
-        "sourceRow": 3,
+        "sourceRow": 4,
         "raw": { ... },
         "amount_money": { "value_milliunits": -67890, "value_display": "-$67.89", "currency": "USD", "direction": "debit" }
       }

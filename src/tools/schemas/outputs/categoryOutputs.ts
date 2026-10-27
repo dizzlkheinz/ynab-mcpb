@@ -211,5 +211,3 @@ export const GetCategoryOutputSchema = CacheMetadataSchema.extend({
 	/** Single category object */
 	category: CategorySchema.describe("Category details"),
 });
-
-// Export inferred TypeScript types

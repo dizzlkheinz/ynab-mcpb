@@ -97,5 +97,3 @@ export const GetPayeeOutputSchema = CacheMetadataSchema.extend({
 	/** Single payee object */
 	payee: PayeeSchema.describe("Payee details"),
 });
-
-// Export inferred TypeScript types

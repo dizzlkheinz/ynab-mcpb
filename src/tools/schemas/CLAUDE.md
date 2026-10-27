@@ -273,6 +273,7 @@ When adding validation for tool output:
      name: z.string(),
    });
 
+   // Export the inferred type only if another file imports it; knip fails on unused exports
    export type MyOutput = z.infer<typeof MyOutputSchema>;
    ```
 
