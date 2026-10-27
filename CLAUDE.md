@@ -132,7 +132,7 @@ Tools are organized by domain with some using modular sub-directories:
   - matcher.ts - Fuzzy matching engine with configurable scoring
   - analyzer.ts - Transaction analysis and discrepancy detection
   - executor.ts - Bulk transaction operations (create/update/unclear)
-  - executorErrors.ts - YNAB error normalization and propagation logic
+  - executorErrors.ts - YNAB error normalization
   - executorHelpers.ts - Executor utilities (chunking, sorting, recommendations)
   - balanceReconciliation.ts - Balance verification and likely-cause analysis
   - outputBuilder.ts - Dual-channel payload builder (human narrative + structured JSON)

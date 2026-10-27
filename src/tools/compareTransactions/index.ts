@@ -77,6 +77,13 @@ function parseDateOnly(date: string): Date {
 }
 
 /**
+ * Whether an ISO date falls inside an optional, inclusive [start, end] window
+ */
+function inWindow(iso: string, start?: string, end?: string): boolean {
+	return (!start || iso >= start) && (!end || iso <= end);
+}
+
+/**
  * Handles the ynab:compare_transactions tool call
  */
 export async function handleCompareTransactions(
@@ -178,32 +185,14 @@ export async function handleCompareTransactions(
 			let filteredYnabTransactions = ynabTransactions;
 
 			if (parsed.statement_start_date || parsed.statement_date) {
-				filteredBankTransactions = bankTransactions.filter((t) => {
-					const dateStr = formatISODate(t.date);
-					if (
-						parsed.statement_start_date &&
-						dateStr < parsed.statement_start_date
-					) {
-						return false;
-					}
-					if (parsed.statement_date && dateStr > parsed.statement_date) {
-						return false;
-					}
-					return true;
-				});
-				filteredYnabTransactions = ynabTransactions.filter((t) => {
-					const dateStr = formatISODate(t.date);
-					if (
-						parsed.statement_start_date &&
-						dateStr < parsed.statement_start_date
-					) {
-						return false;
-					}
-					if (parsed.statement_date && dateStr > parsed.statement_date) {
-						return false;
-					}
-					return true;
-				});
+				const inStatementWindow = (t: { date: Date }) =>
+					inWindow(
+						formatISODate(t.date),
+						parsed.statement_start_date,
+						parsed.statement_date,
+					);
+				filteredBankTransactions = bankTransactions.filter(inStatementWindow);
+				filteredYnabTransactions = ynabTransactions.filter(inStatementWindow);
 			}
 
 			// Find matches

@@ -490,7 +490,7 @@ const token = config.YNAB_ACCESS_TOKEN; // From env var
 ### With Utils (`src/utils/`)
 
 - **Money Conversion**: milliunits ↔ dollars conversion
-- **Date Utilities**: ISO date formatting, validation
+- **Date Utilities**: ISO date validation
 - **Validation**: Amount validation, error formatting
 
 ## Performance Considerations

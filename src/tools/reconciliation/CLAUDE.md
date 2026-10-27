@@ -25,7 +25,7 @@ CSV File → Parser → Matcher → Analyzer → Executor → Reporter
 
 ### Component Flow
 
-1. **CSV Parser** - Parse bank CSV, auto-detect sign convention, normalize payees
+1. **CSV Parser** - Parse bank CSV and auto-detect sign convention
 2. **Matcher** - Fuzzy match CSV transactions to YNAB transactions (85% threshold)
 3. **Analyzer** - Analyze matches, detect discrepancies, duplicates, missing transactions
 4. **Executor** - Execute bulk create/update/unclear operations with progress tracking
@@ -39,7 +39,7 @@ CSV File → Parser → Matcher → Analyzer → Executor → Reporter
 | **matcher.ts** | Fuzzy matching engine with configurable scoring | ~500 | CRITICAL |
 | **analyzer.ts** | Transaction analysis and discrepancy detection | ~600 | CRITICAL |
 | **executor.ts** | Bulk transaction operations (create/update/unclear) | ~580 | HIGH |
-| **executorErrors.ts** | YNAB error normalization and propagation | ~120 | HIGH |
+| **executorErrors.ts** | YNAB error normalization | ~80 | HIGH |
 | **executorHelpers.ts** | Executor utilities (chunking, sorting, recommendations) | ~150 | MEDIUM |
 | **balanceReconciliation.ts** | Balance verification and likely-cause analysis | ~130 | HIGH |
 | **outputBuilder.ts** | Dual-channel payload builder (human + structured) | ~370 | MEDIUM |
@@ -300,17 +300,28 @@ Progress is already implemented for bulk operations. To add to new operations:
 
 ```typescript
 describe('matcher', () => {
-  it('should auto-match an exact amount with a similar payee', () => {
+  it('should auto-match an exact amount and payee on the same date', () => {
     const bankTxn: BankTransaction = {
       id: 'b1',
       date: '2025-01-31',
-      amount: 25500, // milliunits
-      payee: 'AMAZON.CA*2X3Y4Z',
+      amount: -25500, // milliunits (-25.50)
+      payee: 'Shell Gas Station',
       sourceRow: 2,
-      raw: { date: '2025-01-31', amount: '25.50', description: 'AMAZON.CA*2X3Y4Z' },
+      raw: { date: '2025-01-31', amount: '-25.50', description: 'Shell Gas Station' },
+    };
+    const ynabTxn: YNABTransaction = {
+      id: 'y1',
+      date: '2025-01-31',
+      amount: -25500,
+      payee: 'Shell Gas Station',
+      memo: null,
+      categoryName: 'Auto: Gas',
+      cleared: 'uncleared',
+      approved: true,
     };
 
-    const [match] = findMatches([bankTxn], [ynabTxn], config);
+    // Omitting the config uses DEFAULT_CONFIG
+    const [match] = findMatches([bankTxn], [ynabTxn]);
     expect(match!.confidence).toBe('high');
   });
 });
@@ -474,7 +485,7 @@ These fields help users understand why certain YNAB transactions weren't matched
 ### With Utils (`src/utils/`)
 
 - **money.ts**: Milliunits conversion for amount matching
-- **dateUtils.ts**: Date formatting and validation
+- **dateUtils.ts**: ISO date validation
 
 ## Related Documentation
 

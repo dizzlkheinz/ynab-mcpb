@@ -42,6 +42,89 @@ function createYNABTransaction(
 
 describe("matcher", () => {
 	describe("findMatches", () => {
+		test("matches an amount within the configured tolerance", () => {
+			const bankTxns = [createBankTransaction("2023-09-15", 100000, "Test")]; // $100.00
+			const ynabTxns = [
+				createYNABTransaction("ynab1", "2023-09-15", 101000, "Test"), // $101.00 (1% diff)
+			];
+
+			const { matches } = findMatches(bankTxns, ynabTxns, 0.02, 5);
+
+			expect(matches).toHaveLength(1);
+			expect(matches[0]!.match_reasons).toContain(
+				"Amount within configured tolerance",
+			);
+			expect(matches[0]!.match_reasons).not.toContain("Exact amount match");
+		});
+
+		test("treats the tolerance as an inclusive fraction of the bank amount", () => {
+			const bankTxns = [createBankTransaction("2023-09-15", 100000, "Test")];
+			const ynabTxns = [
+				createYNABTransaction("ynab1", "2023-09-15", 101000, "Test"), // exactly 1%
+			];
+
+			expect(findMatches(bankTxns, ynabTxns, 0.01, 5).matches).toHaveLength(1);
+			expect(findMatches(bankTxns, ynabTxns, 0.009, 5).matches).toHaveLength(0);
+		});
+
+		test("requires an exact amount when the tolerance is zero", () => {
+			const bankTxns = [createBankTransaction("2023-09-15", 100000, "Test")];
+			const ynabTxns = [
+				createYNABTransaction("ynab1", "2023-09-15", 100010, "Test"), // 1 cent off
+			];
+
+			const { matches, unmatched_bank, unmatched_ynab } = findMatches(
+				bankTxns,
+				ynabTxns,
+				0,
+				5,
+			);
+
+			expect(matches).toHaveLength(0);
+			expect(unmatched_bank).toHaveLength(1);
+			expect(unmatched_ynab).toHaveLength(1);
+		});
+
+		test("reports memo similarity when the memo matches better than the payee", () => {
+			const bankTxns = [
+				createBankTransaction("2023-09-15", 123450, "Coffee Shop"),
+			];
+			const ynabTxns = [
+				createYNABTransaction(
+					"ynab1",
+					"2023-09-15",
+					123450,
+					"Starbucks",
+					"Coffee Shop Purchase",
+				),
+			];
+
+			const { matches } = findMatches(bankTxns, ynabTxns, 0.01, 5);
+
+			expect(matches).toHaveLength(1);
+			expect(matches[0]!.match_reasons).toContain("Memo similarity");
+		});
+
+		test("does not report memo similarity when the payee matches", () => {
+			const bankTxns = [
+				createBankTransaction("2023-09-15", 123450, "Coffee Shop"),
+			];
+			const ynabTxns = [
+				createYNABTransaction(
+					"ynab1",
+					"2023-09-15",
+					123450,
+					"Coffee Shop",
+					"Morning latte",
+				),
+			];
+
+			const { matches } = findMatches(bankTxns, ynabTxns, 0.01, 5);
+
+			expect(matches).toHaveLength(1);
+			expect(matches[0]!.match_reasons).not.toContain("Memo similarity");
+		});
+
 		test("should find simple one-to-one matches", () => {
 			const bankTxns = [
 				createBankTransaction("2023-09-15", 123450, "Test 1"),

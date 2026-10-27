@@ -3,7 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hashToken, RateLimitError, RateLimiter } from "../rateLimiter.js";
+import { RateLimitError, RateLimiter } from "../rateLimiter.js";
 
 describe("RateLimiter", () => {
 	let rateLimiter: RateLimiter;
@@ -298,7 +298,7 @@ describe("RateLimiter", () => {
 	});
 
 	describe("logged identifiers", () => {
-		it("logs the already-hashed identifier without hashing it again", () => {
+		it("logs only the hash of the token it is given", () => {
 			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
 				// Mock implementation for testing
 			});
@@ -309,18 +309,37 @@ describe("RateLimiter", () => {
 				enableLogging: true,
 			});
 
-			const identifier = hashToken("very-secret-token-12345");
-			loggingLimiter.tryAcquire(identifier);
-			loggingLimiter.markExhausted(identifier);
+			const token = "very-secret-token-12345";
+			loggingLimiter.tryAcquire(token);
+			loggingLimiter.markExhausted(token);
 
 			const logCalls = consoleSpy.mock.calls.flat().map(String);
-			expect(logCalls).toHaveLength(3);
+			const key = /^Rate limit check for (token_[0-9a-f]+): /.exec(
+				logCalls[0] ?? "",
+			)?.[1];
+			expect(key).toBeDefined();
+			expect(logCalls).toEqual([
+				`Rate limit check for ${key}: 0/2 requests, remaining: 2, limited: false`,
+				`Recorded request for ${key}: 1/2 requests`,
+				`Rate limit marked exhausted for ${key}`,
+			]);
 			for (const line of logCalls) {
-				expect(line).toContain(identifier);
-				expect(line).not.toContain(hashToken(identifier));
+				expect(line).not.toContain(token);
 			}
 
 			consoleSpy.mockRestore();
+		});
+
+		it("tracks a token the same way across every method", () => {
+			const limiter = new RateLimiter({ maxRequests: 2, windowMs: 1000 });
+
+			limiter.tryAcquire(testIdentifier);
+			limiter.recordRequest(testIdentifier);
+			expect(limiter.getStatus(testIdentifier).isLimited).toBe(true);
+			expect(limiter.isAllowed("other-token").remaining).toBe(2);
+
+			limiter.reset(testIdentifier);
+			expect(limiter.getStatus(testIdentifier).remaining).toBe(2);
 		});
 
 		it("does not log a check when only reading status", () => {
@@ -343,11 +362,22 @@ describe("RateLimiter", () => {
 });
 
 describe("rate-limit token identifiers", () => {
+	const loggedKey = (token: string): string | undefined => {
+		const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
+			// Mock implementation for testing
+		});
+		new RateLimiter({ enableLogging: true }).isAllowed(token);
+		const line = String(consoleSpy.mock.calls[0]?.[0] ?? "");
+		consoleSpy.mockRestore();
+		return /^Rate limit check for (\S+): /.exec(line)?.[1];
+	};
+
 	it("uses a consistent identifier for the same token", () => {
-		expect(hashToken("same-token")).toBe(hashToken("same-token"));
+		expect(loggedKey("same-token")).toBe(loggedKey("same-token"));
 	});
 	it("separates different tokens without exposing their values", () => {
-		expect(hashToken("token-1")).not.toBe(hashToken("token-2"));
-		expect(hashToken("token-1")).not.toContain("token-1");
+		expect(loggedKey("token-1")).not.toBe(loggedKey("token-2"));
+		expect(loggedKey("token-1")).toMatch(/^token_[0-9a-f]+$/);
+		expect(loggedKey("token-1")).not.toContain("token-1");
 	});
 });

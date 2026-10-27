@@ -32,16 +32,80 @@ export class RateLimiter {
 	}
 
 	/**
-	 * Check if a request is allowed for the given identifier. Callers pass an
-	 * already-hashed identifier (see hashToken); it is logged as given.
+	 * Check if a request is allowed for the given access token. The token is
+	 * hashed here (see hashToken); only the hash is stored or logged.
 	 */
-	isAllowed(identifier: string): RateLimitInfo {
-		const info = this.computeStatus(identifier);
+	isAllowed(token: string): RateLimitInfo {
+		return this.check(hashToken(token));
+	}
+
+	/**
+	 * Record a request for the given access token
+	 */
+	recordRequest(token: string): void {
+		this.record(hashToken(token));
+	}
+
+	/**
+	 * Get current rate limit status for an access token without logging a check
+	 */
+	getStatus(token: string): RateLimitInfo {
+		return this.computeStatus(hashToken(token));
+	}
+
+	/**
+	 * Atomically check and record a request in one call.
+	 * Returns rate limit info; if not limited, the request is recorded.
+	 */
+	tryAcquire(token: string): RateLimitInfo {
+		const key = hashToken(token);
+		const info = this.check(key);
+		if (!info.isLimited) {
+			this.record(key);
+		}
+		return info;
+	}
+
+	/**
+	 * Mark the access token's rate limit window as exhausted.
+	 * Used when a real YNAB 429 response is received.
+	 */
+	markExhausted(token: string): void {
+		const key = hashToken(token);
+		const now = Date.now();
+		// Fill the current window with maxRequests fresh timestamps to force
+		// isLimited = true even if the next check happens a few ms later.
+		const timestamps = Array.from(
+			{ length: this.config.maxRequests },
+			() => now,
+		);
+		this.requests.set(key, timestamps);
+		if (this.config.enableLogging) {
+			console.error(`Rate limit marked exhausted for ${key}`);
+		}
+	}
+
+	/**
+	 * Reset rate limit for a specific access token (useful for testing)
+	 */
+	reset(token?: string): void {
+		if (token) {
+			this.requests.delete(hashToken(token));
+		} else {
+			this.requests.clear();
+		}
+	}
+
+	/**
+	 * Check and log the status of an already-hashed key
+	 */
+	private check(key: string): RateLimitInfo {
+		const info = this.computeStatus(key);
 
 		if (this.config.enableLogging) {
-			const used = this.requests.get(identifier)?.length ?? 0;
+			const used = this.requests.get(key)?.length ?? 0;
 			console.error(
-				`Rate limit check for ${identifier}: ${used}/${this.config.maxRequests} requests, remaining: ${info.remaining}, limited: ${info.isLimited}`,
+				`Rate limit check for ${key}: ${used}/${this.config.maxRequests} requests, remaining: ${info.remaining}, limited: ${info.isLimited}`,
 			);
 		}
 
@@ -49,20 +113,20 @@ export class RateLimiter {
 	}
 
 	/**
-	 * Prune expired requests and compute the identifier's status without logging
+	 * Prune expired requests and compute an already-hashed key's status without logging
 	 */
-	private computeStatus(identifier: string): RateLimitInfo {
+	private computeStatus(key: string): RateLimitInfo {
 		const now = Date.now();
 		const windowStart = now - this.config.windowMs;
 
-		// Get existing requests for this identifier
-		let requests = this.requests.get(identifier) || [];
+		// Get existing requests for this key
+		let requests = this.requests.get(key) || [];
 
 		// Remove requests outside the current window
 		requests = requests.filter((timestamp) => timestamp > windowStart);
 
 		// Update the requests array
-		this.requests.set(identifier, requests);
+		this.requests.set(key, requests);
 
 		const remaining = Math.max(0, this.config.maxRequests - requests.length);
 		const resetTime = new Date((requests[0] ?? now) + this.config.windowMs);
@@ -76,67 +140,19 @@ export class RateLimiter {
 	}
 
 	/**
-	 * Record a request for the given identifier
+	 * Record a request for an already-hashed key
 	 */
-	recordRequest(identifier: string): void {
+	private record(key: string): void {
 		const now = Date.now();
-		const requests = this.requests.get(identifier) || [];
+		const requests = this.requests.get(key) || [];
 
 		requests.push(now);
-		this.requests.set(identifier, requests);
+		this.requests.set(key, requests);
 
 		if (this.config.enableLogging) {
 			console.error(
-				`Recorded request for ${identifier}:${requests.length}/${this.config.maxRequests} requests`,
+				`Recorded request for ${key}: ${requests.length}/${this.config.maxRequests} requests`,
 			);
-		}
-	}
-
-	/**
-	 * Get current rate limit status for an identifier without logging a check
-	 */
-	getStatus(identifier: string): RateLimitInfo {
-		return this.computeStatus(identifier);
-	}
-
-	/**
-	 * Atomically check and record a request in one call.
-	 * Returns rate limit info; if not limited, the request is recorded.
-	 */
-	tryAcquire(identifier: string): RateLimitInfo {
-		const info = this.isAllowed(identifier);
-		if (!info.isLimited) {
-			this.recordRequest(identifier);
-		}
-		return info;
-	}
-
-	/**
-	 * Mark the identifier's rate limit window as exhausted.
-	 * Used when a real YNAB 429 response is received.
-	 */
-	markExhausted(identifier: string): void {
-		const now = Date.now();
-		// Fill the current window with maxRequests fresh timestamps to force
-		// isLimited = true even if the next check happens a few ms later.
-		const timestamps = Array.from(
-			{ length: this.config.maxRequests },
-			() => now,
-		);
-		this.requests.set(identifier, timestamps);
-		if (this.config.enableLogging) {
-			console.error(`Rate limit marked exhausted for ${identifier}`);
-		}
-	}
-
-	/**
-	 * Reset rate limit for a specific identifier (useful for testing)
-	 */
-	reset(identifier?: string): void {
-		if (identifier) {
-			this.requests.delete(identifier);
-		} else {
-			this.requests.clear();
 		}
 	}
 
@@ -147,15 +163,15 @@ export class RateLimiter {
 		const now = Date.now();
 		const windowStart = now - this.config.windowMs;
 
-		for (const [identifier, requests] of this.requests.entries()) {
+		for (const [key, requests] of this.requests.entries()) {
 			const validRequests = requests.filter(
 				(timestamp) => timestamp > windowStart,
 			);
 
 			if (validRequests.length === 0) {
-				this.requests.delete(identifier);
+				this.requests.delete(key);
 			} else {
-				this.requests.set(identifier, validRequests);
+				this.requests.set(key, validRequests);
 			}
 		}
 	}
@@ -164,7 +180,7 @@ export class RateLimiter {
 /**
  * Hash an access token for rate limiting and logging (to avoid exposing sensitive tokens)
  */
-export function hashToken(token: string): string {
+function hashToken(token: string): string {
 	// Simple hash for logging purposes - not cryptographically secure
 	let hash = 0;
 	for (let i = 0; i < token.length; i++) {

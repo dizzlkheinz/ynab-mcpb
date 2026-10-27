@@ -44,7 +44,7 @@ src/tools/
 │   ├── matcher.ts              # Fuzzy matching engine
 │   ├── analyzer.ts             # Transaction analysis
 │   ├── executor.ts             # Bulk transaction operations
-│   ├── executorErrors.ts       # YNAB error normalization/propagation
+│   ├── executorErrors.ts       # YNAB error normalization
 │   ├── executorHelpers.ts      # Executor utilities (chunking, sorting)
 │   ├── balanceReconciliation.ts # Balance verification and likely causes
 │   ├── outputBuilder.ts        # Dual-channel payload builder

@@ -55,7 +55,7 @@ import {
 	formatDiagnosticInfo,
 } from "./markdownFormatter.js";
 import { PromptManager } from "./prompts.js";
-import { hashToken, RateLimiter } from "./rateLimiter.js";
+import { RateLimiter } from "./rateLimiter.js";
 import { globalRequestLogger } from "./requestLogger.js";
 import { ResourceManager } from "./resources.js";
 import { responseFormatter } from "./responseFormatter.js";
@@ -233,7 +233,7 @@ export class YNABMCPServer {
 				getSecurityStats: () => ({
 					...SecurityMiddleware.getSecurityStats(),
 					rateLimitStats: this.rateLimiter.getStatus(
-						hashToken(this.configInstance.YNAB_ACCESS_TOKEN),
+						this.configInstance.YNAB_ACCESS_TOKEN,
 					),
 				}),
 			},

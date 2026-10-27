@@ -14,15 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Convenience re-exports from `dist/types/index.js` (`ServerConfig`, `AuthenticationConfig`, `ErrorHandler`, `RateLimiter`, `RequestLogger`, `SecurityMiddleware`, `ToolContext`, `ToolRegistry` and related types); import them from their own modules
   - Inferred output types and nested schemas re-exported from `dist/tools/schemas/outputs/index.js` (for example `ListBudgetsOutput`, `CacheInfoSchema`); the domain files under `dist/tools/schemas/outputs/` still export the schemas tools use
   - Reconciliation types re-exported from `dist/tools/reconciliation/index.js`; import them from `dist/tools/reconciliation/types.js`
-  - `getAppConfig`/`resetAppConfig` (`dist/server/config.js`), `YNABRequestError` and `BaseError` (`dist/utils/errors.js`), `AuthenticationError`/`ConfigurationError` re-exported from `dist/types/index.js` (import them from `dist/utils/errors.js`), `formatAmount` (`dist/utils/money.js`), and other exports nothing imported
+  - `getAppConfig`/`resetAppConfig` (`dist/server/config.js`), `YNABRequestError` and `BaseError` (`dist/utils/errors.js`), `formatAmount` (`dist/utils/money.js`), and other exports nothing imported
+  - The `AuthenticationError` and `ConfigurationError` classes defined in `dist/types/index.js`. They were separate classes from the ones the server throws, so `instanceof` checks against them never matched a server error. Use the classes in `dist/utils/errors.js`, which extend `BaseError` rather than `Error` directly
   - `BankTransactionComparisonSchema`, `YNABTransactionComparisonSchema` and `ExportedTransactionFullSchema` (`dist/tools/schemas/outputs/comparisonOutputs.js`), which no tool output used
   - Handler and schema re-exports from `dist/tools/transactionTools.js`; import them from `dist/tools/transactionReadTools.js`, `dist/tools/transactionWriteTools.js` or `dist/tools/transactionSchemas.js`
   - Re-exports of `normalizeYnabError`, `NormalizedYnabError` and `buildReconciliationPlan` from `dist/tools/reconciliation/executor.js`; import them from `executorErrors.js` and `plan.js`
   - Functions only tests called: `executeReconciliation` (use `buildReconciliationPlan` with `executeReconciliationPlan`), `shouldPropagateYnabError`, `attachStatusToError`, `findBestMatch`, `formatBalanceInfo`, `formatTransactionList`, `sleep`, the `resolveBudgetId`/`validateBudgetId`/`createMissingBudgetError`/`createInvalidBudgetError` wrappers (use the `BudgetResolver` static methods), `appendCategoryIds`, `collectCategoryIdsFromSources`, `setsEqual`, `toMonthKey`, `CategorySource`, the `compareTransactions` `parseDate`/`amountToMilliunits`/`extractDateRangeFromCSV`/`calculateMatchScore`/`groupTransactionsByAmount`/`matchDuplicateAmounts`, `getDecimalDigits`, `getCurrencyCode`, `assertMilli`, `inWindow`, and every `dateUtils` export except `isValidISODate`
   - `dist/tools/reconciliation/payeeNormalizer.js`, which nothing imported
+  - `hashToken` (`dist/server/rateLimiter.js`); `RateLimiter` now hashes the token itself
 
 ### Changed
 
+- `RateLimiter` methods take the access token and hash it themselves, so a raw token is never stored or logged. Callers no longer pre-hash it
 - `VERBOSE_TESTS` only affects test output. The server no longer reads or validates it, so it no longer turns on rate limiter logging as it did through 0.29.1
 
 ### Fixed

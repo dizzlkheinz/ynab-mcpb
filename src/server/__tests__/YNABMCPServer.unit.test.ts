@@ -3,7 +3,6 @@ import { textOf } from "../../__tests__/testUtils.js";
 import { ConfigurationError } from "../../utils/errors.js";
 import type { CacheManager } from "../cacheManager.js";
 import * as config from "../config.js";
-import { hashToken } from "../rateLimiter.js";
 
 vi.mock("../config.js", () => ({
 	getRuntimeConfig: () => ({
@@ -232,9 +231,7 @@ describe("YNABMCPServer isolated behavior", () => {
 			);
 			expect(rateLimitLines.length > 0).toBe(expected);
 			for (const [line] of rateLimitLines) {
-				expect(String(line)).toContain(
-					`Rate limit check for ${hashToken("unit-test-token")}:`,
-				);
+				expect(String(line)).toMatch(/^Rate limit check for token_[0-9a-f]+: /);
 				expect(String(line)).not.toContain("unit-test-token");
 			}
 		},

@@ -1,6 +1,6 @@
 # Utilities - YNAB MCP Server
 
-This directory contains pure utility functions for common operations like money conversion, date formatting, validation, and error handling.
+This directory contains pure utility functions for common operations like money conversion, date validation, and error handling.
 
 ## Purpose & Responsibilities
 
@@ -479,7 +479,7 @@ const time2 = Date.UTC(
 Utilities are called frequently, so performance matters:
 
 1. **Avoid Unnecessary Allocations** - Reuse objects when safe
-2. **Optimize Hot Paths** - Profile money conversion, date formatting
+2. **Optimize Hot Paths** - Profile money conversion, date validation
 3. **Memoization** - Cache expensive computations (if pure)
 4. **Avoid Regex in Hot Paths** - Pre-compile regular expressions
 
