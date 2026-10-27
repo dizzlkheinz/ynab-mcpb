@@ -10,7 +10,6 @@ import type {
 	BulkTransactionInput,
 	BulkTransactionResult,
 	BulkUpdateResponse,
-	CategorySource,
 	CorrelationPayload,
 	CorrelationPayloadInput,
 } from "./transactionSchemas.js";
@@ -46,69 +45,6 @@ export function ensureTransaction<T>(
 	}
 	return transaction;
 }
-
-// ============================================================================
-// Category Helpers
-// ============================================================================
-
-/**
- * Appends category IDs from a source to a target set
- */
-export function appendCategoryIds(
-	source: CategorySource | undefined,
-	target: Set<string>,
-): void {
-	if (!source) {
-		return;
-	}
-	if (source.category_id) {
-		target.add(source.category_id);
-	}
-	if (Array.isArray(source.subtransactions)) {
-		for (const sub of source.subtransactions) {
-			if (sub?.category_id) {
-				target.add(sub.category_id);
-			}
-		}
-	}
-}
-
-/**
- * Collects category IDs from multiple sources
- */
-export function collectCategoryIdsFromSources(
-	...sources: (CategorySource | undefined)[]
-): Set<string> {
-	const result = new Set<string>();
-	for (const source of sources) {
-		appendCategoryIds(source, result);
-	}
-	return result;
-}
-
-/**
- * Checks if two sets are equal
- */
-export function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
-	if (a.size !== b.size) {
-		return false;
-	}
-	for (const value of a) {
-		if (!b.has(value)) {
-			return false;
-		}
-	}
-	return true;
-}
-
-// ============================================================================
-// Cache Invalidation
-// ============================================================================
-
-/**
- * Converts a date string to a month key
- */
-export const toMonthKey = (date: string): string => `${date.slice(0, 7)}-01`;
 
 // ============================================================================
 // Correlation Utilities

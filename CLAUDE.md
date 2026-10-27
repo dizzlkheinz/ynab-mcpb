@@ -110,7 +110,7 @@ Tools are organized by domain with some using modular sub-directories:
 
 - **budgetTools.ts** - Budget listing and retrieval
 - **accountTools.ts** - Account management
-- **transactionTools.ts** - Transaction tool facade (registration + schema re-exports)
+- **transactionTools.ts** - Transaction tool facade (registers the read and write tools)
 - **transactionReadTools.ts** - Read-only transaction handlers (list/get/export)
 - **transactionWriteTools.ts** - Write transaction handlers (create/update/delete)
 - **transactionSchemas.ts** - Transaction Zod schemas (extracted v0.18.4, 453 lines)
@@ -139,7 +139,6 @@ Tools are organized by domain with some using modular sub-directories:
   - recommendationEngine.ts - Smart reconciliation recommendations
   - reportFormatter.ts - Human-readable reconciliation reports
   - signDetector.ts - Auto-detection of debit/credit sign conventions
-  - payeeNormalizer.ts - Payee name normalization for matching
   - ynabAdapter.ts - YNAB API integration layer
 - **schemas/** - Zod schemas for input/output validation
   - shared/commonOutputs.ts - Reusable base schemas (CacheMetadata, SuccessResponse, PaginationMetadata)
@@ -156,7 +155,7 @@ Tools are organized by domain with some using modular sub-directories:
 ### Utilities (`src/utils/`)
 
 - **money.ts** - Amount conversion (dollars ↔ milliunits)
-- **dateUtils.ts** - Date formatting and validation
+- **dateUtils.ts** - ISO date validation
 - **money.ts** - Amount validation and utilities
 - **baseError.ts** - Base error class for custom errors
 - **errors.ts** - Custom error classes and error handling utilities

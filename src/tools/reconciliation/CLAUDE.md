@@ -46,7 +46,6 @@ CSV File → Parser → Matcher → Analyzer → Executor → Reporter
 | **recommendationEngine.ts** | Smart reconciliation recommendations | ~300 | MEDIUM |
 | **reportFormatter.ts** | Human-readable reconciliation reports | ~400 | MEDIUM |
 | **signDetector.ts** | Auto-detection of debit/credit sign conventions | ~130 | HIGH |
-| **payeeNormalizer.ts** | Payee name normalization for matching | ~150 | MEDIUM |
 | **ynabAdapter.ts** | YNAB API integration layer | ~300 | HIGH |
 | **types.ts** | Reconciliation domain types (BankTransaction, MatchCandidate, MatchingConfig, recommendations) | ~300 | HIGH |
 
@@ -207,30 +206,6 @@ function detectSignConvention(transactions: CSVTransaction[]): SignConvention {
 
 **What Breaks**: Wrong detection → all amounts inverted (debits become credits).
 
-### 6. Payee Normalization
-
-Payee names are normalized for better matching:
-
-```typescript
-function normalizePayee(payee: string): string {
-  return (
-    payee
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '') // Remove special chars
-      .replace(/\s+/g, ' ') // Collapse whitespace
-      .trim()
-  );
-}
-
-// Example:
-// "AMAZON.CA*2X3Y4Z" → "amazonca2x3y4z"
-// "Tim Hortons #1234" → "tim hortons 1234"
-```
-
-**Why Important**: Merchant names vary (location codes, punctuation). Normalization improves fuzzy matching.
-
-**What Breaks**: Over-normalization → lost information. Under-normalization → missed matches.
-
 ## Configuration
 
 Default configuration values:
@@ -312,7 +287,7 @@ Progress is already implemented for bulk operations. To add to new operations:
 - **Location**: `src/tools/reconciliation/__tests__/*.test.ts`
 - **Mock**: YNAB API, file system
 - **Coverage**: 80% minimum
-- **Focus**: Matching logic, sign detection, payee normalization
+- **Focus**: Matching logic, sign detection, CSV parsing
 
 ### Integration Tests
 
@@ -325,21 +300,18 @@ Progress is already implemented for bulk operations. To add to new operations:
 
 ```typescript
 describe('matcher', () => {
-  it('should match transactions with 85%+ score', () => {
-    const csvTx = {
+  it('should auto-match an exact amount with a similar payee', () => {
+    const bankTxn: BankTransaction = {
+      id: 'b1',
       date: '2025-01-31',
       amount: 25500, // milliunits
       payee: 'AMAZON.CA*2X3Y4Z',
+      sourceRow: 2,
+      raw: { date: '2025-01-31', amount: '25.50', description: 'AMAZON.CA*2X3Y4Z' },
     };
 
-    const ynabTx = {
-      date: '2025-01-31',
-      amount: 25500,
-      payee_name: 'Amazon',
-    };
-
-    const score = calculateMatchScore(csvTx, ynabTx);
-    expect(score).toBeGreaterThan(85);
+    const [match] = findMatches([bankTxn], [ynabTxn], config);
+    expect(match!.confidence).toBe('high');
   });
 });
 ```
@@ -486,7 +458,6 @@ These fields help users understand why certain YNAB transactions weren't matched
 2. **Progress Notifications**: Every chunk (100 transactions) emits progress
 3. **Date Range Filtering**: Reduces YNAB transaction set for faster matching
 4. **Fuzzy Matching**: Uses optimized token-set-ratio algorithm
-5. **Payee Normalization**: Caches normalized payees to avoid re-computation
 
 ## Integration Points
 

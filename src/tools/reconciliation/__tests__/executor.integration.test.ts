@@ -5,9 +5,10 @@ import {
 	skipOnRateLimit,
 } from "../../../__tests__/testUtils.js";
 import { toMoneyValueFromDecimal } from "../../../utils/money.js";
-import { type AccountSnapshot, executeReconciliation } from "../executor.js";
+import type { AccountSnapshot } from "../executor.js";
 import type { ReconcileAccountRequest } from "../index.js";
 import type { ReconciliationAnalysis } from "../types.js";
+import { executeReconciliation } from "./executeReconciliation.js";
 
 const config = getTestConfig();
 const describeIntegration = config.skipE2ETests ? describe.skip : describe;

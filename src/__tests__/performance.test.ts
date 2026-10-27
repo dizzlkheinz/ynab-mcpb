@@ -5,15 +5,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { SecurityErrorCode } from "../server/errorHandler.js";
-import {
-	type AccountSnapshot,
-	executeReconciliation,
-} from "../tools/reconciliation/executor.js";
-import { sleep as delay } from "../tools/reconciliation/executorHelpers.js";
+import { executeReconciliation } from "../tools/reconciliation/__tests__/executeReconciliation.js";
+import type { AccountSnapshot } from "../tools/reconciliation/executor.js";
 import type { ReconcileAccountRequest } from "../tools/reconciliation/index.js";
 import type { ReconciliationAnalysis } from "../tools/reconciliation/types.js";
 import { toMoneyValueFromDecimal } from "../utils/money.js";
 import { executeToolCall, parseToolResult } from "./testUtils.js";
+
+const delay = (ms: number): Promise<void> =>
+	new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Helper function to validate tool responses and extract array data

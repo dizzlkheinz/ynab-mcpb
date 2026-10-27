@@ -17,7 +17,7 @@ The `src/utils/` directory provides:
 | File | Responsibility | Lines | Critical |
 |------|---------------|-------|----------|
 | **money.ts** | Dollar ↔ milliunit conversion, currency-aware helpers (`toMilli`, `fromMilli`), and amount formatting (CRITICAL!) | ~200 | CRITICAL |
-| **dateUtils.ts** | ISO/YNAB month formatting and validation | ~100 | HIGH |
+| **dateUtils.ts** | ISO date validation | ~20 | HIGH |
 | **baseError.ts** | Base error class for custom errors | ~50 | HIGH |
 | **errors.ts** | Custom error classes and utilities | ~200 | HIGH |
 | **validationError.ts** | Validation-specific error handling | ~100 | MEDIUM |
@@ -77,16 +77,12 @@ describe('amountToMilliunits', () => {
 });
 ```
 
-### 2. Date Formatting and Validation
+### 2. Date Validation
 
 YNAB requires ISO date format: `YYYY-MM-DD`
 
 ```typescript
 // dateUtils.ts
-export function formatISODate(date: Date): string {
-  return format(date, 'yyyy-MM-dd'); // "2025-01-31"
-}
-
 export function isValidISODate(dateString: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false;
   const parsed = parse(dateString, 'yyyy-MM-dd', new Date());
@@ -247,7 +243,7 @@ export function addDays(dateString: string, days: number): string {
   );
   utcDate.setUTCDate(utcDate.getUTCDate() + days);
 
-  return formatISODate(utcDate);
+  return utcDate.toISOString().slice(0, 10);
 }
 ```
 
@@ -317,13 +313,6 @@ describe('milliunitsToAmount', () => {
 ### Date Utility Tests
 
 ```typescript
-describe('formatISODate', () => {
-  it('should format date as ISO string', () => {
-    const date = new Date('2025-01-31T12:00:00Z');
-    expect(formatISODate(date)).toBe('2025-01-31');
-  });
-});
-
 describe('isValidISODate', () => {
   it('should accept valid ISO dates', () => {
     expect(isValidISODate('2025-01-31')).toBe(true);
@@ -472,7 +461,7 @@ const time2 = Date.UTC(
 ### With Tools (`src/tools/`)
 
 - **Money Conversion**: All transaction tools use `amountToMilliunits`/`milliunitsToAmount`
-- **Date Formatting**: All date fields use `formatISODate`
+- **Date Validation**: Date inputs are checked with `isValidISODate`
 - **Validation**: Input validation before API calls
 
 ### With Server (`src/server/`)

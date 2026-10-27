@@ -1,13 +1,9 @@
-import { YNABAPIError, YNABErrorCode } from "../../server/errorHandler.js";
-
 export interface NormalizedYnabError {
 	status?: number;
 	name?: string;
 	message: string;
 	detail?: string;
 }
-
-const FATAL_YNAB_STATUS_CODES = new Set([400, 401, 403, 404, 429, 500, 503]);
 
 export function normalizeYnabError(error: unknown): NormalizedYnabError {
 	const parseStatus = (value: unknown): number | undefined => {
@@ -80,45 +76,4 @@ export function normalizeYnabError(error: unknown): NormalizedYnabError {
 	}
 
 	return { message: "Unknown error occurred" };
-}
-
-export function shouldPropagateYnabError(error: NormalizedYnabError): boolean {
-	return (
-		error.status !== undefined && FATAL_YNAB_STATUS_CODES.has(error.status)
-	);
-}
-
-export function attachStatusToError(
-	error: NormalizedYnabError,
-	originalError?: unknown,
-): Error {
-	const message = error.message || "YNAB API error";
-
-	const isKnownCode =
-		error.status === YNABErrorCode.BAD_REQUEST ||
-		error.status === YNABErrorCode.UNAUTHORIZED ||
-		error.status === YNABErrorCode.FORBIDDEN ||
-		error.status === YNABErrorCode.NOT_FOUND ||
-		error.status === YNABErrorCode.TOO_MANY_REQUESTS ||
-		error.status === YNABErrorCode.INTERNAL_SERVER_ERROR;
-
-	if (isKnownCode) {
-		return new YNABAPIError(
-			error.status as YNABErrorCode,
-			message,
-			originalError,
-		);
-	}
-
-	const statusFragment = error.status ? ` (HTTP ${error.status})` : "";
-	const detailFragment =
-		error.detail && !message.includes(error.detail) ? ` (${error.detail})` : "";
-	const err = new Error(`${message}${statusFragment}${detailFragment}`);
-	if (error.status !== undefined) {
-		(err as { status?: number }).status = error.status;
-	}
-	if (error.name) {
-		err.name = error.name;
-	}
-	return err;
 }

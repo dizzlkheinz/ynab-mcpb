@@ -16,24 +16,6 @@ export interface MoneyValue {
 const DEFAULT_CURRENCY = "USD";
 const DEFAULT_DECIMAL_DIGITS = 2;
 
-/**
- * Extract decimal digits from YNAB CurrencyFormat
- */
-export const getDecimalDigits = (
-	currencyFormat: ynab.CurrencyFormat | null | undefined,
-): number => {
-	return currencyFormat?.decimal_digits ?? DEFAULT_DECIMAL_DIGITS;
-};
-
-/**
- * Extract ISO currency code from YNAB CurrencyFormat
- */
-export const getCurrencyCode = (
-	currencyFormat: ynab.CurrencyFormat | null | undefined,
-): string => {
-	return currencyFormat?.iso_code ?? DEFAULT_CURRENCY;
-};
-
 export const toMilli = (x: number | string): Milli => {
 	const n = Number(x);
 	const m = Math.round(n * 1000);
@@ -56,24 +38,11 @@ export const fromMilli = (
 	return ynab.utils.convertMilliUnitsToCurrencyAmount(m, decimalDigits);
 };
 
-export const assertMilli = (
-	m: number,
-	msg = "Expected safe integer milliunits",
-) => {
-	if (!Number.isSafeInteger(m)) throw new Error(msg);
-};
-
 export const addMilli = (a: Milli, b: Milli): Milli => {
 	const s = a + b;
 	if (!Number.isSafeInteger(s)) throw new Error("Milliunit sum overflow");
 	return s;
 };
-
-export const inWindow = (
-	iso: string,
-	start: string | undefined = undefined,
-	end: string | undefined = undefined,
-) => (!start || iso >= start) && (!end || iso <= end);
 
 export const moneyDirection = (value: Milli): MoneyDirection => {
 	if (value === 0) return "balanced";

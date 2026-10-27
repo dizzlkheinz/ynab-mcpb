@@ -12,11 +12,13 @@ import {
 } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import {
-	handleCreateTransactions,
 	handleGetTransaction,
 	handleListTransactions,
+} from "../transactionReadTools.js";
+import {
+	handleCreateTransactions,
 	handleUpdateTransactions,
-} from "../transactionTools.js";
+} from "../transactionWriteTools.js";
 
 const config = getTestConfig();
 const describeIntegration = config.skipE2ETests ? describe.skip : describe;

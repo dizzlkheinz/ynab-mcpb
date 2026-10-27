@@ -317,12 +317,3 @@ function buildMatchReasons(
 
 	return reasons;
 }
-
-export function findBestMatch(
-	bankTransaction: CanonicalBankTransaction,
-	ynabTransactions: NormalizedYNABTransaction[],
-	usedYnabIds: Set<string> = new Set<string>(),
-	config?: MatchingConfig,
-): MatchResult {
-	return matchSingle(bankTransaction, ynabTransactions, usedYnabIds, config);
-}

@@ -561,14 +561,3 @@ export interface CorrelationPayloadInput {
 	flag_color?: ynab.TransactionFlagColor | null | undefined;
 	import_id?: string | null | undefined;
 }
-
-/**
- * Interface for category source (used in cache invalidation)
- */
-export interface CategorySource {
-	category_id?: string | null | undefined;
-	subtransactions?:
-		| { category_id?: string | null | undefined }[]
-		| null
-		| undefined;
-}

@@ -32,10 +32,6 @@ export function chunkArray<T>(array: T[], size: number): T[][] {
 	return chunks;
 }
 
-export function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export function truncateMemo(memo: string | null | undefined): string {
 	const MAX_MEMO_LENGTH = 500;
 	if (!memo) return "Auto-reconciled from bank statement";

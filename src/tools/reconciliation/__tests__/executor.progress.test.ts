@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import type { ProgressCallback } from "../../../server/toolRegistry.js";
 import { toMoneyValueFromDecimal } from "../../../utils/money.js";
-import { type ExecutionOptions, executeReconciliation } from "../executor.js";
+import type { ExecutionOptions } from "../executor.js";
 import type { ReconcileAccountRequest } from "../index.js";
 import type {
 	BankTransaction,
@@ -10,6 +10,7 @@ import type {
 	TransactionMatch,
 	YNABTransaction,
 } from "../types.js";
+import { executeReconciliation } from "./executeReconciliation.js";
 
 /**
  * Unit tests for progress notification functionality in reconciliation executor

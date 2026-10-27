@@ -51,7 +51,6 @@ src/tools/
 │   ├── recommendationEngine.ts # Smart reconciliation recommendations
 │   ├── reportFormatter.ts      # Human-readable reports
 │   ├── signDetector.ts         # Auto-detection of debit/credit signs
-│   ├── payeeNormalizer.ts      # Payee name normalization
 │   └── ynabAdapter.ts          # YNAB API integration layer
 └── schemas/                    # Zod schemas for input/output validation
     ├── common.ts               # Shared schema (emptyObject)
@@ -286,7 +285,6 @@ Transaction tooling is split into focused modules for maintainability:
 
 5. **transactionTools.ts**
    - Facade that calls read/write registration factories
-   - Backward-compatible re-exports
 
 ### Why Refactored
 
@@ -617,7 +615,7 @@ metadata: {
 ### With Utils (`src/utils/`)
 
 - **Money Conversion**: `amountToMilliunits()`, `milliunitsToAmount()`
-- **Date Utilities**: `formatISODate()`, `isValidISODate()`
+- **Date Utilities**: `isValidISODate()`
 - **Validation**: `isValidISODate()` plus Zod input schemas
 
 ## Performance Considerations

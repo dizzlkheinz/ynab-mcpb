@@ -14,7 +14,7 @@ import { ServerKnowledgeStore } from "../../server/serverKnowledgeStore.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { handleListAccounts } from "../accountTools.js";
 import { DeltaFetcher } from "../deltaFetcher.js";
-import { handleListTransactions } from "../transactionTools.js";
+import { handleListTransactions } from "../transactionReadTools.js";
 
 const shouldSkip = ["true", "1", "yes", "y", "on"].includes(
 	(process.env["SKIP_E2E_TESTS"] || "").toLowerCase().trim(),
