@@ -3,7 +3,7 @@
 **Document Version:** 2.0
 **Last Updated:** 2025-12-01
 **Code Version Compatibility:** v0.27.1+
-**Last Verified Against Code:** v0.27.1 (2026-07-10)
+**Last Verified Against Code:** v0.27.1 (2026-07-10); execution sections (2.1, 2.6, 3, 6, A.1) against v0.30.1 (2026-10-27)
 **Status:** Active Implementation
 
 ---
@@ -64,19 +64,14 @@ graph TB
     J --> M[recommendationEngine.ts]
     M --> N[Actionable Recommendations]
 
-    L --> O{Execute Actions?}
-    N --> O
+    L --> O[plan.ts]
+    O --> P[executor.ts]
+    P -->|dry_run = false| R[YNAB API Updates]
 
-    O -->|Yes| P[executor.ts]
-    P --> Q[Bulk Operations]
-    Q --> R[YNAB API Updates]
-
-    O -->|No| S[reportFormatter.ts]
+    P --> S[reportFormatter.ts]
     L --> S
     N --> S
     S --> T[Human-Readable Report]
-
-    R --> S
 
     T --> U[MCP Response]
 ```
@@ -90,7 +85,8 @@ graph TB
 | **ynabAdapter.ts** | YNAB Normalization | TransactionDetail[] | NormalizedYNABTransaction[] | YNAB SDK |
 | **matcher.ts** | Matching Algorithm | Bank + YNAB Transactions | MatchResult[] | fuzzball |
 | **analyzer.ts** | Analysis Orchestration | Parsed Data | ReconciliationAnalysis | matcher, recommendationEngine |
-| **executor.ts** | Action Execution | Analysis + Params | ExecutionResult | YNAB API, transactionTools |
+| **plan.ts** | Operation Planning | Analysis + Params | ReconciliationPlan | None (pure logic) |
+| **executor.ts** | Plan Execution | ReconciliationPlan | ExecutionResult | YNAB API |
 | **recommendationEngine.ts** | Recommendation Generation | Analysis | ActionableRecommendation[] | None (pure logic) |
 | **reportFormatter.ts** | Human-Readable Output | Analysis + Execution | Formatted Report | None (pure formatting) |
 
@@ -163,15 +159,21 @@ graph TD
     I --> K[analyzeReconciliation]
     J --> K
 
-    K --> L{Execute Actions?}
-    L -->|auto_create/update enabled| M[executeReconciliation]
-    L -->|Analysis only| N[Skip execution]
+    K --> L[buildReconciliationPlan]
+    L --> M{dry_run?}
+    M -->|true, the default| N[executeReconciliationPlan: every operation marked planned]
+    M -->|false| O[executeReconciliationPlan: writes the planned operations]
 
-    M --> O[Build Response Payload]
-    N --> O
+    N --> P[Build Response Payload]
+    O --> P
 
-    O --> P[Return MCP Response]
+    P --> Q[Return MCP Response]
 ```
+
+The analysis, parameters and account snapshot are frozen before planning. In the
+`preview` write mode the tool registry runs the handler with `dry_run: true`, and the
+handler registers that same plan through `prepareExecution`. A confirmed call then
+executes the stored plan; it does not re-read the CSV or recompute matches.
 
 **Configuration Mapping:**
 
@@ -678,160 +680,106 @@ const CONFIDENCE = {
 
 ---
 
-### 2.6 Executor: executor.ts
+### 2.6 Planner and Executor: plan.ts, executor.ts
 
-**File:** `C:\Users\ksutk\projects\ynab-mcpb\src\tools\reconciliation\executor.ts`
+**Files:** `src/tools/reconciliation/plan.ts`, `src/tools/reconciliation/executor.ts`
 
-**Purpose:** Execute reconciliation actions (create, update, clear, reconcile transactions) with bulk operation support and error handling.
+**Purpose:** `buildReconciliationPlan` turns the analysis into a frozen, ordered list of
+operations without calling the API. `executeReconciliationPlan` applies exactly those
+operations and reports the outcome of each one.
 
-**Execution Phases:**
-
-```mermaid
-graph TD
-    A[executeReconciliation] --> B[Initialize State]
-    B --> C[clearedDeltaMilli = cleared - statement]
-
-    C --> D{Balance Aligned?}
-    D -->|Yes| E[Skip Execution]
-    D -->|No| F[PHASE 1: Auto-Create Missing]
-
-    F --> G{auto_create_transactions?}
-    G -->|No| H[Skip Phase 1]
-    G -->|Yes| I{2+ Unmatched Bank?}
-
-    I -->|Yes| J[Bulk Create Path]
-    I -->|No| K[Sequential Create Path]
-
-    J --> L[Build Batches Until Balance Aligns]
-    L --> M[Chunk by MAX_BULK_CREATE_CHUNK = 100]
-    M --> N[Process Each Chunk]
-
-    N --> O{Bulk API Success?}
-    O -->|Yes| P[Correlate Results]
-    O -->|No| Q[Sequential Fallback]
-
-    P --> R[Update clearedDeltaMilli]
-    Q --> R
-    K --> R
-
-    R --> S{Balance Aligned?}
-    S -->|Yes| T[Skip Remaining Phases]
-    S -->|No| U[PHASE 2: Update Matched Txns]
-
-    U --> V{auto_update_cleared_status?}
-    V -->|Yes| W[Collect Updates]
-    V -->|No| X[Skip Phase 2]
-
-    W --> Y[Chunk by MAX_BULK_UPDATE_CHUNK = 100]
-    Y --> Z[Batch Update API Call]
-
-    Z --> AA{Balance Aligned?}
-    AA -->|Yes| T
-    AA -->|No| AB[PHASE 3: Auto-Unclear Missing]
-
-    AB --> AC{auto_unclear_missing?}
-    AC -->|Yes| AD[Collect Unclear Updates]
-    AC -->|No| AE[Skip Phase 3]
-
-    AD --> AF[Batch Unclear API Call]
-
-    AF --> AG{Balance Aligned?}
-    AG -->|Yes| T
-    AG -->|No| AH[PHASE 4: Mark as Reconciled]
-
-    AH --> AI[Batch Reconcile Matched Txns]
-
-    T --> AJ[PHASE 5: Balance Reconciliation]
-    AI --> AJ
-    AH --> AJ
-
-    AJ --> AK{statement_date provided?}
-    AK -->|Yes| AL[buildBalanceReconciliation]
-    AK -->|No| AM[Skip Balance Snapshot]
-
-    AL --> AN[Refresh Account Snapshot]
-    AM --> AN
-
-    AN --> AO[Build Recommendations]
-    AO --> AP[Return ExecutionResult]
-```
-
-**Bulk Operation Correlation:**
-
-```typescript
-// Generate deterministic import_id for deduplication
-function generateBulkImportId(
-  accountId: string,
-  date: string,
-  amountMilli: number,
-  payee?: string | null,
-): string {
-  const normalizedPayee = (payee ?? '').trim().toLowerCase();
-  const raw = `${accountId}|${date}|${amountMilli}|${normalizedPayee}`;
-  const digest = createHash('sha256').update(raw).digest('hex').slice(0, 24);
-  return `YNAB:bulk:${digest}`;
-}
-
-// Correlate bulk API response with requests
-const correlated = correlateResults(
-  chunk.map(entry => toCorrelationPayload(entry.saveTransaction)),
-  response.data,
-  duplicateImportIds
-);
-
-for (const result of correlated) {
-  if (result.status === 'created') {
-    // Success - record action
-  } else if (result.status === 'duplicate') {
-    // Duplicate detected - emit warning
-    bulkDetails.duplicates_detected += 1;
-  } else {
-    // Failure - record error
-    bulkDetails.transaction_failures += 1;
-  }
-}
-```
-
-**Error Handling Strategy:**
+**Planning (`buildReconciliationPlan`):**
 
 ```mermaid
 graph TD
-    A[Bulk Chunk Failure] --> B[normalizeYnabError]
-    B --> C{shouldPropagateYnabError?}
+    A[buildReconciliationPlan] --> B{auto_create_transactions?}
+    B -->|Yes| C[create: one per unmatched bank txn, newest first]
+    B -->|No| D
+    C --> D[update: one per auto-match that needs a cleared or date change]
 
-    C -->|Yes 400/401/403/404/429/500/503| D[Throw Error]
-    C -->|No Other Status| E[Log Warning]
+    D --> E{auto_unclear_missing?}
+    E -->|Yes| F[unclear: cleared, statement-missing txns, newest first, until the projected cleared balance is within 10 milliunits of the statement]
+    E -->|No| G
+    F --> G{auto_update_cleared_status and projected cleared balance equals the statement?}
 
-    E --> F[Sequential Fallback]
-    F --> G[Process Each Transaction Individually]
-
-    G --> H{Individual Success?}
-    H -->|Yes| I[Record Success]
-    H -->|No| J{shouldPropagateYnabError?}
-
-    J -->|Yes| D
-    J -->|No| K[Record Failure + Continue]
-
-    I --> L[Update Metrics]
-    K --> L
-
-    L --> M{More Transactions?}
-    M -->|Yes| G
-    M -->|No| N[Return with Partial Success]
+    G -->|Yes| H[reconcile: one per cleared matched txn]
+    G -->|No| I
+    H --> I[Freeze plan with a fingerprint of the account's transactions]
 ```
 
-**Bulk Operation Metrics:**
+Every operation records its payload, a reason, whether it changes the date, and its
+effect on the cleared balance, so a preview shows the projected cleared balance.
+
+**Execution (`executeReconciliationPlan`):**
+
+```mermaid
+graph TD
+    A[executeReconciliationPlan] --> B{Plan budget and account match the request?}
+    B -->|No| X[Throw: scope mismatch]
+    B -->|Yes| C{dry_run?}
+
+    C -->|No| D[Re-fetch the account's transactions]
+    D --> E{Fingerprint unchanged?}
+    E -->|No| Y[Throw: changed since preview, nothing applied]
+    E -->|Yes| F
+    C -->|Yes| F[Group consecutive operations of one kind, chunk by 100]
+
+    F --> G{dry_run, or an earlier chunk stopped the run?}
+    G -->|dry_run| H[Mark planned]
+    G -->|stopped| I[Mark skipped]
+    G -->|No| J[One API request for the chunk]
+
+    J --> K{Request succeeded?}
+    K -->|No| L[Mark the chunk uncertain and stop]
+    K -->|Yes| M{Each operation acknowledged by a returned transaction?}
+    M -->|Yes| N[Mark applied]
+    M -->|No| O[Mark uncertain and stop]
+
+    H --> P[Build summary]
+    I --> P
+    L --> P
+    N --> P
+    O --> P
+
+    P --> Q{dry_run?}
+    Q -->|No| R[buildBalanceReconciliation when statement_end_date is set, then refresh the account if anything was applied]
+    Q -->|Yes| S[Projected balance from the plan]
+    R --> T[Recommendations, plus any errors]
+    S --> T
+    T --> U[Return ExecutionResult]
+```
+
+**Acknowledgment matching:** YNAB may return saved transactions in any order. An
+operation counts as applied only when a returned, non-deleted transaction carries every
+field of its payload (an empty memo matches YNAB's `null`). Each returned transaction
+can acknowledge one operation, and a created transaction is never counted twice.
 
 ```typescript
-export interface BulkOperationDetails {
-  chunks_processed: number;
-  bulk_successes: number;
-  sequential_fallbacks: number;
-  duplicates_detected: number;
-  failed_transactions: number;      // Backward-compatible alias
-  bulk_chunk_failures: number;      // API-level failures (entire chunk)
-  transaction_failures: number;     // Canonical per-transaction failures
-  sequential_attempts?: number;     // Fallback creation attempts
+function acknowledges(operation: PlannedOperation, transaction: ynab.TransactionDetail): boolean {
+  if (!transaction.id || transaction.deleted) return false;
+  return Object.entries(operation.payload).every(([key, expected]) => {
+    if (expected === undefined) return true;
+    const actual = (transaction as unknown as Record<string, unknown>)[key];
+    return key === 'memo' ? (actual ?? '') === (expected ?? '') : actual === expected;
+  });
+}
+```
+
+**Error handling:** a request that fails may still have committed in YNAB, so the
+executor never retries it or falls back to per-row writes. The failed chunk is marked
+`uncertain` (its message comes from `normalizeYnabError`), every later chunk is
+`skipped`, and the tool returns an error that tells the user to check YNAB before
+retrying. A failure during final verification is reported the same way, after the
+applied writes are recorded.
+
+**Operation results:**
+
+```typescript
+export interface OperationResult {
+  operation: PlannedOperation;
+  status: 'planned' | 'applied' | 'uncertain' | 'skipped';
+  transaction_id?: string;
+  error?: string;
 }
 ```
 
@@ -985,39 +933,33 @@ sequenceDiagram
 
     Analyzer-->>Handler: ReconciliationAnalysis
 
-    alt auto_create_transactions || auto_update_cleared_status
-        Handler->>Executor: executeReconciliation(analysis, params)
+    Handler->>Executor: buildReconciliationPlan(options)
+    Executor-->>Handler: ReconciliationPlan (frozen)
+    Handler->>Executor: executeReconciliationPlan(plan, options)
 
-        loop Phase 1: Auto-create missing transactions
-            Executor->>Executor: Build bulk create batches
-            Executor->>YNAB: POST /budgets/{id}/transactions (bulk)
-            YNAB-->>Executor: BulkResponse
-            Executor->>Executor: Correlate results
-            Executor->>Executor: Update clearedDeltaMilli
+    alt dry_run = false
+        Executor->>YNAB: GET /budgets/{id}/accounts/{id}/transactions
+        YNAB-->>Executor: Transactions (fingerprint check)
+
+        loop For each chunk of up to 100 operations of one kind
+            Executor->>YNAB: POST or PATCH /budgets/{id}/transactions
+            YNAB-->>Executor: Saved transactions
+            Executor->>Executor: Mark each operation applied or uncertain
         end
 
-        loop Phase 2: Update matched transactions
-            Executor->>Executor: Collect updates (cleared, date adjustments)
-            Executor->>YNAB: PATCH /budgets/{id}/transactions (bulk)
-            YNAB-->>Executor: UpdateResponse
+        opt statement_end_date set
+            Executor->>YNAB: Balance reconciliation reads
         end
 
-        loop Phase 3: Auto-unclear missing
-            Executor->>Executor: Collect unclear updates
-            Executor->>YNAB: PATCH /budgets/{id}/transactions (bulk)
-            YNAB-->>Executor: UpdateResponse
+        opt Any operation applied
+            Executor->>YNAB: GET /budgets/{id}/accounts/{id}
+            YNAB-->>Executor: Account
         end
-
-        alt Balance aligned
-            Executor->>YNAB: PATCH /budgets/{id}/transactions (mark reconciled)
-            YNAB-->>Executor: UpdateResponse
-        end
-
-        Executor->>YNAB: GET /budgets/{id}/accounts/{id} (refresh snapshot)
-        YNAB-->>Executor: Account
-
-        Executor-->>Handler: ExecutionResult
+    else dry_run = true
+        Executor->>Executor: Mark every operation planned
     end
+
+    Executor-->>Handler: ExecutionResult
 
     Handler->>Formatter: formatHumanReadableReport(analysis, execution)
     Formatter-->>Handler: Formatted report string
@@ -1052,17 +994,12 @@ graph LR
 
     K -->|generateRecommendations| L[ActionableRecommendation[]]
 
-    K --> M{Execute?}
-    L --> M
-
-    M -->|Yes| N[executeReconciliation]
-    N -->|YNAB API| O[ExecutionResult]
-
-    M -->|No| P[Skip Execution]
+    K -->|buildReconciliationPlan| M[ReconciliationPlan]
+    M -->|executeReconciliationPlan| O[ExecutionResult]
 
     K --> Q[formatHumanReadableReport]
+    L --> Q
     O --> Q
-    P --> Q
 
     Q --> R[Human-Readable Report]
 
@@ -1345,166 +1282,54 @@ rawDesc = rawDesc
 
 ## 6. Execution Engine
 
-### 6.1 Execution Phases
+### 6.1 Operation Kinds
 
-The executor implements a **4-phase execution strategy** with early termination once balance aligns.
+The plan lists operations in this order, and the executor keeps that order.
 
-**Phase Overview:**
+| Kind | Added when | Payload | Cleared-balance effect |
+|------|-----------|---------|------------------------|
+| `create` | `auto_create_transactions` | New cleared, approved transaction (memo truncated) | + amount |
+| `update` | An auto-match needs a cleared or date change | `{ id, cleared?, date? }` | + amount when clearing |
+| `unclear` | `auto_unclear_missing`, while the projected cleared balance is more than 10 milliunits from the statement | `{ id, cleared: 'uncleared' }` | − amount |
+| `reconcile` | `auto_update_cleared_status` and the projected cleared balance equals the statement | `{ id, cleared: 'reconciled' }` | none |
 
-| Phase | Trigger | Purpose | Balance Check |
-|-------|---------|---------|---------------|
-| 1 | `auto_create_transactions` | Create missing bank transactions | After each create |
-| 2 | `auto_update_cleared_status` | Mark matched YNAB txns as cleared | After each update |
-| 3 | `auto_unclear_missing` | Un-clear YNAB txns not on statement | After each unclear |
-| 4 | Balance aligned | Mark all matched txns as reconciled | N/A |
+### 6.2 Requests and Chunking
 
-**Early Termination:**
+Consecutive operations of the same kind go out together, at most 100 per request:
 
-```typescript
-const recordAlignmentIfNeeded = (trigger: string, { log = true } = {}) => {
-  if (balanceAligned) return true;
+| Operations | API call |
+|-----------|----------|
+| One `create` | `transactions.createTransaction` |
+| Several `create` | `transactions.createTransactions` |
+| `update`, `unclear`, `reconcile` | `transactions.updateTransactions` |
 
-  if (Math.abs(clearedDeltaMilli) <= balanceToleranceMilli) {
-    balanceAligned = true;
-    if (log) {
-      actions_taken.push({
-        type: 'balance_checkpoint',
-        transaction: null,
-        reason: `Cleared delta ${deltaDisplay} within ±${toleranceDisplay} after ${trigger} - halting`,
-      });
-    }
-    return true;
-  }
-  return false;
-};
-```
+### 6.3 Stale-Preview Protection
 
-### 6.2 Bulk vs Sequential Operations
-
-**Decision Matrix:**
-
-| Scenario | Strategy | Rationale |
-|----------|----------|-----------|
-| 2+ unmatched bank txns | Bulk create | API efficiency |
-| 1 unmatched bank txn | Sequential create | Simpler error handling |
-| Bulk API failure | Sequential fallback | Resilience |
-| Updates (cleared, date) | Always bulk (chunked) | YNAB supports batch updates |
-
-**Bulk Create Flow:**
-
-```typescript
-// Build batches until balance aligns or all processed
-while (nextBankIndex < orderedUnmatchedBank.length && !balanceAligned) {
-  const batch: PreparedBulkCreateEntry[] = [];
-  let projectedDelta = clearedDeltaMilli;
-
-  // Greedy batch: add transactions until balance would align
-  while (nextBankIndex < orderedUnmatchedBank.length) {
-    const entry = buildPreparedEntry(orderedUnmatchedBank[nextBankIndex]);
-    batch.push(entry);
-    nextBankIndex += 1;
-    projectedDelta = addMilli(projectedDelta, entry.amountMilli);
-
-    if (Math.abs(projectedDelta) <= balanceToleranceMilli) {
-      break;  // This batch should align balance
-    }
-  }
-
-  // Process batch in chunks of MAX_BULK_CREATE_CHUNK (100)
-  const chunks = chunkArray(batch, MAX_BULK_CREATE_CHUNK);
-  for (const chunk of chunks) {
-    try {
-      await processBulkChunk(chunk, chunkIndex);
-    } catch (error) {
-      // Fallback to sequential
-      await processSequentialEntries(chunk, { chunkIndex, fallbackError: error });
-    }
-  }
-}
-```
-
-### 6.3 Correlation Tracking
-
-**Problem:** Bulk API returns transactions in arbitrary order. How to match responses to requests?
-
-**Solution:** Hash-based correlation keys
-
-```typescript
-// Generate correlation key from transaction attributes
-export function generateCorrelationKey(txn: CorrelationPayload): string {
-  const key = `${txn.account_id}|${txn.date}|${txn.amount}|${normalizePayee(txn.payee_name)}`;
-  return createHash('sha256').update(key).digest('hex').slice(0, 16);
-}
-
-// Correlate responses
-export function correlateResults(
-  requests: CorrelationPayload[],
-  response: BulkResponse,
-  duplicateImportIds: Set<string>,
-): CorrelationResult[] {
-  const results: CorrelationResult[] = [];
-
-  for (let i = 0; i < requests.length; i++) {
-    const request = requests[i];
-    const correlationKey = generateCorrelationKey(request);
-
-    // Try to find in created transactions
-    const created = response.transactions?.find(t =>
-      generateCorrelationKey(toCorrelationPayload(t)) === correlationKey
-    );
-
-    if (created) {
-      results.push({ status: 'created', request_index: i, transaction_id: created.id, correlation_key: correlationKey });
-    } else if (duplicateImportIds.has(request.import_id ?? '')) {
-      results.push({ status: 'duplicate', request_index: i, correlation_key: correlationKey });
-    } else {
-      results.push({ status: 'failed', request_index: i, correlation_key: correlationKey, error: 'Not in response' });
-    }
-  }
-
-  return results;
-}
-```
+The plan stores a SHA-256 fingerprint of the account's non-deleted transactions. Before
+writing, the executor fetches them again and refuses to run if the fingerprint changed,
+so a confirmed preview never applies to data that changed after it was shown.
 
 ### 6.4 Error Recovery
 
-**Retry Strategy:**
-
 ```mermaid
 graph TD
-    A[Bulk Chunk Failure] --> B[normalizeYnabError]
-    B --> C{FATAL_STATUS_CODES?}
+    A[Send chunk] --> B{Request threw?}
+    B -->|Yes| C[Mark the chunk uncertain]
+    B -->|No| D{Every operation acknowledged?}
+    D -->|No| E[Mark unacknowledged operations uncertain]
+    D -->|Yes| F[Mark applied]
 
-    C -->|400/401/403/404/429/500/503| D[Propagate Error]
-    C -->|Other| E[Log + Continue]
-
-    E --> F[Sequential Fallback]
-    F --> G[Process Individually]
-
-    G --> H{Individual Success?}
-    H -->|Yes| I[Record Success]
-    H -->|No| J{FATAL?}
-
-    J -->|Yes| D
-    J -->|No| K[Record Failure + Continue]
-
-    I --> L[Update Metrics]
-    K --> L
+    C --> G[Stop: later chunks are skipped]
+    E --> G
+    F --> H{More chunks?}
+    H -->|Yes| A
+    H -->|No| I[Final verification]
+    G --> I
 ```
 
-**Fatal vs Recoverable Errors:**
-
-```typescript
-const FATAL_YNAB_STATUS_CODES = new Set([
-  400,  // Bad Request - malformed payload
-  401,  // Unauthorized - invalid token
-  403,  // Forbidden - insufficient permissions
-  404,  // Not Found - budget/account doesn't exist
-  429,  // Too Many Requests - rate limited
-  500,  // Internal Server Error - YNAB backend issue
-  503,  // Service Unavailable - YNAB maintenance
-]);
-```
+Nothing is retried. A transport error can arrive after YNAB has committed the write, and
+replaying it could create duplicates, so the response lists what was applied and what is
+uncertain and asks the user to check YNAB before retrying.
 
 ---
 
@@ -1672,7 +1497,7 @@ const transactionsResult = forceFullRefresh
 // Create multiple transactions
 const response = await ynabAPI.transactions.createTransactions(budgetId, {
   transactions: [
-    { account_id, date, amount, payee_name, cleared: 'cleared', approved: true, import_id },
+    { account_id, date, amount, payee_name, memo, cleared: 'cleared', approved: true },
     // ... more transactions
   ],
 });
@@ -1769,8 +1594,8 @@ export const ReconcileAccountSchema = z.object({
 | YNAB Normalization | O(M) | M = YNAB transactions |
 | Basic Matching | O(N × M) | N = bank txns, M = YNAB txns |
 | Payee Fuzzy Matching | O(L²) per pair | L = string length; fuzzball optimized |
-| Bulk Create | O(N/100) API calls | Chunked by MAX_BULK_CREATE_CHUNK |
-| Bulk Update | O(M/100) API calls | Chunked by MAX_BULK_UPDATE_CHUNK |
+| Create writes | O(N/100) API calls | Up to 100 operations per request |
+| Update writes | O(M/100) API calls | Up to 100 operations per request |
 
 ### 9.2 Scale Limits
 
@@ -1786,7 +1611,7 @@ export const ReconcileAccountSchema = z.object({
 **Current Optimizations:**
 
 1. **Integer Arithmetic** - No floating-point comparisons
-2. **Early Termination** - Stop when balance aligns
+2. **Bounded Unclears** - `auto_unclear_missing` stops planning once the projected cleared balance is within 10 milliunits of the statement
 3. **Bulk Operations** - Minimize API calls
 4. **Delta Fetching** - Only fetch changed transactions
 
@@ -1908,81 +1733,47 @@ Output:
 
 ## Appendix A: Sequence Diagrams
 
-### A.1 Create Transaction Flow
+### A.1 Execute Plan Flow
 
 ```mermaid
 sequenceDiagram
+    participant H as index.ts
+    participant P as plan.ts
     participant E as executor.ts
-    participant B as BankTransaction[]
-    participant C as Correlation
     participant Y as YNAB API
 
-    E->>B: Filter unmatched_bank
-    B->>E: orderedUnmatchedBank (sorted by date desc)
+    H->>P: buildReconciliationPlan(options)
+    P-->>H: Frozen plan (operations + fingerprint)
+    H->>E: executeReconciliationPlan(plan, options)
 
-    loop For each batch until balance aligns
-        E->>E: Build batch (greedy until projected balance aligns)
-        E->>E: Chunk batch by MAX_BULK_CREATE_CHUNK (100)
-
-        loop For each chunk
-            E->>C: Generate import_id for each txn
-            C-->>E: import_id = YNAB:bulk:{hash}
-
-            E->>C: Generate correlation_key
-            C-->>E: correlation_key = {hash}
-
-            E->>Y: POST /budgets/{id}/transactions (bulk)
-
-            alt Bulk Success
-                Y-->>E: BulkResponse { transactions[], duplicate_import_ids[] }
-                E->>C: correlateResults(requests, response, duplicates)
-
-                loop For each correlated result
-                    alt Status: created
-                        C-->>E: { status: 'created', transaction_id, correlation_key }
-                        E->>E: Record success action
-                        E->>E: Update clearedDeltaMilli
-                    else Status: duplicate
-                        C-->>E: { status: 'duplicate', correlation_key }
-                        E->>E: Record duplicate warning
-                        E->>E: Increment duplicates_detected
-                    else Status: failed
-                        C-->>E: { status: 'failed', correlation_key, error }
-                        E->>E: Record failure action
-                        E->>E: Increment transaction_failures
-                    end
-                end
-
-                E->>E: Check if balance aligned
-            else Bulk Failure
-                Y-->>E: Error response
-                E->>E: Increment bulk_chunk_failures
-                E->>E: Log fallback action
-
-                loop For each txn in chunk (Sequential Fallback)
-                    E->>Y: POST /budgets/{id}/transactions (single)
-
-                    alt Success
-                        Y-->>E: { transaction: {...} }
-                        E->>E: Record success action
-                        E->>E: Update clearedDeltaMilli
-                    else Failure
-                        Y-->>E: Error
-                        E->>E: normalizeYnabError
-
-                        alt Fatal Error (400/401/403/404/429/500/503)
-                            E->>E: Throw error (halt execution)
-                        else Recoverable Error
-                            E->>E: Record failure action
-                            E->>E: Increment transaction_failures
-                            E->>E: Continue to next txn
+    E->>Y: GET account transactions
+    Y-->>E: Transactions
+    alt Fingerprint changed
+        E-->>H: Error: changed since preview, nothing applied
+    else Fingerprint unchanged
+        loop For each chunk (up to 100 operations of one kind)
+            alt Run already stopped
+                E->>E: Mark chunk skipped
+            else
+                E->>Y: createTransaction / createTransactions / updateTransactions
+                alt Request succeeded
+                    Y-->>E: Saved transactions
+                    loop For each operation in the chunk
+                        alt Acknowledged
+                            E->>E: Mark applied
+                        else Not acknowledged
+                            E->>E: Mark uncertain, stop the run
                         end
                     end
-
-                    E->>E: Check if balance aligned
+                else Request failed
+                    Y-->>E: Error
+                    E->>E: normalizeYnabError, mark chunk uncertain, stop the run
                 end
             end
         end
+        E->>Y: Balance reconciliation and account refresh
+        Y-->>E: Account
+        E-->>H: ExecutionResult (operation_results, errors)
     end
 ```
 
@@ -2119,7 +1910,7 @@ sequenceDiagram
 | Date parsing errors | Ambiguous date format | Specify `csv_format.date_format` |
 | Amount parsing errors | European number format | Parser auto-detects, check warnings |
 | Balance never aligns | Missing transactions | Check `unmatched_bank` and `unmatched_ynab` |
-| Bulk create failures | Import ID collisions | Check `bulk_operation_details.duplicates_detected` |
+| Operation marked `uncertain` | A write failed or YNAB did not acknowledge it | Check the account in YNAB before retrying; `operation_results` shows what was applied |
 
 ### C.2 Diagnostic Output
 
