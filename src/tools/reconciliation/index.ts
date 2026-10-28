@@ -171,7 +171,7 @@ export async function handleReconcileAccount(
 
 			// Initial parse without inversion for date window + sign detection
 			const parsedCsv = parseCsvOrThrow(csvContent, csvOptions);
-			const statementWindowEnd = params.statement_end_date || undefined;
+			const statementWindowEnd = params.statement_end_date;
 			const rawCsvResult = applyStatementWindow(
 				parsedCsv,
 				statementWindowEnd,

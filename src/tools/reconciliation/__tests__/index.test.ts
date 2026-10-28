@@ -74,13 +74,17 @@ describe("ReconcileAccountSchema", () => {
 			statement_balance: -10,
 		};
 
-		it("accepts a YYYY-MM-DD date, an empty string or no value", () => {
-			for (const statement_end_date of ["2024-01-31", "", undefined]) {
-				expect(
-					ReconcileAccountSchema.safeParse({ ...base, statement_end_date })
-						.success,
-				).toBe(true);
-			}
+		it.each([
+			["2024-01-31", "2024-01-31"],
+			[" 2024-01-31 ", "2024-01-31"],
+			["", undefined],
+			["  ", undefined],
+			[undefined, undefined],
+		])("parses %j as %j", (statement_end_date, expected) => {
+			expect(
+				ReconcileAccountSchema.parse({ ...base, statement_end_date })
+					.statement_end_date,
+			).toBe(expected);
 		});
 
 		it.each([
@@ -254,6 +258,32 @@ describe("handleReconcileAccount", () => {
 		} finally {
 			readFile.mockRestore();
 		}
+	});
+
+	it("infers the statement end date from the CSV when statement_end_date is empty", async () => {
+		const ynabAPI = buildEmptyAccountAPI();
+
+		const result = await handleReconcileAccount(
+			ynabAPI,
+			ReconcileAccountSchema.parse({
+				budget_id: "budget-1",
+				account_id: "account-1",
+				csv_data:
+					"Date,Description,Amount\n2025-01-01,Coffee,-10.00\n2025-01-05,Lunch,-15.00",
+				statement_balance: -25,
+				statement_end_date: "",
+				auto_unclear_missing: false,
+			}),
+			{
+				cacheManager: new CacheManager(),
+				deltaFetcher: new DeltaFetcher(ynabAPI, unusedDeltaCache),
+			},
+		);
+
+		expect(result.isError).toBeFalsy();
+		expect(JSON.stringify(result.content)).toContain(
+			"Auto-detected statement_end_date=2025-01-05",
+		);
 	});
 
 	it("always returns unmatched_only structured content", async () => {

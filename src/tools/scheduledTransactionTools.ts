@@ -4,12 +4,12 @@ import { z } from "zod/v4";
 import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
-import { isValidISODate } from "../utils/dateUtils.js";
 import {
 	createAdapters,
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
+import { isoDateSchema } from "./schemas/common.js";
 import {
 	amountInputShape,
 	normalizeOptionalAmount,
@@ -39,10 +39,6 @@ const FREQUENCIES = [
 	"everyOtherYear",
 ] as const;
 
-const isoDate = z
-	.string()
-	.refine(isValidISODate, "Date must be a valid ISO date (YYYY-MM-DD)");
-
 export const ListScheduledTransactionsSchema = z
 	.object({
 		budget_id: z.string().min(1).optional(),
@@ -60,7 +56,7 @@ export const GetScheduledTransactionSchema = z
 
 const scheduledSaveShape = {
 	account_id: z.string().min(1),
-	date: isoDate,
+	date: isoDateSchema,
 	...amountInputShape,
 	payee_id: z.string().nullable().optional(),
 	payee_name: z.string().nullable().optional(),

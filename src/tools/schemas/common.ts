@@ -12,12 +12,23 @@ import { isValidISODate } from "../../utils/dateUtils.js";
  */
 export const emptyObjectSchema = z.object({}).strict();
 
+const ISO_DATE_MESSAGE = "Date must be a valid ISO date (YYYY-MM-DD)";
+
 /**
- * Optional YYYY-MM-DD date. An empty string means no date, as clients often
- * send one for an unused field.
+ * YYYY-MM-DD date. Surrounding whitespace is ignored.
+ */
+export const isoDateSchema = z
+	.string()
+	.trim()
+	.refine(isValidISODate, ISO_DATE_MESSAGE);
+
+/**
+ * Optional YYYY-MM-DD date. An empty or whitespace-only string parses as
+ * undefined, as clients often send one for an unused field.
  */
 export const optionalDateSchema = z
 	.string()
-	.refine(isValidISODate, "Date must be a valid ISO date (YYYY-MM-DD)")
-	.or(z.literal(""))
+	.trim()
+	.refine((value) => value === "" || isValidISODate(value), ISO_DATE_MESSAGE)
+	.transform((value) => value || undefined)
 	.optional();

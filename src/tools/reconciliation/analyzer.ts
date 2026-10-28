@@ -133,11 +133,12 @@ function filterByDateRange(
 	);
 	const minDateStr = formatUTCISODate(minDateWithBuffer);
 
-	const maxDateStr = /^\d{4}-\d{2}-\d{2}$/.test(statementEndDate ?? "")
-		? (statementEndDate ?? dateRange.maxDate)
-		: formatUTCISODate(
-				new Date(Date.UTC(maxYear, maxMonth - 1, maxDay + safeToleranceDays)),
-			);
+	// statementEndDate is YYYY-MM-DD: the input schema validates it
+	const maxDateStr =
+		statementEndDate ??
+		formatUTCISODate(
+			new Date(Date.UTC(maxYear, maxMonth - 1, maxDay + safeToleranceDays)),
+		);
 
 	for (const txn of ynabTransactions) {
 		if (isDateInRange(txn.date, minDateStr, maxDateStr)) {

@@ -595,7 +595,7 @@ Performs comprehensive account reconciliation with bank statement data. The tool
 - `csv_file_path` or `csv_data` (one required)
 - `csv_format` (object, optional): `date_column`, `amount_column`, `debit_column`, `credit_column`, `description_column`, `date_format`, `has_header`, `delimiter`
 - `statement_balance` (number, required) – ending cleared balance from the statement in dollars
-- `statement_end_date` (string, optional): Last day of the statement as `YYYY-MM-DD`. Other formats are rejected; an empty string is treated as omitted. When omitted, it is inferred from the latest CSV transaction
+- `statement_end_date` (string, optional): Last day of the statement as `YYYY-MM-DD`. Other formats are rejected; surrounding whitespace is ignored, and an empty string is treated as omitted. When omitted, it is inferred from the latest CSV transaction
 - Matching controls: `date_tolerance_days` (0–7, default 7) and `match_strictness` (`"loose"`, `"normal"` or `"strict"`, default `"normal"`; sets the auto-match and suggestion thresholds to 70/55, 85/60 or 93/75). Amounts must match exactly (no tolerance parameter)
 - `sign_convention` (`"auto"`, `"invert"` or `"as_is"`, default `"auto"`): How to treat CSV amount signs
 - Execution controls (optional):
