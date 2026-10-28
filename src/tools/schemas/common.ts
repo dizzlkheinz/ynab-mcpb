@@ -20,7 +20,8 @@ const ISO_DATE_MESSAGE = "Date must be a valid ISO date (YYYY-MM-DD)";
 export const isoDateSchema = z
 	.string()
 	.trim()
-	.refine(isValidISODate, ISO_DATE_MESSAGE);
+	.refine(isValidISODate, ISO_DATE_MESSAGE)
+	.meta({ format: "date" });
 
 /**
  * Optional YYYY-MM-DD date. An empty or whitespace-only string parses as
@@ -31,4 +32,5 @@ export const optionalDateSchema = z
 	.trim()
 	.refine((value) => value === "" || isValidISODate(value), ISO_DATE_MESSAGE)
 	.transform((value) => value || undefined)
+	.meta({ format: "date" })
 	.optional();

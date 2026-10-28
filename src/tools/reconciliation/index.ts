@@ -171,18 +171,17 @@ export async function handleReconcileAccount(
 
 			// Initial parse without inversion for date window + sign detection
 			const parsedCsv = parseCsvOrThrow(csvContent, csvOptions);
-			const statementWindowEnd = params.statement_end_date;
 			const rawCsvResult = applyStatementWindow(
 				parsedCsv,
-				statementWindowEnd,
+				params.statement_end_date,
 				narrativeNotes,
 			);
 
 			const effectiveStatementEndDate =
-				statementWindowEnd ??
+				params.statement_end_date ??
 				inferLatestTransactionDate(rawCsvResult.transactions);
 			if (
-				statementWindowEnd === undefined &&
+				params.statement_end_date === undefined &&
 				effectiveStatementEndDate !== undefined
 			) {
 				narrativeNotes.push(

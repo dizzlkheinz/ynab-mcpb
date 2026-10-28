@@ -58,7 +58,14 @@ export const CompareTransactionsSchema = z
 	.strict()
 	.refine((data) => data.csv_file_path || data.csv_data, {
 		message: "Either csv_file_path or csv_data must be provided",
-	});
+	})
+	.refine(
+		(data) =>
+			data.statement_start_date === undefined ||
+			data.statement_date === undefined ||
+			data.statement_start_date <= data.statement_date,
+		{ message: "statement_start_date must be on or before statement_date" },
+	);
 
 export type CompareTransactionsParams = z.infer<
 	typeof CompareTransactionsSchema
