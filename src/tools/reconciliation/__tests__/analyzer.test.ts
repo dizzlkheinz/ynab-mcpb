@@ -519,6 +519,62 @@ describe("analyzer", () => {
 			expect(result.unmatched_ynab).toHaveLength(0);
 		});
 
+		it("falls back to the tolerance bound for a non-ISO statement_end_date", () => {
+			vi.mocked(csvParser.parseCSV).mockReturnValue({
+				transactions: [
+					{
+						id: "b1",
+						date: "2025-01-15",
+						amount: -50000,
+						payee: "Grocery Store",
+						memo: "",
+						sourceRow: 1,
+						raw: {} as any,
+					},
+				],
+				meta: {
+					detectedDelimiter: ",",
+					detectedColumns: [],
+					totalRows: 1,
+					validRows: 1,
+					skippedRows: 0,
+				},
+				errors: [],
+				warnings: [],
+			});
+
+			const ynabTxns = [
+				{
+					id: "after-close",
+					date: "2025-01-16",
+					amount: -1000,
+					payee_name: "After Close",
+					cleared: "uncleared",
+					approved: true,
+				},
+			] as YNABAPITransaction[];
+
+			const result = analyzeReconciliation(
+				"csv",
+				undefined,
+				ynabTxns,
+				0,
+				undefined,
+				"USD",
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				"01/31/2025",
+			);
+
+			expect(result.ynab_outside_date_range).toHaveLength(0);
+			expect(result.unmatched_ynab.map((txn) => txn.id)).toContain(
+				"after-close",
+			);
+		});
+
 		it("does not report balance-adjustment payees as unmatched", () => {
 			vi.mocked(csvParser.parseCSV).mockReturnValue({
 				transactions: [

@@ -16,7 +16,7 @@ The `src/tools/schemas/` directory provides:
 
 ```
 src/tools/schemas/
-├── common.ts               # Shared schema (emptyObject)
+├── common.ts               # Shared schemas (emptyObject, isoDate, optionalDate)
 └── outputs/                # Output validation schemas
     ├── budgetOutputs.ts              # Budget response schemas
     ├── accountOutputs.ts             # Account response schemas
@@ -35,7 +35,7 @@ src/tools/schemas/
 
 | File | Responsibility | Lines | Critical |
 |------|---------------|-------|----------|
-| **common.ts** | Shared schema (emptyObject) | ~50 | HIGH |
+| **common.ts** | Shared schemas (emptyObject, isoDate, optionalDate) | ~50 | HIGH |
 | **outputs/*.ts** | Output validation schemas for each tool domain | ~100-200 each | MEDIUM |
 
 ## Critical Patterns & Conventions
