@@ -17,11 +17,13 @@ import {
 	validateOptionalAmount,
 	validateRequiredAmount,
 } from "./schemas/monetaryInput.js";
+import { DryRunWarningSchema } from "./schemas/outputs/transactionMutationOutputs.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
 import {
 	TransactionOutputSchema,
 	toTransactionOutput,
 } from "./transactionModel.js";
+import { withTransactionPreflight } from "./transactionPreflight.js";
 
 const FREQUENCIES = [
 	"never",
@@ -140,6 +142,7 @@ const ScheduledMutationOutputSchema = z.union([
 		dry_run: z.literal(true),
 		action: z.string(),
 		request: z.record(z.string(), z.unknown()),
+		warnings: z.array(DryRunWarningSchema).optional(),
 	}),
 	z.object({ scheduled_transaction: ScheduledTransactionOutputSchema }),
 ]);
@@ -419,7 +422,18 @@ export const registerScheduledTransactionTools: ToolFactory = (
 			"Create a recurring scheduled transaction. Prefer amount_decimal; amount_milliunits is available for already-converted values.",
 		inputSchema: CreateScheduledTransactionSchema,
 		outputSchema: ScheduledMutationOutputSchema,
-		handler: adapt(handleCreateScheduledTransaction),
+		handler: withTransactionPreflight(
+			context,
+			(input: z.infer<typeof CreateScheduledTransactionSchema>) => [
+				{
+					path: "",
+					account_id: input.account_id,
+					amount: input.amount,
+					category_id: input.category_id,
+				},
+			],
+			adapt(handleCreateScheduledTransaction),
+		),
 		defaultArgumentResolver: budgetResolver(),
 		metadata: {
 			writeSafety: { mutation: true, preview: "dry-run" },
@@ -434,7 +448,18 @@ export const registerScheduledTransactionTools: ToolFactory = (
 		description: "Update selected fields on a scheduled transaction.",
 		inputSchema: UpdateScheduledTransactionSchema,
 		outputSchema: ScheduledMutationOutputSchema,
-		handler: adapt(handleUpdateScheduledTransaction),
+		handler: withTransactionPreflight(
+			context,
+			(input: z.infer<typeof UpdateScheduledTransactionSchema>) => [
+				{
+					path: "",
+					account_id: input.account_id,
+					amount: input.amount,
+					category_id: input.category_id,
+				},
+			],
+			adapt(handleUpdateScheduledTransaction),
+		),
 		defaultArgumentResolver: budgetResolver(),
 		metadata: {
 			writeSafety: { mutation: true, preview: "dry-run" },

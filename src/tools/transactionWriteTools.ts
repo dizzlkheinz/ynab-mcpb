@@ -16,7 +16,10 @@ import {
 	createBudgetResolver,
 	requireResolvedBudgetId,
 } from "./adapters.js";
-import { applySmartCollapseLogic } from "./receiptSplit/collapseLogic.js";
+import {
+	allocateReceiptTax,
+	applySmartCollapseLogic,
+} from "./receiptSplit/collapseLogic.js";
 import {
 	CreateReceiptSplitTransactionOutputSchema,
 	CreateTransactionOutputSchema,
@@ -31,7 +34,10 @@ import {
 	type TransactionModel,
 	toTransactionOutput,
 } from "./transactionModel.js";
-import { withTransactionPreflight } from "./transactionPreflight.js";
+import {
+	readCurrencyDecimalDigits,
+	withTransactionPreflight,
+} from "./transactionPreflight.js";
 
 import {
 	type BulkCreateResponse,
@@ -201,7 +207,13 @@ export async function handleCreateReceiptSplitTransaction(
 	ynabAPI: ynab.API,
 	params: CreateReceiptSplitTransactionParams,
 	errorHandler?: ErrorHandler,
+	/**
+	 * Decimal places of the budget currency. Tax is allocated in that
+	 * currency's smallest unit; omitted, it is allocated in milliunits.
+	 */
+	decimalDigits?: number,
 ): Promise<CallToolResult> {
+	const step = decimalDigits === undefined ? 1 : 10 ** (3 - decimalDigits);
 	const date = params.date ?? defaultTransactionDate();
 
 	const categoryCalculations: ReceiptCategoryCalculation[] =
@@ -256,31 +268,17 @@ export async function handleCreateReceiptSplitTransaction(
 	const subtransactions = applySmartCollapseLogic(
 		categoryCalculations,
 		taxMilliunits,
+		step,
 	);
 
-	// Distribute tax proportionally for receipt_summary (only for positive categories)
+	// receipt_summary shows the same tax shares as the tax split lines.
 	if (taxMilliunits > 0) {
-		const positiveSubtotal = categoryCalculations.reduce(
-			(sum, cat) => sum + Math.max(0, cat.subtotal_milliunits),
-			0,
+		allocateReceiptTax(categoryCalculations, taxMilliunits, step).forEach(
+			(share, index) => {
+				const category = categoryCalculations[index];
+				if (category) category.tax_milliunits = share;
+			},
 		);
-		if (positiveSubtotal > 0) {
-			let remainingTax = taxMilliunits;
-			const positiveCats = categoryCalculations.filter(
-				(cat) => cat.subtotal_milliunits > 0,
-			);
-			positiveCats.forEach((cat, index) => {
-				if (index === positiveCats.length - 1) {
-					cat.tax_milliunits = remainingTax;
-				} else {
-					const share = Math.round(
-						(cat.subtotal_milliunits / positiveSubtotal) * taxMilliunits,
-					);
-					cat.tax_milliunits = share;
-					remainingTax -= share;
-				}
-			});
-		}
 	}
 
 	const receiptSummary = {
@@ -1241,12 +1239,49 @@ Returns: transaction with subtransactions and receipt_summary.`,
 			context,
 			(input: CreateReceiptSplitTransactionParams) => [
 				{ path: "", account_id: input.account_id },
-				...input.categories.map((category, index) => ({
-					path: `categories[${index}]`,
-					category_id: category.category_id,
-				})),
+				{
+					path: "receipt_total",
+					amount: amountToMilliunits(input.receipt_total),
+				},
+				{ path: "receipt_tax", amount: amountToMilliunits(input.receipt_tax) },
+				...(input.receipt_subtotal === undefined
+					? []
+					: [
+							{
+								path: "receipt_subtotal",
+								amount: amountToMilliunits(input.receipt_subtotal),
+							},
+						]),
+				...input.categories.flatMap((category, index) => [
+					{ path: `categories[${index}]`, category_id: category.category_id },
+					...category.items.map((item, itemIndex) => ({
+						path: `categories[${index}].items[${itemIndex}]`,
+						amount: amountToMilliunits(item.amount),
+					})),
+				]),
 			],
-			adapt(handleCreateReceiptSplitTransaction),
+			async ({ input }) => {
+				const budgetId = requireResolvedBudgetId(input.budget_id);
+				// Tax splits depend on the currency, so the preview and the
+				// confirmed write must use the same one: never guess it.
+				const decimalDigits = await readCurrencyDecimalDigits(
+					context,
+					budgetId,
+				);
+				if (decimalDigits === undefined) {
+					return context.errorHandler.createValidationError(
+						"Could not read the budget's currency",
+						"ynab_create_receipt_split_transaction allocates tax in the currency's smallest unit, which could not be determined for this budget.",
+						["Retry the request", "Check budget_id with ynab_list_budgets"],
+					);
+				}
+				return handleCreateReceiptSplitTransaction(
+					context.ynabAPI,
+					input,
+					context.errorHandler,
+					decimalDigits,
+				);
+			},
 		),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),

@@ -263,6 +263,42 @@ describe("runTransactionPreflight", () => {
 		]);
 	});
 
+	it("reads import_id history from 90 days before the earliest date", async () => {
+		const { deps, fetchTransactionsByAccount } = createDeps();
+		await runTransactionPreflight(deps, BUDGET, [
+			{
+				path: "transactions[0]",
+				account_id: ACCOUNT,
+				date: "2026-03-15",
+				amount: -1000,
+				import_id: "a",
+			},
+			{
+				path: "transactions[1]",
+				account_id: ACCOUNT,
+				date: "2026-03-01",
+				amount: -1000,
+				import_id: "b",
+			},
+		]);
+		expect(fetchTransactionsByAccount).toHaveBeenCalledWith(
+			BUDGET,
+			ACCOUNT,
+			"2025-12-01",
+		);
+	});
+
+	it("skips the currency read when every amount is a whole unit", async () => {
+		const { deps } = createDeps();
+		await runTransactionPreflight(deps, BUDGET, [
+			{ path: "", account_id: ACCOUNT, amount: -5000 },
+		]);
+		expect(
+			(deps as unknown as { deltaFetcher: { fetchBudgets: unknown } })
+				.deltaFetcher.fetchBudgets,
+		).not.toHaveBeenCalled();
+	});
+
 	it("fails open with a warning when budget data cannot be read", async () => {
 		const { deps } = createDeps({ categoriesFail: "always" });
 		const report = await runTransactionPreflight(deps, BUDGET, [
@@ -308,7 +344,10 @@ describe("withTransactionPreflight", () => {
 			],
 			inner,
 		);
-		const call = (input: Record<string, unknown>) =>
+		const call = (
+			input: Record<string, unknown>,
+			options: { confirmed?: true } = {},
+		) =>
 			handler({
 				input: { budget_id: BUDGET, ...input },
 				context: {
@@ -316,6 +355,7 @@ describe("withTransactionPreflight", () => {
 					name: "ynab_create_transaction",
 					operation: "op",
 					rawArguments: {},
+					...options,
 				},
 			});
 		return { call, inner, createValidationError };
@@ -348,15 +388,46 @@ describe("withTransactionPreflight", () => {
 		});
 	});
 
-	it("passes real writes straight through", async () => {
+	it("refuses a direct write with errors before it reaches YNAB", async () => {
+		const { call, inner, createValidationError } = wrap(createDeps().deps);
+		const result = await call({ dry_run: false, amount: -378 });
+		expect(result.isError).toBe(true);
+		expect(inner).not.toHaveBeenCalled();
+		expect(createValidationError.mock.calls[0]?.[0]).toContain(
+			"Write rejected before reaching YNAB",
+		);
+	});
+
+	it("skips the import_id check and warnings on a direct write", async () => {
+		const { deps, fetchTransactionsByAccount } = createDeps({
+			importIds: ["dup"],
+		});
+		const { call, inner } = wrap(deps);
+		const result = await call({
+			dry_run: false,
+			amount: -1000,
+			import_id: "dup",
+		});
+		expect(inner).toHaveBeenCalledTimes(1);
+		expect(fetchTransactionsByAccount).not.toHaveBeenCalled();
+		expect(result.structuredContent?.["warnings"]).toEqual([
+			{ code: "existing" },
+		]);
+	});
+
+	it("does not re-check a write confirmed with a preview token", async () => {
 		const { deps } = createDeps();
 		const { call, inner } = wrap(deps);
-		await call({ dry_run: false, amount: -378 });
+		await call({ dry_run: false, amount: -378 }, { confirmed: true });
 		expect(inner).toHaveBeenCalledTimes(1);
-		expect(
-			(deps as unknown as { deltaFetcher: { fetchBudgets: unknown } })
-				.deltaFetcher.fetchBudgets,
-		).not.toHaveBeenCalled();
+		const fetcher = (
+			deps as unknown as {
+				deltaFetcher: Record<string, ReturnType<typeof vi.fn>>;
+			}
+		).deltaFetcher;
+		for (const read of Object.values(fetcher)) {
+			expect(read).not.toHaveBeenCalled();
+		}
 	});
 });
 

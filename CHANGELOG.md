@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `npm run test:live` also runs preview-only live checks (`src/__tests__/previewChecks.e2e.test.ts`): it refuses to run unless the server is in `preview` mode, always previews with `dry_run: true`, and never confirms, so nothing is written
+- Transaction preview checks now also cover `ynab_create_scheduled_transaction` and `ynab_update_scheduled_transaction`, and direct writes in `YNAB_MCP_WRITE_MODE=enabled`: those are refused before reaching YNAB when an account or category does not exist or an amount is finer than the budget currency allows
 - `ynab_list_transactions` lookup filters: `until_date` (with `since_date`, a date window), `import_id`, `payee_id`, `payee_name` (case-insensitive substring), and an exact `amount_decimal` or `amount_milliunits`. They apply before pagination, so finding a just-created transaction no longer means paging through a whole account
 - Transaction dry runs (and so every preview-mode transaction write) now check the request against cached budget data before issuing a confirmation token: unknown or deleted `account_id`/`category_id` values (including split lines) are rejected by name, amounts finer than the budget currency's precision are rejected with likely intended values (`-378` milliunits → "did you mean `amount_decimal: -3.78`?"), and an `import_id` already in the account is reported as a warning. Dry-run outputs for these tools now declare an optional `warnings` array
 - YNAB's "must be formatted as a uuid" error now notes that YNAB also returns it for a valid UUID that does not exist in the budget
@@ -22,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ynab_create_receipt_split_transaction` allocates tax in the budget currency's smallest unit (for example whole cents) with a largest-remainder split, so tax lines always sum to the tax and are never finer than the currency allows; 1.00 of tax over three categories is now 0.34/0.33/0.33 instead of 0.334/0.333/0.333. `receipt_summary` tax figures now come from the same allocation as the split lines. Item amounts and `receipt_total`/`receipt_tax`/`receipt_subtotal` finer than the currency allows are rejected at preview, and the tool returns an error when the budget currency cannot be read rather than guessing it
+- The preview `import_id` check reads only the 90 days of account history before the request's earliest date, instead of the account's whole history after every write. The currency read is skipped when every amount is a whole currency unit
 - Preview-mode mutations now return `confirmation_token` and `confirmation_expires_at` in `structuredContent`, and every mutation tool's `outputSchema` declares both fields as optional on each branch. Before, the token appeared only in a text block, so clients that read only structured output had no way to confirm a write
 
 ## [0.31.0] - 2026-10-27
