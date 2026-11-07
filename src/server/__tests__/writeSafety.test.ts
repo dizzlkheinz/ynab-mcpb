@@ -806,6 +806,9 @@ describe("prepared reconciliation confirmation", () => {
 			const preview = await call();
 			expect(preview.isError).not.toBe(true);
 			expect(create).not.toHaveBeenCalled();
+			expect(preview.structuredContent?.["confirmation_token"]).toBe(
+				confirmationToken(preview),
+			);
 			expect(JSON.stringify(preview.structuredContent)).toContain(
 				'"amount_milliunits":-10000',
 			);

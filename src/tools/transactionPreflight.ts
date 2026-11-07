@@ -59,25 +59,44 @@ function at(path: string, field: string): string {
 	return path ? `${path}.${field}` : field;
 }
 
-function isNotFound(error: unknown): boolean {
-	if (typeof error !== "object" || error === null) return false;
+/** HTTP status of a YNAB SDK error, from its payload, response, or message. */
+function errorStatus(error: unknown): number | undefined {
+	if (typeof error !== "object" || error === null) return undefined;
 	const record = error as Record<string, unknown>;
 	const nested = record["error"] as Record<string, unknown> | undefined;
-	const status =
-		record["status"] ?? (record["response"] as { status?: unknown })?.status;
-	return (
-		status === 404 ||
-		nested?.["id"] === "404" ||
-		nested?.["name"] === "not_found" ||
-		(error instanceof Error && /\b404\b|not found/i.test(error.message))
-	);
+	const candidates = [
+		nested?.["id"],
+		record["status"],
+		(record["response"] as { status?: unknown } | undefined)?.status,
+	];
+	for (const candidate of candidates) {
+		const status = Number(candidate);
+		if (Number.isInteger(status) && status >= 100 && status < 600) {
+			return status;
+		}
+	}
+	if (nested?.["name"] === "not_found") return 404;
+	const match =
+		error instanceof Error ? /\b([45]\d\d)\b/.exec(error.message) : null;
+	return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * Whether YNAB rejected the ID itself. YNAB answers an unknown but
+ * well-formed category ID with 400 "must be formatted as a uuid", so 400 and
+ * 422 count as well as 404. Auth, rate-limit, server, and network failures
+ * do not, so they never block a valid write.
+ */
+function isRejectedId(error: unknown): boolean {
+	const status = errorStatus(error);
+	return status === 400 || status === 404 || status === 422;
 }
 
 /**
  * Returns the ids that are neither in the cached list nor found by a direct
  * lookup. The direct lookup covers entities created since the cache was
- * filled; a lookup that fails for any reason other than 404 is not treated
- * as missing, so a flaky request never blocks a valid write.
+ * filled; only a lookup that YNAB rejects for the ID itself counts as
+ * missing (see isRejectedId).
  */
 async function findMissing(
 	ids: Set<string>,
@@ -95,7 +114,7 @@ async function findMissing(
 			const entity = await lookup(id);
 			if (entity.deleted) missing.add(id);
 		} catch (error) {
-			if (isNotFound(error)) missing.add(id);
+			if (isRejectedId(error)) missing.add(id);
 		}
 	}
 	return missing;
