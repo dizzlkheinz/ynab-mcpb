@@ -129,6 +129,25 @@ describe("ErrorHandler high-risk branches", () => {
 		}
 	});
 
+	it("explains YNAB's uuid error for unknown IDs", () => {
+		const parsed = parse(
+			{
+				error: {
+					id: "400",
+					name: "bad_request",
+					detail: "category must be formatted as a uuid",
+				},
+			},
+			"creating transaction",
+		);
+		expect(parsed.error.details).toContain(
+			"category must be formatted as a uuid",
+		);
+		expect(parsed.error.details).toContain(
+			"valid UUID that does not exist in this budget",
+		);
+	});
+
 	it("handles circular objects and primitive fallback values", () => {
 		const circular: { self?: unknown } = {};
 		circular.self = circular;

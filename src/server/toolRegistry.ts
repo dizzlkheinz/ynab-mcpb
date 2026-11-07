@@ -137,6 +137,23 @@ type ExecutionStep<T> =
 	| { ok: true; value: T }
 	| { ok: false; result: CallToolResult };
 
+/** structuredContent fields that carry a preview's confirmation token. */
+const CONFIRMATION_TOKEN_FIELD = "confirmation_token";
+const CONFIRMATION_EXPIRES_FIELD = "confirmation_expires_at";
+
+const CONFIRMATION_OUTPUT_PROPERTIES = {
+	[CONFIRMATION_TOKEN_FIELD]: {
+		type: "string",
+		description:
+			"Preview only: single-use token that executes this exact request when passed back as confirmation_token.",
+	},
+	[CONFIRMATION_EXPIRES_FIELD]: {
+		type: "string",
+		format: "date-time",
+		description: "Preview only: when confirmation_token expires (ISO 8601).",
+	},
+} as const;
+
 const CONFIRMATION_REJECTION_DETAILS: Record<
 	Exclude<ConfirmationResult, { ok: true }>["reason"],
 	string
@@ -249,7 +266,7 @@ export class ToolRegistry {
 			const result: Tool = {
 				name: tool.name,
 				description: requiresConfirmation
-					? `${tool.description}\n\nWrite safety: call without confirmation_token to preview. Execute the identical validated request with the short-lived confirmation_token returned by that preview.`
+					? `${tool.description}\n\nWrite safety: call without confirmation_token to preview. The preview returns confirmation_token and confirmation_expires_at in its structured output (and in its text). Execute the identical validated request with that short-lived confirmation_token.`
 					: tool.description,
 				inputSchema,
 			};
@@ -258,8 +275,12 @@ export class ToolRegistry {
 					this.generateJsonSchema(tool.outputSchema, "output"),
 					"output",
 					tool.name,
+				);
+				result.outputSchema = (
+					requiresConfirmation
+						? this.withConfirmationOutput(outputSchema, tool.name)
+						: outputSchema
 				) as Tool["outputSchema"];
-				result.outputSchema = outputSchema;
 			}
 			if (tool.metadata?.annotations) {
 				result.annotations = tool.metadata.annotations;
@@ -557,8 +578,20 @@ export class ToolRegistry {
 				confirmationArguments,
 				preparedExecution,
 			);
+			// Also deliver the token in structuredContent: some clients read only
+			// structured output, and would otherwise never see it. listTools
+			// declares these fields on every branch of the output schema.
+			const structuredContent =
+				preview.structuredContent === undefined
+					? undefined
+					: {
+							...preview.structuredContent,
+							[CONFIRMATION_TOKEN_FIELD]: issued.token,
+							[CONFIRMATION_EXPIRES_FIELD]: issued.expiresAt,
+						};
 			return {
 				...preview,
+				...(structuredContent ? { structuredContent } : {}),
 				content: [
 					...preview.content,
 					{
@@ -810,6 +843,72 @@ export class ToolRegistry {
 				},
 			},
 		};
+	}
+
+	/**
+	 * Declares the preview's confirmation fields on the output schema. Each
+	 * union branch is a closed object (additionalProperties: false), so the
+	 * fields go on every object branch, not beside the union. They stay
+	 * optional because execution results do not carry them.
+	 */
+	private withConfirmationOutput(
+		schema: Record<string, unknown>,
+		toolName: string,
+	): Record<string, unknown> {
+		const addProperties = (
+			node: Record<string, unknown>,
+		): Record<string, unknown> => {
+			// Fail loudly on shapes this walk cannot patch, rather than list a
+			// schema that rejects every preview.
+			const unsupported = (["$ref", "allOf"] as const).find(
+				(key) => node[key] !== undefined,
+			);
+			if (unsupported) {
+				throw new Error(
+					`Output schema for '${toolName}' uses ${unsupported}; cannot declare confirmation fields`,
+				);
+			}
+			let result = node;
+			// A node's own properties apply alongside any union branches.
+			if (node["properties"] !== undefined) {
+				result = {
+					...result,
+					properties: {
+						...(node["properties"] as Record<string, unknown>),
+						...CONFIRMATION_OUTPUT_PROPERTIES,
+					},
+				};
+			}
+			const branches = (["anyOf", "oneOf"] as const).find((key) =>
+				Array.isArray(node[key]),
+			);
+			if (branches) {
+				return {
+					...result,
+					[branches]: (node[branches] as Record<string, unknown>[]).map(
+						addProperties,
+					),
+				};
+			}
+			if (node["properties"] !== undefined) {
+				return result;
+			}
+			// No properties to extend: only an open object accepts the fields.
+			const extra = node["additionalProperties"];
+			const open =
+				extra === undefined ||
+				extra === true ||
+				(typeof extra === "object" &&
+					extra !== null &&
+					Object.keys(extra).length === 0);
+			if (!open) {
+				throw new Error(
+					`Output schema for '${toolName}' restricts extra fields without declaring properties; cannot declare confirmation fields`,
+				);
+			}
+			return node;
+		};
+		return addProperties(schema);
 	}
 
 	private ensureRootObjectJsonSchema(

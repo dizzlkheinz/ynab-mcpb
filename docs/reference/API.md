@@ -43,10 +43,20 @@ YNAB_ACCESS_TOKEN=your_personal_access_token_here
 `YNAB_MCP_WRITE_MODE` defaults to `preview`:
 
 - `read-only`: YNAB mutation tools are not registered.
-- `preview`: the first mutation call runs a dry-run preview and returns a two-minute, single-use `confirmation_token`. Repeating the identical validated request with that token executes it.
+- `preview`: the first mutation call runs a dry-run preview and returns a two-minute, single-use `confirmation_token`. Repeating the identical validated request with that token executes it. The preview's `structuredContent` carries `confirmation_token` and `confirmation_expires_at` (ISO 8601), and each mutation tool's `outputSchema` declares both as optional fields; the token is also repeated in a text content block for clients that read only text.
 - `enabled`: direct writes remain available for users who explicitly opt into the legacy behavior.
 
 Tokens are bound to the canonical tool name and normalized validated arguments. A changed field, different tool, expired token, or reused token is rejected. Passing `confirmation_token` to a tool that does not require confirmation (any read tool, or any tool in `enabled` mode) is rejected rather than ignored; a `null` or empty-string `confirmation_token` counts as not passed. Bulk and deletion tools use the same central enforcement.
+
+### Transaction preview checks
+
+A dry run of `ynab_create_transaction`, `ynab_create_transactions`, `ynab_update_transaction`, `ynab_update_transactions`, or `ynab_create_receipt_split_transaction` (which includes every preview in `preview` mode) checks the request against cached budget data before a confirmation token is issued:
+
+- Every `account_id` and `category_id`, including split-line categories, must exist in the budget and not be deleted. On any cache miss the list is re-read once before an ID is rejected, so recently created entities pass.
+- Every amount must fit the precision of the budget's currency (`currency_format.decimal_digits`). For a 2-decimal currency, `amount_milliunits: -378` (0.378) is rejected with suggestions such as `amount_decimal: -3.78`. If the currency cannot be read, a 2-decimal currency is assumed and the result is a warning instead of an error.
+- An `import_id` that already exists in the target account is reported as an `import_id_exists` warning, since YNAB skips it as a duplicate.
+
+Errors reject the preview, so no token is issued. Warnings are returned in the dry-run output's `warnings` array (`code`, `count`, `message`, optional `sample_ids`). When budget data cannot be read, the checks fail open with a `preflight_unavailable` warning. Writes in `enabled` mode without `dry_run` skip these checks.
 
 `YNAB_MCP_TOOL_PROFILE` selects a stable startup surface: `core`, `read-only`, or `full` (default). Profiles do not use runtime list-change notifications.
 
@@ -406,7 +416,15 @@ Lists transactions for a budget with optional filtering.
 - `account_id` (string, optional): Filter by account ID
 - `category_id` (string, optional): Filter by category ID
 - `since_date` (string, optional): Only return transactions on or after this date (YYYY-MM-DD)
-- `type` (string, optional): Filter by transaction type (`uncategorized` or `unapproved`)
+- `until_date` (string, optional): Only return transactions on or before this date (YYYY-MM-DD). Combine with `since_date` for a date window
+- `type` (string, optional): Filter by transaction type (`uncategorized` or `unapproved`); also applies with `account_id` or `category_id`
+- `cleared` (string, optional): `cleared`, `uncleared`, or `reconciled`
+- `import_id` (string, optional): Exact `import_id`
+- `payee_id` (string, optional): Exact payee ID
+- `payee_name` (string, optional): Case-insensitive substring of the payee name
+- `amount_decimal` (number, optional): Exact amount in currency units (for example `-12.34`). Use `amount_milliunits` instead for raw YNAB milliunits; pass at most one. Matches the parent amount, except with `category_id`, which returns individual split lines and matches their amounts
+
+Filters apply before pagination, so `total_count` counts matching transactions. To find a transaction you just wrote, set `account_id`, a `since_date`/`until_date` window around its date, and `payee_name`, `amount_decimal`, or `import_id`.
 
 **Example Request:**
 ```json

@@ -671,7 +671,11 @@ export class ErrorHandler {
 			return null;
 		}
 
-		const details = typeof detail === "string" ? detail : undefined;
+		let details = typeof detail === "string" ? detail : undefined;
+		// YNAB reports an unknown but well-formed ID the same way as a malformed one.
+		if (details && /formatted as a uuid/i.test(details)) {
+			details = `${details} (YNAB also returns this for a valid UUID that does not exist in this budget; check the ID with the matching list tool)`;
+		}
 		const result: { code: YNABErrorCode; details?: string } = { code };
 		if (details !== undefined) {
 			result.details = details;

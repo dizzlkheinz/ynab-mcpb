@@ -226,6 +226,110 @@ describe("ToolRegistry write safety enforcement", () => {
 		expect(confirmationToken(response)).toBe(FIXED_TOKEN);
 	});
 
+	it("returns the confirmation token in structuredContent and declares it in the output schema", async () => {
+		const policy = new WriteSafetyPolicy({
+			tokenFactory: () => FIXED_TOKEN,
+			now: () => Date.UTC(2026, 0, 1),
+		});
+		const registry = new ToolRegistry(createDependencies(policy));
+		registry.register({
+			name: "ynab_create_transaction",
+			description: "Protected mutation",
+			inputSchema: z
+				.object({ id: z.string(), dry_run: z.boolean().optional() })
+				.strict(),
+			outputSchema: z.union([
+				z.object({ dry_run: z.literal(true), id: z.string() }).strict(),
+				z.object({ created: z.string() }),
+			]),
+			handler: async ({ input }) =>
+				input["dry_run"]
+					? result({ dry_run: true, id: String(input["id"]) })
+					: result({ created: String(input["id"]) }),
+			metadata: {
+				writeSafety: { mutation: true, preview: "dry-run" },
+				annotations: { readOnlyHint: false },
+			},
+		});
+
+		const preview = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		expect(preview.structuredContent).toEqual({
+			dry_run: true,
+			id: "txn-1",
+			confirmation_token: FIXED_TOKEN,
+			confirmation_expires_at: "2026-01-01T00:02:00.000Z",
+		});
+		expect(confirmationToken(preview)).toBe(FIXED_TOKEN);
+
+		const branches = registry.listTools()[0]?.outputSchema?.["anyOf"] as
+			| { properties: Record<string, unknown>; required?: string[] }[]
+			| undefined;
+		expect(branches).toHaveLength(2);
+		for (const branch of branches ?? []) {
+			expect(branch.properties).toHaveProperty("confirmation_token");
+			expect(branch.properties).toHaveProperty("confirmation_expires_at");
+			expect(branch.required ?? []).not.toContain("confirmation_token");
+		}
+
+		const execution = await registry.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: {
+				id: "txn-1",
+				confirmation_token: preview.structuredContent?.["confirmation_token"],
+			},
+		});
+		expect(execution.isError).toBeFalsy();
+		expect(execution.structuredContent).toEqual({ created: "txn-1" });
+	});
+
+	it.each([["a record with typed values", z.record(z.string(), z.number())]])(
+		"refuses to list a confirmed tool whose output schema is %s",
+		(_label, outputSchema) => {
+			const registry = new ToolRegistry(
+				createDependencies(
+					new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+				),
+			);
+			registry.register({
+				name: "ynab_create_transaction",
+				description: "Protected mutation",
+				inputSchema: z
+					.object({ id: z.string(), dry_run: z.boolean().optional() })
+					.strict(),
+				outputSchema: outputSchema as z.ZodSchema<Record<string, unknown>>,
+				handler: async () => result({ id: "x" }),
+				metadata: { writeSafety: { mutation: true, preview: "dry-run" } },
+			});
+			expect(() => registry.listTools()).toThrow(
+				/cannot declare confirmation fields/,
+			);
+		},
+	);
+
+	it("does not add confirmation fields to output schemas in enabled mode", () => {
+		const registry = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
+		);
+		registry.register({
+			name: "ynab_create_transaction",
+			description: "Mutation",
+			inputSchema: z
+				.object({ id: z.string(), dry_run: z.boolean().optional() })
+				.strict(),
+			outputSchema: z.object({ id: z.string() }),
+			handler: async () => result({ id: "x" }),
+			metadata: { writeSafety: { mutation: true, preview: "dry-run" } },
+		});
+		expect(
+			registry.listTools()[0]?.outputSchema?.properties,
+		).not.toHaveProperty("confirmation_token");
+	});
+
 	it("preserves direct mutation behavior in enabled mode", async () => {
 		const registry = new ToolRegistry(
 			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
@@ -726,6 +830,9 @@ describe("prepared reconciliation confirmation", () => {
 			const preview = await call();
 			expect(preview.isError).not.toBe(true);
 			expect(create).not.toHaveBeenCalled();
+			expect(preview.structuredContent?.["confirmation_token"]).toBe(
+				confirmationToken(preview),
+			);
 			expect(JSON.stringify(preview.structuredContent)).toContain(
 				'"amount_milliunits":-10000',
 			);

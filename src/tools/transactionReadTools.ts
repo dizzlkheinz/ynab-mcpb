@@ -12,6 +12,7 @@ import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
 import { withToolErrorHandling } from "../types/index.js";
 import type { ReadDeps, ToolContext } from "../types/toolRegistration.js";
+import { amountToMilliunits } from "../utils/money.js";
 import {
 	createAdapters,
 	createBudgetResolver,
@@ -45,6 +46,35 @@ import {
 	ensureTransaction,
 	handleTransactionError,
 } from "./transactionUtils.js";
+
+/**
+ * Predicate for the list filters YNAB cannot apply server-side.
+ */
+function transactionFilter(
+	params: ListTransactionsParams,
+): (transaction: TransactionModel) => boolean {
+	const amount =
+		params.amount_decimal !== undefined
+			? amountToMilliunits(params.amount_decimal)
+			: params.amount_milliunits;
+	const payeeName = params.payee_name?.toLowerCase();
+	return (transaction) =>
+		(params.cleared === undefined || transaction.cleared === params.cleared) &&
+		(params.until_date === undefined ||
+			(transaction.date ?? "") <= params.until_date) &&
+		(params.import_id === undefined ||
+			transaction.import_id === params.import_id) &&
+		(params.payee_id === undefined ||
+			transaction.payee_id === params.payee_id) &&
+		(payeeName === undefined ||
+			(transaction.payee_name ?? "").toLowerCase().includes(payeeName)) &&
+		(amount === undefined || transaction.amount === amount) &&
+		// YNAB applies type server-side only on the unfiltered path; the
+		// account and category paths need it here.
+		(params.type !== "unapproved" || transaction.approved === false) &&
+		(params.type !== "uncategorized" ||
+			(!transaction.category_id && !transaction.transfer_account_id));
+}
 
 /**
  * Handles the ynab:list_transactions tool call
@@ -105,12 +135,8 @@ export async function handleListTransactions(
 				usedDelta = result.usedDelta;
 			}
 
-			// Apply cleared filter before pagination to avoid client-side post-filtering.
-			if (params.cleared) {
-				transactions = transactions.filter(
-					(transaction) => transaction.cleared === params.cleared,
-				);
-			}
+			// Apply filters before pagination to avoid client-side post-filtering.
+			transactions = transactions.filter(transactionFilter(params));
 
 			// Apply pagination before size check
 			const limit = params.limit ?? 50;
@@ -271,8 +297,13 @@ Args:
   - account_id (string, optional): Filter by account.
   - category_id (string, optional): Filter by category.
   - since_date (string, optional): ISO date (YYYY-MM-DD) to filter transactions on or after.
+  - until_date (string, optional): ISO date (YYYY-MM-DD) to filter transactions on or before. Combine with since_date for a date window.
   - type (string, optional): "uncategorized" or "unapproved".
   - cleared (string, optional): "cleared", "uncleared", or "reconciled".
+  - import_id (string, optional): Exact import_id, e.g. to find a transaction you just created.
+  - payee_id (string, optional): Exact payee UUID.
+  - payee_name (string, optional): Case-insensitive substring of the payee name.
+  - amount_decimal (number, optional): Exact amount in currency units (e.g. -12.34). Or amount_milliunits for raw YNAB milliunits; pass at most one.
   - limit (int, optional): Max results per page. Default: 50.
   - offset (int, optional): Zero-based offset for pagination. Default: 0.
   - response_format (string, optional): "json" or "markdown" (default: "markdown").
@@ -283,6 +314,7 @@ Examples:
   - All transactions: call with no args (uses default budget)
   - Filter by account: set account_id
   - Last 30 days: set since_date to 30 days ago
+  - Find a transaction: set account_id, since_date/until_date around its date, and payee_name or amount_decimal (or import_id)
   - Page 2: set limit=50, offset=50
 
 Errors:

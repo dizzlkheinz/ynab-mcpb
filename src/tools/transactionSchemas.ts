@@ -32,8 +32,38 @@ export const ListTransactionsSchema = z
 			.string()
 			.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in ISO format (YYYY-MM-DD)")
 			.optional(),
+		until_date: z
+			.string()
+			.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in ISO format (YYYY-MM-DD)")
+			.optional()
+			.describe("Only transactions on or before this date (YYYY-MM-DD)."),
 		type: z.enum(["uncategorized", "unapproved"]).optional(),
 		cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional(),
+		import_id: z
+			.string()
+			.min(1)
+			.optional()
+			.describe("Only the transaction with this exact import_id."),
+		payee_id: z.string().min(1).optional().describe("Only this payee."),
+		payee_name: z
+			.string()
+			.min(1)
+			.optional()
+			.describe(
+				"Only payees whose name contains this text (case-insensitive).",
+			),
+		amount_decimal: z
+			.number()
+			.finite()
+			.optional()
+			.describe(
+				"Only transactions with exactly this amount in currency units (e.g. -12.34). Matches each row's amount: the parent amount, or the split-line amount when category_id is set (that path returns split lines).",
+			),
+		amount_milliunits: z
+			.number()
+			.int()
+			.optional()
+			.describe("Like amount_decimal, in raw YNAB milliunits."),
 		limit: z.number().int().positive().optional(),
 		offset: z.number().int().min(0).optional(),
 		response_format: z
@@ -41,7 +71,30 @@ export const ListTransactionsSchema = z
 			.default("markdown")
 			.optional(),
 	})
-	.strict();
+	.strict()
+	.superRefine((data, ctx) => {
+		if (
+			data.amount_decimal !== undefined &&
+			data.amount_milliunits !== undefined
+		) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Provide at most one of amount_decimal or amount_milliunits",
+				path: ["amount_decimal"],
+			});
+		}
+		if (
+			data.since_date !== undefined &&
+			data.until_date !== undefined &&
+			data.since_date > data.until_date
+		) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "since_date must be on or before until_date",
+				path: ["until_date"],
+			});
+		}
+	});
 
 export type ListTransactionsParams = z.infer<typeof ListTransactionsSchema>;
 

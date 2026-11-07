@@ -255,6 +255,7 @@ export const CreateTransactionOutputSchema = z.union([
 		dry_run: z.literal(true),
 		action: z.literal("ynab_create_transaction"),
 		request: z.record(z.string(), z.unknown()),
+		warnings: z.array(DryRunWarningSchema).optional(),
 	}),
 	z.object({
 		transaction: TransactionWithBalanceSchema,
@@ -336,6 +337,7 @@ export const CreateTransactionsOutputSchema = z.union([
 				categories_affected: z.array(z.string()),
 			}),
 			transactions_preview: z.array(CreateTransactionPreviewSchema),
+			warnings: z.array(DryRunWarningSchema).optional(),
 			note: z.string(),
 		})
 		.strict(), // Strict for dry-run to prevent malformed previews
@@ -382,6 +384,7 @@ export const UpdateTransactionOutputSchema = z.union([
 		dry_run: z.literal(true),
 		action: z.literal("ynab_update_transaction"),
 		request: z.record(z.string(), z.unknown()),
+		warnings: z.array(DryRunWarningSchema).optional(),
 	}),
 	z.object({
 		transaction: TransactionWithBalanceSchema,
@@ -605,6 +608,7 @@ export const CreateReceiptSplitTransactionOutputSchema = z.union([
 		transaction_preview: TransactionDryRunPreviewSchema,
 		receipt_summary: ReceiptSummarySchema,
 		subtransactions: z.array(SubtransactionPreviewSchema),
+		warnings: z.array(DryRunWarningSchema).optional(),
 	}),
 	z.object({
 		transaction: TransactionWithBalanceSchema,
