@@ -43,7 +43,7 @@ YNAB_ACCESS_TOKEN=your_personal_access_token_here
 `YNAB_MCP_WRITE_MODE` defaults to `preview`:
 
 - `read-only`: YNAB mutation tools are not registered.
-- `preview`: the first mutation call runs a dry-run preview and returns a two-minute, single-use `confirmation_token`. Repeating the identical validated request with that token executes it.
+- `preview`: the first mutation call runs a dry-run preview and returns a two-minute, single-use `confirmation_token`. Repeating the identical validated request with that token executes it. The preview's `structuredContent` carries `confirmation_token` and `confirmation_expires_at` (ISO 8601), and each mutation tool's `outputSchema` declares both as optional fields; the token is also repeated in a text content block for clients that read only text.
 - `enabled`: direct writes remain available for users who explicitly opt into the legacy behavior.
 
 Tokens are bound to the canonical tool name and normalized validated arguments. A changed field, different tool, expired token, or reused token is rejected. Passing `confirmation_token` to a tool that does not require confirmation (any read tool, or any tool in `enabled` mode) is rejected rather than ignored; a `null` or empty-string `confirmation_token` counts as not passed. Bulk and deletion tools use the same central enforcement.

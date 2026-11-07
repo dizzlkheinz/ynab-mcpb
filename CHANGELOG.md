@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Preview-mode mutations now return `confirmation_token` and `confirmation_expires_at` in `structuredContent`, and every mutation tool's `outputSchema` declares both fields as optional on each branch. Before, the token appeared only in a text block, so clients that read only structured output had no way to confirm a write
+
 ## [0.31.0] - 2026-10-27
 
 ### Removed

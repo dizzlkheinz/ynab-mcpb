@@ -164,6 +164,47 @@ describe("Tool Registration", () => {
 			}
 		});
 
+		it("declares the preview confirmation fields on every object branch of confirmed tools' output schemas", () => {
+			const server = new YNABMCPServer(false);
+			const tools = server.getToolRegistry().listTools();
+			const confirmed = tools.filter(
+				(tool) =>
+					tool.inputSchema.properties?.["confirmation_token"] !== undefined,
+			);
+			expect(confirmed.length).toBeGreaterThan(0);
+
+			const objectLeaves = (
+				node: Record<string, unknown>,
+			): Record<string, unknown>[] => {
+				for (const key of ["anyOf", "oneOf"]) {
+					const branches = node[key];
+					if (Array.isArray(branches)) {
+						return branches.flatMap((branch) =>
+							objectLeaves(branch as Record<string, unknown>),
+						);
+					}
+				}
+				return [node];
+			};
+
+			for (const tool of confirmed) {
+				expect(tool.outputSchema, `${tool.name} outputSchema`).toBeDefined();
+				const leaves = objectLeaves(
+					tool.outputSchema as Record<string, unknown>,
+				);
+				for (const leaf of leaves) {
+					if (leaf["additionalProperties"] !== false) continue;
+					const properties = leaf["properties"] as Record<string, unknown>;
+					expect(
+						properties,
+						`${tool.name} branch rejects confirmation_token`,
+					).toHaveProperty("confirmation_token");
+					expect(properties).toHaveProperty("confirmation_expires_at");
+					expect(leaf["required"] ?? []).not.toContain("confirmation_token");
+				}
+			}
+		});
+
 		it("has annotations for all tools", () => {
 			const server = new YNABMCPServer(false);
 			const tools = server.getToolRegistry().listTools();
