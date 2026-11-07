@@ -268,7 +268,7 @@ Use the appropriate YNAB MCP tools to:
 2. List accounts for that budget to find the account ID
 3. If a category is specified, list categories to find the category ID
 4. Create the transaction using amount_decimal (do not manually convert or guess units)
-5. In preview write mode, review the preview and use its single-use confirmation_token only for the identical request
+5. In preview write mode, review the preview and use its single-use confirmation_token (returned in the structured output and the text) only for the identical request
 6. Confirm the transaction was created successfully`,
 					},
 				},
@@ -352,7 +352,7 @@ Reconciliation workflow:
    - "matched" transactions are paired between YNAB and bank — verify these look correct
    - "unmatched_ynab" transactions exist in YNAB but not the bank statement — may be future or missing
    - "unmatched_bank" transactions are in the bank statement but not YNAB — may need to be created
-5. If the preview looks correct, repeat the identical request with the returned confirmation_token. If writes are disabled, report that the server is read-only.
+5. If the preview looks correct, repeat the identical request with the confirmation_token returned in the preview's structured output. If writes are disabled, report that the server is read-only.
 
 Important notes:
 - The statement_balance parameter is in dollars (e.g., 1234.56)
