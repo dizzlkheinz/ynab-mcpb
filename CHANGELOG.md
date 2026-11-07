@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-07
+
 ### Added
 
 - `npm run test:live` also runs preview-only live checks (`src/__tests__/previewChecks.e2e.test.ts`): it refuses to run unless the server is in `preview` mode, always previews with `dry_run: true`, and never confirms, so nothing is written
