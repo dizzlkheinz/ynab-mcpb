@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ynab_create_receipt_split_transaction` allocates tax in the budget currency's smallest unit (for example whole cents) with a largest-remainder split, so tax lines always sum to the tax and are never finer than the currency allows; 1.00 of tax over three categories is now 0.34/0.33/0.33 instead of 0.334/0.333/0.333. `receipt_summary` tax figures now come from the same allocation as the split lines. Item amounts and `receipt_total`/`receipt_tax`/`receipt_subtotal` finer than the currency allows are rejected at preview, and the tool returns an error when the budget currency cannot be read rather than guessing it
 - The preview `import_id` check reads only the 90 days of account history before the request's earliest date, instead of the account's whole history after every write. The currency read is skipped when every amount is a whole currency unit
 - Preview-mode mutations now return `confirmation_token` and `confirmation_expires_at` in `structuredContent`, and every mutation tool's `outputSchema` declares both fields as optional on each branch. Before, the token appeared only in a text block, so clients that read only structured output had no way to confirm a write
 

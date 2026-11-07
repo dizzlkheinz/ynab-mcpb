@@ -51,6 +51,8 @@ function buildItemMemo(item: {
 export function applySmartCollapseLogic(
 	categoryCalculations: ReceiptCategoryCalculation[],
 	taxMilliunits: number,
+	/** Smallest currency unit in milliunits (10 for cents). Default: 1. */
+	step = 1,
 ): SubtransactionInput[] {
 	// Step 1: Extract special items and classify remaining items
 	interface SpecialItem {
@@ -159,7 +161,11 @@ export function applySmartCollapseLogic(
 	}
 
 	// Step 4: Handle tax allocation
-	const taxSubtransactions = allocateTax(categoryCalculations, taxMilliunits);
+	const taxSubtransactions = allocateTax(
+		categoryCalculations,
+		taxMilliunits,
+		step,
+	);
 	subtransactions.push(...taxSubtransactions);
 
 	return subtransactions;
@@ -301,6 +307,61 @@ function buildCollapsedMemo(
 }
 
 /**
+ * Splits a positive total in proportion to positive weights, in whole
+ * multiples of step, using the largest-remainder method: every share is
+ * floored to a step, then the leftover steps go to the largest fractional
+ * remainders. Shares are never negative and always sum to the total; if the
+ * total is not itself a multiple of step, the residue joins the largest share.
+ * @internal Exported for tests.
+ */
+export function allocateProportionally(
+	total: number,
+	weights: readonly number[],
+	step = 1,
+): number[] {
+	const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+	if (total <= 0 || weightSum <= 0) return weights.map(() => 0);
+	const units = Math.floor(total / step);
+	const exact = weights.map((weight) => (units * weight) / weightSum);
+	const shares = exact.map(Math.floor);
+	let leftover = units - shares.reduce((sum, share) => sum + share, 0);
+	const byRemainder = exact
+		.map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+		.sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+	for (const { index } of byRemainder) {
+		if (leftover <= 0) break;
+		shares[index] = (shares[index] ?? 0) + 1;
+		leftover--;
+	}
+	const amounts = shares.map((share) => share * step);
+	const residue = total - units * step;
+	if (residue !== 0) {
+		const largest = amounts.indexOf(Math.max(...amounts));
+		amounts[largest] = (amounts[largest] ?? 0) + residue;
+	}
+	return amounts;
+}
+
+/**
+ * Positive tax allocated to each category, aligned with categoryCalculations,
+ * in proportion to each category's positive items. Categories with no
+ * positive items get 0. Used for both the tax split lines and the receipt
+ * summary, so the two always agree.
+ */
+export function allocateReceiptTax(
+	categoryCalculations: readonly ReceiptCategoryCalculation[],
+	taxMilliunits: number,
+	step = 1,
+): number[] {
+	const positiveSubtotals = categoryCalculations.map((category) =>
+		category.items
+			.filter((item) => item.amount_milliunits > 0)
+			.reduce((sum, item) => sum + item.amount_milliunits, 0),
+	);
+	return allocateProportionally(taxMilliunits, positiveSubtotals, step);
+}
+
+/**
  * Allocates tax across categories
  * - Positive categories get proportional tax subtransactions
  * - Negative tax creates a single tax refund subtransaction
@@ -308,6 +369,7 @@ function buildCollapsedMemo(
 function allocateTax(
 	categoryCalculations: ReceiptCategoryCalculation[],
 	taxMilliunits: number,
+	step: number,
 ): SubtransactionInput[] {
 	const subtransactions: SubtransactionInput[] = [];
 
@@ -350,63 +412,20 @@ function allocateTax(
 	}
 
 	// Positive tax - allocate proportionally to positive categories only
-	const positiveCategorySubtotals = categoryCalculations
-		.map((cat) => ({
-			category: cat,
-			positiveSubtotal: cat.items
-				.filter((item) => item.amount_milliunits > 0)
-				.reduce((sum, item) => sum + item.amount_milliunits, 0),
-		}))
-		.filter((x) => x.positiveSubtotal > 0);
-
-	if (positiveCategorySubtotals.length === 0) {
-		// No positive items, no tax allocation
-		return subtransactions;
-	}
-
-	const totalPositiveSubtotal = positiveCategorySubtotals.reduce(
-		(sum, x) => sum + x.positiveSubtotal,
-		0,
+	const allocations = allocateReceiptTax(
+		categoryCalculations,
+		taxMilliunits,
+		step,
 	);
-
-	// Distribute tax using largest remainder method
-	let allocatedTax = 0;
-	const taxAllocations: {
-		category: ReceiptCategoryCalculation;
-		taxAmount: number;
-	}[] = [];
-
-	for (let i = 0; i < positiveCategorySubtotals.length; i++) {
-		const entry = positiveCategorySubtotals[i];
-		if (!entry) continue;
-
-		const { category, positiveSubtotal } = entry;
-
-		if (i === positiveCategorySubtotals.length - 1) {
-			// Last category gets remainder
-			const taxAmount = taxMilliunits - allocatedTax;
-			if (taxAmount > 0) {
-				taxAllocations.push({ category, taxAmount });
-			}
-		} else {
-			const taxAmount = Math.round(
-				(taxMilliunits * positiveSubtotal) / totalPositiveSubtotal,
-			);
-			if (taxAmount > 0) {
-				taxAllocations.push({ category, taxAmount });
-				allocatedTax += taxAmount;
-			}
-		}
-	}
-
-	// Create tax subtransactions
-	for (const { category, taxAmount } of taxAllocations) {
+	allocations.forEach((taxAmount, index) => {
+		const category = categoryCalculations[index];
+		if (!category || taxAmount <= 0) return;
 		subtransactions.push({
 			amount: -taxAmount,
 			category_id: category.category_id,
 			memo: `Tax - ${category.category_name ?? "Uncategorized"}`,
 		});
-	}
+	});
 
 	return subtransactions;
 }

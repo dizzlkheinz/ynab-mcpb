@@ -175,11 +175,11 @@ async function checkAccounts(
 }
 
 /**
- * Decimal places of the budget's currency, or undefined when the budget
- * list does not report it.
+ * Decimal places of the budget's currency (0-3), or undefined when the
+ * cached budget list cannot be read or does not report it.
  */
-async function currencyDecimalDigits(
-	deps: PreflightDeps,
+export async function readCurrencyDecimalDigits(
+	deps: Pick<PreflightDeps, "deltaFetcher">,
 	budgetId: string,
 ): Promise<number | undefined> {
 	try {
@@ -243,7 +243,7 @@ async function checkAmountPrecision(
 	// Whole currency units fit every currency, so the budget read is skipped.
 	if (amounts.every(({ milliunits }) => milliunits % 1000 === 0)) return;
 
-	const knownDigits = await currencyDecimalDigits(deps, budgetId);
+	const knownDigits = await readCurrencyDecimalDigits(deps, budgetId);
 	const decimalDigits = knownDigits ?? 2;
 	const step = 10 ** (3 - decimalDigits);
 	const offending = amounts.filter(({ milliunits }) => milliunits % step !== 0);

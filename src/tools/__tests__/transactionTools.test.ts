@@ -1570,6 +1570,47 @@ describe("transactionTools", () => {
 			);
 		});
 
+		it("allocates tax in whole cents that sum to the tax and match the summary", async () => {
+			const params = {
+				budget_id: "budget-123",
+				account_id: "account-456",
+				payee_name: "Shop",
+				date: "2025-10-13",
+				receipt_tax: 1,
+				receipt_total: 31,
+				categories: ["a", "b", "c"].map((id) => ({
+					category_id: `category-${id}`,
+					category_name: id,
+					items: [{ name: `Item ${id}`, amount: 10 }],
+				})),
+				dry_run: true,
+			} satisfies CreateReceiptSplitTransactionParams;
+
+			const result = await handleCreateReceiptSplitTransaction(
+				mockYnabAPI,
+				params,
+				undefined,
+				2,
+			);
+
+			const parsed = JSON.parse(textOf(result.content[0]));
+			const taxLines = parsed.subtransactions.filter((line: any) =>
+				String(line.memo).startsWith("Tax - "),
+			);
+			const taxMilliunits = taxLines.map(
+				(line: any) => -line.amount_milliunits,
+			);
+			expect(taxMilliunits.every((value: number) => value % 10 === 0)).toBe(
+				true,
+			);
+			expect(
+				taxMilliunits.reduce((sum: number, value: number) => sum + value, 0),
+			).toBe(1000);
+			expect(
+				parsed.receipt_summary.categories.map((category: any) => category.tax),
+			).toEqual(taxMilliunits.map((value: number) => value / 1000));
+		});
+
 		it.each([
 			// West of UTC, late evening locally is already tomorrow in UTC
 			["America/Toronto", new Date(Date.UTC(2025, 9, 14, 3, 30)), "2025-10-13"],
