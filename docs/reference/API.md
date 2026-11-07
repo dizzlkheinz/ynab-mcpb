@@ -416,7 +416,15 @@ Lists transactions for a budget with optional filtering.
 - `account_id` (string, optional): Filter by account ID
 - `category_id` (string, optional): Filter by category ID
 - `since_date` (string, optional): Only return transactions on or after this date (YYYY-MM-DD)
+- `until_date` (string, optional): Only return transactions on or before this date (YYYY-MM-DD). Combine with `since_date` for a date window
 - `type` (string, optional): Filter by transaction type (`uncategorized` or `unapproved`)
+- `cleared` (string, optional): `cleared`, `uncleared`, or `reconciled`
+- `import_id` (string, optional): Exact `import_id`
+- `payee_id` (string, optional): Exact payee ID
+- `payee_name` (string, optional): Case-insensitive substring of the payee name
+- `amount_decimal` (number, optional): Exact parent amount in currency units (for example `-12.34`). Use `amount_milliunits` instead for raw YNAB milliunits; pass at most one. Split lines are not matched
+
+Filters apply before pagination, so `total_count` counts matching transactions. To find a transaction you just wrote, set `account_id`, a `since_date`/`until_date` window around its date, and `payee_name`, `amount_decimal`, or `import_id`.
 
 **Example Request:**
 ```json

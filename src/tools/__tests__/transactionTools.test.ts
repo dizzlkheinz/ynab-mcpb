@@ -201,6 +201,81 @@ describe("transactionTools", () => {
 			subtransactions: [],
 		};
 
+		it("filters by import_id, payee, amount, and date window before paging", async () => {
+			const rows = [
+				{
+					...mockTransaction,
+					id: "a",
+					date: "2024-01-05",
+					payee_name: "Corner Cafe",
+					amount: -3780,
+					import_id: "imp-a",
+				},
+				{
+					...mockTransaction,
+					id: "b",
+					date: "2024-01-06",
+					payee_name: "Corner Cafe",
+					amount: -9990,
+				},
+				{
+					...mockTransaction,
+					id: "c",
+					date: "2024-02-01",
+					payee_name: "corner cafe",
+					amount: -3780,
+				},
+				{
+					...mockTransaction,
+					id: "d",
+					date: "2024-01-05",
+					payee_name: "Grocer",
+					amount: -3780,
+					payee_id: "payee-x",
+				},
+			];
+			(mockYnabAPI.transactions.getTransactions as any).mockResolvedValue({
+				data: { transactions: rows },
+			});
+			const ids = async (filters: Record<string, unknown>) => {
+				const result = await handleListTransactions(mockYnabAPI, {
+					budget_id: "budget-123",
+					response_format: "json" as const,
+					...filters,
+				});
+				const parsed = JSON.parse(textOf(result.content[0]));
+				expect(parsed.total_count).toBe(parsed.transactions.length);
+				return parsed.transactions.map((t: { id: string }) => t.id);
+			};
+
+			expect(await ids({ import_id: "imp-a" })).toEqual(["a"]);
+			expect(await ids({ payee_name: "CAFE", amount_decimal: -3.78 })).toEqual([
+				"a",
+				"c",
+			]);
+			expect(
+				await ids({ payee_name: "cafe", until_date: "2024-01-31" }),
+			).toEqual(["a", "b"]);
+			expect(
+				await ids({ payee_id: "payee-x", amount_milliunits: -3780 }),
+			).toEqual(["d"]);
+		});
+
+		it("rejects two amount filters and an inverted date window", () => {
+			expect(
+				ListTransactionsSchema.safeParse({
+					amount_decimal: -1,
+					amount_milliunits: -1000,
+				}).success,
+			).toBe(false);
+			expect(
+				ListTransactionsSchema.safeParse({
+					since_date: "2024-02-01",
+					until_date: "2024-01-01",
+				}).success,
+			).toBe(false);
+		});
+
 		it("uses the injected transaction fetcher for unfiltered requests", async () => {
 			const mockResponse = {
 				data: {
