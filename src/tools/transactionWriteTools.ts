@@ -248,7 +248,7 @@ export async function handleCreateReceiptSplitTransaction(
 			: undefined;
 	if (
 		declaredSubtotalMilliunits !== undefined &&
-		Math.abs(declaredSubtotalMilliunits - subtotalMilliunits) > 1
+		declaredSubtotalMilliunits !== subtotalMilliunits
 	) {
 		throw new Error(
 			`Categorized items subtotal (${milliunitsToAmount(subtotalMilliunits)}) does not match receipt subtotal (${milliunitsToAmount(declaredSubtotalMilliunits)})`,
@@ -258,7 +258,9 @@ export async function handleCreateReceiptSplitTransaction(
 	const taxMilliunits = amountToMilliunits(params.receipt_tax);
 	const totalMilliunits = amountToMilliunits(params.receipt_total);
 	const computedTotal = subtotalMilliunits + taxMilliunits;
-	if (Math.abs(computedTotal - totalMilliunits) > 1) {
+	// Exact: the split lines must sum to the parent amount, or YNAB rejects
+	// the confirmed write after its preview was accepted.
+	if (computedTotal !== totalMilliunits) {
 		throw new Error(
 			`Receipt total (${milliunitsToAmount(totalMilliunits)}) does not equal subtotal plus tax (${milliunitsToAmount(computedTotal)})`,
 		);

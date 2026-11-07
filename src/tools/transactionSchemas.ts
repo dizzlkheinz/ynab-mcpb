@@ -1,5 +1,6 @@
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
+import { optionalDateSchema } from "./schemas/common.js";
 import {
 	amountInputShape,
 	normalizeOptionalAmount,
@@ -28,15 +29,10 @@ export const ListTransactionsSchema = z
 		budget_id: z.string().min(1, "Budget ID is required").optional(),
 		account_id: z.string().optional(),
 		category_id: z.string().optional(),
-		since_date: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in ISO format (YYYY-MM-DD)")
-			.optional(),
-		until_date: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in ISO format (YYYY-MM-DD)")
-			.optional()
-			.describe("Only transactions on or before this date (YYYY-MM-DD)."),
+		since_date: optionalDateSchema,
+		until_date: optionalDateSchema.describe(
+			"Only transactions on or before this date (YYYY-MM-DD).",
+		),
 		type: z.enum(["uncategorized", "unapproved"]).optional(),
 		cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional(),
 		import_id: z

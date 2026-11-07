@@ -69,7 +69,7 @@ describe("Transaction Schemas", () => {
 					budget_id: "budget-1",
 					since_date: "20240101",
 				}),
-			).toThrow("Date must be in ISO format (YYYY-MM-DD)");
+			).toThrow("Date must be a valid ISO date (YYYY-MM-DD)");
 		});
 
 		it("should reject invalid date format (wrong separator)", () => {
@@ -78,7 +78,7 @@ describe("Transaction Schemas", () => {
 					budget_id: "budget-1",
 					since_date: "2024/01/01",
 				}),
-			).toThrow("Date must be in ISO format (YYYY-MM-DD)");
+			).toThrow("Date must be a valid ISO date (YYYY-MM-DD)");
 		});
 
 		it("should reject invalid type value", () => {
