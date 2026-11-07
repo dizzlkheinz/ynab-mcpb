@@ -6,7 +6,11 @@
  */
 
 import type * as ynab from "ynab";
-import { formatUTCISODate, isDateInRange } from "../../utils/dateUtils.js";
+import {
+	formatUTCISODate,
+	isDateInRange,
+	isValidISODate,
+} from "../../utils/dateUtils.js";
 import { toMoneyValue } from "../../utils/money.js";
 import {
 	type CSVParseResult,
@@ -133,11 +137,12 @@ function filterByDateRange(
 	);
 	const minDateStr = formatUTCISODate(minDateWithBuffer);
 
-	const maxDateStr = /^\d{4}-\d{2}-\d{2}$/.test(statementEndDate ?? "")
-		? (statementEndDate ?? dateRange.maxDate)
-		: formatUTCISODate(
-				new Date(Date.UTC(maxYear, maxMonth - 1, maxDay + safeToleranceDays)),
-			);
+	const maxDateStr =
+		statementEndDate !== undefined && isValidISODate(statementEndDate)
+			? statementEndDate
+			: formatUTCISODate(
+					new Date(Date.UTC(maxYear, maxMonth - 1, maxDay + safeToleranceDays)),
+				);
 
 	for (const txn of ynabTransactions) {
 		if (isDateInRange(txn.date, minDateStr, maxDateStr)) {

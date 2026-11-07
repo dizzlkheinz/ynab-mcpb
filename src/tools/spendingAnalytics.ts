@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
-import { formatUTCISODate, isValidISODate } from "../utils/dateUtils.js";
+import { formatUTCISODate } from "../utils/dateUtils.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
@@ -12,22 +12,20 @@ import {
 	requireResolvedBudgetId,
 } from "./adapters.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
+import { isoDateSchema } from "./schemas/common.js";
 import { ToolAnnotationPresets } from "./toolCategories.js";
 import {
 	type TransactionModel,
 	transactionPostings,
 } from "./transactionModel.js";
 
-const dateSchema = z
-	.string()
-	.refine(isValidISODate, "Date must be a valid ISO date (YYYY-MM-DD)");
 const groupBySchema = z.enum(["category", "payee", "account", "week", "month"]);
 
 export const AnalyzeSpendingSchema = z
 	.object({
 		budget_id: z.string().min(1).optional(),
-		since_date: dateSchema,
-		until_date: dateSchema,
+		since_date: isoDateSchema,
+		until_date: isoDateSchema,
 		group_by: groupBySchema,
 		include_transfers: z.boolean().default(false).optional(),
 	})
@@ -38,7 +36,7 @@ export const AnalyzeSpendingSchema = z
 	});
 
 const PeriodSchema = z
-	.object({ since_date: dateSchema, until_date: dateSchema })
+	.object({ since_date: isoDateSchema, until_date: isoDateSchema })
 	.strict()
 	.refine((data) => data.since_date <= data.until_date, {
 		message: "since_date must be on or before until_date",

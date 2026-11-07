@@ -106,6 +106,17 @@ describe("compareTransactions index (main handler)", () => {
 			});
 			expect(parsed.success).toBe(true);
 		});
+
+		test("rejects a statement window that ends before it starts", () => {
+			const parsed = CompareTransactionsSchema.safeParse({
+				budget_id: "budget-123",
+				account_id: "account-456",
+				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test",
+				statement_start_date: "2024-02-01",
+				statement_date: "2024-01-31",
+			});
+			expect(parsed.success).toBe(false);
+		});
 	});
 
 	describe("handleCompareTransactions orchestration", () => {

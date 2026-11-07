@@ -53,7 +53,7 @@ src/tools/
 │   ├── signDetector.ts         # Auto-detection of debit/credit signs
 │   └── ynabAdapter.ts          # YNAB API integration layer
 └── schemas/                    # Zod schemas for input/output validation
-    ├── common.ts               # Shared schema (emptyObject)
+    ├── common.ts               # Shared schemas (emptyObject, isoDate, optionalDate)
     └── outputs/                # Output validation schemas (11 files)
 ```
 

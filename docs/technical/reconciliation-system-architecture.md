@@ -1540,7 +1540,7 @@ export const ReconcileAccountSchema = z.object({
 
   // Statement Information
   statement_balance: z.number(),
-  statement_end_date: z.string().optional(),
+  statement_end_date: optionalDateSchema, // YYYY-MM-DD, or "" for none
 
   // Matching Configuration (amounts must match exactly, no tolerance parameter)
   date_tolerance_days: z.number().min(0).max(7).optional().default(7),

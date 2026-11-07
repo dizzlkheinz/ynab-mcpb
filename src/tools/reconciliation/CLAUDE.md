@@ -66,7 +66,7 @@ const [minYear, minMonth, minDay] = dateRange.minDate.split('-').map(Number);
 const minDateStr = formatUTCISODate(
   new Date(Date.UTC(minYear, minMonth - 1, minDay - toleranceDays))
 );
-// maxDateStr likewise (or statement_end_date when it is YYYY-MM-DD)
+// maxDateStr likewise, or statement_end_date when given (the schema guarantees YYYY-MM-DD)
 
 for (const txn of ynabTransactions) {
   (isDateInRange(txn.date, minDateStr, maxDateStr) ? inRange : outsideRange).push(txn);
@@ -342,7 +342,7 @@ const { inRange, outsideRange } = filterByDateRange(
 
 **Impact**: Timezone bugs → transactions on boundary dates incorrectly included/excluded.
 
-**Fix**: Keep dates as YYYY-MM-DD strings and compare them with `isDateInRange`. Do date arithmetic with `Date.UTC` and format the result with `formatUTCISODate`. Read user-supplied statement dates through `normalizeStatementDate` (`statementWindow.ts`):
+**Fix**: Keep dates as YYYY-MM-DD strings and compare them with `isDateInRange`. Do date arithmetic with `Date.UTC` and format the result with `formatUTCISODate`. User-supplied statement dates are validated as `YYYY-MM-DD` by the input schema (`optionalDateSchema`), so use them as-is:
 
 ```typescript
 // BAD
