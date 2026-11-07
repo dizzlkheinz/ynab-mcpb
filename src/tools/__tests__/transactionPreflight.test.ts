@@ -16,6 +16,8 @@ const ACCOUNT = "11111111-1111-4111-8111-111111111111";
 const CATEGORY = "22222222-2222-4222-8222-222222222222";
 const UNKNOWN_CATEGORY = "84d05aab-0000-4000-8000-000000000000";
 const NEW_CATEGORY = "33333333-3333-4333-8333-333333333333";
+const BAD_REQUEST_CATEGORY = "44444444-4444-4444-8444-444444444444";
+const FLAKY_CATEGORY = "55555555-5555-4555-8555-555555555555";
 
 function notFound(): Error {
 	return Object.assign(new Error("Resource not found"), {
@@ -34,6 +36,18 @@ function createDeps(
 	const getCategoryById = vi.fn(async (_budget: string, id: string) => {
 		if (id === NEW_CATEGORY) {
 			return { data: { category: { id, deleted: false } } };
+		}
+		if (id === BAD_REQUEST_CATEGORY) {
+			throw {
+				error: {
+					id: "400",
+					name: "bad_request",
+					detail: "category must be formatted as a uuid",
+				},
+			};
+		}
+		if (id === FLAKY_CATEGORY) {
+			throw { error: { id: "503", name: "service_unavailable" } };
 		}
 		throw notFound();
 	});
@@ -139,6 +153,36 @@ describe("runTransactionPreflight", () => {
 				'subtransactions[1].category_id: category_id "deleted-cat"',
 			),
 		]);
+	});
+
+	it("treats YNAB's 400 uuid error for a well-formed ID as not found", async () => {
+		const { deps } = createDeps();
+		const report = await runTransactionPreflight(deps, BUDGET, [
+			{
+				path: "",
+				account_id: ACCOUNT,
+				amount: -1000,
+				category_id: BAD_REQUEST_CATEGORY,
+			},
+		]);
+		expect(report.errors).toEqual([
+			expect.stringContaining(
+				`category_id "${BAD_REQUEST_CATEGORY}" was not found`,
+			),
+		]);
+	});
+
+	it("does not reject an ID when the lookup fails for another reason", async () => {
+		const { deps } = createDeps();
+		const report = await runTransactionPreflight(deps, BUDGET, [
+			{
+				path: "",
+				account_id: ACCOUNT,
+				amount: -1000,
+				category_id: FLAKY_CATEGORY,
+			},
+		]);
+		expect(report.errors).toEqual([]);
 	});
 
 	it("accepts a category created after the cache was filled", async () => {
