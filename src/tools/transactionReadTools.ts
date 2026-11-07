@@ -68,7 +68,12 @@ function transactionFilter(
 			transaction.payee_id === params.payee_id) &&
 		(payeeName === undefined ||
 			(transaction.payee_name ?? "").toLowerCase().includes(payeeName)) &&
-		(amount === undefined || transaction.amount === amount);
+		(amount === undefined || transaction.amount === amount) &&
+		// YNAB applies type server-side only on the unfiltered path; the
+		// account and category paths need it here.
+		(params.type !== "unapproved" || transaction.approved === false) &&
+		(params.type !== "uncategorized" ||
+			(!transaction.category_id && !transaction.transfer_account_id));
 }
 
 /**
@@ -298,7 +303,7 @@ Args:
   - import_id (string, optional): Exact import_id, e.g. to find a transaction you just created.
   - payee_id (string, optional): Exact payee UUID.
   - payee_name (string, optional): Case-insensitive substring of the payee name.
-  - amount_decimal (number, optional): Exact parent amount in currency units (e.g. -12.34). Or amount_milliunits for raw YNAB milliunits.
+  - amount_decimal (number, optional): Exact amount in currency units (e.g. -12.34). Or amount_milliunits for raw YNAB milliunits; pass at most one.
   - limit (int, optional): Max results per page. Default: 50.
   - offset (int, optional): Zero-based offset for pagination. Default: 0.
   - response_format (string, optional): "json" or "markdown" (default: "markdown").

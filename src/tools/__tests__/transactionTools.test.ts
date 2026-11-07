@@ -261,6 +261,55 @@ describe("transactionTools", () => {
 			).toEqual(["d"]);
 		});
 
+		it("counts filtered rows, not fetched rows, when paging", async () => {
+			const rows = ["a", "b", "c"].map((id, index) => ({
+				...mockTransaction,
+				id,
+				payee_name: index < 2 ? "Cafe" : "Grocer",
+			}));
+			(mockYnabAPI.transactions.getTransactions as any).mockResolvedValue({
+				data: { transactions: rows },
+			});
+			const result = await handleListTransactions(mockYnabAPI, {
+				budget_id: "budget-123",
+				response_format: "json" as const,
+				payee_name: "cafe",
+				limit: 1,
+			});
+			const parsed = JSON.parse(textOf(result.content[0]));
+			expect(parsed.total_count).toBe(2);
+			expect(parsed.has_more).toBe(true);
+			expect(parsed.transactions.map((t: { id: string }) => t.id)).toEqual([
+				"a",
+			]);
+		});
+
+		it("applies type locally on the account path", async () => {
+			(mockYnabAPI.accounts.getAccounts as any).mockResolvedValue({
+				data: { accounts: [{ id: "account-456", deleted: false }] },
+			});
+			(
+				mockYnabAPI.transactions.getTransactionsByAccount as any
+			).mockResolvedValue({
+				data: {
+					transactions: [
+						{ ...mockTransaction, id: "approved", approved: true },
+						{ ...mockTransaction, id: "pending", approved: false },
+					],
+				},
+			});
+			const result = await handleListTransactions(mockYnabAPI, {
+				budget_id: "budget-123",
+				account_id: "account-456",
+				type: "unapproved",
+				response_format: "json" as const,
+			});
+			const parsed = JSON.parse(textOf(result.content[0]));
+			expect(parsed.transactions.map((t: { id: string }) => t.id)).toEqual([
+				"pending",
+			]);
+		});
+
 		it("rejects two amount filters and an inverted date window", () => {
 			expect(
 				ListTransactionsSchema.safeParse({

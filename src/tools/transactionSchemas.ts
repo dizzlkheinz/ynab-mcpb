@@ -57,7 +57,7 @@ export const ListTransactionsSchema = z
 			.finite()
 			.optional()
 			.describe(
-				"Only transactions with exactly this amount in currency units (e.g. -12.34). Matches the parent amount, not split lines.",
+				"Only transactions with exactly this amount in currency units (e.g. -12.34). Matches each row's amount: the parent amount, or the split-line amount when category_id is set (that path returns split lines).",
 			),
 		amount_milliunits: z
 			.number()
