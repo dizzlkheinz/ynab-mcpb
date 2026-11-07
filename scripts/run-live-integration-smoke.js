@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Runs a live YNAB suite against the real API:
- *   (default) smoke - small, read-only E2E smoke suite
+ *   (default) smoke - small, read-only E2E smoke suite, including preview-only
+ *                     write checks (dry runs; nothing is written)
  *   delta           - delta-backed tool tests; WRITES: creates one $1.00
  *                     transaction in the first budget and deletes it again
  *
@@ -45,7 +46,12 @@ if (!hasRealToken) {
 }
 
 const SUITES = {
-	smoke: ["--project", "live", "src/__tests__/smoke.e2e.test.ts"],
+	smoke: [
+		"--project",
+		"live",
+		"src/__tests__/smoke.e2e.test.ts",
+		"src/__tests__/previewChecks.e2e.test.ts",
+	],
 	delta: [
 		"--project",
 		"live",
