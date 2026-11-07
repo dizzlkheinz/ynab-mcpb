@@ -52,7 +52,7 @@ Tokens are bound to the canonical tool name and normalized validated arguments. 
 
 A dry run of `ynab_create_transaction`, `ynab_create_transactions`, `ynab_update_transaction`, `ynab_update_transactions`, or `ynab_create_receipt_split_transaction` (which includes every preview in `preview` mode) checks the request against cached budget data before a confirmation token is issued:
 
-- Every `account_id` and `category_id`, including split-line categories, must exist in the budget and not be deleted. An ID missing from the cache is looked up directly before it is rejected, so recently created entities pass.
+- Every `account_id` and `category_id`, including split-line categories, must exist in the budget and not be deleted. On any cache miss the list is re-read once before an ID is rejected, so recently created entities pass.
 - Every amount must fit the precision of the budget's currency (`currency_format.decimal_digits`). For a 2-decimal currency, `amount_milliunits: -378` (0.378) is rejected with suggestions such as `amount_decimal: -3.78`. If the currency cannot be read, a 2-decimal currency is assumed and the result is a warning instead of an error.
 - An `import_id` that already exists in the target account is reported as an `import_id_exists` warning, since YNAB skips it as a duplicate.
 

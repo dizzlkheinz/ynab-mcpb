@@ -287,6 +287,30 @@ describe("ToolRegistry write safety enforcement", () => {
 		expect(execution.structuredContent).toEqual({ created: "txn-1" });
 	});
 
+	it.each([["a record with typed values", z.record(z.string(), z.number())]])(
+		"refuses to list a confirmed tool whose output schema is %s",
+		(_label, outputSchema) => {
+			const registry = new ToolRegistry(
+				createDependencies(
+					new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+				),
+			);
+			registry.register({
+				name: "ynab_create_transaction",
+				description: "Protected mutation",
+				inputSchema: z
+					.object({ id: z.string(), dry_run: z.boolean().optional() })
+					.strict(),
+				outputSchema: outputSchema as z.ZodSchema<Record<string, unknown>>,
+				handler: async () => result({ id: "x" }),
+				metadata: { writeSafety: { mutation: true, preview: "dry-run" } },
+			});
+			expect(() => registry.listTools()).toThrow(
+				/cannot declare confirmation fields/,
+			);
+		},
+	);
+
 	it("does not add confirmation fields to output schemas in enabled mode", () => {
 		const registry = new ToolRegistry(
 			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),

@@ -16,43 +16,44 @@ const ACCOUNT = "11111111-1111-4111-8111-111111111111";
 const CATEGORY = "22222222-2222-4222-8222-222222222222";
 const UNKNOWN_CATEGORY = "84d05aab-0000-4000-8000-000000000000";
 const NEW_CATEGORY = "33333333-3333-4333-8333-333333333333";
-const BAD_REQUEST_CATEGORY = "44444444-4444-4444-8444-444444444444";
-const FLAKY_CATEGORY = "55555555-5555-4555-8555-555555555555";
-
-function notFound(): Error {
-	return Object.assign(new Error("Resource not found"), {
-		error: { id: "404", name: "not_found", detail: "Resource not found" },
-	});
-}
 
 function createDeps(
 	options: {
 		decimalDigits?: number | undefined;
 		budgetsFail?: boolean;
-		categoriesFail?: boolean;
+		/** "always" fails every read; "refresh" fails only the fresh re-read. */
+		categoriesFail?: "always" | "refresh";
 		importIds?: string[];
 	} = {},
 ) {
-	const getCategoryById = vi.fn(async (_budget: string, id: string) => {
-		if (id === NEW_CATEGORY) {
-			return { data: { category: { id, deleted: false } } };
-		}
-		if (id === BAD_REQUEST_CATEGORY) {
-			throw {
-				error: {
-					id: "400",
-					name: "bad_request",
-					detail: "category must be formatted as a uuid",
-				},
-			};
-		}
-		if (id === FLAKY_CATEGORY) {
-			throw { error: { id: "503", name: "service_unavailable" } };
-		}
-		throw notFound();
+	// NEW_CATEGORY exists in YNAB but only appears once the cache is refreshed.
+	let categoriesRefreshed = false;
+	const cacheDelete = vi.fn((key: string) => {
+		if (key.includes("categories")) categoriesRefreshed = true;
+		return true;
 	});
-	const getAccountById = vi.fn(async () => {
-		throw notFound();
+	const fetchCategories = vi.fn(async () => {
+		if (
+			options.categoriesFail === "always" ||
+			(options.categoriesFail === "refresh" && categoriesRefreshed)
+		) {
+			throw new Error("categories down");
+		}
+		return {
+			data: [
+				{
+					id: "group",
+					deleted: false,
+					categories: [
+						{ id: CATEGORY, deleted: false },
+						{ id: "deleted-cat", deleted: true },
+						...(categoriesRefreshed
+							? [{ id: NEW_CATEGORY, deleted: false }]
+							: []),
+					],
+				},
+			],
+		};
 	});
 	const fetchTransactionsByAccount = vi.fn(async () => ({
 		data: (options.importIds ?? []).map((importId, index) => ({
@@ -62,10 +63,7 @@ function createDeps(
 		})),
 	}));
 	const deps = {
-		ynabAPI: {
-			categories: { getCategoryById },
-			accounts: { getAccountById },
-		},
+		cacheManager: { delete: cacheDelete },
 		deltaFetcher: {
 			fetchBudgets: vi.fn(async () => {
 				if (options.budgetsFail) throw new Error("budgets down");
@@ -84,39 +82,27 @@ function createDeps(
 			fetchAccounts: vi.fn(async () => ({
 				data: [{ id: ACCOUNT, deleted: false }],
 			})),
-			fetchCategories: vi.fn(async () => {
-				if (options.categoriesFail) throw new Error("categories down");
-				return {
-					data: [
-						{
-							id: "group",
-							deleted: false,
-							categories: [
-								{ id: CATEGORY, deleted: false },
-								{ id: "deleted-cat", deleted: true },
-							],
-						},
-					],
-				};
-			}),
+			fetchCategories,
 			fetchTransactionsByAccount,
 		},
 	};
 	return {
 		deps: deps as unknown as Parameters<typeof runTransactionPreflight>[0],
-		getCategoryById,
+		fetchCategories,
+		cacheDelete,
 		fetchTransactionsByAccount,
 	};
 }
 
 describe("runTransactionPreflight", () => {
-	it("accepts a request that matches the budget", async () => {
-		const { deps, getCategoryById } = createDeps();
+	it("accepts a request that matches the budget without refreshing", async () => {
+		const { deps, fetchCategories, cacheDelete } = createDeps();
 		const report = await runTransactionPreflight(deps, BUDGET, [
 			{ path: "", account_id: ACCOUNT, amount: -3780, category_id: CATEGORY },
 		]);
 		expect(report).toEqual({ errors: [], warnings: [] });
-		expect(getCategoryById).not.toHaveBeenCalled();
+		expect(fetchCategories).toHaveBeenCalledTimes(1);
+		expect(cacheDelete).not.toHaveBeenCalled();
 	});
 
 	it("reports an unknown well-formed category_id as not found", async () => {
@@ -155,38 +141,40 @@ describe("runTransactionPreflight", () => {
 		]);
 	});
 
-	it("treats YNAB's 400 uuid error for a well-formed ID as not found", async () => {
-		const { deps } = createDeps();
-		const report = await runTransactionPreflight(deps, BUDGET, [
-			{
-				path: "",
-				account_id: ACCOUNT,
-				amount: -1000,
-				category_id: BAD_REQUEST_CATEGORY,
-			},
-		]);
-		expect(report.errors).toEqual([
-			expect.stringContaining(
-				`category_id "${BAD_REQUEST_CATEGORY}" was not found`,
-			),
-		]);
+	it("refreshes the list once however many ids miss", async () => {
+		const { deps, fetchCategories, cacheDelete } = createDeps();
+		const transactions = Array.from({ length: 100 }, (_, index) => ({
+			path: `transactions[${index}]`,
+			amount: -1000,
+			category_id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+		}));
+		const report = await runTransactionPreflight(deps, BUDGET, transactions);
+		expect(report.errors).toHaveLength(100);
+		expect(fetchCategories).toHaveBeenCalledTimes(2);
+		expect(cacheDelete).toHaveBeenCalledTimes(1);
 	});
 
-	it("does not reject an ID when the lookup fails for another reason", async () => {
-		const { deps } = createDeps();
+	it("reports the check as unavailable when the refresh fails", async () => {
+		const { deps } = createDeps({ categoriesFail: "refresh" });
 		const report = await runTransactionPreflight(deps, BUDGET, [
 			{
 				path: "",
 				account_id: ACCOUNT,
 				amount: -1000,
-				category_id: FLAKY_CATEGORY,
+				category_id: UNKNOWN_CATEGORY,
 			},
 		]);
 		expect(report.errors).toEqual([]);
+		expect(report.warnings).toEqual([
+			expect.objectContaining({
+				code: "preflight_unavailable",
+				message: expect.stringContaining("category_id"),
+			}),
+		]);
 	});
 
 	it("accepts a category created after the cache was filled", async () => {
-		const { deps, getCategoryById } = createDeps();
+		const { deps, cacheDelete } = createDeps();
 		const report = await runTransactionPreflight(deps, BUDGET, [
 			{
 				path: "",
@@ -196,7 +184,9 @@ describe("runTransactionPreflight", () => {
 			},
 		]);
 		expect(report.errors).toEqual([]);
-		expect(getCategoryById).toHaveBeenCalledWith(BUDGET, NEW_CATEGORY);
+		expect(cacheDelete).toHaveBeenCalledWith(
+			expect.stringContaining("categories"),
+		);
 	});
 
 	it("reports an unknown account_id", async () => {
@@ -274,7 +264,7 @@ describe("runTransactionPreflight", () => {
 	});
 
 	it("fails open with a warning when budget data cannot be read", async () => {
-		const { deps } = createDeps({ categoriesFail: true });
+		const { deps } = createDeps({ categoriesFail: "always" });
 		const report = await runTransactionPreflight(deps, BUDGET, [
 			{ path: "", account_id: ACCOUNT, amount: -1000, category_id: CATEGORY },
 		]);

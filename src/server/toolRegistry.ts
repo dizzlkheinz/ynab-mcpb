@@ -858,35 +858,52 @@ export class ToolRegistry {
 		const addProperties = (
 			node: Record<string, unknown>,
 		): Record<string, unknown> => {
-			if (typeof node["$ref"] === "string") {
+			// Fail loudly on shapes this walk cannot patch, rather than list a
+			// schema that rejects every preview.
+			const unsupported = (["$ref", "allOf"] as const).find(
+				(key) => node[key] !== undefined,
+			);
+			if (unsupported) {
 				throw new Error(
-					`Output schema for '${toolName}' uses a $ref branch; cannot declare confirmation fields`,
+					`Output schema for '${toolName}' uses ${unsupported}; cannot declare confirmation fields`,
 				);
 			}
-			const branches = (["anyOf", "oneOf"] as const).find((key) =>
-				Array.isArray(node[key]),
-			);
-			if (branches) {
-				return {
-					...node,
-					[branches]: (node[branches] as Record<string, unknown>[]).map(
-						addProperties,
-					),
-				};
-			}
-			if (node["type"] === "object" && node["properties"] !== undefined) {
-				return {
-					...node,
+			let result = node;
+			// A node's own properties apply alongside any union branches.
+			if (node["properties"] !== undefined) {
+				result = {
+					...result,
 					properties: {
 						...(node["properties"] as Record<string, unknown>),
 						...CONFIRMATION_OUTPUT_PROPERTIES,
 					},
 				};
 			}
-			// Permissive object fallback: extra fields are already allowed.
-			if (node["additionalProperties"] === false) {
+			const branches = (["anyOf", "oneOf"] as const).find((key) =>
+				Array.isArray(node[key]),
+			);
+			if (branches) {
+				return {
+					...result,
+					[branches]: (node[branches] as Record<string, unknown>[]).map(
+						addProperties,
+					),
+				};
+			}
+			if (node["properties"] !== undefined) {
+				return result;
+			}
+			// No properties to extend: only an open object accepts the fields.
+			const extra = node["additionalProperties"];
+			const open =
+				extra === undefined ||
+				extra === true ||
+				(typeof extra === "object" &&
+					extra !== null &&
+					Object.keys(extra).length === 0);
+			if (!open) {
 				throw new Error(
-					`Output schema for '${toolName}' is a closed object without properties; cannot declare confirmation fields`,
+					`Output schema for '${toolName}' restricts extra fields without declaring properties; cannot declare confirmation fields`,
 				);
 			}
 			return node;

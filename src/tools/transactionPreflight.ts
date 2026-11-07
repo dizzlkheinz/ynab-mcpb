@@ -15,6 +15,7 @@
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
+import { CacheManager } from "../server/cacheManager.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolHandler } from "../server/toolRegistry.js";
@@ -48,76 +49,38 @@ interface PreflightReport {
 }
 
 interface PreflightDeps {
-	ynabAPI: ynab.API;
 	deltaFetcher: DeltaFetcher;
+	cacheManager: CacheManager;
 }
-
-const UUID_PATTERN =
-	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function at(path: string, field: string): string {
 	return path ? `${path}.${field}` : field;
 }
 
-/** HTTP status of a YNAB SDK error, from its payload, response, or message. */
-function errorStatus(error: unknown): number | undefined {
-	if (typeof error !== "object" || error === null) return undefined;
-	const record = error as Record<string, unknown>;
-	const nested = record["error"] as Record<string, unknown> | undefined;
-	const candidates = [
-		nested?.["id"],
-		record["status"],
-		(record["response"] as { status?: unknown } | undefined)?.status,
-	];
-	for (const candidate of candidates) {
-		const status = Number(candidate);
-		if (Number.isInteger(status) && status >= 100 && status < 600) {
-			return status;
-		}
-	}
-	if (nested?.["name"] === "not_found") return 404;
-	const match =
-		error instanceof Error ? /\b([45]\d\d)\b/.exec(error.message) : null;
-	return match ? Number(match[1]) : undefined;
+interface Reference {
+	path: string;
+	id: string;
 }
 
 /**
- * Whether YNAB rejected the ID itself. YNAB answers an unknown but
- * well-formed category ID with 400 "must be formatted as a uuid", so 400 and
- * 422 count as well as 404. Auth, rate-limit, server, and network failures
- * do not, so they never block a valid write.
- */
-function isRejectedId(error: unknown): boolean {
-	const status = errorStatus(error);
-	return status === 400 || status === 404 || status === 422;
-}
-
-/**
- * Returns the ids that are neither in the cached list nor found by a direct
- * lookup. The direct lookup covers entities created since the cache was
- * filled; only a lookup that YNAB rejects for the ID itself counts as
- * missing (see isRejectedId).
+ * Returns the referenced ids absent from the entity list. The cached list is
+ * checked first; on any miss the list is read fresh once, which covers
+ * entities created since it was cached at a cost of one request, however
+ * many ids missed. A failed read throws, so the caller reports the check as
+ * unavailable rather than passing it.
  */
 async function findMissing(
-	ids: Set<string>,
-	known: Set<string>,
-	lookup: (id: string) => Promise<{ deleted?: boolean }>,
+	references: readonly Reference[],
+	cacheKey: string,
+	cacheManager: CacheManager,
+	loadKnown: () => Promise<Set<string>>,
 ): Promise<Set<string>> {
-	const missing = new Set<string>();
-	for (const id of ids) {
-		if (known.has(id)) continue;
-		if (!UUID_PATTERN.test(id)) {
-			missing.add(id);
-			continue;
-		}
-		try {
-			const entity = await lookup(id);
-			if (entity.deleted) missing.add(id);
-		} catch (error) {
-			if (isRejectedId(error)) missing.add(id);
-		}
-	}
-	return missing;
+	const ids = new Set(references.map((reference) => reference.id));
+	let known = await loadKnown();
+	if ([...ids].every((id) => known.has(id))) return new Set();
+	cacheManager.delete(cacheKey);
+	known = await loadKnown();
+	return new Set([...ids].filter((id) => !known.has(id)));
 }
 
 async function checkCategories(
@@ -126,7 +89,7 @@ async function checkCategories(
 	transactions: readonly PreflightTransaction[],
 	errors: string[],
 ): Promise<void> {
-	const references: { path: string; id: string }[] = [];
+	const references: Reference[] = [];
 	for (const transaction of transactions) {
 		if (transaction.category_id) {
 			references.push({
@@ -145,20 +108,21 @@ async function checkCategories(
 	}
 	if (references.length === 0) return;
 
-	const groups = (await deps.deltaFetcher.fetchCategories(budgetId)).data;
-	const known = new Set<string>();
-	for (const group of groups) {
-		if (group.deleted) continue;
-		for (const category of group.categories ?? []) {
-			if (!category.deleted) known.add(category.id);
-		}
-	}
 	const missing = await findMissing(
-		new Set(references.map((reference) => reference.id)),
-		known,
-		async (id) =>
-			(await deps.ynabAPI.categories.getCategoryById(budgetId, id)).data
-				.category,
+		references,
+		CacheManager.generateKey("categories", "list", budgetId),
+		deps.cacheManager,
+		async () => {
+			const known = new Set<string>();
+			const groups = (await deps.deltaFetcher.fetchCategories(budgetId)).data;
+			for (const group of groups) {
+				if (group.deleted) continue;
+				for (const category of group.categories ?? []) {
+					if (!category.deleted) known.add(category.id);
+				}
+			}
+			return known;
+		},
 	);
 	for (const reference of references) {
 		if (missing.has(reference.id)) {
@@ -175,7 +139,7 @@ async function checkAccounts(
 	transactions: readonly PreflightTransaction[],
 	errors: string[],
 ): Promise<void> {
-	const references = transactions.flatMap((transaction) =>
+	const references: Reference[] = transactions.flatMap((transaction) =>
 		transaction.account_id
 			? [
 					{
@@ -187,15 +151,16 @@ async function checkAccounts(
 	);
 	if (references.length === 0) return;
 
-	const accounts = (await deps.deltaFetcher.fetchAccounts(budgetId)).data;
-	const known = new Set(
-		accounts.filter((account) => !account.deleted).map((account) => account.id),
-	);
 	const missing = await findMissing(
-		new Set(references.map((reference) => reference.id)),
-		known,
-		async (id) =>
-			(await deps.ynabAPI.accounts.getAccountById(budgetId, id)).data.account,
+		references,
+		CacheManager.generateKey("accounts", "list", budgetId),
+		deps.cacheManager,
+		async () =>
+			new Set(
+				(await deps.deltaFetcher.fetchAccounts(budgetId)).data
+					.filter((account) => !account.deleted)
+					.map((account) => account.id),
+			),
 	);
 	for (const reference of references) {
 		if (missing.has(reference.id)) {
@@ -310,14 +275,10 @@ async function checkImportIds(
 	}
 	const collisions: string[] = [];
 	for (const [accountId, importIds] of byAccount) {
-		let existing: ynab.TransactionDetail[];
-		try {
-			existing = (
-				await deps.deltaFetcher.fetchTransactionsByAccount(budgetId, accountId)
-			).data;
-		} catch {
-			continue; // An unknown account is already reported by checkAccounts.
-		}
+		// A failed read propagates, so the check is reported as unavailable.
+		const existing: ynab.TransactionDetail[] = (
+			await deps.deltaFetcher.fetchTransactionsByAccount(budgetId, accountId)
+		).data;
 		for (const transaction of existing) {
 			if (
 				!transaction.deleted &&
