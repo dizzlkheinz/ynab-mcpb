@@ -48,6 +48,16 @@ YNAB_ACCESS_TOKEN=your_personal_access_token_here
 
 Tokens are bound to the canonical tool name and normalized validated arguments. A changed field, different tool, expired token, or reused token is rejected. Passing `confirmation_token` to a tool that does not require confirmation (any read tool, or any tool in `enabled` mode) is rejected rather than ignored; a `null` or empty-string `confirmation_token` counts as not passed. Bulk and deletion tools use the same central enforcement.
 
+### Transaction preview checks
+
+A dry run of `ynab_create_transaction`, `ynab_create_transactions`, `ynab_update_transaction`, `ynab_update_transactions`, or `ynab_create_receipt_split_transaction` (which includes every preview in `preview` mode) checks the request against cached budget data before a confirmation token is issued:
+
+- Every `account_id` and `category_id`, including split-line categories, must exist in the budget and not be deleted. An ID missing from the cache is looked up directly before it is rejected, so recently created entities pass.
+- Every amount must fit the precision of the budget's currency (`currency_format.decimal_digits`). For a 2-decimal currency, `amount_milliunits: -378` (0.378) is rejected with suggestions such as `amount_decimal: -3.78`. If the currency cannot be read, a 2-decimal currency is assumed and the result is a warning instead of an error.
+- An `import_id` that already exists in the target account is reported as an `import_id_exists` warning, since YNAB skips it as a duplicate.
+
+Errors reject the preview, so no token is issued. Warnings are returned in the dry-run output's `warnings` array (`code`, `count`, `message`, optional `sample_ids`). When budget data cannot be read, the checks fail open with a `preflight_unavailable` warning. Writes in `enabled` mode without `dry_run` skip these checks.
+
 `YNAB_MCP_TOOL_PROFILE` selects a stable startup surface: `core`, `read-only`, or `full` (default). Profiles do not use runtime list-change notifications.
 
 ## Data Formats

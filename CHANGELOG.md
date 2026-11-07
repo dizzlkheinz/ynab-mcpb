@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Transaction dry runs (and so every preview-mode transaction write) now check the request against cached budget data before issuing a confirmation token: unknown or deleted `account_id`/`category_id` values (including split lines) are rejected by name, amounts finer than the budget currency's precision are rejected with likely intended values (`-378` milliunits → "did you mean `amount_decimal: -3.78`?"), and an `import_id` already in the account is reported as a warning. Dry-run outputs for these tools now declare an optional `warnings` array
+- YNAB's "must be formatted as a uuid" error now notes that YNAB also returns it for a valid UUID that does not exist in the budget
+
 ### Fixed
 
 - Preview-mode mutations now return `confirmation_token` and `confirmation_expires_at` in `structuredContent`, and every mutation tool's `outputSchema` declares both fields as optional on each branch. Before, the token appeared only in a text block, so clients that read only structured output had no way to confirm a write
