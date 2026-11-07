@@ -345,7 +345,7 @@ export function allocateProportionally(
 /**
  * Positive tax allocated to each category, aligned with categoryCalculations,
  * in proportion to each category's positive items. Categories with no
- * positive items get 0. Used for both the tax split lines and the receipt
+ * positive items get 0; if no category has any, the first gets all the tax. Used for both the tax split lines and the receipt
  * summary, so the two always agree.
  */
 export function allocateReceiptTax(
@@ -358,6 +358,17 @@ export function allocateReceiptTax(
 			.filter((item) => item.amount_milliunits > 0)
 			.reduce((sum, item) => sum + item.amount_milliunits, 0),
 	);
+	if (
+		taxMilliunits > 0 &&
+		categoryCalculations.length > 0 &&
+		positiveSubtotals.every((subtotal) => subtotal <= 0)
+	) {
+		// Nothing to weight by (only free or returned items): keep the split
+		// balanced by putting all the tax on the first category.
+		return positiveSubtotals.map((_, index) =>
+			index === 0 ? taxMilliunits : 0,
+		);
+	}
 	return allocateProportionally(taxMilliunits, positiveSubtotals, step);
 }
 

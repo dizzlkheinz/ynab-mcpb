@@ -203,7 +203,10 @@ describe("runTransactionPreflight", () => {
 			{ path: "", account_id: ACCOUNT, amount: -378 },
 		]);
 		expect(report.errors).toHaveLength(1);
-		expect(report.errors[0]).toContain("-378 milliunits is -0.378");
+		expect(report.errors[0]).toContain(
+			"-0.378 has more than the 2 decimal place(s)",
+		);
+		expect(report.errors[0]).toContain("round it to -0.38");
 		expect(report.errors[0]).toContain("amount_decimal: -3.78");
 	});
 
@@ -281,6 +284,38 @@ describe("runTransactionPreflight", () => {
 				import_id: "b",
 			},
 		]);
+		expect(fetchTransactionsByAccount).toHaveBeenCalledWith(
+			BUDGET,
+			ACCOUNT,
+			"2025-12-01",
+		);
+	});
+
+	it("rejects empty-string IDs, which YNAB would refuse", async () => {
+		const { deps } = createDeps();
+		const report = await runTransactionPreflight(deps, BUDGET, [
+			{ path: "", account_id: "", amount: -1000, category_id: "" },
+		]);
+		expect(report.errors).toEqual([
+			expect.stringContaining('account_id: account_id ""'),
+			expect.stringContaining('category_id: category_id ""'),
+		]);
+	});
+
+	it("windows the import_id read per account over rows with an import_id", async () => {
+		const { deps, fetchTransactionsByAccount } = createDeps();
+		const OTHER = "99999999-9999-4999-8999-999999999999";
+		await runTransactionPreflight(deps, BUDGET, [
+			{ path: "t[0]", account_id: OTHER, date: "2019-01-01", amount: -1000 },
+			{
+				path: "t[1]",
+				account_id: ACCOUNT,
+				date: "2026-03-01",
+				amount: -1000,
+				import_id: "a",
+			},
+		]);
+		expect(fetchTransactionsByAccount).toHaveBeenCalledTimes(1);
 		expect(fetchTransactionsByAccount).toHaveBeenCalledWith(
 			BUDGET,
 			ACCOUNT,

@@ -52,7 +52,10 @@ import {
  */
 function transactionFilter(
 	params: ListTransactionsParams,
+	/** Whether YNAB already applied params.type server-side on this path. */
+	typeAppliedByYnab: boolean,
 ): (transaction: TransactionModel) => boolean {
+	const type = typeAppliedByYnab ? undefined : params.type;
 	const amount =
 		params.amount_decimal !== undefined
 			? amountToMilliunits(params.amount_decimal)
@@ -69,11 +72,23 @@ function transactionFilter(
 		(payeeName === undefined ||
 			(transaction.payee_name ?? "").toLowerCase().includes(payeeName)) &&
 		(amount === undefined || transaction.amount === amount) &&
-		// YNAB applies type server-side only on the unfiltered path; the
-		// account and category paths need it here.
-		(params.type !== "unapproved" || transaction.approved === false) &&
-		(params.type !== "uncategorized" ||
-			(!transaction.category_id && !transaction.transfer_account_id));
+		(type !== "unapproved" || transaction.approved === false) &&
+		(type !== "uncategorized" || isUncategorized(transaction));
+}
+
+/**
+ * Whether a transaction needs a category: a split needs one when any of its
+ * lines does, since a split parent's own category is not a real assignment.
+ * Transfers never need one.
+ */
+function isUncategorized(transaction: TransactionModel): boolean {
+	const lines = (transaction.subtransactions ?? []).filter(
+		(line) => !line.deleted,
+	);
+	if (lines.length > 0) {
+		return lines.some((line) => !line.category_id && !line.transfer_account_id);
+	}
+	return !transaction.category_id && !transaction.transfer_account_id;
 }
 
 /**
@@ -122,6 +137,8 @@ export async function handleListTransactions(
 					budgetId,
 					params.category_id,
 					params.since_date,
+					undefined,
+					params.type as ynab.GetTransactionsByCategoryTypeEnum | undefined,
 				);
 				transactions = response.data.transactions;
 			} else {
@@ -136,7 +153,11 @@ export async function handleListTransactions(
 			}
 
 			// Apply filters before pagination to avoid client-side post-filtering.
-			transactions = transactions.filter(transactionFilter(params));
+			// YNAB applies type server-side everywhere except the cached
+			// account path, which fetches every type.
+			transactions = transactions.filter(
+				transactionFilter(params, !params.account_id),
+			);
 
 			// Apply pagination before size check
 			const limit = params.limit ?? 50;

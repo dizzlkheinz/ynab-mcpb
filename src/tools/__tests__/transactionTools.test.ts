@@ -156,7 +156,7 @@ describe("transactionTools", () => {
 			expect(result.success).toBe(false);
 			if (!result.success) {
 				expect(result.error.issues[0]!.message).toContain(
-					"Date must be in ISO format",
+					"Date must be a valid ISO date",
 				);
 			}
 		});
@@ -310,6 +310,72 @@ describe("transactionTools", () => {
 			]);
 		});
 
+		it("keeps YNAB's own type filtering on the unfiltered path", async () => {
+			(mockYnabAPI.transactions.getTransactions as any).mockResolvedValue({
+				data: {
+					transactions: [
+						// A split parent YNAB counts as uncategorized
+						{ ...mockTransaction, id: "split", category_id: "split-category" },
+					],
+				},
+			});
+			const result = await handleListTransactions(mockYnabAPI, {
+				budget_id: "budget-123",
+				type: "uncategorized",
+				response_format: "json" as const,
+			});
+			const parsed = JSON.parse(textOf(result.content[0]));
+			expect(parsed.transactions.map((t: { id: string }) => t.id)).toEqual([
+				"split",
+			]);
+		});
+
+		it("treats a split with an uncategorized line as uncategorized on the account path", async () => {
+			(mockYnabAPI.accounts.getAccounts as any).mockResolvedValue({
+				data: { accounts: [{ id: "account-456", deleted: false }] },
+			});
+			const line = (id: string, category_id: string | null) => ({
+				id,
+				transaction_id: "x",
+				amount: -1000,
+				category_id,
+				transfer_account_id: null,
+				deleted: false,
+			});
+			(
+				mockYnabAPI.transactions.getTransactionsByAccount as any
+			).mockResolvedValue({
+				data: {
+					transactions: [
+						{
+							...mockTransaction,
+							id: "split-open",
+							category_id: null,
+							subtransactions: [line("a", "cat"), line("b", null)],
+						},
+						{
+							...mockTransaction,
+							id: "split-done",
+							category_id: null,
+							subtransactions: [line("c", "cat"), line("d", "cat")],
+						},
+						{ ...mockTransaction, id: "plain-open", category_id: null },
+					],
+				},
+			});
+			const result = await handleListTransactions(mockYnabAPI, {
+				budget_id: "budget-123",
+				account_id: "account-456",
+				type: "uncategorized",
+				response_format: "json" as const,
+			});
+			const parsed = JSON.parse(textOf(result.content[0]));
+			expect(parsed.transactions.map((t: { id: string }) => t.id)).toEqual([
+				"split-open",
+				"plain-open",
+			]);
+		});
+
 		it("rejects two amount filters and an inverted date window", () => {
 			expect(
 				ListTransactionsSchema.safeParse({
@@ -448,7 +514,13 @@ describe("transactionTools", () => {
 
 			expect(
 				mockYnabAPI.transactions.getTransactionsByCategory,
-			).toHaveBeenCalledWith("budget-123", "category-789", undefined);
+			).toHaveBeenCalledWith(
+				"budget-123",
+				"category-789",
+				undefined,
+				undefined,
+				undefined,
+			);
 			expect(textOf(result.content[0])).toContain("transaction-123");
 		});
 
@@ -1568,6 +1640,58 @@ describe("transactionTools", () => {
 			expect(parsed.subtransactions.every((item: any) => item.amount < 0)).toBe(
 				true,
 			);
+		});
+
+		it("puts all tax on the first category when no item is positive", async () => {
+			const params = {
+				budget_id: "budget-123",
+				account_id: "account-456",
+				payee_name: "Shop",
+				date: "2025-10-13",
+				receipt_tax: 2.5,
+				receipt_total: 2.5,
+				categories: [
+					{
+						category_id: "category-a",
+						category_name: "A",
+						items: [{ name: "Replacement", amount: 0 }],
+					},
+				],
+				dry_run: true,
+			} satisfies CreateReceiptSplitTransactionParams;
+			const result = await handleCreateReceiptSplitTransaction(
+				mockYnabAPI,
+				params,
+				undefined,
+				2,
+			);
+			const parsed = JSON.parse(textOf(result.content[0]));
+			const total = parsed.subtransactions.reduce(
+				(sum: number, line: any) => sum + line.amount_milliunits,
+				0,
+			);
+			expect(total).toBe(-2500);
+			expect(parsed.receipt_summary.categories[0].tax).toBe(2.5);
+		});
+
+		it("rejects a total that is off by one milliunit", async () => {
+			const params = {
+				budget_id: "budget-123",
+				account_id: "account-456",
+				payee_name: "Shop",
+				receipt_tax: 0.1,
+				receipt_total: 1.105,
+				categories: [
+					{
+						category_id: "category-a",
+						items: [{ name: "Item", amount: 1.004 }],
+					},
+				],
+				dry_run: true,
+			} satisfies CreateReceiptSplitTransactionParams;
+			await expect(
+				handleCreateReceiptSplitTransaction(mockYnabAPI, params, undefined, 3),
+			).rejects.toThrow("does not equal subtotal plus tax");
 		});
 
 		it("allocates tax in whole cents that sum to the tax and match the summary", async () => {

@@ -66,6 +66,15 @@ interface Reference {
 }
 
 /**
+ * Whether a request field names an entity to check. null (clear) and
+ * undefined (unchanged) do not; an empty string does, since the handlers
+ * send it to YNAB, which rejects it.
+ */
+function isReference(id: string | null | undefined): id is string {
+	return typeof id === "string";
+}
+
+/**
  * Returns the referenced ids absent from the entity list. The cached list is
  * checked first; on any miss the list is read fresh once, which covers
  * entities created since it was cached at a cost of one request, however
@@ -94,14 +103,14 @@ async function checkCategories(
 ): Promise<void> {
 	const references: Reference[] = [];
 	for (const transaction of transactions) {
-		if (transaction.category_id) {
+		if (isReference(transaction.category_id)) {
 			references.push({
 				path: at(transaction.path, "category_id"),
 				id: transaction.category_id,
 			});
 		}
 		transaction.subtransactions?.forEach((line, index) => {
-			if (line.category_id) {
+			if (isReference(line.category_id)) {
 				references.push({
 					path: at(transaction.path, `subtransactions[${index}].category_id`),
 					id: line.category_id,
@@ -143,7 +152,7 @@ async function checkAccounts(
 	errors: string[],
 ): Promise<void> {
 	const references: Reference[] = transactions.flatMap((transaction) =>
-		transaction.account_id
+		isReference(transaction.account_id)
 			? [
 					{
 						path: at(transaction.path, "account_id"),
@@ -209,14 +218,18 @@ function precisionMessage(
 	decimalDigits: number,
 ): string {
 	const asEntered = milliunitsToAmount(milliunits);
-	const minorUnits = milliunits / 10 ** decimalDigits;
-	const alternatives = [
+	const step = 10 ** (3 - decimalDigits);
+	const rounded = formatAmount(
+		Math.round(milliunits / step) * step,
+		decimalDigits,
+	);
+	const unitHints = [
 		decimalDigits > 0
-			? `if ${milliunits} was in minor units (e.g. cents), use amount_decimal: ${formatAmount(minorUnits * 1000, decimalDigits)}`
+			? `if ${milliunits} was in cents (or the currency's minor unit), use amount_decimal: ${formatAmount((milliunits / 10 ** decimalDigits) * 1000, decimalDigits)}`
 			: undefined,
-		`if ${milliunits} was in whole currency units, use amount_decimal: ${milliunits}`,
+		`if it was in whole currency units, use amount_decimal: ${milliunits}`,
 	].filter((text): text is string => text !== undefined);
-	return `${path}: ${milliunits} milliunits is ${asEntered}, which has more than the ${decimalDigits} decimal place(s) this budget's currency uses. Did you mean a different unit? ${alternatives.join("; ")}.`;
+	return `${path}: ${asEntered} has more than the ${decimalDigits} decimal place(s) this budget's currency uses. If it is the intended amount, round it to ${rounded}. If it was given in raw milliunits (amount_milliunits or deprecated amount), check the unit: ${unitHints.join("; ")}.`;
 }
 
 async function checkAmountPrecision(
@@ -269,7 +282,7 @@ const IMPORT_ID_WINDOW_DAYS = 90;
 
 /**
  * Start of the history read for import_id collisions: IMPORT_ID_WINDOW_DAYS
- * before the earliest dated transaction, or undefined (full history) when no
+ * before the earliest dated transaction among the given rows, or undefined (full history) when no
  * transaction carries a date. Bounding the read keeps a preview from pulling
  * an account's whole history each time a write clears the cache; an older
  * collision is still caught by YNAB, which skips the duplicate.
@@ -298,17 +311,19 @@ async function checkImportIds(
 	transactions: readonly PreflightTransaction[],
 	report: PreflightReport,
 ): Promise<void> {
-	const byAccount = new Map<string, Set<string>>();
+	const byAccount = new Map<string, PreflightTransaction[]>();
 	for (const transaction of transactions) {
 		if (!transaction.import_id || !transaction.account_id) continue;
-		const ids = byAccount.get(transaction.account_id) ?? new Set<string>();
-		ids.add(transaction.import_id);
-		byAccount.set(transaction.account_id, ids);
+		const rows = byAccount.get(transaction.account_id) ?? [];
+		rows.push(transaction);
+		byAccount.set(transaction.account_id, rows);
 	}
-	if (byAccount.size === 0) return;
-	const sinceDate = importIdWindowStart(transactions);
 	const collisions: string[] = [];
-	for (const [accountId, importIds] of byAccount) {
+	for (const [accountId, rows] of byAccount) {
+		const importIds = new Set(rows.map((row) => row.import_id));
+		// Window per account, over the rows that carry an import_id, so an
+		// old row elsewhere in a batch does not widen every account's read.
+		const sinceDate = importIdWindowStart(rows);
 		// A failed read propagates, so the check is reported as unavailable.
 		const existing: ynab.TransactionDetail[] = (
 			await deps.deltaFetcher.fetchTransactionsByAccount(
