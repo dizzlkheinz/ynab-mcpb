@@ -330,6 +330,57 @@ describe("ToolRegistry write safety enforcement", () => {
 		).not.toHaveProperty("confirmation_token");
 	});
 
+	it("marks only token-confirmed executions as confirmed", async () => {
+		const seen: { dryRun: unknown; confirmed: unknown }[] = [];
+		const handler = vi.fn(
+			async ({
+				input,
+				context,
+			}: {
+				input: Record<string, unknown>;
+				context?: { confirmed?: true };
+			}) => {
+				seen.push({ dryRun: input["dry_run"], confirmed: context?.confirmed });
+				return result({ ok: true });
+			},
+		);
+		const preview = new ToolRegistry(
+			createDependencies(
+				new WriteSafetyPolicy({ tokenFactory: () => FIXED_TOKEN }),
+			),
+		);
+		registerMutation(preview, "ynab_create_transaction", handler);
+		const previewed = await preview.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+		await preview.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: {
+				id: "txn-1",
+				confirmation_token: confirmationToken(previewed),
+			},
+		});
+
+		const enabled = new ToolRegistry(
+			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),
+		);
+		registerMutation(enabled, "ynab_create_transaction", handler);
+		await enabled.executeTool({
+			name: "ynab_create_transaction",
+			accessToken: "token",
+			arguments: { id: "txn-1" },
+		});
+
+		expect(seen).toEqual([
+			{ dryRun: true, confirmed: undefined },
+			{ dryRun: false, confirmed: true },
+			{ dryRun: undefined, confirmed: undefined },
+		]);
+	});
+
 	it("preserves direct mutation behavior in enabled mode", async () => {
 		const registry = new ToolRegistry(
 			createDependencies(new WriteSafetyPolicy({ mode: "enabled" })),

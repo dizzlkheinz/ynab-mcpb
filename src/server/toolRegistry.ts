@@ -95,6 +95,12 @@ export interface ToolExecutionContext {
 	sendProgress?: ProgressCallback;
 	/** Capture a prepared write during a protected preview. Never supplied by clients. */
 	prepareExecution?: (execute: PreparedExecution) => void;
+	/**
+	 * True when this write executes a request already previewed and confirmed
+	 * with a token, so checks the preview ran need not run again. Set only by
+	 * the registry; never supplied by clients.
+	 */
+	confirmed?: true;
 }
 
 export interface ToolExecutionPayload<TInput extends Record<string, unknown>> {
@@ -621,7 +627,7 @@ export class ToolRegistry {
 		return this.executeCommittedWrite(
 			tool,
 			confirmationArguments,
-			context,
+			{ ...context, confirmed: true },
 			confirmation.execute,
 		);
 	}

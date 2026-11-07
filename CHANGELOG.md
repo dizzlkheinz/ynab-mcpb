@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Transaction preview checks now also cover `ynab_create_scheduled_transaction` and `ynab_update_scheduled_transaction`, and direct writes in `YNAB_MCP_WRITE_MODE=enabled`: those are refused before reaching YNAB when an account or category does not exist or an amount is finer than the budget currency allows
 - `ynab_list_transactions` lookup filters: `until_date` (with `since_date`, a date window), `import_id`, `payee_id`, `payee_name` (case-insensitive substring), and an exact `amount_decimal` or `amount_milliunits`. They apply before pagination, so finding a just-created transaction no longer means paging through a whole account
 - Transaction dry runs (and so every preview-mode transaction write) now check the request against cached budget data before issuing a confirmation token: unknown or deleted `account_id`/`category_id` values (including split lines) are rejected by name, amounts finer than the budget currency's precision are rejected with likely intended values (`-378` milliunits → "did you mean `amount_decimal: -3.78`?"), and an `import_id` already in the account is reported as a warning. Dry-run outputs for these tools now declare an optional `warnings` array
 - YNAB's "must be formatted as a uuid" error now notes that YNAB also returns it for a valid UUID that does not exist in the budget
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The preview `import_id` check reads only the 90 days of account history before the request's earliest date, instead of the account's whole history after every write. The currency read is skipped when every amount is a whole currency unit
 - Preview-mode mutations now return `confirmation_token` and `confirmation_expires_at` in `structuredContent`, and every mutation tool's `outputSchema` declares both fields as optional on each branch. Before, the token appeared only in a text block, so clients that read only structured output had no way to confirm a write
 
 ## [0.31.0] - 2026-10-27

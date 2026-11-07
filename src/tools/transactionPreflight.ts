@@ -20,6 +20,7 @@ import type { ErrorHandler } from "../server/errorHandler.js";
 import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolHandler } from "../server/toolRegistry.js";
 import type { ToolContext } from "../types/toolRegistration.js";
+import { formatUTCISODate } from "../utils/dateUtils.js";
 import { milliunitsToAmount } from "../utils/money.js";
 import type { DeltaFetcher } from "./deltaFetcher.js";
 
@@ -28,6 +29,8 @@ export interface PreflightTransaction {
 	/** Location in the request, e.g. "transactions[2]". Empty for single writes. */
 	path: string;
 	account_id?: string | undefined;
+	/** YYYY-MM-DD; bounds the import_id history read. */
+	date?: string | undefined;
 	amount?: number | undefined;
 	category_id?: string | null | undefined;
 	import_id?: string | undefined;
@@ -237,7 +240,8 @@ async function checkAmountPrecision(
 			});
 		});
 	}
-	if (amounts.length === 0) return;
+	// Whole currency units fit every currency, so the budget read is skipped.
+	if (amounts.every(({ milliunits }) => milliunits % 1000 === 0)) return;
 
 	const knownDigits = await currencyDecimalDigits(deps, budgetId);
 	const decimalDigits = knownDigits ?? 2;
@@ -260,6 +264,34 @@ async function checkAmountPrecision(
 	});
 }
 
+/** Days of history before the earliest request date read for import_id collisions. */
+const IMPORT_ID_WINDOW_DAYS = 90;
+
+/**
+ * Start of the history read for import_id collisions: IMPORT_ID_WINDOW_DAYS
+ * before the earliest dated transaction, or undefined (full history) when no
+ * transaction carries a date. Bounding the read keeps a preview from pulling
+ * an account's whole history each time a write clears the cache; an older
+ * collision is still caught by YNAB, which skips the duplicate.
+ */
+function importIdWindowStart(
+	transactions: readonly PreflightTransaction[],
+): string | undefined {
+	const dates = transactions
+		.map((transaction) => transaction.date)
+		.filter((date): date is string => typeof date === "string")
+		.sort();
+	const earliest = dates[0];
+	if (earliest === undefined) return undefined;
+	const [year, month, day] = earliest.split("-").map(Number);
+	if (year === undefined || month === undefined || day === undefined) {
+		return undefined;
+	}
+	return formatUTCISODate(
+		new Date(Date.UTC(year, month - 1, day - IMPORT_ID_WINDOW_DAYS)),
+	);
+}
+
 async function checkImportIds(
 	deps: PreflightDeps,
 	budgetId: string,
@@ -273,11 +305,17 @@ async function checkImportIds(
 		ids.add(transaction.import_id);
 		byAccount.set(transaction.account_id, ids);
 	}
+	if (byAccount.size === 0) return;
+	const sinceDate = importIdWindowStart(transactions);
 	const collisions: string[] = [];
 	for (const [accountId, importIds] of byAccount) {
 		// A failed read propagates, so the check is reported as unavailable.
 		const existing: ynab.TransactionDetail[] = (
-			await deps.deltaFetcher.fetchTransactionsByAccount(budgetId, accountId)
+			await deps.deltaFetcher.fetchTransactionsByAccount(
+				budgetId,
+				accountId,
+				sinceDate,
+			)
 		).data;
 		for (const transaction of existing) {
 			if (
@@ -298,21 +336,29 @@ async function checkImportIds(
 	});
 }
 
-/** Runs every preview check for the given transactions. */
+/**
+ * Runs the checks for the given transactions. A "preview" runs every check;
+ * a direct "write" runs only the checks that can reject the request, since
+ * YNAB itself skips a duplicate import_id.
+ */
 export async function runTransactionPreflight(
 	deps: PreflightDeps,
 	budgetId: string,
 	transactions: readonly PreflightTransaction[],
+	mode: "preview" | "write" = "preview",
 ): Promise<PreflightReport> {
 	const report: PreflightReport = { errors: [], warnings: [] };
-	const checks = {
+	const checks: Record<string, () => Promise<void>> = {
 		account_id: () =>
 			checkAccounts(deps, budgetId, transactions, report.errors),
 		category_id: () =>
 			checkCategories(deps, budgetId, transactions, report.errors),
 		amount: () => checkAmountPrecision(deps, budgetId, transactions, report),
-		import_id: () => checkImportIds(deps, budgetId, transactions, report),
 	};
+	if (mode === "preview") {
+		checks["import_id"] = () =>
+			checkImportIds(deps, budgetId, transactions, report);
+	}
 	const skipped: string[] = [];
 	for (const [field, check] of Object.entries(checks)) {
 		try {
@@ -357,22 +403,32 @@ function withWarnings(
 function rejection(
 	errorHandler: ErrorHandler,
 	errors: readonly string[],
+	isPreview: boolean,
 ): CallToolResult {
 	return errorHandler.createValidationError(
-		"Preview rejected: the request does not match this budget",
+		isPreview
+			? "Preview rejected: the request does not match this budget"
+			: "Write rejected before reaching YNAB: the request does not match this budget",
 		errors.join("\n"),
 		[
-			"Fix the listed fields and preview again",
+			isPreview
+				? "Fix the listed fields and preview again"
+				: "Fix the listed fields and retry",
 			"Prefer amount_decimal for currency amounts",
 		],
 	);
 }
 
 /**
- * Wraps a transaction write handler so its dry runs (including every
- * preview-mode preview) run the preflight checks first. Errors reject the
- * preview, so no confirmation token is issued; warnings are added to the
- * dry-run output. Real writes pass straight through.
+ * Wraps a transaction write handler so requests are checked before they
+ * reach YNAB:
+ * - A dry run (including every preview-mode preview) runs every check.
+ *   Errors reject it, so no confirmation token is issued; warnings are added
+ *   to the dry-run output.
+ * - A direct write (enabled mode) runs the rejecting checks only, and is
+ *   refused on errors.
+ * - A write confirmed with a preview token is not checked again: its preview
+ *   already was.
  */
 export function withTransactionPreflight<
 	TInput extends Record<string, unknown>,
@@ -383,17 +439,20 @@ export function withTransactionPreflight<
 ): ToolHandler<TInput> {
 	return async (payload) => {
 		const budgetId = payload.input["budget_id"];
-		if (payload.input["dry_run"] !== true || typeof budgetId !== "string") {
+		if (payload.context.confirmed === true || typeof budgetId !== "string") {
 			return handler(payload);
 		}
+		const isPreview = payload.input["dry_run"] === true;
 		const report = await runTransactionPreflight(
 			context,
 			budgetId,
 			collect(payload.input),
+			isPreview ? "preview" : "write",
 		);
 		if (report.errors.length > 0) {
-			return rejection(context.errorHandler, report.errors);
+			return rejection(context.errorHandler, report.errors, isPreview);
 		}
-		return withWarnings(await handler(payload), report.warnings);
+		const result = await handler(payload);
+		return isPreview ? withWarnings(result, report.warnings) : result;
 	};
 }
