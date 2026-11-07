@@ -31,6 +31,7 @@ import {
 	type TransactionModel,
 	toTransactionOutput,
 } from "./transactionModel.js";
+import { withTransactionPreflight } from "./transactionPreflight.js";
 
 import {
 	type BulkCreateResponse,
@@ -1160,7 +1161,11 @@ Examples:
   - Already-converted data: set amount_milliunits=-50000`,
 		inputSchema: CreateTransactionSchema,
 		outputSchema: CreateTransactionOutputSchema,
-		handler: adapt(handleCreateTransaction),
+		handler: withTransactionPreflight(
+			context,
+			(input: CreateTransactionParams) => [{ path: "", ...input }],
+			adapt(handleCreateTransaction),
+		),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionSchema>>(),
 		metadata: {
@@ -1188,7 +1193,15 @@ Examples:
   - If you explicitly want YNAB-side duplicate import detection, set import_id on each transaction`,
 		inputSchema: CreateTransactionsSchema,
 		outputSchema: CreateTransactionsOutputSchema,
-		handler: adapt(handleCreateTransactions),
+		handler: withTransactionPreflight(
+			context,
+			(input: CreateTransactionsParams) =>
+				input.transactions.map((transaction, index) => ({
+					path: `transactions[${index}]`,
+					...transaction,
+				})),
+			adapt(handleCreateTransactions),
+		),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateTransactionsSchema>>(),
 		metadata: {
@@ -1224,7 +1237,17 @@ Use this helper when you have receipt line items and want tax allocated across c
 Returns: transaction with subtransactions and receipt_summary.`,
 		inputSchema: CreateReceiptSplitTransactionSchema,
 		outputSchema: CreateReceiptSplitTransactionOutputSchema,
-		handler: adapt(handleCreateReceiptSplitTransaction),
+		handler: withTransactionPreflight(
+			context,
+			(input: CreateReceiptSplitTransactionParams) => [
+				{ path: "", account_id: input.account_id },
+				...input.categories.map((category, index) => ({
+					path: `categories[${index}]`,
+					category_id: category.category_id,
+				})),
+			],
+			adapt(handleCreateReceiptSplitTransaction),
+		),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof CreateReceiptSplitTransactionSchema>>(),
 		metadata: {
@@ -1258,7 +1281,11 @@ Args:
 Returns: the updated transaction, including split lines and explicit amount_milliunits.`,
 		inputSchema: UpdateTransactionSchema,
 		outputSchema: UpdateTransactionOutputSchema,
-		handler: adapt(handleUpdateTransaction),
+		handler: withTransactionPreflight(
+			context,
+			(input: UpdateTransactionParams) => [{ path: "", ...input }],
+			adapt(handleUpdateTransaction),
+		),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionSchema>>(),
 		metadata: {
@@ -1285,7 +1312,15 @@ Examples:
   - Dry run: set dry_run=true to preview before/after for first 10 items`,
 		inputSchema: UpdateTransactionsSchema,
 		outputSchema: UpdateTransactionsOutputSchema,
-		handler: adapt(handleUpdateTransactions),
+		handler: withTransactionPreflight(
+			context,
+			(input: UpdateTransactionsParams) =>
+				input.transactions.map((transaction, index) => ({
+					path: `transactions[${index}]`,
+					...transaction,
+				})),
+			adapt(handleUpdateTransactions),
+		),
 		defaultArgumentResolver:
 			budgetResolver<z.infer<typeof UpdateTransactionsSchema>>(),
 		metadata: {

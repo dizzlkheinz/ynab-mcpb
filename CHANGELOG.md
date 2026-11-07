@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Transaction dry runs (and so every preview-mode transaction write) now check the request against cached budget data before issuing a confirmation token: unknown or deleted `account_id`/`category_id` values (including split lines) are rejected by name, amounts finer than the budget currency's precision are rejected with likely intended values (`-378` milliunits → "did you mean `amount_decimal: -3.78`?"), and an `import_id` already in the account is reported as a warning. Dry-run outputs for these tools now declare an optional `warnings` array
+- YNAB's "must be formatted as a uuid" error now notes that YNAB also returns it for a valid UUID that does not exist in the budget
+
 ### Changed
 
 - **Breaking:** `reconcile_account` accepts `statement_end_date` only as a `YYYY-MM-DD` date, as its description documents, and rejects other values with a validation error. This reverses the 0.31.0 change that read `01/31/2024`, `Jan 31, 2024` and ISO timestamps as calendar dates; callers passing those must send `2024-01-31` instead. Such formats were guessed through `new Date()`, which could land a day early depending on the server's time zone (`31-Jan-24`, `1/31/24`), read `01/02/2024` as January 2 even for day-first banks, and silently fell back to the CSV-inferred date when the value could not be parsed. Surrounding whitespace is ignored, and an empty or whitespace-only value is still treated as omitted. Dates inside the CSV are parsed as before
