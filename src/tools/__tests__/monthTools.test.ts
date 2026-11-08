@@ -41,15 +41,11 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { CacheManager, CACHE_TTLS } = await import(
-	"../../server/cacheManager.js"
-);
+const { CacheManager } = await import("../../server/cacheManager.js");
 
 describe("Month Tools", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
-		// Reset NODE_ENV to test to ensure cache bypassing in tests
-		process.env["NODE_ENV"] = "test";
 		// Mock cache.wrap to call the loader directly (bypass cache)
 		(cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
 			async (
@@ -106,60 +102,6 @@ describe("Month Tools", () => {
 				"Fresh data retrieved from YNAB API",
 			);
 			expect(parsedContent.month.month).toBe("2024-01-01");
-		});
-
-		it.skip("should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher", async () => {
-			// Temporarily set NODE_ENV to non-test
-			process.env["NODE_ENV"] = "development";
-
-			const mockMonth = {
-				month: "2024-01-01",
-				note: "January budget",
-				income: 500000,
-				budgeted: 450000,
-				activity: -400000,
-				to_be_budgeted: 50000,
-				age_of_money: 30,
-				deleted: false,
-				categories: [],
-			};
-
-			const mockCacheKey = "month:get:budget-1:2024-01-01:generated-key";
-			(CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-			(cacheManager.wrap as any).mockResolvedValue(mockMonth);
-			(cacheManager.has as any).mockReturnValue(true);
-
-			const result = await handleGetMonth(
-				mockYnabAPI,
-				{
-					budget_id: "budget-1",
-					month: "2024-01-01",
-					response_format: "json",
-				},
-				createReadDeps(mockYnabAPI, { cacheManager }),
-			);
-
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.cached).toBe(true);
-			expect(parsedContent.cache_info).toBe(
-				"Data retrieved from cache for improved performance",
-			);
-
-			// Verify cache was used
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				"month",
-				"get",
-				"budget-1",
-				"2024-01-01",
-			);
-			expect(cacheManager.wrap).toHaveBeenCalledWith(mockCacheKey, {
-				ttl: CACHE_TTLS.MONTHS,
-				loader: expect.any(Function),
-			});
-			expect(cacheManager.has).toHaveBeenCalledWith(mockCacheKey);
-
-			// Reset NODE_ENV
-			process.env["NODE_ENV"] = "test";
 		});
 
 		it("should return formatted month data on success", async () => {
@@ -392,59 +334,6 @@ describe("Month Tools", () => {
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toContain("delta merge applied");
 			expect(parsedContent.months).toHaveLength(1);
-		});
-
-		it.skip("should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher", async () => {
-			// Temporarily set NODE_ENV to non-test
-			process.env["NODE_ENV"] = "development";
-
-			const mockMonths = [
-				{
-					month: "2024-01-01",
-					note: "January budget",
-					income: 500000,
-					budgeted: 450000,
-					activity: -400000,
-					to_be_budgeted: 50000,
-					age_of_money: 30,
-					deleted: false,
-				},
-			];
-
-			const mockCacheKey = "months:list:budget-1:generated-key";
-			(CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-			(cacheManager.wrap as any).mockResolvedValue(mockMonths);
-			(cacheManager.has as any).mockReturnValue(true);
-
-			const result = await handleListMonths(
-				mockYnabAPI,
-				{
-					budget_id: "budget-1",
-					response_format: "json",
-				},
-				createReadDeps(mockYnabAPI, { cacheManager }),
-			);
-
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.cached).toBe(true);
-			expect(parsedContent.cache_info).toBe(
-				"Data retrieved from cache for improved performance",
-			);
-
-			// Verify cache was used
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				"months",
-				"list",
-				"budget-1",
-			);
-			expect(cacheManager.wrap).toHaveBeenCalledWith(mockCacheKey, {
-				ttl: CACHE_TTLS.MONTHS,
-				loader: expect.any(Function),
-			});
-			expect(cacheManager.has).toHaveBeenCalledWith(mockCacheKey);
-
-			// Reset NODE_ENV
-			process.env["NODE_ENV"] = "test";
 		});
 
 		it("should return formatted months list on success", async () => {

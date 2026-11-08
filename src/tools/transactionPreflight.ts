@@ -229,7 +229,7 @@ function precisionMessage(
 			: undefined,
 		`if it was in whole currency units, use amount_decimal: ${milliunits}`,
 	].filter((text): text is string => text !== undefined);
-	return `${path}: ${asEntered} has more than the ${decimalDigits} decimal place(s) this budget's currency uses. If it is the intended amount, round it to ${rounded}. If it was given in raw milliunits (amount_milliunits or deprecated amount), check the unit: ${unitHints.join("; ")}.`;
+	return `${path}: ${asEntered} has more than the ${decimalDigits} decimal place(s) this budget's currency uses. If it is the intended amount, round it to ${rounded}. If it was given in raw milliunits (amount_milliunits), check the unit: ${unitHints.join("; ")}.`;
 }
 
 async function checkAmountPrecision(

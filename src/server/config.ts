@@ -17,27 +17,33 @@ const normalizeEnvValue = (value: unknown) => {
 	return trimmed;
 };
 
+const optionalEnv = <T extends z.ZodType>(schema: T) =>
+	z.preprocess((value) => {
+		const normalized = normalizeEnvValue(value);
+		return normalized === "" ? undefined : normalized;
+	}, schema);
+
 const envSchema = z.object({
 	YNAB_ACCESS_TOKEN: z.preprocess(
 		normalizeEnvValue,
 		z.string().min(1, "YNAB_ACCESS_TOKEN must be a non-empty string"),
 	),
-	YNAB_DEFAULT_BUDGET_ID: z
-		.string()
-		.uuid("YNAB_DEFAULT_BUDGET_ID must be a valid UUID")
-		.optional(),
-	YNAB_MCP_ENABLE_DELTA: z.enum(["true", "false"]).optional(),
-	YNAB_MCP_WRITE_MODE: z.enum(WRITE_MODES).default(DEFAULT_WRITE_MODE),
-	YNAB_MCP_TOOL_PROFILE: z.enum(TOOL_PROFILES).default(DEFAULT_TOOL_PROFILE),
-	LOG_LEVEL: z
-		.enum(["trace", "debug", "info", "warn", "error", "fatal"])
-		.default("info"),
-	YNAB_EXPORT_PATH: z.string().optional(),
-	XDG_DOCUMENTS_DIR: z.string().optional(),
-	RATE_LIMIT_LOGGING: z
-		.enum(["true", "false"])
-		.optional()
-		.transform((value) => value === "true"),
+	YNAB_DEFAULT_BUDGET_ID: optionalEnv(
+		z.string().uuid("YNAB_DEFAULT_BUDGET_ID must be a valid UUID").optional(),
+	),
+	YNAB_MCP_WRITE_MODE: optionalEnv(
+		z.enum(WRITE_MODES).default(DEFAULT_WRITE_MODE),
+	),
+	YNAB_MCP_TOOL_PROFILE: optionalEnv(
+		z.enum(TOOL_PROFILES).default(DEFAULT_TOOL_PROFILE),
+	),
+	LOG_LEVEL: optionalEnv(
+		z
+			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
+			.default("info"),
+	),
+	YNAB_EXPORT_PATH: optionalEnv(z.string().optional()),
+	XDG_DOCUMENTS_DIR: optionalEnv(z.string().optional()),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
@@ -68,7 +74,6 @@ const runtimeEnvSchema = z.object({
 	LOG_LEVEL: envShape.LOG_LEVEL.catch("info"),
 	YNAB_EXPORT_PATH: envShape.YNAB_EXPORT_PATH.catch(undefined),
 	XDG_DOCUMENTS_DIR: envShape.XDG_DOCUMENTS_DIR.catch(undefined),
-	YNAB_MCP_ENABLE_DELTA: envShape.YNAB_MCP_ENABLE_DELTA.catch(undefined),
 });
 
 export type RuntimeConfig = z.infer<typeof runtimeEnvSchema>;
@@ -77,7 +82,7 @@ let cachedRuntimeConfig: RuntimeConfig | undefined;
 
 /**
  * Returns the memoized runtime config for infrastructure modules (logging,
- * delta requests, exports). Never throws, so modules can read these values
+ * exports). Never throws, so modules can read these values
  * at import time without YNAB credentials present.
  */
 export function getRuntimeConfig(): RuntimeConfig {
@@ -93,11 +98,6 @@ export function getRuntimeConfig(): RuntimeConfig {
  */
 export function resetRuntimeConfig(): void {
 	cachedRuntimeConfig = undefined;
-}
-
-/** Whether delta requests are in effect, per the parsed runtime config. */
-export function isDeltaEnabled(): boolean {
-	return getRuntimeConfig().YNAB_MCP_ENABLE_DELTA === "true";
 }
 
 export const RESPONSE_SIZE_LIMIT_BYTES = 90_000;

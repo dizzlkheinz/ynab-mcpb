@@ -1,6 +1,6 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { skipOnRateLimit } from "../../__tests__/testUtils.js";
+import { getLiveTestGate, skipOnRateLimit } from "../../__tests__/testUtils.js";
 import { ValidationError } from "../../types/index";
 import { YNABMCPServer } from "../YNABMCPServer";
 
@@ -14,10 +14,10 @@ import { YNABMCPServer } from "../YNABMCPServer";
  * - MCP server initialization
  * - Tool registration
  * - Transport connection setup
- * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
+ * Skips if YNAB_ACCESS_TOKEN is not set unless RUN_LIVE_YNAB_TESTS=true
  */
 const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
-const shouldSkip = process.env["SKIP_E2E_TESTS"] === "true" || !hasToken;
+const shouldSkip = !getLiveTestGate().enabled || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("Server Startup and Transport Integration", () => {

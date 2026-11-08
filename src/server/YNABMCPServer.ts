@@ -105,11 +105,9 @@ export class YNABMCPServer {
 			logLevel: resolveLogLevel(this.configInstance.LOG_LEVEL),
 		});
 
-		// Rate limit lines are debug logs; RATE_LIMIT_LOGGING forces them on
-		const forceRateLimitLogging = this.configInstance.RATE_LIMIT_LOGGING;
+		// Rate limit lines are debug logs (LOG_LEVEL=debug or trace)
 		this.rateLimiter = new RateLimiter({
-			log: (message) =>
-				globalRequestLogger.debug(message, forceRateLimitLogging),
+			log: (message) => globalRequestLogger.debug(message),
 		});
 
 		// Initialize YNAB API

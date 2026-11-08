@@ -358,8 +358,14 @@ Args:
   - csv_file_path or csv_data (string, required): Bank export file path or inline CSV text.
   - statement_start_date (string, optional): Filter comparison window start date (YYYY-MM-DD).
   - statement_date (string, optional): Filter comparison window end date (YYYY-MM-DD).
+  - amount_tolerance (number, optional): Amount match tolerance in dollars, 0-1. Default: 0.01.
+  - date_tolerance_days (number, optional): Date match tolerance, 0-7 days. Default: 5.
+  - enable_chronology_bonus (boolean, optional): Prefer matches in chronological order. Default: false.
+  - auto_detect_format (boolean, optional): Detect CSV columns automatically. Default: false.
+  - csv_format (object, optional): CSV layout (date_column, amount_column, debit_column, credit_column, description_column, date_format, has_header, delimiter).
+  - debug (boolean, optional): Include extra diagnostics. Default: false.
 
-Returns: comparison report with matched, unmatched_bank, unmatched_ynab transactions.`,
+Returns: summary (counts, date_range, parameters), matches, missing_in_ynab (bank rows with no YNAB match), missing_in_bank (YNAB transactions with no bank row).`,
 		inputSchema: CompareTransactionsSchema,
 		outputSchema: CompareTransactionsOutputSchema,
 		handler: adapt(handleCompareTransactions),
@@ -384,6 +390,9 @@ Args:
   - statement_balance (number, required): Ending balance from the bank statement (dollars).
       For credit cards and other liability accounts, pass a negative value (e.g. -6143.27 means you owe $6,143.27).
   - statement_end_date (string, optional): Statement closing date (YYYY-MM-DD). Filters CSV and triggers balance verification. Auto-detected from CSV if omitted.
+  - csv_format (object, optional): CSV layout overrides (column names or indexes, date_format, has_header, delimiter).
+  - date_tolerance_days (number, optional): Date match tolerance, 0-7 days. Default: 7.
+  - auto_adjust_dates (boolean, optional): Auto-adjust YNAB dates to match the bank dates. Default: false.
   - match_strictness (string, optional): Matching sensitivity — "loose" (more matches), "normal" (default), or "strict" (fewer false positives).
   - sign_convention (string, optional): How to treat CSV amount signs — "auto" (default, detects from data), "invert" (negate all amounts), "as_is" (use amounts unchanged). Useful when auto-detection fails for liability accounts.
   - dry_run (boolean, optional): Preview actions without executing. Default: true.

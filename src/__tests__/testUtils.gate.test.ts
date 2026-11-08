@@ -20,17 +20,6 @@ describe("live YNAB test gate", () => {
 		expect(gate.enabled).toBe(true);
 	});
 
-	it("allows SKIP_E2E_TESTS to override explicit opt-in", () => {
-		const gate = getLiveTestGate({
-			RUN_LIVE_YNAB_TESTS: "true",
-			SKIP_E2E_TESTS: "true",
-			YNAB_ACCESS_TOKEN: "real-looking-token",
-		});
-
-		expect(gate.skipExplicitlyRequested).toBe(true);
-		expect(gate.enabled).toBe(false);
-	});
-
 	it("rejects the mocked-test sentinel as a real token", () => {
 		const gate = getLiveTestGate({
 			RUN_LIVE_YNAB_TESTS: "true",

@@ -46,14 +46,9 @@ const mockYnabAPI = {
 // Import mocked cache manager
 const { CacheManager } = await import("../../server/cacheManager.js");
 
-// Capture original NODE_ENV for restoration
-const originalNodeEnv = process.env["NODE_ENV"];
-
 describe("Account Tools", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
-		// Reset NODE_ENV to test to ensure cache bypassing in tests
-		process.env["NODE_ENV"] = "test";
 		(cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
 			async (
 				_key: string,
@@ -71,14 +66,7 @@ describe("Account Tools", () => {
 		);
 	});
 
-	afterAll(() => {
-		// Restore original NODE_ENV value
-		if (originalNodeEnv === undefined) {
-			Reflect.deleteProperty(process.env, "NODE_ENV");
-		} else {
-			process.env["NODE_ENV"] = originalNodeEnv;
-		}
-	});
+	afterAll(() => {});
 
 	describe("handleListAccounts", () => {
 		it("should include cache metadata from delta fetcher results", async () => {

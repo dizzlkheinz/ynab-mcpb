@@ -1,41 +1,12 @@
 ## Summary
 
-Describe the change and its motivation.
+What changed and why.
 
-## Type of change
+## Checklist
 
-- [ ] Patch (backwards‑compatible fixes)
-- [ ] Minor (backwards‑compatible features)
-- [ ] Major (breaking changes)
+- [ ] `npm test`, `npm run test:integration`, `npm run lint` and `npm run knip` pass
+- [ ] `CHANGELOG.md` updated under `[Unreleased]` (Added / Changed / Fixed / Removed)
+- [ ] Tool, prompt or resource changes are reflected in `manifest.json` and `docs/reference/API.md`
+- [ ] Breaking changes are called out in the changelog with **Breaking:**
 
-## Public API surface checklist
-
-For details, see `docs/VERSIONING.md`.
-
-- Tools
-  - [ ] No tool removals/renames, or deprecations documented
-  - [ ] No changes to required args; only additive optional args
-  - [ ] Output shapes preserved (only additive fields)
-- Resources
-  - [ ] URIs unchanged or deprecations documented
-  - [ ] Response shapes preserved (only additive fields)
-- Prompts
-  - [ ] Names/arguments unchanged or deprecations documented
-- Manifest/config
-  - [ ] `user_config.YNAB_ACCESS_TOKEN` remains the auth key
-  - [ ] `server.entry_point` and `mcp_config.env` remain compatible
-- Runtime behavior
-  - [ ] Auth and error semantics unchanged
-  - [ ] `get_env_status` still functional
-
-## Versioning and release
-
-- Proposed version bump: `X.Y.Z` → `X.Y.Z`
-- [ ] Changelog entry prepared (Added/Changed/Fixed/Removed)
-- [ ] Tests and lint pass locally
-- [ ] Built MCPB with `npm run package:mcpb` and sanity‑checked
-
-## Screenshots / Logs (optional)
-
-## Additional notes (optional)
-
+## Notes (optional)

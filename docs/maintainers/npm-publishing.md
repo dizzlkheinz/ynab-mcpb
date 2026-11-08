@@ -1,6 +1,35 @@
-# npm publishing (maintainers)
+# Releasing and publishing (maintainers)
 
 This repo publishes the package `@dizzlkheinz/ynab-mcpb` to the public npm registry via GitHub Actions (`.github/workflows/publish.yml`).
+
+## Release flow
+
+1. Bump the version in `package.json`, `package-lock.json`, `manifest.json` and `server.json`
+   (`npm run verify:metadata`, part of `npm run build`, fails if they disagree), and move the
+   `[Unreleased]` changelog entries under the new version.
+2. Run the checks in [Before releasing](#before-releasing), commit, and push a `vX.Y.Z` tag.
+3. `release.yml` (on tag push) builds the `.mcpb` and attaches it to the GitHub Release.
+4. `publish.yml` (on release published) publishes to npm and then to the MCP Registry.
+
+## What a maintainer needs access to
+
+Handing the project over means transferring or granting all of these:
+
+- **GitHub repo** admin (`dizzlkheinz/ynab-mcpb`), including the `npm-publish` environment.
+- **Repository secrets**:
+  - `YNAB_ACCESS_TOKEN`: a token for a test budget, used by the weekly live smoke workflow (`full-integration.yml`)
+  - `CLAUDE_CODE_OAUTH_TOKEN`: used by `claude.yml`
+  - `WORKFLOW_PAT` (optional): used by `release.yml`; it falls back to `GITHUB_TOKEN`
+- **npm**: owner of `@dizzlkheinz/ynab-mcpb`, and the Trusted Publisher entry below. If the
+  repo moves, update that entry to the new repo/workflow.
+- **MCP Registry**: the server name `io.github.dizzlkheinz/ynab-mcpb` (`mcpName` in
+  `package.json`, `name` in `server.json`) is tied to the `dizzlkheinz` GitHub namespace. A new
+  owner publishing from a different account or org must rename it to their own
+  `io.github.<owner>/...` namespace in both files.
+- **Glama** listing: `glama.json` lists the maintainers.
+
+`.githooks/local.sh` only extends the original maintainer's personal shared hooks
+(`core.hooksPath=../githooks`); it is not needed. CI is the gate.
 
 ## Trusted publishing (OIDC)
 

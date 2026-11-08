@@ -124,13 +124,6 @@ export type GetTransactionParams = z.infer<typeof GetTransactionSchema>;
 const SubtransactionInputSchema = z
 	.object({
 		...amountInputShape,
-		amount: z
-			.number()
-			.int("Subtransaction amount must be an integer in milliunits")
-			.optional()
-			.describe(
-				"Deprecated legacy alias for amount_milliunits on this split line.",
-			),
 		payee_name: z.string().optional(),
 		payee_id: z.string().optional(),
 		category_id: z.string().optional(),
@@ -206,7 +199,6 @@ export interface SubtransactionInput {
 
 const BulkTransactionInputSchemaBase = CreateTransactionBaseInputSchema.pick({
 	account_id: true,
-	amount: true,
 	amount_decimal: true,
 	amount_milliunits: true,
 	date: true,

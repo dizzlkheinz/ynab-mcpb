@@ -41,15 +41,11 @@ const mockYnabAPI = {
 } as unknown as ynab.API;
 
 // Import mocked cache manager
-const { CacheManager, CACHE_TTLS } = await import(
-	"../../server/cacheManager.js"
-);
+const { CacheManager } = await import("../../server/cacheManager.js");
 
 describe("Payee Tools", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
-		// Reset NODE_ENV to test to ensure cache bypassing in tests
-		process.env["NODE_ENV"] = "test";
 		// Mock cache.wrap to call the loader directly (bypass cache)
 		(cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
 			async (
@@ -106,54 +102,6 @@ describe("Payee Tools", () => {
 			expect(parsedContent.cached).toBe(resolved.wasCached);
 			expect(parsedContent.cache_info).toContain("delta merge applied");
 			expect(parsedContent.payees).toHaveLength(2);
-		});
-
-		it.skip("should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher", async () => {
-			// Temporarily set NODE_ENV to non-test
-			process.env["NODE_ENV"] = "development";
-
-			const mockPayees = [
-				{
-					id: "payee-1",
-					name: "Grocery Store",
-					transfer_account_id: null,
-					deleted: false,
-				},
-			];
-
-			const mockCacheKey = "payees:list:budget-1:generated-key";
-			(CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-			(cacheManager.wrap as any).mockResolvedValue(mockPayees);
-			(cacheManager.has as any).mockReturnValue(true);
-
-			const result = await handleListPayees(
-				mockYnabAPI,
-				{
-					budget_id: "budget-1",
-				},
-				createReadDeps(mockYnabAPI, { cacheManager }),
-			);
-
-			// Verify cache was used
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				"payees",
-				"list",
-				"budget-1",
-			);
-			expect(cacheManager.wrap).toHaveBeenCalledWith(mockCacheKey, {
-				ttl: CACHE_TTLS.PAYEES,
-				loader: expect.any(Function),
-			});
-			expect(cacheManager.has).toHaveBeenCalledWith(mockCacheKey);
-
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.cached).toBe(true);
-			expect(parsedContent.cache_info).toBe(
-				"Data retrieved from cache for improved performance",
-			);
-
-			// Reset NODE_ENV
-			process.env["NODE_ENV"] = "test";
 		});
 
 		it("should return formatted payee list on success", async () => {
@@ -365,54 +313,6 @@ describe("Payee Tools", () => {
 	});
 
 	describe("handleGetPayee", () => {
-		it.skip("should use cache when NODE_ENV is not test - obsolete test, caching now handled by DeltaFetcher", async () => {
-			// Temporarily set NODE_ENV to non-test
-			process.env["NODE_ENV"] = "development";
-
-			const mockPayee = {
-				id: "payee-1",
-				name: "Grocery Store",
-				transfer_account_id: null,
-				deleted: false,
-			};
-
-			const mockCacheKey = "payee:get:budget-1:payee-1:generated-key";
-			(CacheManager.generateKey as any).mockReturnValue(mockCacheKey);
-			(cacheManager.wrap as any).mockResolvedValue(mockPayee);
-			(cacheManager.has as any).mockReturnValue(true);
-
-			const result = await handleGetPayee(
-				mockYnabAPI,
-				{
-					budget_id: "budget-1",
-					payee_id: "payee-1",
-					response_format: "json",
-				},
-				createReadDeps(mockYnabAPI, { cacheManager }),
-			);
-
-			// Verify cache was used
-			expect(CacheManager.generateKey).toHaveBeenCalledWith(
-				"payee",
-				"get",
-				"budget-1",
-				"payee-1",
-			);
-			expect(cacheManager.wrap).toHaveBeenCalledWith(mockCacheKey, {
-				ttl: CACHE_TTLS.PAYEES,
-				loader: expect.any(Function),
-			});
-
-			const parsedContent = JSON.parse(textOf(result.content[0]));
-			expect(parsedContent.cached).toBe(true);
-			expect(parsedContent.cache_info).toBe(
-				"Data retrieved from cache for improved performance",
-			);
-
-			// Reset NODE_ENV
-			process.env["NODE_ENV"] = "test";
-		});
-
 		it("should return detailed payee information on success", async () => {
 			const mockPayee = {
 				id: "payee-1",

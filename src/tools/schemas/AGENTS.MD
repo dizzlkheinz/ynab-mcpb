@@ -1,1 +1,0 @@
-C:/Users/ksutk/projects/ynab-mcpb/src/tools/schemas/CLAUDE.md

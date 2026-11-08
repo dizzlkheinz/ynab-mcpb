@@ -12,10 +12,6 @@ describe("CacheManager", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers({ now: 0 }); // Start fake timers at timestamp 0
-		// Clear environment variables
-		process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = undefined;
-		process.env["YNAB_MCP_CACHE_STALE_MS"] = undefined;
-		process.env["YNAB_MCP_CACHE_DEFAULT_TTL_MS"] = undefined;
 		cache = new CacheManager();
 	});
 
@@ -138,8 +134,7 @@ describe("CacheManager", () => {
 
 	describe("LRU Eviction", () => {
 		beforeEach(() => {
-			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "3";
-			cache = new CacheManager();
+			cache = new CacheManager({ maxEntries: 3 });
 		});
 
 		it("should not evict when under limit", () => {
@@ -185,8 +180,7 @@ describe("CacheManager", () => {
 		});
 
 		it("should handle zero maxEntries (no caching)", () => {
-			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "0";
-			cache = new CacheManager();
+			cache = new CacheManager({ maxEntries: 0 });
 
 			cache.set("key1", "value1");
 			expect(cache.get("key1")).toBeNull();
@@ -200,8 +194,7 @@ describe("CacheManager", () => {
 			cache.set("key3", "value3");
 
 			// Change maxEntries to 1 by creating a new cache manager
-			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "1";
-			const smallCache = new CacheManager();
+			const smallCache = new CacheManager({ maxEntries: 1 });
 
 			// Add entries that should trigger multiple evictions
 			smallCache.set("key1", "value1");
@@ -575,63 +568,36 @@ describe("CacheManager", () => {
 		});
 	});
 
-	describe("Environment Variable Configuration", () => {
-		it("should use environment variable for maxEntries", () => {
-			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "5";
-			const configuredCache = new CacheManager();
+	describe("Constructor Options", () => {
+		it("should use constructor option for maxEntries", () => {
+			const configuredCache = new CacheManager({ maxEntries: 5 });
 
 			const stats = configuredCache.getStats();
 			expect(stats.maxEntries).toBe(5);
 		});
 
-		it("should use environment variable for stale window", () => {
-			process.env["YNAB_MCP_CACHE_STALE_MS"] = "30000";
-			const configuredCache = new CacheManager();
+		it("should use constructor option for stale window", () => {
+			const configuredCache = new CacheManager({ staleMs: 30000 });
 
 			configuredCache.set("key1", "value1", {
 				ttl: 1000,
 				staleWhileRevalidate: undefined,
 			});
 
-			// The default stale window should be used from env var
-			vi.advanceTimersByTime(15000); // Within default stale window from env
+			// The default stale window should be used from option
+			vi.advanceTimersByTime(15000); // Within default stale window from option
 			expect(configuredCache.get("key1")).toBe("value1"); // Served as stale data
 
 			vi.advanceTimersByTime(16100); // Beyond stale window now (total 31100ms > 31000ms)
 			expect(configuredCache.get("key1")).toBeNull();
 		});
 
-		it("should fall back to defaults for invalid environment values", () => {
-			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "invalid";
-			process.env["YNAB_MCP_CACHE_STALE_MS"] = "not-a-number";
-			process.env["YNAB_MCP_CACHE_DEFAULT_TTL_MS"] = "invalid-ttl";
-
+		it("should use constructor option for default TTL", () => {
 			// Reset timers for new cache instance
 			vi.useRealTimers();
 			vi.useFakeTimers({ now: 0 });
 
-			const configuredCache = new CacheManager();
-			const stats = configuredCache.getStats();
-
-			expect(stats.maxEntries).toBe(1000); // Default value
-
-			// Test that invalid default TTL falls back to 300000ms (5 minutes)
-			configuredCache.set("key1", "value1");
-			vi.advanceTimersByTime(299000); // Just under 5 minutes - should be valid
-			expect(configuredCache.get("key1")).toBe("value1");
-
-			vi.advanceTimersByTime(2000); // ~5 minutes total - should expire
-			expect(configuredCache.get("key1")).toBeNull();
-		});
-
-		it("should use environment variable for default TTL", () => {
-			process.env["YNAB_MCP_CACHE_DEFAULT_TTL_MS"] = "60000"; // 1 minute
-
-			// Reset timers for new cache instance
-			vi.useRealTimers();
-			vi.useFakeTimers({ now: 0 });
-
-			const configuredCache = new CacheManager();
+			const configuredCache = new CacheManager({ defaultTtlMs: 60000 });
 
 			configuredCache.set("key1", "value1"); // Use default TTL
 			vi.advanceTimersByTime(59000); // Just under 1 minute - should be valid
@@ -641,11 +607,7 @@ describe("CacheManager", () => {
 			expect(configuredCache.get("key1")).toBeNull();
 		});
 
-		it("should fall back to defaults when environment variables are missing", () => {
-			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = undefined;
-			process.env["YNAB_MCP_CACHE_STALE_MS"] = undefined;
-			process.env["YNAB_MCP_CACHE_DEFAULT_TTL_MS"] = undefined;
-
+		it("should use defaults when no options are given", () => {
 			// Reset timers for new cache instance
 			vi.useRealTimers();
 			vi.useFakeTimers({ now: 0 });
@@ -763,8 +725,7 @@ describe("CacheManager", () => {
 		});
 
 		it("should handle very large cache sizes", () => {
-			process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "10000";
-			const largeCache = new CacheManager();
+			const largeCache = new CacheManager({ maxEntries: 10000 });
 
 			// Add many entries
 			for (let i = 0; i < 5000; i++) {

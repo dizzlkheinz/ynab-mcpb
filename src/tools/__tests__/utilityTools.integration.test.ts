@@ -1,14 +1,18 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
-import { skipOnRateLimit, textOf } from "../../__tests__/testUtils.js";
+import {
+	getLiveTestGate,
+	skipOnRateLimit,
+	textOf,
+} from "../../__tests__/testUtils.js";
 import { handleGetUser } from "../utilityTools.js";
 
 /**
  * Utility Tools Integration Tests
- * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
+ * Skips if YNAB_ACCESS_TOKEN is not set unless RUN_LIVE_YNAB_TESTS=true
  */
 const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
-const shouldSkip = process.env["SKIP_E2E_TESTS"] === "true" || !hasToken;
+const shouldSkip = !getLiveTestGate().enabled || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("Utility Tools Integration Tests", () => {

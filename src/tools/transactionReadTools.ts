@@ -356,14 +356,18 @@ Errors:
 
 	registry.register({
 		name: "ynab_export_transactions",
-		description: `Export all transactions for a budget to a local JSON file.
+		description: `Export transactions for a budget to a local JSON file.
 
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
   - account_id (string, optional): Filter by account.
+  - category_id (string, optional): Filter by category.
   - since_date (string, optional): ISO date (YYYY-MM-DD) to filter transactions on or after.
+  - type (string, optional): "uncategorized" or "unapproved" to export only those transactions.
+  - filename (string, optional): File name (not a path); ".json" is appended if missing. Default: generated from the filters, count and timestamp.
+  - minimal (boolean, optional): Export only id, date, amount, amount_milliunits, payee_name and cleared. Default: true; false exports full fields.
 
-Returns: file_path, transaction_count, file_size_kb
+Returns: message, filename, full_path, export_directory, export_mode ("minimal" or "full"), minimal_fields, filename_explanation, total_count, preview_count, preview_transactions (a short preview, not the whole file)
 
 Examples:
   - Export all transactions: call with no args

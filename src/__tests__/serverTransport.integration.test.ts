@@ -64,7 +64,8 @@ describe("server tools through the SDK transport", () => {
 			expect(result.isError).not.toBe(true);
 			expect(result.structuredContent?.["accounts"]).toHaveLength(1);
 		}
-		expect(fetch).toHaveBeenCalledTimes(1);
+		// The repeat read revalidates with a delta request.
+		expect(fetch).toHaveBeenCalledTimes(2);
 		const mutation = await executeConfirmedToolCall(
 			server,
 			"ynab_create_account",
@@ -80,7 +81,7 @@ describe("server tools through the SDK transport", () => {
 		const updated = await read();
 		expect(updated.isError).not.toBe(true);
 		expect(updated.structuredContent?.["accounts"]).toHaveLength(2);
-		expect(fetch).toHaveBeenCalledTimes(3);
+		expect(fetch).toHaveBeenCalledTimes(4);
 	});
 
 	it("keeps payee, category, and split details through list and get responses", async () => {

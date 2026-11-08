@@ -9,6 +9,7 @@ import {
 } from "vitest";
 import * as ynab from "ynab";
 import {
+	getLiveTestGate,
 	isAuthError,
 	isRateLimitError,
 	skipOnRateLimit,
@@ -21,9 +22,7 @@ import { listBudgetsCompat } from "../../../utils/ynabApiCompat.js";
 import { DeltaFetcher } from "../../deltaFetcher.js";
 import { handleReconcileAccount, ReconcileAccountSchema } from "../index.js";
 
-const shouldSkip = ["true", "1", "yes", "y", "on"].includes(
-	(process.env["SKIP_E2E_TESTS"] || "").toLowerCase().trim(),
-);
+const shouldSkip = !getLiveTestGate().enabled;
 const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
 const skipTests = shouldSkip || !hasToken;
 const describeIntegration = skipTests ? describe.skip : describe;
@@ -34,7 +33,6 @@ describeIntegration("Reconciliation delta isolation", () => {
 	let testAccountId: string;
 	let deltaFetcher: DeltaFetcher;
 	let cacheManager: CacheManager;
-	let previousNodeEnv: string | undefined;
 	let setupRateLimited = false;
 
 	beforeAll(async () => {
@@ -76,25 +74,15 @@ describeIntegration("Reconciliation delta isolation", () => {
 	});
 
 	beforeEach(() => {
-		previousNodeEnv = process.env["NODE_ENV"];
-		process.env["NODE_ENV"] = "integration";
 		cacheManager = new CacheManager();
 		const knowledgeStore = new ServerKnowledgeStore();
 		const deltaCache = new DeltaCache(cacheManager, knowledgeStore);
 		deltaFetcher = new DeltaFetcher(ynabAPI, deltaCache);
-		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
 		resetRuntimeConfig();
 	});
 
 	afterEach(() => {
-		Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
 		resetRuntimeConfig();
-		if (previousNodeEnv === undefined) {
-			Reflect.deleteProperty(process.env, "NODE_ENV");
-		} else {
-			process.env["NODE_ENV"] = previousNodeEnv;
-		}
-		previousNodeEnv = undefined;
 		vi.restoreAllMocks();
 	});
 

@@ -10,6 +10,19 @@ const fallbackErrorHandler = createErrorHandler({
 	format: (value: unknown) => JSON.stringify(value, null, 2),
 });
 
+const FIXTURE_ID_PATTERN =
+	/^(test|budget|account|category|transaction|payee|mock)-[a-z0-9_-]+$/i;
+let acceptFixtureIds = false;
+
+/**
+ * Test seam: accept simplified fixture identifiers such as `test-budget-1`.
+ * Set from the test setup file only; production never enables it.
+ * @internal
+ */
+export function setAcceptFixtureBudgetIds(enabled: boolean): void {
+	acceptFixtureIds = enabled;
+}
+
 /**
  * Centralized budget resolution helper that standardizes budget ID validation
  * and resolution logic across the entire YNAB MCP server
@@ -114,13 +127,8 @@ export class BudgetResolver {
 			);
 		}
 
-		// Allow simplified identifiers in test environments
-		if (process.env["NODE_ENV"] === "test") {
-			const testIdentifierPattern =
-				/^(test|budget|account|category|transaction|payee|mock)-[a-z0-9_-]+$/i;
-			if (testIdentifierPattern.test(trimmed)) {
-				return trimmed;
-			}
+		if (acceptFixtureIds && FIXTURE_ID_PATTERN.test(trimmed)) {
+			return trimmed;
 		}
 
 		// Validate UUID format

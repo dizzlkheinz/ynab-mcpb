@@ -37,7 +37,7 @@ describeE2E("YNAB MCP Server - Smoke Tests", () => {
 
 		if (testConfig.skipE2ETests) {
 			console.warn(
-				"Skipping E2E smoke tests - set RUN_LIVE_YNAB_TESTS=true with a real token and leave SKIP_E2E_TESTS disabled",
+				"Skipping E2E smoke tests - set RUN_LIVE_YNAB_TESTS=true with a real token",
 			);
 			return;
 		}

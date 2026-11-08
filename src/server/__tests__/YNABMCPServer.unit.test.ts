@@ -7,11 +7,9 @@ import * as config from "../config.js";
 vi.mock("../config.js", () => ({
 	getRuntimeConfig: () => ({
 		LOG_LEVEL: "error",
-		YNAB_MCP_ENABLE_DELTA: undefined,
 		YNAB_EXPORT_PATH: undefined,
 		XDG_DOCUMENTS_DIR: undefined,
 	}),
-	isDeltaEnabled: () => false,
 	loadConfig: () => ({
 		YNAB_ACCESS_TOKEN: "unit-test-token",
 		YNAB_DEFAULT_BUDGET_ID: undefined,
@@ -205,7 +203,6 @@ describe("YNABMCPServer isolated behavior", () => {
 	});
 
 	it.each([
-		[{ RATE_LIMIT_LOGGING: true }, true],
 		[{ LOG_LEVEL: "debug" as const }, true],
 		[{ LOG_LEVEL: "trace" as const }, true],
 		[{}, false],
@@ -214,7 +211,6 @@ describe("YNABMCPServer isolated behavior", () => {
 		async (overrides, expected) => {
 			vi.spyOn(config, "loadConfig").mockReturnValueOnce({
 				...config.loadConfig(),
-				RATE_LIMIT_LOGGING: false,
 				...overrides,
 			});
 			vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -242,7 +238,7 @@ describe("YNABMCPServer isolated behavior", () => {
 	it("does not log rate limit acquires when diagnostics read the status", async () => {
 		vi.spyOn(config, "loadConfig").mockReturnValueOnce({
 			...config.loadConfig(),
-			RATE_LIMIT_LOGGING: true,
+			LOG_LEVEL: "debug",
 		});
 		const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
 		const configured = new YNABMCPServer(false);
@@ -296,7 +292,7 @@ describe("YNABMCPServer isolated behavior", () => {
 		expect(request).not.toHaveBeenCalled();
 	});
 
-	it("resolves the default budget and caches repeated account reads", async () => {
+	it("resolves the default budget and revalidates repeated account reads with a delta request", async () => {
 		const budgetId = "00000000-0000-4000-8000-000000000001";
 		const request = vi
 			.spyOn(server.getYNABAPI().accounts, "getAccounts")
@@ -311,7 +307,9 @@ describe("YNABMCPServer isolated behavior", () => {
 			expect(result.isError).not.toBe(true);
 			expect(result.structuredContent).toMatchObject({ accounts: [] });
 		}
-		expect(request).toHaveBeenCalledExactlyOnceWith(budgetId);
+		expect(request).toHaveBeenCalledTimes(2);
+		expect(request).toHaveBeenNthCalledWith(1, budgetId);
+		expect(request).toHaveBeenNthCalledWith(2, budgetId, 1);
 	});
 
 	it.each([false, true])(

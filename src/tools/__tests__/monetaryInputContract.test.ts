@@ -26,13 +26,14 @@ describe("public monetary input contract", () => {
 		expect(parsed.amount).toBe(12_345);
 	});
 
-	it("preserves the deprecated amount field as milliunits without guessing", () => {
-		const parsed = CreateTransactionSchema.parse({
-			account_id: "account-1",
-			amount: 12_345,
-			date: "2026-07-09",
-		});
-		expect(parsed.amount).toBe(12_345);
+	it("rejects the removed legacy amount field", () => {
+		expect(() =>
+			CreateTransactionSchema.parse({
+				account_id: "account-1",
+				amount: 12_345,
+				date: "2026-07-09",
+			}),
+		).toThrow();
 	});
 
 	it("rejects ambiguous transaction representations", () => {
@@ -78,7 +79,7 @@ describe("public monetary input contract", () => {
 		expect(updates.transactions[0]?.amount).toBe(2_345);
 	});
 
-	it("normalizes category funding while preserving its legacy alias", () => {
+	it("normalizes category funding", () => {
 		expect(
 			UpdateCategorySchema.parse({
 				category_id: "category-1",
@@ -88,8 +89,14 @@ describe("public monetary input contract", () => {
 		expect(
 			UpdateCategorySchema.parse({
 				category_id: "category-1",
-				budgeted: 100_125,
+				budgeted_milliunits: 100_125,
 			}).budgeted,
 		).toBe(100_125);
+		expect(() =>
+			UpdateCategorySchema.parse({
+				category_id: "category-1",
+				budgeted: 100_125,
+			}),
+		).toThrow();
 	});
 });

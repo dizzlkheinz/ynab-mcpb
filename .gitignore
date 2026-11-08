@@ -20,7 +20,6 @@ build/
 .vuepress/dist/
 *.tsbuildinfo
 *.mcpb
-manifest.json
 
 # Environment variables
 .env

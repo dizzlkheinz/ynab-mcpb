@@ -1,16 +1,16 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
 import { createReadDeps } from "../../__tests__/readDeps.js";
-import { textOf } from "../../__tests__/testUtils.js";
+import { getLiveTestGate, textOf } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { handleGetPayee, handleListPayees } from "../payeeTools.js";
 
 /**
  * Integration tests for payee tools using real YNAB API
- * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
+ * Skips if YNAB_ACCESS_TOKEN is not set unless RUN_LIVE_YNAB_TESTS=true
  */
 const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
-const shouldSkip = process.env["SKIP_E2E_TESTS"] === "true" || !hasToken;
+const shouldSkip = !getLiveTestGate().enabled || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("Payee Tools Integration", () => {

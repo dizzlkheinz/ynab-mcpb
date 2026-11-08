@@ -18,7 +18,7 @@
 			"environmentVariables": [
 				{
 					"name": "YNAB_ACCESS_TOKEN",
-					"description": "YNAB Personal Access Token from https://app.youneedabudget.com/settings/developer",
+					"description": "YNAB Personal Access Token from https://app.ynab.com/settings/developer",
 					"isRequired": true,
 					"format": "string",
 					"isSecret": true
@@ -32,7 +32,7 @@
 				},
 				{
 					"name": "YNAB_MCP_TOOL_PROFILE",
-					"description": "Static tool profile: core, read-only, or full (default)",
+					"description": "Static tool profile: core or full (default)",
 					"isRequired": false,
 					"format": "string",
 					"isSecret": false

@@ -58,11 +58,6 @@ export class YNABAPIError extends Error {
 		this.code = code;
 		this.originalError = originalError;
 	}
-
-	// Expose status as an alias for code for backward compatibility with tests
-	get status(): YNABErrorCode {
-		return this.code;
-	}
 }
 
 /**
@@ -305,7 +300,7 @@ export class ErrorHandler {
 				];
 			case YNABErrorCode.UNAUTHORIZED:
 				return [
-					"Go to https://app.youneedabudget.com/settings/developer to generate a new access token",
+					"Go to https://app.ynab.com/settings/developer to generate a new access token",
 					"Make sure you copied the entire token without any extra spaces",
 					"Check that your token hasn't expired",
 				];
@@ -325,7 +320,7 @@ export class ErrorHandler {
 				];
 			case YNABErrorCode.INTERNAL_SERVER_ERROR:
 				return [
-					"Check YNAB's status page at https://status.youneedabudget.com",
+					"Check YNAB's status page at https://status.ynab.com",
 					"Try again in a few minutes",
 					"Contact YNAB support if the issue persists",
 				];

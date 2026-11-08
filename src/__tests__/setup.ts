@@ -4,7 +4,7 @@
 
 // Load environment variables from .env for integration tests
 import "dotenv/config";
-import { beforeEach } from "vitest";
+import { setAcceptFixtureBudgetIds } from "../server/budgetResolver.js";
 import {
 	getLiveTestGate,
 	MOCK_TEST_ACCESS_TOKEN,
@@ -19,14 +19,14 @@ if (liveTestGate.enabled) {
 	process.env["YNAB_ACCESS_TOKEN"] = normalizeAccessToken(
 		process.env["YNAB_ACCESS_TOKEN"],
 	);
-	process.env["SKIP_E2E_TESTS"] = "false";
 } else {
 	process.env["YNAB_ACCESS_TOKEN"] = MOCK_TEST_ACCESS_TOKEN;
-	process.env["SKIP_E2E_TESTS"] = "true";
+	// Offline runs must never reach the real API, whatever a local .env says.
+	process.env["RUN_LIVE_YNAB_TESTS"] = "false";
 }
 
-// Set test environment variables immediately
-process.env["NODE_ENV"] = "test";
+// Accept fixture budget IDs such as "test-budget-1" in tests
+setAcceptFixtureBudgetIds(true);
 if (!process.env["LOG_LEVEL"]) {
 	process.env["LOG_LEVEL"] = "error";
 }
@@ -66,7 +66,3 @@ if (!process.env["VERBOSE_TESTS"]) {
 		// Suppress debug logs by default
 	};
 }
-
-beforeEach(() => {
-	process.env["NODE_ENV"] = "test";
-});

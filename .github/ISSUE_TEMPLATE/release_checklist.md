@@ -5,27 +5,18 @@ title: "Release vX.Y.Z"
 labels: release
 ---
 
-## Version
+See `docs/maintainers/npm-publishing.md` for details.
 
-- Target: vX.Y.Z
+## Before tagging
 
-## Checks
-
-- [ ] Version bumped in `package.json` and `manifest.json`
-- [ ] Public API surface reviewed (see `docs/VERSIONING.md`)
-- [ ] Changelog entry prepared (Added/Changed/Fixed/Removed)
-- [ ] Tests and lint pass
-- [ ] Built with `npm run build` and packaged with `npm run package:mcpb`
-- [ ] Manual sanity check in Claude Desktop (`ynab_diagnostic_info`, basic tool calls)
+- [ ] Version bumped in `package.json`, `package-lock.json`, `manifest.json` and `server.json` (`npm run verify:metadata` checks they agree)
+- [ ] `[Unreleased]` changelog entries moved under the new version
+- [ ] `npm run type-check`, `npm run test:coverage`, `npm run test:integration` pass
+- [ ] Live smoke run locally: `RUN_LIVE_YNAB_TESTS=true npm run test:live`
+- [ ] `npm run build` and `npm pack --dry-run --ignore-scripts` look right
 
 ## Publish
 
-- [ ] Tag pushed: `vX.Y.Z`
-- [ ] GitHub Release created with `.mcpb` attached
-- [ ] Release notes include upgrade/migration details if needed
-
-## Post‑release
-
-- [ ] Update docs if applicable
-- [ ] Monitor issues for regressions
-
+- [ ] Tag pushed: `vX.Y.Z` (the `Release MCPB` workflow attaches the `.mcpb` to the GitHub Release)
+- [ ] `Publish to npm & MCP Registry` workflow succeeded
+- [ ] Manual sanity check in Claude Desktop (`ynab_diagnostic_info`, a few reads, one previewed write)

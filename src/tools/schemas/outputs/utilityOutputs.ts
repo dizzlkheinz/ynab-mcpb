@@ -136,7 +136,6 @@ export const ServerInfoSchema = z.object({
 	pid: z.number(),
 	uptime_ms: z.number(),
 	uptime_readable: z.string(),
-	env: z.record(z.string(), z.unknown()),
 });
 
 /**
@@ -191,10 +190,8 @@ export const CacheInfoSchema = z.object({
  * Reports status of delta request feature and knowledge base.
  */
 export const DeltaInfoSchema = z.object({
-	enabled: z.boolean(),
 	knowledge_entries: z.number(),
 	knowledge_stats: z.record(z.string(), z.unknown()),
-	feature_flag: z.string(),
 	delta_hits: z.number(),
 	delta_misses: z.number(),
 	delta_hit_rate: z.number(),

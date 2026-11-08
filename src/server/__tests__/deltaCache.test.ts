@@ -24,7 +24,6 @@ let logger: Logger;
 
 beforeEach(() => {
 	vi.useFakeTimers({ now: 1000 });
-	vi.stubEnv("YNAB_MCP_ENABLE_DELTA", "true");
 	resetRuntimeConfig();
 	cache = new CacheManager();
 	knowledge = new ServerKnowledgeStore();
@@ -124,25 +123,6 @@ describe("DeltaCache with the real cache lifecycle", () => {
 		expect(knowledge.get(key)).toBe(1001);
 	});
 
-	it("serves fresh reads from cache without a request when delta is disabled", async () => {
-		vi.stubEnv("YNAB_MCP_ENABLE_DELTA", "false");
-		resetRuntimeConfig();
-		await seed();
-		const fetcher = vi.fn();
-		const result = await delta.fetchWithDelta<Entity>(
-			key,
-			budget,
-			fetcher,
-			mergeFlatEntities,
-			{ ttl },
-		);
-		expect(fetcher).not.toHaveBeenCalled();
-		expect(result).toMatchObject({
-			data: [{ id: "original" }],
-			wasCached: true,
-		});
-	});
-
 	it("uses an expired snapshot's knowledge and merges updates, additions and deletions", async () => {
 		await seed(key, [
 			{ id: "changed", name: "before" },
@@ -225,39 +205,6 @@ describe("DeltaCache with the real cache lifecycle", () => {
 			data: [{ id: "complete" }],
 			usedDelta: false,
 		});
-	});
-
-	it("retains normal TTL caching while the delta feature is disabled", async () => {
-		vi.stubEnv("YNAB_MCP_ENABLE_DELTA", "false");
-		resetRuntimeConfig();
-		await seed();
-		const fetcher = vi.fn().mockResolvedValue({
-			data: [{ id: "replacement" }],
-			serverKnowledge: 1010,
-		});
-		expect(
-			(
-				await delta.fetchWithDelta<Entity>(
-					key,
-					budget,
-					fetcher,
-					mergeFlatEntities,
-					{ ttl },
-				)
-			).wasCached,
-		).toBe(true);
-		expect(fetcher).not.toHaveBeenCalled();
-		expire();
-		const refreshed = await delta.fetchWithDelta<Entity>(
-			key,
-			budget,
-			fetcher,
-			mergeFlatEntities,
-			{ ttl },
-		);
-		expect(fetcher).toHaveBeenCalledExactlyOnceWith(undefined);
-		expect(refreshed.data).toEqual([{ id: "replacement" }]);
-		expect(refreshed.usedDelta).toBe(false);
 	});
 
 	it("uses fresh data but requests a full response on the next forced refresh", async () => {

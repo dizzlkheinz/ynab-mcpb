@@ -20,6 +20,16 @@ interface CacheSetOptions {
 	staleWhileRevalidate?: number | undefined;
 }
 
+const DEFAULT_MAX_ENTRIES = 1000;
+const DEFAULT_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_STALE_MS = 2 * 60 * 1000;
+
+export interface CacheManagerOptions {
+	maxEntries?: number;
+	defaultTtlMs?: number;
+	staleMs?: number;
+}
+
 export class CacheManager {
 	private cache = new Map<string, CacheEntry<unknown>>();
 	private readonly defaultTTL: number;
@@ -32,13 +42,10 @@ export class CacheManager {
 	private pendingFetches = new Map<string, Promise<unknown>>();
 	private pendingRefresh = new Set<string>();
 
-	constructor() {
-		this.maxEntries = this.parseEnvInt("YNAB_MCP_CACHE_MAX_ENTRIES", 1000);
-		this.defaultStaleWindow = this.parseEnvInt(
-			"YNAB_MCP_CACHE_STALE_MS",
-			2 * 60 * 1000,
-		);
-		this.defaultTTL = this.parseEnvInt("YNAB_MCP_CACHE_DEFAULT_TTL_MS", 300000);
+	constructor(options: CacheManagerOptions = {}) {
+		this.maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
+		this.defaultStaleWindow = options.staleMs ?? DEFAULT_STALE_MS;
+		this.defaultTTL = options.defaultTtlMs ?? DEFAULT_TTL_MS;
 	}
 
 	/**
@@ -502,17 +509,6 @@ export class CacheManager {
 				break;
 			}
 		}
-	}
-
-	/**
-	 * Parse environment variable as integer with fallback
-	 */
-	private parseEnvInt(key: string, defaultValue: number): number {
-		const value = process.env[key];
-		if (!value) return defaultValue;
-
-		const parsed = Number.parseInt(value, 10);
-		return Number.isNaN(parsed) ? defaultValue : parsed;
 	}
 
 	/**

@@ -46,14 +46,9 @@ const mockYnabAPI = {
 // Import mocked cache manager
 const { CacheManager } = await import("../../server/cacheManager.js");
 
-// Capture original NODE_ENV for restoration
-const originalNodeEnv = process.env["NODE_ENV"];
-
 describe("Category Tools", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		// Reset NODE_ENV to test to ensure cache bypassing in tests
-		process.env["NODE_ENV"] = "test";
 		(cacheManager.wrap as ReturnType<typeof vi.fn>).mockImplementation(
 			async (
 				_key: string,
@@ -71,14 +66,7 @@ describe("Category Tools", () => {
 		);
 	});
 
-	afterAll(() => {
-		// Restore original NODE_ENV value
-		if (originalNodeEnv === undefined) {
-			Reflect.deleteProperty(process.env, "NODE_ENV");
-		} else {
-			process.env["NODE_ENV"] = originalNodeEnv;
-		}
-	});
+	afterAll(() => {});
 
 	describe("handleListCategories", () => {
 		it("should include cache metadata from delta fetcher results", async () => {
@@ -635,7 +623,7 @@ describe("Category Tools", () => {
 				const result = UpdateCategorySchema.parse({
 					budget_id: "budget-1",
 					category_id: "category-1",
-					budgeted: 50000,
+					budgeted_milliunits: 50000,
 				});
 				expect(result.budget_id).toBe("budget-1");
 				expect(result.category_id).toBe("category-1");
@@ -647,7 +635,7 @@ describe("Category Tools", () => {
 					UpdateCategorySchema.parse({
 						budget_id: "budget-1",
 						category_id: "category-1",
-						budgeted: 50.5,
+						budgeted_milliunits: 50.5,
 					}),
 				).toThrow();
 			});
@@ -655,7 +643,7 @@ describe("Category Tools", () => {
 			it("should allow missing budget_id for default resolution", () => {
 				const result = UpdateCategorySchema.parse({
 					category_id: "category-1",
-					budgeted: 50000,
+					budgeted_milliunits: 50000,
 				});
 				expect(result.budget_id).toBeUndefined();
 				expect(result.category_id).toBe("category-1");
@@ -674,7 +662,7 @@ describe("Category Tools", () => {
 				const result = UpdateCategorySchema.parse({
 					budget_id: "budget-1",
 					category_id: "category-1",
-					budgeted: -10000,
+					budgeted_milliunits: -10000,
 				});
 				expect(result.budgeted).toBe(-10000);
 			});
@@ -683,7 +671,7 @@ describe("Category Tools", () => {
 				const result = UpdateCategorySchema.parse({
 					budget_id: "budget-1",
 					category_id: "category-1",
-					budgeted: 0,
+					budgeted_milliunits: 0,
 				});
 				expect(result.budgeted).toBe(0);
 			});

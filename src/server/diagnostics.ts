@@ -6,7 +6,6 @@
  */
 
 import type { CacheManager } from "./cacheManager.js";
-import { isDeltaEnabled } from "./config.js";
 import type { DeltaCache } from "./deltaCache.js";
 import type { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
 
@@ -143,9 +142,6 @@ export class DiagnosticManager {
 				pid: process.pid,
 				uptime_ms: uptimeMs,
 				uptime_readable: formatUptime(uptimeMs),
-				env: {
-					node_env: process.env["NODE_ENV"] || "development",
-				},
 			};
 		}
 
@@ -274,14 +270,8 @@ export class DiagnosticManager {
 			const deltaHitRate =
 				totalDeltaRequests > 0 ? deltaStats.deltaHits / totalDeltaRequests : 0;
 			diagnostics["delta"] = {
-				enabled: isDeltaEnabled(),
 				knowledge_entries: Object.keys(knowledgeStats.entries).length, // Canonical count from entries
 				knowledge_stats: knowledgeStats.entries,
-				// `enabled` is the effective gate DeltaCache uses (parsed once);
-				// `feature_flag` is the raw env value read live. They can differ
-				// on purpose: a malformed flag (e.g. "TRUE") shows here verbatim
-				// next to enabled:false, which is the point of reporting both.
-				feature_flag: process.env["YNAB_MCP_ENABLE_DELTA"] ?? "false",
 				delta_hits: deltaStats.deltaHits,
 				delta_misses: deltaStats.deltaMisses,
 				delta_hit_rate: Number(deltaHitRate.toFixed(4)),

@@ -206,11 +206,7 @@ export class ToolRegistry {
 	>(definition: ToolDefinition<TInput, TOutput>): void {
 		this.assertValidDefinition(definition);
 		if (
-			!toolBelongsToProfile(
-				this.deps.toolProfile ?? "full",
-				definition.name,
-				definition.metadata?.annotations,
-			)
+			!toolBelongsToProfile(this.deps.toolProfile ?? "full", definition.name)
 		) {
 			return;
 		}

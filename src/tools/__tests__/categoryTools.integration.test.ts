@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
 import { createReadDeps } from "../../__tests__/readDeps.js";
-import { textOf } from "../../__tests__/testUtils.js";
+import { getLiveTestGate, textOf } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import {
 	handleGetCategory,
@@ -13,8 +13,7 @@ import {
  * Integration tests for category tools using real YNAB API
  */
 const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
-const shouldSkip =
-	process.env["SKIP_E2E_TESTS"]?.toLowerCase() === "true" || !hasToken;
+const shouldSkip = !getLiveTestGate().enabled || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("Category Tools Integration", () => {

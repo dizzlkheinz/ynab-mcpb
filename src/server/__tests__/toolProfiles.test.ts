@@ -11,16 +11,6 @@ describe("tool profiles", () => {
 		expect(toolBelongsToProfile("full", "custom_tool")).toBe(true);
 	});
 
-	it("read-only includes only tools with an explicit read-only annotation", () => {
-		expect(
-			toolBelongsToProfile("read-only", "read", { readOnlyHint: true }),
-		).toBe(true);
-		expect(
-			toolBelongsToProfile("read-only", "write", { readOnlyHint: false }),
-		).toBe(false);
-		expect(toolBelongsToProfile("read-only", "unannotated")).toBe(false);
-	});
-
 	it("core keeps common reads and differentiated workflows", () => {
 		expect(CORE_TOOL_NAMES.size).toBeGreaterThan(10);
 		for (const name of [

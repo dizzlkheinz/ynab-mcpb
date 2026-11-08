@@ -117,7 +117,6 @@ describe("transactionTools", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		// Each test controls its explicit read dependencies.
-		process.env["NODE_ENV"] = "test";
 	});
 
 	describe("ListTransactionsSchema", () => {
@@ -887,7 +886,7 @@ describe("transactionTools", () => {
 			const validParams = {
 				budget_id: "budget-123",
 				account_id: "account-456",
-				amount: -50000, // $50.00 outflow in milliunits
+				amount_milliunits: -50000, // $50.00 outflow in milliunits
 				date: "2024-01-01",
 			};
 
@@ -899,7 +898,7 @@ describe("transactionTools", () => {
 			const validParams = {
 				budget_id: "budget-123",
 				account_id: "account-456",
-				amount: -50000,
+				amount_milliunits: -50000,
 				date: "2024-01-01",
 				payee_name: "Test Payee",
 				payee_id: "payee-789",
@@ -917,7 +916,7 @@ describe("transactionTools", () => {
 		it("should allow missing budget_id for default resolution", () => {
 			const paramsWithoutBudget = {
 				account_id: "account-456",
-				amount: -50000,
+				amount_milliunits: -50000,
 				date: "2024-01-01",
 			};
 
@@ -931,7 +930,7 @@ describe("transactionTools", () => {
 		it("should require account_id", () => {
 			const invalidParams = {
 				budget_id: "budget-123",
-				amount: -50000,
+				amount_milliunits: -50000,
 				date: "2024-01-01",
 			};
 
@@ -943,7 +942,7 @@ describe("transactionTools", () => {
 			const invalidParams = {
 				budget_id: "budget-123",
 				account_id: "account-456",
-				amount: -500.5, // Decimal not allowed
+				amount_milliunits: -500.5, // Decimal not allowed
 				date: "2024-01-01",
 			};
 
@@ -951,7 +950,7 @@ describe("transactionTools", () => {
 			expect(result.success).toBe(false);
 			if (!result.success) {
 				expect(result.error.issues[0]!.message).toContain(
-					"Amount must be an integer in milliunits",
+					"amount_milliunits must be an integer",
 				);
 			}
 		});
@@ -960,7 +959,7 @@ describe("transactionTools", () => {
 			const invalidParams = {
 				budget_id: "budget-123",
 				account_id: "account-456",
-				amount: -50000,
+				amount_milliunits: -50000,
 				date: "01/01/2024", // Invalid format
 			};
 
@@ -977,7 +976,7 @@ describe("transactionTools", () => {
 			const invalidParams = {
 				budget_id: "budget-123",
 				account_id: "account-456",
-				amount: -50000,
+				amount_milliunits: -50000,
 				date: "2024-01-01",
 				cleared: "invalid-status",
 			};
@@ -990,7 +989,7 @@ describe("transactionTools", () => {
 			const invalidParams = {
 				budget_id: "budget-123",
 				account_id: "account-456",
-				amount: -50000,
+				amount_milliunits: -50000,
 				date: "2024-01-01",
 				flag_color: "invalid-color",
 			};
@@ -1003,16 +1002,16 @@ describe("transactionTools", () => {
 			const validParams = {
 				budget_id: "budget-123",
 				account_id: "account-456",
-				amount: -75000,
+				amount_milliunits: -75000,
 				date: "2024-01-01",
 				subtransactions: [
 					{
-						amount: -25000,
+						amount_milliunits: -25000,
 						memo: "Groceries",
 						category_id: "category-groceries",
 					},
 					{
-						amount: -50000,
+						amount_milliunits: -50000,
 						memo: "Rent",
 						category_id: "category-rent",
 					},
@@ -1027,14 +1026,14 @@ describe("transactionTools", () => {
 			const invalidParams = {
 				budget_id: "budget-123",
 				account_id: "account-456",
-				amount: -70000,
+				amount_milliunits: -70000,
 				date: "2024-01-01",
 				subtransactions: [
 					{
-						amount: -25000,
+						amount_milliunits: -25000,
 					},
 					{
-						amount: -40000,
+						amount_milliunits: -40000,
 					},
 				],
 			};
@@ -1377,76 +1376,6 @@ describe("transactionTools", () => {
 
 			const response = JSON.parse(textOf(result.content[0]));
 			expect(response.error.message).toBe("Failed to create transaction");
-		});
-	});
-
-	describe("handleCreateTransactions", () => {
-		it("surfaces top-level validation errors with a reserved transaction index", async () => {
-			const invalidParams = {
-				budget_id: "",
-				transactions: [],
-			};
-
-			const result = await handleCreateTransactions(
-				mockYnabAPI,
-				invalidParams as any,
-			);
-
-			expect(result.content).toHaveLength(1);
-			const parsed = JSON.parse(textOf(result.content[0]));
-			expect(parsed.error.code).toBe("VALIDATION_ERROR");
-			expect(parsed.error.details).toBeDefined();
-
-			const details = JSON.parse(parsed.error.details ?? "[]");
-			expect(details).toHaveLength(1);
-			expect(details[0].transaction_index).toBeNull();
-			expect(details[0].errors).toEqual(
-				expect.arrayContaining([
-					"Budget ID is required",
-					"At least one transaction is required",
-				]),
-			);
-		});
-
-		it("combines reserved and per-transaction validation errors", async () => {
-			const invalidParams = {
-				budget_id: "budget-123",
-				dry_run: "later",
-				transactions: [
-					{
-						account_id: "",
-						amount: -50000,
-						date: "2024-01-01",
-					},
-				],
-			};
-
-			const result = await handleCreateTransactions(
-				mockYnabAPI,
-				invalidParams as any,
-			);
-
-			const parsed = JSON.parse(textOf(result.content[0]));
-			expect(parsed.error.code).toBe("VALIDATION_ERROR");
-			expect(parsed.error.details).toBeDefined();
-
-			const details = JSON.parse(parsed.error.details ?? "[]");
-			const generalEntry = details.find(
-				(entry: any) => entry.transaction_index === null,
-			);
-			const transactionEntry = details.find(
-				(entry: any) => entry.transaction_index === 0,
-			);
-
-			expect(generalEntry).toBeDefined();
-			expect(generalEntry.errors).toEqual(
-				expect.arrayContaining([expect.stringContaining("expected boolean")]),
-			);
-
-			expect(transactionEntry).toBeDefined();
-			expect(transactionEntry.errors).toEqual(
-				expect.arrayContaining(["Account ID is required"]),
-			);
 		});
 	});
 
@@ -2662,7 +2591,7 @@ describe("transactionTools", () => {
 			const validParams = {
 				budget_id: "budget-123",
 				transaction_id: "transaction-456",
-				amount: -60000, // Updated amount
+				amount_milliunits: -60000, // Updated amount
 			};
 
 			const result = UpdateTransactionSchema.safeParse(validParams);
@@ -2674,7 +2603,7 @@ describe("transactionTools", () => {
 				budget_id: "budget-123",
 				transaction_id: "transaction-456",
 				account_id: "account-789",
-				amount: -60000,
+				amount_milliunits: -60000,
 				date: "2024-01-02",
 				payee_name: "Updated Payee",
 				payee_id: "payee-999",
@@ -2692,7 +2621,7 @@ describe("transactionTools", () => {
 		it("should allow missing budget_id for default resolution", () => {
 			const paramsWithoutBudget = {
 				transaction_id: "transaction-456",
-				amount: -60000,
+				amount_milliunits: -60000,
 			};
 
 			const result = UpdateTransactionSchema.safeParse(paramsWithoutBudget);
@@ -2705,7 +2634,7 @@ describe("transactionTools", () => {
 		it("should require transaction_id", () => {
 			const invalidParams = {
 				budget_id: "budget-123",
-				amount: -60000,
+				amount_milliunits: -60000,
 			};
 
 			const result = UpdateTransactionSchema.safeParse(invalidParams);
@@ -2716,14 +2645,14 @@ describe("transactionTools", () => {
 			const invalidParams = {
 				budget_id: "budget-123",
 				transaction_id: "transaction-456",
-				amount: -600.5, // Decimal not allowed
+				amount_milliunits: -600.5, // Decimal not allowed
 			};
 
 			const result = UpdateTransactionSchema.safeParse(invalidParams);
 			expect(result.success).toBe(false);
 			if (!result.success) {
 				expect(result.error.issues[0]!.message).toContain(
-					"Amount must be an integer in milliunits",
+					"amount_milliunits must be an integer",
 				);
 			}
 		});
@@ -3060,7 +2989,7 @@ describe("transactionTools", () => {
 	describe("CreateTransactionsSchema", () => {
 		const buildTransaction = (overrides: Record<string, unknown> = {}) => ({
 			account_id: "account-123",
-			amount: -5000,
+			amount_milliunits: -5000,
 			date: "2024-01-01",
 			memo: "Bulk entry",
 			...overrides,
@@ -3159,7 +3088,7 @@ describe("transactionTools", () => {
 		it("should require integer milliunit amounts", () => {
 			const params = {
 				budget_id: "budget-123",
-				transactions: [buildTransaction({ amount: -50.25 })],
+				transactions: [buildTransaction({ amount_milliunits: -50.25 })],
 			};
 			const result = CreateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
@@ -3167,7 +3096,7 @@ describe("transactionTools", () => {
 				expect(result.error.issues[0]!.path).toEqual([
 					"transactions",
 					0,
-					"amount",
+					"amount_milliunits",
 				]);
 			}
 		});
@@ -3185,7 +3114,7 @@ describe("transactionTools", () => {
 			const params = {
 				budget_id: "budget-123",
 				transactions: [
-					buildTransaction({ subtransactions: [{ amount: -2500 }] }),
+					buildTransaction({ subtransactions: [{ amount_milliunits: -2500 }] }),
 				],
 			};
 			const result = CreateTransactionsSchema.safeParse(params);
@@ -3204,7 +3133,7 @@ describe("transactionTools", () => {
 				budget_id: "budget-123",
 				transactions: [
 					buildTransaction(),
-					buildTransaction({ amount: "invalid" }),
+					buildTransaction({ amount_milliunits: "invalid" }),
 				],
 			};
 			const result = CreateTransactionsSchema.safeParse(params);
@@ -3436,29 +3365,6 @@ describe("transactionTools", () => {
 					"account-bar",
 				]);
 				expect(response["transactions_preview"]).toHaveLength(2);
-			});
-
-			it("surfaces validation errors before execution", async () => {
-				const invalidParams = buildParams({
-					transactions: [
-						// @ts-expect-error -- account_id is missing on purpose
-						{
-							amount: -2000,
-							date: "2024-01-01",
-						},
-					],
-				});
-
-				const result = await handleCreateTransactions(
-					mockYnabAPI,
-					invalidParams as any,
-				);
-				const parsed = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
-				expect(parsed.error).toBeDefined();
-				expect(parsed.error.message).toContain("validation failed");
-				expect(
-					mockYnabAPI.transactions.createTransactions,
-				).not.toHaveBeenCalled();
 			});
 		});
 
@@ -3832,7 +3738,10 @@ describe("transactionTools", () => {
 			const params = {
 				budget_id: "budget-123",
 				transactions: [
-					buildUpdateTransaction({ amount: -10000, memo: "Updated" }),
+					buildUpdateTransaction({
+						amount_milliunits: -10000,
+						memo: "Updated",
+					}),
 					buildUpdateTransaction({ id: "transaction-456", cleared: "cleared" }),
 				],
 			};
@@ -3846,7 +3755,7 @@ describe("transactionTools", () => {
 		it("should require id field for each transaction", () => {
 			const params = {
 				budget_id: "budget-123",
-				transactions: [{ amount: -5000 }],
+				transactions: [{ amount_milliunits: -5000 }],
 			};
 			const result = UpdateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
@@ -3933,7 +3842,7 @@ describe("transactionTools", () => {
 		it("should require integer milliunit amounts when provided", () => {
 			const params = {
 				budget_id: "budget-123",
-				transactions: [buildUpdateTransaction({ amount: -50.25 })],
+				transactions: [buildUpdateTransaction({ amount_milliunits: -50.25 })],
 			};
 			const result = UpdateTransactionsSchema.safeParse(params);
 			expect(result.success).toBe(false);
@@ -3941,7 +3850,7 @@ describe("transactionTools", () => {
 				expect(result.error.issues[0]!.path).toEqual([
 					"transactions",
 					0,
-					"amount",
+					"amount_milliunits",
 				]);
 			}
 		});
@@ -4231,23 +4140,6 @@ describe("transactionTools", () => {
 					{ amount: -3, amount_milliunits: -3000, category_id: "category-1" },
 					{ amount: -2, amount_milliunits: -2000, category_id: "category-2" },
 				]);
-			});
-
-			it("surfaces validation errors before execution", async () => {
-				const invalidParams = buildParams({
-					transactions: [{ amount: -2000 }],
-				});
-
-				const result = await handleUpdateTransactions(
-					mockYnabAPI,
-					invalidParams as any,
-				);
-				const parsed = JSON.parse(maybeTextOf(result.content?.[0]) ?? "{}");
-				expect(parsed.error).toBeDefined();
-				expect(parsed.error.message).toContain("validation failed");
-				expect(
-					mockYnabAPI.transactions.updateTransactions,
-				).not.toHaveBeenCalled();
 			});
 
 			it("fetches fresh preview state once per transaction", async () => {

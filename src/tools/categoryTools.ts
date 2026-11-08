@@ -411,7 +411,6 @@ Args:
   - category_id (string, required): Category UUID.
   - budgeted_decimal (number, preferred): New funding amount in decimal currency units.
   - budgeted_milliunits (int, alternative): Explicit raw YNAB milliunits.
-  - budgeted (int, deprecated): Backward-compatible alias for budgeted_milliunits.
   - dry_run (boolean, optional): Preview without saving. Default: false.
 
 Returns: updated category with new budgeted, activity, balance.

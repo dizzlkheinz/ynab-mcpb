@@ -55,7 +55,7 @@ export class RequestLogger {
 
 	constructor(config: Partial<LoggerConfig> = {}) {
 		this.config = {
-			enabled: process.env["NODE_ENV"] !== "production",
+			enabled: true,
 			logLevel: config.logLevel ?? defaultLogLevel(),
 			maxLogEntries: 1000,
 			sanitizeParameters: true,
@@ -74,12 +74,11 @@ export class RequestLogger {
 	}
 
 	/**
-	 * Write a debug line to stderr when the log level is debug, or always when
-	 * `force` is set. Debug lines are not stored as request logs, so they do not
+	 * Write a debug line to stderr when the log level is debug. Debug lines are not stored as request logs, so they do not
 	 * depend on `enabled`.
 	 */
-	debug(message: string, force = false): void {
-		if (force || this.shouldLog("debug")) {
+	debug(message: string): void {
+		if (this.shouldLog("debug")) {
 			console.error(`[DEBUG] ${message}`);
 		}
 	}

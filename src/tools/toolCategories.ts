@@ -151,15 +151,4 @@ export const ToolAnnotationPresets = {
 		idempotentHint: true,
 		openWorldHint: false,
 	},
-
-	/**
-	 * Backward-compatible alias for existing call sites.
-	 * Prefer explicit READ_ONLY or MUTATION presets for new tools.
-	 */
-	UTILITY_LOCAL: {
-		readOnlyHint: true,
-		destructiveHint: false,
-		idempotentHint: true,
-		openWorldHint: false,
-	},
 } as const satisfies Record<string, Omit<MCPToolAnnotations, "title">>;

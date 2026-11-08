@@ -3,15 +3,7 @@
  * These tests use mocked YNAB API responses to test complete workflows
  */
 
-import {
-	afterAll,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CACHE_TTLS, type CacheManager } from "../server/cacheManager.js";
 import { YNABMCPServer } from "../server/YNABMCPServer.js";
 import {
@@ -511,7 +503,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 					account_id: accountId,
 					category_id: "category-1",
 					payee_name: "Test Payee",
-					amount: -2500,
+					amount_milliunits: -2500,
 					memo: "Test transaction",
 					date: "2024-01-17",
 					cleared: "uncleared",
@@ -803,7 +795,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				{
 					budget_id: budgetId,
 					category_id: "category-1",
-					budgeted: 160000,
+					budgeted_milliunits: 160000,
 				},
 			);
 			validateToolResult(updateResult);
@@ -936,25 +928,8 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 	});
 
 	describe("Caching Integration Tests", () => {
-		let previousNodeEnv: string | undefined;
-
-		beforeAll(() => {
-			previousNodeEnv = process.env["NODE_ENV"];
-			process.env["NODE_ENV"] = "development";
-		});
-
 		beforeEach(() => {
 			cacheManager.clear();
-			process.env["NODE_ENV"] = "development";
-		});
-
-		afterAll(() => {
-			// Restore NODE_ENV after all caching tests complete
-			if (previousNodeEnv === undefined) {
-				Reflect.deleteProperty(process.env, "NODE_ENV");
-			} else {
-				process.env["NODE_ENV"] = previousNodeEnv;
-			}
 		});
 
 		it("should cache budget list requests and improve performance on subsequent calls", {
@@ -1121,11 +1096,11 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				statsAfterUnfiltered.size,
 			);
 
-			// Both API methods should have been called
-			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledTimes(1);
+			// Both API methods were called; each repeat revalidates with a delta request
+			expect(mockYnabAPI.transactions.getTransactions).toHaveBeenCalledTimes(2);
 			expect(
 				mockYnabAPI.transactions.getTransactionsByAccount,
-			).toHaveBeenCalledTimes(1);
+			).toHaveBeenCalledTimes(2);
 		});
 
 		it("should handle cache warming after setting default budget", {

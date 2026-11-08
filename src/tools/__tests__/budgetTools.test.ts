@@ -44,8 +44,6 @@ const mockYnabAPI = {
 describe("Budget Tools", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		// Reset NODE_ENV to test to ensure cache bypassing in tests
-		process.env["NODE_ENV"] = "test";
 	});
 
 	describe("handleListBudgets", () => {

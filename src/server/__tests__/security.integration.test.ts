@@ -21,7 +21,7 @@ describe("Security Integration", () => {
 		SecurityMiddleware.reset();
 
 		// Pin the logger config so console-output assertions do not depend
-		// on ambient LOG_LEVEL/NODE_ENV values
+		// on ambient LOG_LEVEL values
 		globalRequestLogger.setConfig({ enabled: true, logLevel: "info" });
 	});
 

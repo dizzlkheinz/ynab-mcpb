@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
 import { createReadDeps } from "../../__tests__/readDeps.js";
 import {
+	getLiveTestGate,
 	isAuthError,
 	isRateLimitError,
 	skipOnRateLimit,
@@ -16,9 +17,7 @@ import { handleListAccounts } from "../accountTools.js";
 import { DeltaFetcher } from "../deltaFetcher.js";
 import { handleListTransactions } from "../transactionReadTools.js";
 
-const shouldSkip = ["true", "1", "yes", "y", "on"].includes(
-	(process.env["SKIP_E2E_TESTS"] || "").toLowerCase().trim(),
-);
+const shouldSkip = !getLiveTestGate().enabled;
 const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
 const skipTests = shouldSkip || !hasToken;
 const describeIntegration = skipTests ? describe.skip : describe;
@@ -28,7 +27,6 @@ describeIntegration("Delta-backed account tool handlers", () => {
 	let testBudgetId: string;
 	let testAccountId: string;
 	let deltaFetcher: DeltaFetcher;
-	let previousNodeEnv: string | undefined;
 	let setupRateLimited = false;
 
 	beforeAll(async () => {
@@ -68,25 +66,15 @@ describeIntegration("Delta-backed account tool handlers", () => {
 	});
 
 	beforeEach(() => {
-		previousNodeEnv = process.env["NODE_ENV"];
-		process.env["NODE_ENV"] = "integration";
 		const cacheManager = new CacheManager();
 		const knowledgeStore = new ServerKnowledgeStore();
 		const deltaCache = new DeltaCache(cacheManager, knowledgeStore);
 		deltaFetcher = new DeltaFetcher(ynabAPI, deltaCache);
-		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
 		resetRuntimeConfig();
 	});
 
 	afterEach(() => {
-		Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
 		resetRuntimeConfig();
-		if (previousNodeEnv === undefined) {
-			Reflect.deleteProperty(process.env, "NODE_ENV");
-		} else {
-			process.env["NODE_ENV"] = previousNodeEnv;
-		}
-		previousNodeEnv = undefined;
 	});
 
 	const parseResponse = (result: CallToolResult) => {

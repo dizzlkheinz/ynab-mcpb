@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	getLiveTestGate,
 	maybeTextOf,
 	skipOnRateLimit,
 	textOf,
@@ -12,10 +13,10 @@ import { YNABMCPServer } from "../YNABMCPServer.js";
 
 /**
  * Real YNAB API tests using token from .env (YNAB_ACCESS_TOKEN)
- * Skips if YNAB_ACCESS_TOKEN is not set or if SKIP_E2E_TESTS is true
+ * Skips if YNAB_ACCESS_TOKEN is not set unless RUN_LIVE_YNAB_TESTS=true
  */
 const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
-const shouldSkip = process.env["SKIP_E2E_TESTS"] === "true" || !hasToken;
+const shouldSkip = !getLiveTestGate().enabled || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;
 
 describeIntegration("YNABMCPServer", () => {
@@ -382,34 +383,21 @@ describeIntegration("YNABMCPServer", () => {
 		}, async () => {
 			// This test demonstrates the LRU eviction functionality
 			// by creating a temporary cache with a low maxEntries limit
-			const originalEnvValue = process.env["YNAB_MCP_CACHE_MAX_ENTRIES"];
+			const tempCache = new (await import("../cacheManager.js")).CacheManager({
+				maxEntries: 2,
+			});
 
-			try {
-				// Set low limit and create a new cache manager instance
-				process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = "2";
-				const tempCache = new (
-					await import("../cacheManager.js")
-				).CacheManager();
+			// Add entries that should trigger eviction
+			tempCache.set("test:entry1", { data: "value1" }, 60000);
+			tempCache.set("test:entry2", { data: "value2" }, 60000);
 
-				// Add entries that should trigger eviction
-				tempCache.set("test:entry1", { data: "value1" }, 60000);
-				tempCache.set("test:entry2", { data: "value2" }, 60000);
+			// This should trigger eviction of entry1 due to LRU policy
+			tempCache.set("test:entry3", { data: "value3" }, 60000);
 
-				// This should trigger eviction of entry1 due to LRU policy
-				tempCache.set("test:entry3", { data: "value3" }, 60000);
-
-				const stats = tempCache.getStats();
-				// Should have some evictions due to LRU policy
-				expect(stats.evictions).toBeGreaterThan(0);
-				expect(stats.size).toBeLessThanOrEqual(2);
-			} finally {
-				// Restore original environment
-				if (originalEnvValue !== undefined) {
-					process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = originalEnvValue;
-				} else {
-					process.env["YNAB_MCP_CACHE_MAX_ENTRIES"] = undefined;
-				}
-			}
+			const stats = tempCache.getStats();
+			// Should have some evictions due to LRU policy
+			expect(stats.evictions).toBeGreaterThan(0);
+			expect(stats.size).toBeLessThanOrEqual(2);
 		});
 
 		it("should show cache hit rate improvement with repeated operations", {

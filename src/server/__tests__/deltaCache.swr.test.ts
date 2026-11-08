@@ -22,7 +22,6 @@ let delta: DeltaCache;
 
 beforeEach(() => {
 	vi.useFakeTimers({ now: 1000 });
-	vi.stubEnv("YNAB_MCP_ENABLE_DELTA", "true");
 	resetRuntimeConfig();
 	cache = new CacheManager();
 	knowledge = new ServerKnowledgeStore();
@@ -57,58 +56,7 @@ function deferred() {
 	return { promise, resolve };
 }
 
-function disableDelta() {
-	vi.stubEnv("YNAB_MCP_ENABLE_DELTA", "false");
-	resetRuntimeConfig();
-}
-
 describe("DeltaCache stale-while-revalidate with real caching", () => {
-	it("serves stale data and performs one background refresh when delta is disabled", async () => {
-		disableDelta();
-		await seed();
-		vi.advanceTimersByTime(101);
-		const refresh = deferred();
-		const fetcher = vi.fn(() => refresh.promise);
-		const stale = await delta.fetchWithDelta<Entity>(
-			key,
-			budget,
-			fetcher,
-			mergeFlatEntities,
-			options,
-		);
-		const concurrent = await delta.fetchWithDelta<Entity>(
-			key,
-			budget,
-			fetcher,
-			mergeFlatEntities,
-			options,
-		);
-		expect(stale).toMatchObject({
-			data: [{ id: "original" }],
-			wasCached: true,
-			usedDelta: false,
-		});
-		expect(concurrent.data).toEqual(stale.data);
-		expect(fetcher).toHaveBeenCalledExactlyOnceWith(undefined);
-		refresh.resolve({ data: [{ id: "updated" }], serverKnowledge: 1001 });
-		await vi.advanceTimersByTimeAsync(0);
-		const fresh = await delta.fetchWithDelta<Entity>(
-			key,
-			budget,
-			fetcher,
-			mergeFlatEntities,
-			options,
-		);
-		expect(fresh.data).toEqual([{ id: "updated" }]);
-		expect(fresh).toMatchObject({
-			wasCached: true,
-			serverKnowledge: 1001,
-			usedDelta: false,
-		});
-		expect(fetcher).toHaveBeenCalledTimes(1);
-		expect(knowledge.get(key)).toBe(1001);
-	});
-
 	it("in delta mode, a stale read waits for the delta instead of serving stale data", async () => {
 		await seed();
 		vi.advanceTimersByTime(101);
@@ -221,47 +169,6 @@ describe("DeltaCache stale-while-revalidate with real caching", () => {
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(2, 1000);
 		expect(recovered.data).toEqual([{ id: "original" }, { id: "recovered" }]);
-	});
-
-	it("retains stale data after a background error and permits a later refresh", async () => {
-		disableDelta();
-		await seed();
-		vi.advanceTimersByTime(101);
-		const fetcher = vi
-			.fn()
-			.mockRejectedValueOnce(new Error("offline"))
-			.mockResolvedValueOnce({
-				data: [{ id: "recovered" }],
-				serverKnowledge: 1001,
-			});
-		const stale = await delta.fetchWithDelta<Entity>(
-			key,
-			budget,
-			fetcher,
-			mergeFlatEntities,
-			options,
-		);
-		expect(stale.data).toEqual([{ id: "original" }]);
-		await vi.advanceTimersByTimeAsync(0);
-		expect(cache.peek(key)).toBeDefined();
-		expect(knowledge.get(key)).toBe(1000);
-		await delta.fetchWithDelta<Entity>(
-			key,
-			budget,
-			fetcher,
-			mergeFlatEntities,
-			options,
-		);
-		await vi.advanceTimersByTimeAsync(0);
-		const recovered = await delta.fetchWithDelta<Entity>(
-			key,
-			budget,
-			fetcher,
-			mergeFlatEntities,
-			options,
-		);
-		expect(recovered.data).toEqual([{ id: "recovered" }]);
-		expect(fetcher).toHaveBeenCalledTimes(2);
 	});
 
 	it("does not resurrect invalidated in-flight data or knowledge", async () => {

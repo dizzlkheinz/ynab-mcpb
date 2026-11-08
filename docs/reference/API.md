@@ -1,1418 +1,532 @@
-# YNAB MCP Server API Reference
+# API Reference
 
-This document provides comprehensive documentation for all tools available in the YNAB MCP Server, including parameters, examples, and error handling.
+This MCP server provides 35 tools, 9 prompts, 2 resources and 6 resource templates for working with YNAB budgets, accounts, transactions, categories, payees, months, scheduled transactions and reconciliation.
 
-## Table of Contents
+Legend: **core** = included in the `core` tool profile; **destructive** = irreversible delete; **write** = mutation tool, subject to the write mode below. In parameter tables, `req` is `yes` when the schema requires the field.
 
-- [Overview](#overview)
-- [Authentication](#authentication)
-- [Data Formats](#data-formats)
-- [MCP Resources](#mcp-resources)
-- [MCP Client Features](#mcp-client-features)
-- [Budget Management Tools](#budget-management-tools)
-- [Account Management Tools](#account-management-tools)
-- [Transaction Management Tools](#transaction-management-tools)
-- [Category Management Tools](#category-management-tools)
-- [Payee Management Tools](#payee-management-tools)
-- [Monthly Data Tools](#monthly-data-tools)
-- [Utility Tools](#utility-tools)
-- [Diagnostic Tools](#diagnostic-tools)
-- [Error Handling](#error-handling)
+## Conventions
 
-## Overview
+### Budget ID
 
-The YNAB MCP Server provides 35 tools that enable AI assistants to interact with YNAB data. All tools follow consistent patterns for parameters, responses, and error handling.
+`budget_id` is optional on every tool that accepts it except `ynab_get_budget`, where the schema requires it. When omitted, the default budget is used: the one set with `ynab_set_default_budget` in this session, or else `YNAB_DEFAULT_BUDGET_ID` from the server config. If neither is set, the call fails with an error asking you to set one.
 
-### Tool Naming Convention
+### Amounts
 
-All tools follow a simple naming pattern with an action and resource:
-- `list_budgets` - List operation on budgets
-- `get_budget` - Get operation on a specific budget
-- `create_transaction` - Create operation for transactions
+YNAB stores money as **milliunits**: 1/1000 of a currency unit (`$12.34` = `12340`).
 
-## Authentication
+- `amount_decimal` (number): amount in currency units, e.g. `-12.34`. Rounded to the nearest milliunit.
+- `amount_milliunits` (integer): raw YNAB milliunits, for values that are already converted.
 
-All tools require authentication via a YNAB Personal Access Token set in the `YNAB_ACCESS_TOKEN` environment variable.
+Pass at most one of the two on any single amount. Negative amounts are outflows, positive are inflows. Category funding uses the same pair as `budgeted_decimal` / `budgeted_milliunits`. Outputs report amounts in currency units; mutation and reconciliation outputs also include explicit `*_milliunits` fields.
 
-```bash
-YNAB_ACCESS_TOKEN=your_personal_access_token_here
-```
-
-## Write safety and tool profiles
-
-`YNAB_MCP_WRITE_MODE` defaults to `preview`:
-
-- `read-only`: YNAB mutation tools are not registered.
-- `preview`: the first mutation call runs a dry-run preview and returns a two-minute, single-use `confirmation_token`. Repeating the identical validated request with that token executes it. The preview's `structuredContent` carries `confirmation_token` and `confirmation_expires_at` (ISO 8601), and each mutation tool's `outputSchema` declares both as optional fields; the token is also repeated in a text content block for clients that read only text.
-- `enabled`: direct writes remain available for users who explicitly opt into the legacy behavior.
-
-Tokens are bound to the canonical tool name and normalized validated arguments. A changed field, different tool, expired token, or reused token is rejected. Passing `confirmation_token` to a tool that does not require confirmation (any read tool, or any tool in `enabled` mode) is rejected rather than ignored; a `null` or empty-string `confirmation_token` counts as not passed. Bulk and deletion tools use the same central enforcement.
-
-### Transaction preview checks
-
-A dry run of `ynab_create_transaction`, `ynab_create_transactions`, `ynab_update_transaction`, `ynab_update_transactions`, `ynab_create_receipt_split_transaction`, `ynab_create_scheduled_transaction`, or `ynab_update_scheduled_transaction` (which includes every preview in `preview` mode) checks the request against cached budget data before a confirmation token is issued:
-
-- Every `account_id` and `category_id`, including split-line categories, must exist in the budget and not be deleted. On any cache miss the list is re-read once before an ID is rejected, so recently created entities pass.
-- Every amount must fit the precision of the budget's currency (`currency_format.decimal_digits`). For a 2-decimal currency, `amount_milliunits: -378` (0.378) is rejected with suggestions such as `amount_decimal: -3.78`. If the currency cannot be read, a 2-decimal currency is assumed and the result is a warning instead of an error.
-- An `import_id` that already exists in the target account is reported as an `import_id_exists` warning, since YNAB skips it as a duplicate. Only account history from 90 days before the request's earliest transaction date is read; YNAB still skips an older duplicate.
-
-Errors reject the preview, so no token is issued. Warnings are returned in the dry-run output's `warnings` array (`code`, `count`, `message`, optional `sample_ids`). When budget data cannot be read, the checks fail open with a `preflight_unavailable` warning.
-
-In `enabled` mode, a direct write (without `dry_run`) runs the account, category and amount checks and is refused before reaching YNAB on any error; the `import_id` check and warnings apply only to dry runs. A write confirmed with a `preview`-mode token is not checked again, since its preview was.
-
-`YNAB_MCP_TOOL_PROFILE` selects a stable startup surface: `core`, `read-only`, or `full` (default). Profiles do not use runtime list-change notifications.
-
-## Data Formats
-
-### Monetary Amounts
-
-**📢 New in v0.7.0**: Monetary values in responses are automatically converted to standard dollar format for human readability.
-
-The server automatically converts YNAB's internal milliunits to dollars in all responses:
-- Account balances: `-1924.37` (instead of `-1924370` milliunits)
-- Transaction amounts: `50.25` (instead of `50250` milliunits)
-- Budget amounts: `150.00` (instead of `150000` milliunits)
-
-**Input formats**:
-- Prefer `amount_decimal` for transaction currency values and `budgeted_decimal` for category funding.
-- Use `amount_milliunits` or `budgeted_milliunits` only when the value is already a raw YNAB integer.
-- Deprecated `amount` and `budgeted` aliases remain backward compatible as milliunits. Their meaning is never inferred from magnitude.
-- Receipt helpers, account opening balances, and reconciliation statement balances use decimal currency units.
-
-**Note**: YNAB's internal representation uses milliunits (1/1000th of a currency unit). Responses are rendered in dollars, but write-tool inputs must follow the per-tool contract below.
+A few tools take plain currency numbers instead (`balance` on `ynab_create_account`, `statement_balance` on `ynab_reconcile_account`, the `receipt_*` fields and item `amount` on `ynab_create_receipt_split_transaction`).
 
 ### Dates
 
-All dates use ISO 8601 format: `YYYY-MM-DD`
-- Example: `2024-01-15`
-- Time zones are handled by YNAB based on your account settings
-
-### IDs
-
-All YNAB IDs are UUID strings:
-- Budget ID: `12345678-1234-1234-1234-123456789012`
-- Account ID: `87654321-4321-4321-4321-210987654321`
-
-## MCP Resources
-
-**📢 New in v0.16.0**: The YNAB MCP Server now supports MCP resource templates, enabling AI assistants to discover and access YNAB data through standardized URI patterns.
-
-### What are MCP Resources?
-
-MCP resources provide a standardized way for AI assistants to access structured data using URI patterns. Unlike tools (which perform actions), resources are read-only data endpoints that can be discovered and accessed dynamically.
-
-### Available Resources
-
-#### Static Resources
-
-| URI | Description | Returns |
-|-----|-------------|---------|
-| `ynab://budgets` | List all available budgets | Array of budget summaries with IDs, names, and metadata |
-| `ynab://user` | Current user information | User ID and basic profile data |
-
-#### Resource Templates (Dynamic URIs)
-
-| URI Template | Parameters | Description | Returns |
-|--------------|------------|-------------|---------|
-| `ynab://budgets/{budget_id}` | `budget_id` (UUID) | Detailed budget information | Complete budget object with accounts, categories, months, and settings |
-| `ynab://budgets/{budget_id}/accounts` | `budget_id` (UUID) | List accounts for a budget | Array of all accounts in the specified budget |
-| `ynab://budgets/{budget_id}/accounts/{account_id}` | `budget_id` (UUID)<br>`account_id` (UUID) | Detailed account information | Complete account object with balance, type, and metadata |
-
-### Usage Examples
-
-#### Listing Budgets
-```
-URI: ynab://budgets
-```
-
-**Response:**
-```json
-{
-  "budgets": [
-    {
-      "id": "12345678-1234-1234-1234-123456789012",
-      "name": "My Budget 2025",
-      "last_modified_on": "2025-12-01T10:30:00Z",
-      "first_month": "2025-01-01",
-      "last_month": "2025-12-01",
-      "currency_format": {
-        "iso_code": "USD",
-        "example_format": "$123.45",
-        "decimal_digits": 2,
-        "decimal_separator": ".",
-        "symbol_first": true,
-        "group_separator": ",",
-        "currency_symbol": "$",
-        "display_symbol": true
-      }
-    }
-  ]
-}
-```
-
-#### Getting Budget Details
-```
-URI: ynab://budgets/12345678-1234-1234-1234-123456789012
-```
-
-**Response:**
-```json
-{
-  "id": "12345678-1234-1234-1234-123456789012",
-  "name": "My Budget 2025",
-  "accounts": [...],
-  "categories": [...],
-  "months": [...],
-  "date_format": {"format": "DD/MM/YYYY"},
-  "currency_format": {...}
-}
-```
-
-#### Listing Budget Accounts
-```
-URI: ynab://budgets/12345678-1234-1234-1234-123456789012/accounts
-```
-
-**Response:**
-```json
-[
-  {
-    "id": "87654321-4321-4321-4321-210987654321",
-    "name": "Checking Account",
-    "type": "checking",
-    "balance": -1924.37,
-    "cleared_balance": -1850.00,
-    "uncleared_balance": -74.37,
-    "on_budget": true,
-    "closed": false
-  }
-]
-```
-
-#### Getting Account Details
-```
-URI: ynab://budgets/12345678-1234-1234-1234-123456789012/accounts/87654321-4321-4321-4321-210987654321
-```
-
-**Response:**
-```json
-{
-  "id": "87654321-4321-4321-4321-210987654321",
-  "name": "Checking Account",
-  "type": "checking",
-  "balance": -1924.37,
-  "cleared_balance": -1850.00,
-  "uncleared_balance": -74.37,
-  "on_budget": true,
-  "closed": false,
-  "note": null,
-  "transfer_payee_id": "..."
-}
-```
-
-### Caching
-
-All MCP resources are cached for optimal performance:
-- **Budgets**: 10 minutes TTL (rarely change)
-- **Accounts**: 5 minutes TTL (balances update periodically)
-- **User info**: 30 minutes TTL (static data)
-
-### Resource vs Tool: When to Use What
-
-**Use MCP Resources when:**
-- You need to **read** structured data
-- You want to **discover** available budgets or accounts
-- You're building a UI that needs to **list** items
-- You need **cached** data for performance
-
-**Use Tools when:**
-- You need to **create**, **update**, or **delete** data
-- You need advanced filtering or querying (e.g., transactions since date)
-- You need to perform **actions** (e.g., reconcile, export)
-- You need the latest **real-time** data
-
-**Example:**
-- Get list of budgets: Use `ynab://budgets` resource ✅
-- Get transactions for an account: Use `list_transactions` tool ✅
-- Create a new transaction: Use `create_transaction` tool ✅
-
-## MCP Client Features
-
-These features depend on MCP client support. If your client doesn't surface them, tool calls still work normally.
-
-### Completions (Autocomplete)
-
-The server provides MCP completions for common arguments:
-- `budget_id`
-- `account_id`
-- `account_name`
-- `category`
-- `category_id`
-- `payee`
-- `payee_id`
-
-Clients can use these completions to suggest IDs or names while composing tool calls.
-
-### Progress Notifications
-
-When a client provides a `progressToken` in tool requests, the server emits `notifications/progress` events. Progress updates are most useful for long-running operations such as `reconcile_account`, which can create, update, or unclear large batches of transactions.
-
-## Budget Management Tools
-
-### list_budgets
-
-Lists all budgets associated with the user's account.
-
-**Parameters:** None
-
-**Example Request:**
-```json
-{
-  "name": "list_budgets",
-  "arguments": {}
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"budgets\": [\n    {\n      \"id\": \"12345678-1234-1234-1234-123456789012\",\n      \"name\": \"My Budget\",\n      \"last_modified_on\": \"2024-01-15T10:30:00.000Z\",\n      \"first_month\": \"2024-01-01\",\n      \"last_month\": \"2024-12-01\",\n      \"date_format\": {\n        \"format\": \"MM/DD/YYYY\"\n      },\n      \"currency_format\": {\n        \"iso_code\": \"USD\",\n        \"example_format\": \"123,456.78\",\n        \"decimal_digits\": 2,\n        \"decimal_separator\": \".\",\n        \"symbol_first\": true,\n        \"group_separator\": \",\",\n        \"currency_symbol\": \"$\",\n        \"display_symbol\": true\n      }\n    }\n  ]\n}"
-    }
-  ]
-}
-```
-
-### get_budget
-
-Gets detailed information for a specific budget.
-
-**Parameters:**
-- `budget_id` (string, required): The ID of the budget to retrieve
-
-**Example Request:**
-```json
-{
-  "name": "get_budget",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012"
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"budget\": {\n    \"id\": \"12345678-1234-1234-1234-123456789012\",\n    \"name\": \"My Budget\",\n    \"last_modified_on\": \"2024-01-15T10:30:00.000Z\",\n    \"first_month\": \"2024-01-01\",\n    \"last_month\": \"2024-12-01\",\n    \"accounts\": [...],\n    \"payees\": [...],\n    \"payee_locations\": [...],\n    \"category_groups\": [...],\n    \"categories\": [...],\n    \"months\": [...],\n    \"transactions\": [...],\n    \"subtransactions\": [...],\n    \"scheduled_transactions\": [...],\n    \"scheduled_subtransactions\": [...]\n  }\n}"
-    }
-  ]
-}
-```
-
-## Account Management Tools
-
-### list_accounts
-
-Lists all accounts for a specific budget.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-
-**Example Request:**
-```json
-{
-  "name": "list_accounts",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012"
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"accounts\": [\n    {\n      \"id\": \"87654321-4321-4321-4321-210987654321\",\n      \"name\": \"Checking Account\",\n      \"type\": \"checking\",\n      \"on_budget\": true,\n      \"closed\": false,\n      \"note\": null,\n      \"balance\": 150.0,\n      \"cleared_balance\": 145.0,\n      \"uncleared_balance\": 5.0,\n      \"transfer_payee_id\": \"transfer-payee-id\",\n      \"direct_import_linked\": false,\n      \"direct_import_in_error\": false,\n      \"last_reconciled_at\": null,\n      \"debt_original_balance\": null,\n      \"debt_interest_rates\": {},\n      \"debt_minimum_payments\": {},\n      \"debt_escrow_amounts\": {}\n    }\n  ]\n}"
-    }
-  ]
-}
-```
-
-### get_account
-
-Gets detailed information for a specific account.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `account_id` (string, required): The ID of the account
-
-**Example Request:**
-```json
-{
-  "name": "get_account",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321"
-  }
-}
-```
-
-### create_account
-
-Creates a new account in the specified budget.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `name` (string, required): The name of the new account
-- `type` (string, required): The account type. Valid values:
-  - `checking` - Checking account
-  - `savings` - Savings account
-  - `creditCard` - Credit card account
-  - `cash` - Cash account
-  - `lineOfCredit` - Line of credit
-  - `otherAsset` - Other asset account
-  - `otherLiability` - Other liability account
-- `balance` (number, optional): Initial balance in dollars
-- `dry_run` (boolean, optional): Validate and return simulated result; no API call
-
-**Example Request:**
-```json
-{
-  "name": "create_account",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "name": "New Savings Account",
-    "type": "savings",
-    "balance": 100.0
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"account\": {\n    \"id\": \"new-account-id\",\n    \"name\": \"New Savings Account\",\n    \"type\": \"savings\",\n    \"on_budget\": true,\n    \"closed\": false,\n    \"balance\": 100.0,\n    \"cleared_balance\": 100.0,\n    \"uncleared_balance\": 0\n  }\n}"
-    }
-  ]
-}
-```
-
-## Transaction Management Tools
-
-### list_transactions
-
-Lists transactions for a budget with optional filtering.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `account_id` (string, optional): Filter by account ID
-- `category_id` (string, optional): Filter by category ID
-- `since_date` (string, optional): Only return transactions on or after this date (YYYY-MM-DD)
-- `until_date` (string, optional): Only return transactions on or before this date (YYYY-MM-DD). Combine with `since_date` for a date window
-- `type` (string, optional): Filter by transaction type (`uncategorized` or `unapproved`); also applies with `account_id` or `category_id`
-- `cleared` (string, optional): `cleared`, `uncleared`, or `reconciled`
-- `import_id` (string, optional): Exact `import_id`
-- `payee_id` (string, optional): Exact payee ID
-- `payee_name` (string, optional): Case-insensitive substring of the payee name
-- `amount_decimal` (number, optional): Exact amount in currency units (for example `-12.34`). Use `amount_milliunits` instead for raw YNAB milliunits; pass at most one. Matches the parent amount, except with `category_id`, which returns individual split lines and matches their amounts
-
-Filters apply before pagination, so `total_count` counts matching transactions. To find a transaction you just wrote, set `account_id`, a `since_date`/`until_date` window around its date, and `payee_name`, `amount_decimal`, or `import_id`.
-
-**Example Request:**
-```json
-{
-  "name": "list_transactions",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321",
-    "since_date": "2024-01-01"
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"transactions\": [\n    {\n      \"id\": \"transaction-id\",\n      \"date\": \"2024-01-15\",\n      \"amount\": -5.0,\n      \"memo\": \"Coffee shop\",\n      \"cleared\": \"cleared\",\n      \"approved\": true,\n      \"flag_color\": null,\n      \"account_id\": \"87654321-4321-4321-4321-210987654321\",\n      \"payee_id\": \"payee-id\",\n      \"category_id\": \"category-id\",\n      \"transfer_account_id\": null,\n      \"transfer_transaction_id\": null,\n      \"matched_transaction_id\": null,\n      \"import_id\": null,\n      \"import_payee_name\": null,\n      \"import_payee_name_original\": null,\n      \"debt_transaction_type\": null,\n      \"deleted\": false\n    }\n  ]\n}"
-    }
-  ]
-}
-```
-
-### export_transactions
-
-Exports all transactions to a JSON file with descriptive filename and platform-specific default paths. This tool bypasses MCP response size limits by saving data to a file instead of returning it in the response.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `account_id` (string, optional): Filter by account ID
-- `category_id` (string, optional): Filter by category ID
-- `since_date` (string, optional): Only export transactions on or after this date (YYYY-MM-DD)
-- `type` (string, optional): Filter by transaction type (`uncategorized` or `unapproved`)
-- `filename` (string, optional): Custom filename (auto-generated if not provided)
-- `minimal` (boolean, optional): Export only essential fields for smaller files (default: true)
-
-**Example Request:**
-```json
-{
-  "name": "export_transactions",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "since_date": "2024-01-01"
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"message\": \"Successfully exported 1247 transactions\",\n  \"filename\": \"ynab_since_2024-01-01_1247items_2024-09-10_14-30-15.json\",\n  \"full_path\": \"C:\\\\Users\\\\YourName\\\\Downloads\\\\ynab_since_2024-01-01_1247items_2024-09-10_14-30-15.json\",\n  \"export_directory\": \"C:\\\\Users\\\\YourName\\\\Downloads\",\n  \"filename_explanation\": \"Filename format: ynab_{filters}_{count}items_{timestamp}.json - identifies what data was exported, when, and how many transactions\",\n  \"preview_count\": 10,\n  \"total_count\": 1247,\n  \"preview_transactions\": [\n    {\n      \"id\": \"transaction-id\",\n      \"date\": \"2024-01-15\",\n      \"amount\": -5.0,\n      \"memo\": \"Coffee shop\",\n      \"payee_name\": \"Starbucks\",\n      \"category_name\": \"Dining Out\"\n    }\n  ]\n}"
-    }
-  ]
-}
-```
-
-**Export File Structure:**
-The exported JSON file contains:
-- `export_info`: Metadata about the export (timestamp, filters, count, minimal flag)
-- `transactions`: Array of transaction objects
-  - **Minimal mode (default)**: `id`, `date`, `amount`, `payee_name`, `cleared`
-  - **Full mode**: All available transaction fields
-
-**Platform-Specific Default Paths:**
-- Windows/Mac: `~/Downloads`
-- Linux/Unix: `~/Documents` (or `$XDG_DOCUMENTS_DIR`)
-- Configurable via `YNAB_EXPORT_PATH` environment variable
-
-### compare_transactions
-
-Compares bank transactions from CSV files with YNAB transactions to identify missing entries in either direction. This tool helps with bank statement reconciliation by finding transactions that exist in your bank statement but not in YNAB (need to import) or vice versa (double-check for duplicates).
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget to compare against. Omit to use the default budget
-- `account_id` (string, required): The ID of the account to compare transactions for
-- `csv_file_path` (string, optional): Path to CSV file containing bank transactions
-- `csv_data` (string, optional): CSV data as string (alternative to csv_file_path)
-- `amount_tolerance` (number, optional): Amount difference tolerance as decimal (0.01 = 1%, default: 0.01)
-- `date_tolerance_days` (number, optional): Date difference tolerance in days (default: 5)
-- `statement_start_date`, `statement_date` (string, optional): Inclusive statement window as `YYYY-MM-DD`; other formats are rejected
-- `csv_format` (object, optional): CSV format configuration
-  - `date_column` (string): Column name for transaction date when `has_header: true`, or column index as string when `has_header: false` (default: "Date")
-  - `amount_column` (string): Column name for transaction amount when `has_header: true`, or column index as string when `has_header: false` (default: "Amount")
-  - `description_column` (string): Column name for transaction description when `has_header: true`, or column index as string when `has_header: false` (default: "Description")
-  - `date_format` (string): Date format pattern (default: "MM/DD/YYYY")
-  - `has_header` (boolean): Whether CSV has header row (default: true)
-  - `delimiter` (string): CSV delimiter character (default: ",")
-
-**Example Request (CSV data):**
-```json
-{
-  "name": "compare_transactions",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321",
-    "csv_data": "Date,Amount,Description\n2024-01-01,100.00,Coffee Shop\n2024-01-02,-50.25,Gas Station\n2024-01-03,25.00,ATM Withdrawal"
-  }
-}
-```
-
-**Example Request (CSV file with custom format):**
-```json
-{
-  "name": "compare_transactions",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321",
-    "csv_file_path": "/path/to/bank-statement.csv",
-    "csv_format": {
-      "date_column": "Transaction Date",
-      "amount_column": "Dollar Amount",
-      "description_column": "Description",
-      "date_format": "DD/MM/YYYY",
-      "delimiter": ";",
-      "has_header": true
-    },
-    "amount_tolerance": 0.02,
-    "date_tolerance_days": 3
-  }
-}
-```
-
-**Example Request (CSV without headers using column indices):**
-```json
-{
-  "name": "compare_transactions",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321",
-    "csv_data": "2024-01-01,100.00,Coffee Shop\n2024-01-02,-15.50,ATM Fee\n2024-01-03,250.00,Paycheck",
-    "csv_format": {
-      "date_column": "0",
-      "amount_column": "1",
-      "description_column": "2",
-      "date_format": "YYYY-MM-DD",
-      "has_header": false,
-      "delimiter": ","
-    }
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"summary\": {\n    \"bank_transactions_count\": 15,\n    \"ynab_transactions_count\": 12,\n    \"matches_found\": 10,\n    \"missing_in_ynab\": 5,\n    \"missing_in_bank\": 2,\n    \"date_range\": {\n      \"start\": \"2024-01-01\",\n      \"end\": \"2024-01-15\"\n    },\n    \"parameters\": {\n      \"amount_tolerance\": 0.01,\n      \"date_tolerance_days\": 5\n    }\n  },\n  \"matches\": [\n    {\n      \"bank_date\": \"2024-01-01\",\n      \"bank_amount\": \"100.00\",\n      \"bank_description\": \"Coffee Shop\",\n      \"ynab_date\": \"2024-01-01\",\n      \"ynab_amount\": \"100.00\",\n      \"ynab_payee\": \"Starbucks\",\n      \"match_score\": 90,\n      \"match_reasons\": [\"Exact date match\", \"Exact amount match\"]\n    }\n  ],\n  \"missing_in_ynab\": [\n    {\n      \"date\": \"2024-01-03\",\n      \"amount\": \"25.00\",\n      \"description\": \"ATM Withdrawal\",\n      \"row_number\": 4\n    }\n  ],\n  \"missing_in_bank\": [\n    {\n      \"id\": \"transaction-xyz\",\n      \"date\": \"2024-01-02\",\n      \"amount\": \"-15.50\",\n      \"payee_name\": \"Coffee Bean\",\n      \"memo\": \"Morning coffee\",\n      \"cleared\": \"cleared\"\n    }\n  ]\n}"
-    }
-  ]
-}
-```
-
-**Matching Algorithm:**
-- **Date matching** (40 points max): Exact dates get full points, nearby dates get partial points
-- **Amount matching** (50 points max): Exact amounts get full points, close amounts within tolerance get partial points
-- **Description matching** (10 points max): Similarity between bank description and YNAB payee/memo
-- **Smart Duplicate Handling**: Multiple transactions with identical amounts are matched using chronological order with chronology bonus (+15 points for same day, +10 for within 3 days)
-- **Minimum match score**: 30 points required for a valid match
-
-**Supported Date Formats:**
-- `MM/DD/YYYY` or `M/D/YYYY` (default)
-- `DD/MM/YYYY` or `D/M/YYYY`
-- `YYYY-MM-DD` (ISO format)
-- `MM-DD-YYYY`
-
-**Use Cases:**
-- **Bank reconciliation**: Find transactions missing from YNAB that need to be imported
-- **Duplicate detection**: Identify YNAB transactions that don't appear in bank statements
-- **Import verification**: Verify that imported transactions match your bank statement exactly
-- **Data cleanup**: Find and resolve discrepancies between bank and YNAB data
-
-### reconcile_account
-
-Performs comprehensive account reconciliation with bank statement data. The tool returns one text entry holding a JSON object, also sent as `structuredContent`, with two fields: `human`, a narrative report for assistants, and `structured`, the unmatched transactions and suggestions with MoneyValue amounts, plus the execution summary and per-operation results once the plan has run.
-
-**Parameters:**
-- `budget_id` (string, optional): Budget UUID. Omit to use the default budget
-- `account_id` (string, required)
-- `csv_file_path` or `csv_data` (one required)
-- `csv_format` (object, optional): `date_column`, `amount_column`, `debit_column`, `credit_column`, `description_column`, `date_format`, `has_header`, `delimiter`
-- `statement_balance` (number, required) – ending cleared balance from the statement in dollars
-- `statement_end_date` (string, optional): Last day of the statement as `YYYY-MM-DD`. Other formats are rejected; surrounding whitespace is ignored, and an empty string is treated as omitted. When omitted, it is inferred from the latest CSV transaction
-- Matching controls: `date_tolerance_days` (0–7, default 7) and `match_strictness` (`"loose"`, `"normal"` or `"strict"`, default `"normal"`; sets the auto-match and suggestion thresholds to 70/55, 85/60 or 93/75). Amounts must match exactly (no tolerance parameter)
-- `sign_convention` (`"auto"`, `"invert"` or `"as_is"`, default `"auto"`): How to treat CSV amount signs
-- Execution controls (optional):
-  - `auto_create_transactions` (default `false`)
-  - `auto_update_cleared_status` (default `false`)
-  - `auto_unclear_missing` (default `false`)
-  - `auto_adjust_dates` (default `false`)
-  - `dry_run` (default `true`)
-- `max_suggestions_in_output` (integer ≥ 1, default 20): Limit on unmatched items and suggestions shown in the human report
-
-The schema is strict: any other parameter is rejected.
-
-**Example Request:**
-```json
-{
-  "name": "reconcile_account",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321",
-    "csv_data": "Date,Description,Amount\n2025-10-20,Amazon,-23.47\n2025-10-22,Coffee Shop,-4.50\n2025-10-23,Grocery Store,-67.89",
-    "statement_balance": -560.38,
-    "statement_end_date": "2025-10-31",
-    "auto_create_transactions": true,
-    "dry_run": true
-  }
-}
-```
-
-**Example Response (`structuredContent`, truncated):**
-```json
-{
-  "human": "📊 Checking Account Reconciliation Report\n...\nDry run only — no YNAB changes were applied.",
-  "structured": {
-    "unmatched_bank": [
-      {
-        "id": "3f1c2b9e-8d4a-4e6b-9a7c-5b2d1e0f4a63",
-        "date": "2025-10-23",
-        "amount": -67890,
-        "payee": "Grocery Store",
-        "sourceRow": 4,
-        "raw": { ... },
-        "amount_money": { "value_milliunits": -67890, "value_display": "-$67.89", "currency": "USD", "direction": "debit" }
-      }
-    ],
-    "unmatched_ynab": [],
-    "suggestions": [],
-    "execution_summary": {
-      "transactions_created": 1,
-      "transactions_updated": 0,
-      "dates_adjusted": 0,
-      "dry_run": true,
-      "balance_status": "unbalanced",
-      "recommendations": ["Dry run only — re-run with dry_run=false to apply these changes"]
-    },
-    "operations": [ { "status": "planned", "operation": { "kind": "create", ... } } ],
-    "errors": []
-  }
-}
-```
-
-**Structured fields:**
-- `unmatched_bank`, `unmatched_ynab` – transactions left unmatched, each with an `amount_money` MoneyValue beside the milliunit `amount`
-- `suggestions` – suggested matches with their candidates, confidence and match reason
-- `execution_summary` – created/updated/date-adjusted counts, `dry_run`, `balance_status` (`balanced`, `unbalanced` or `not_verified`) and recommendation strings
-- `operations` – each planned write and its status: `planned` in a dry run, otherwise `applied`, `uncertain` or `skipped`
-- `errors` – write errors; when there are any, the result is also marked `isError`
-
-### get_transaction
-
-Gets detailed information for a specific transaction.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `transaction_id` (string, required): The ID of the transaction
-
-**Example Request:**
-```json
-{
-  "name": "get_transaction",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "transaction_id": "transaction-id"
-  }
-}
-```
-
-### create_transaction
-
-Creates a new transaction in the specified budget and account.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `account_id` (string, required): The ID of the account
-- `amount_decimal` (number, preferred): Transaction amount in decimal currency units (negative for outflows)
-- `amount_milliunits` (integer): Explicit raw YNAB milliunits; mutually exclusive with `amount_decimal`
-- `amount` (integer, deprecated): Backward-compatible alias for `amount_milliunits`
-- `date` (string, required): Transaction date in ISO format (YYYY-MM-DD)
-- `payee_name` (string, optional): The payee name
-- `payee_id` (string, optional): The payee ID
-- `category_id` (string, optional): The category ID
-- `memo` (string, optional): Transaction memo
-- `cleared` (string, optional): Transaction cleared status (`cleared`, `uncleared`, `reconciled`)
-- `approved` (boolean, optional): Whether the transaction is approved
-- `flag_color` (string, optional): Transaction flag color (`red`, `orange`, `yellow`, `green`, `blue`, `purple`)
-- `dry_run` (boolean, optional): Validate and return simulated result; no API call
-- `subtransactions` (array, optional): Split line items; each entry uses exactly one of `amount_decimal`, `amount_milliunits`, or deprecated `amount`, plus optional `memo`, `category_id`, `payee_id`, and `payee_name`
-
-When `subtransactions` are supplied, their normalized milliunit values must sum exactly to the normalized parent amount.
-Use `subtransactions` for manual split transactions. Use `create_receipt_split_transaction` when you have itemized receipt data and want proportional tax allocation handled automatically.
-Advanced: `import_id` is supported, but it is intentionally not part of normal guidance. Usually omit it if you want the transaction to remain eligible for later bank-import matching.
-
-**Example Request:**
-```json
-{
-  "name": "create_transaction",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321",
-    "amount_decimal": -5.00,
-    "date": "2024-01-15",
-    "payee_name": "Coffee Shop",
-    "category_id": "category-id",
-    "memo": "Morning coffee",
-    "cleared": "cleared",
-    "approved": true
-  }
-}
-```
-
-**Split Transaction Example:**
-```json
-{
-  "name": "create_transaction",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321",
-    "amount_decimal": -125.00,
-    "date": "2024-02-01",
-    "memo": "Rent and utilities",
-    "subtransactions": [
-      { "amount_decimal": -100.00, "category_id": "rent-category", "memo": "Rent" },
-      { "amount_milliunits": -25000, "category_id": "utilities-category", "memo": "Utilities" }
-    ]
-  }
-}
-```
-
-### create_receipt_split_transaction
-
-Creates a split transaction from categorized receipt data and allocates taxes proportionally across the selected categories. Use this helper after the user has confirmed the receipt breakdown and category assignments. For generic manual splits without receipt-tax logic, use `create_transaction` with `subtransactions`.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `account_id` (string, required): The ID of the account
-- `payee_name` (string, required): Payee to assign to the transaction (e.g., the store name)
-- `date` (string, optional): Transaction date in ISO format (defaults to today when omitted, taken as the earlier of the server's local and UTC dates so it is never in the future for YNAB)
-- `memo` (string, optional): Memo applied to the parent transaction
-- `receipt_subtotal` (number, optional): Pre-tax subtotal for validation (calculated automatically if omitted)
-- `receipt_tax` (number, required): Total tax collected on the receipt
-- `receipt_total` (number, required): Final total including tax
-- `categories` (array, required): Categorized line items. Each entry accepts:
-  - `category_id` (string, required)
-  - `category_name` (string, optional, used for tax memo labels)
-  - `items` (array, required): Each item includes `name` (string), `amount` (number), optional `quantity` (number), and optional `memo` (string)
-- `cleared` (string, optional): Cleared status (`cleared`, `uncleared`, `reconciled`). Defaults to `uncleared`
-- `approved` (boolean, optional): Whether the transaction should be marked approved
-- `flag_color` (string, optional): Flag color (`red`, `orange`, `yellow`, `green`, `blue`, `purple`)
-- `dry_run` (boolean, optional): When true, returns a preview without calling YNAB
-
-**Example Request:**
-```json
-{
-  "name": "create_receipt_split_transaction",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "account_id": "87654321-4321-4321-4321-210987654321",
-    "payee_name": "IKEA",
-    "date": "2025-10-13",
-    "memo": "Receipt import",
-    "receipt_subtotal": 112.34,
-    "receipt_tax": 11.84,
-    "receipt_total": 124.18,
-    "categories": [
-      {
-        "category_id": "baby-stuff",
-        "category_name": "Baby Stuff",
-        "items": [
-          { "name": "Crib pillow", "amount": 12.99 },
-          { "name": "Bed linen", "amount": 49.99 }
-        ]
-      },
-      {
-        "category_id": "home-maintenance",
-        "category_name": "Home Maintenance",
-        "items": [
-          { "name": "Teapot", "amount": 45.37 },
-          { "name": "Toothbrush holder", "amount": 3.99 }
-        ]
-      }
-    ]
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "transaction": {
-    "id": "new-transaction-456",
-    "amount": -124.18,
-    "payee_name": "IKEA",
-    "cleared": "uncleared",
-    "subtransactions": [
-      { "memo": "Crib pillow", "amount": -12.99, "category_id": "baby-stuff" },
-      { "memo": "Bed linen", "amount": -49.99, "category_id": "baby-stuff" },
-      { "memo": "Teapot", "amount": -45.37, "category_id": "home-maintenance" },
-      { "memo": "Toothbrush holder", "amount": -3.99, "category_id": "home-maintenance" },
-      { "memo": "Tax - Baby Stuff", "amount": -6.638, "category_id": "baby-stuff" },
-      { "memo": "Tax - Home Maintenance", "amount": -5.202, "category_id": "home-maintenance" }
-    ],
-    "account_balance": 2534.87,
-    "account_cleared_balance": 2450.22
-  },
-  "receipt_summary": {
-    "subtotal": 112.34,
-    "tax": 11.84,
-    "total": 124.18,
-    "categories": [
-      {
-        "category_id": "baby-stuff",
-        "category_name": "Baby Stuff",
-        "items": [
-          { "name": "Crib pillow", "amount": 12.99 },
-          { "name": "Bed linen", "amount": 49.99 }
-        ],
-        "subtotal": 62.98,
-        "tax": 6.638,
-        "total": 69.618
-      },
-      {
-        "category_id": "home-maintenance",
-        "category_name": "Home Maintenance",
-        "items": [
-          { "name": "Teapot", "amount": 45.37 },
-          { "name": "Toothbrush holder", "amount": 3.99 }
-        ],
-        "subtotal": 49.36,
-        "tax": 5.202,
-        "total": 54.562
-      }
-    ]
-  }
-}
-```
-
-### update_transaction
-
-Updates an existing transaction.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `transaction_id` (string, required): The ID of the transaction to update
-- `account_id` (string, optional): Update the account ID
-- `amount_decimal` (number, preferred): Updated amount in decimal currency units
-- `amount_milliunits` (integer): Updated raw YNAB milliunits
-- `amount` (integer, deprecated): Backward-compatible milliunit alias
-- `date` (string, optional): Update the date (YYYY-MM-DD)
-- `payee_name` (string, optional): Update the payee name
-- `payee_id` (string, optional): Update the payee ID
-- `category_id` (string, optional): Update the category ID
-- `memo` (string, optional): Update the memo
-- `cleared` (string, optional): Update the cleared status
-- `approved` (boolean, optional): Update the approved status
-- `flag_color` (string, optional): Update the flag color
-- `subtransactions` (array, optional): Convert a non-split transaction into a split; each line uses exactly one of `amount_decimal`, `amount_milliunits`, or deprecated `amount`
-- `dry_run` (boolean, optional): Validate and return simulated result; no API call
-
-When `subtransactions` are supplied, the parent amount is required, the normalized
-split amounts must sum exactly to it, and `category_id` must be omitted from the
-parent. YNAB does not support replacing the lines of an already-split transaction.
-
-**Example Request:**
-```json
-{
-  "name": "update_transaction",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "transaction_id": "transaction-id",
-    "amount_decimal": -6.00,
-    "memo": "Updated memo",
-    "flag_color": "red"
-  }
-}
-```
-
-### delete_transaction
-
-Deletes a transaction from the specified budget.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `transaction_id` (string, required): The ID of the transaction to delete
-- `dry_run` (boolean, optional): Validate and return simulated result; no API call
-
-**Example Request:**
-```json
-{
-  "name": "delete_transaction",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "transaction_id": "transaction-id"
-  }
-}
-```
-
-## Category Management Tools
-
-### list_categories
-
-Lists all categories for a specific budget.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-
-**Example Request:**
-```json
-{
-  "name": "list_categories",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012"
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"category_groups\": [\n    {\n      \"id\": \"group-id\",\n      \"name\": \"Monthly Bills\",\n      \"hidden\": false,\n      \"deleted\": false,\n      \"categories\": [\n        {\n          \"id\": \"category-id\",\n          \"category_group_id\": \"group-id\",\n          \"name\": \"Rent/Mortgage\",\n          \"hidden\": false,\n          \"original_category_group_id\": null,\n          \"note\": null,\n          \"budgeted\": 150.0,\n          \"activity\": -150.0,\n          \"balance\": 0,\n          \"goal_type\": null,\n          \"goal_creation_month\": null,\n          \"goal_target\": null,\n          \"goal_target_month\": null,\n          \"goal_percentage_complete\": null,\n          \"goal_months_to_budget\": null,\n          \"goal_under_funded\": null,\n          \"goal_overall_funded\": null,\n          \"goal_overall_left\": null,\n          \"deleted\": false\n        }\n      ]\n    }\n  ]\n}"
-    }
-  ]
-}
-```
-
-### get_category
-
-Gets detailed information for a specific category.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `category_id` (string, required): The ID of the category
-
-### update_category
-
-Updates the budgeted amount for a category in the current month.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `category_id` (string, required): The ID of the category
-- `budgeted_decimal` (number, preferred): Category funding in decimal currency units
-- `budgeted_milliunits` (integer): Explicit raw YNAB milliunits
-- `budgeted` (integer, deprecated): Backward-compatible alias for `budgeted_milliunits`
-- `dry_run` (boolean, optional): Validate and return simulated result; no API call
-
-**Example Request:**
-```json
-{
-  "name": "update_category",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "category_id": "category-id",
-    "budgeted_decimal": 50.00
-  }
-}
-```
-
-## Scheduled Transaction Tools
-
-Scheduled transaction outputs include both decimal `amount` and exact `amount_milliunits`. Create and update inputs use the same explicit `amount_decimal` / `amount_milliunits` contract as ordinary transactions. All scheduled writes participate in the selected write mode and invalidate scheduled delta state after execution.
-
-- `list_scheduled_transactions`: Delta-cached, paginated list of active schedules.
-- `get_scheduled_transaction`: Retrieve one schedule by ID.
-- `create_scheduled_transaction`: Create a schedule with date, frequency, account, and amount.
-- `update_scheduled_transaction`: Merge selected changes with required current schedule fields.
-- `delete_scheduled_transaction`: Delete a schedule through the destructive confirmation policy.
-
-Supported frequencies are `never`, `daily`, `weekly`, `everyOtherWeek`, `twiceAMonth`, `every4Weeks`, `monthly`, `everyOtherMonth`, `every3Months`, `every4Months`, `twiceAYear`, `yearly`, and `everyOtherYear`.
-
-## Deterministic Spending Analytics
-
-### analyze_spending
-
-Calculates income, spending, net, and transaction counts for an inclusive `since_date` / `until_date` range. `group_by` accepts `category`, `payee`, `account`, `week`, or `month`. Transfers are excluded unless `include_transfers` is true. Category grouping expands split lines, and aggregates are computed from the complete fetched period before grouping.
-
-### compare_spending_periods
-
-Calculates both periods and their total and per-group differences in server code. The result does not depend on display pagination or LLM arithmetic.
-
-## Payee Management Tools
-
-### list_payees
-
-Lists all payees for a specific budget.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-
-**Example Request:**
-```json
-{
-  "name": "list_payees",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012"
-  }
-}
-```
-
-### get_payee
-
-Gets detailed information for a specific payee.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `payee_id` (string, required): The ID of the payee
-
-## Monthly Data Tools
-
-### get_month
-
-Gets budget data for a specific month.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-- `month` (string, required): The month in ISO format (YYYY-MM-DD, typically first day of month)
-
-**Example Request:**
-```json
-{
-  "name": "get_month",
-  "arguments": {
-    "budget_id": "12345678-1234-1234-1234-123456789012",
-    "month": "2024-01-01"
-  }
-}
-```
-
-### list_months
-
-Lists all months summary data for a budget.
-
-**Parameters:**
-- `budget_id` (string, optional): The ID of the budget. Omit to use the default budget
-
-## Utility Tools
-
-### get_user
-
-Gets information about the authenticated user.
-
-**Parameters:** None
-
-**Example Request:**
-```json
-{
-  "name": "get_user",
-  "arguments": {}
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"user\": {\n    \"id\": \"user-id\",\n    \"email\": \"user@example.com\",\n    \"trial_expires_on\": null,\n    \"subscription\": {\n      \"trial_expires_on\": null,\n      \"cancelled_at\": null,\n      \"date_first_current\": \"2020-01-01T00:00:00.000Z\",\n      \"frequency\": \"annually\"\n    }\n  }\n}"
-    }
-  ]
-}
-```
-
-## Diagnostic Tools
-
-These tools help inspect the server, environment, and performance. They do not modify YNAB data.
-
-### diagnostic_info
-
-Returns comprehensive diagnostic information about the MCP server with flexible parameter control.
-
-**Parameters:**
-- `include_memory` (boolean, optional): Include memory usage statistics (default: true)
-- `include_environment` (boolean, optional): Include environment and token status (default: true)
-- `include_server` (boolean, optional): Include server version and runtime info (default: true)
-- `include_security` (boolean, optional): Include security and rate limiting stats (default: true)
-- `include_cache` (boolean, optional): Include cache statistics (default: true)
-
-**Example Request (all sections):**
-```json
-{
-  "name": "diagnostic_info",
-  "arguments": {}
-}
-```
-
-**Example Request (selective sections):**
-```json
-{
-  "name": "diagnostic_info",
-  "arguments": {
-    "include_memory": true,
-    "include_server": true,
-    "include_security": false,
-    "include_cache": false,
-    "include_environment": false
-  }
-}
-```
-
-**Example Response:**
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n  \"server\": {\n    \"name\": \"ynab-mcp-server\",\n    \"version\": \"0.6.0\",\n    \"node_version\": \"v20.10.0\",\n    \"platform\": \"win32\",\n    \"arch\": \"x64\",\n    \"pid\": 12345,\n    \"uptime_ms\": 3600000,\n    \"uptime_readable\": \"1h 0m 0s\",\n    \"env\": {\n      \"node_env\": \"development\",\n      }\n  },\n  \"memory\": {\n    \"rss_mb\": 45.2,\n    \"heap_used_mb\": 32.1,\n    \"heap_total_mb\": 40.5,\n    \"external_mb\": 2.1,\n    \"array_buffers_mb\": 0.5,\n    \"description\": {\n      \"rss\": \"Resident Set Size - total memory allocated for the process\",\n      \"heap_used\": \"Used heap memory (objects, closures, etc.)\",\n      \"heap_total\": \"Total heap memory allocated\",\n      \"external\": \"Memory used by C++ objects bound to JavaScript objects\",\n      \"array_buffers\": \"Memory allocated for ArrayBuffer and SharedArrayBuffer\"\n    }\n  },\n  \"environment\": {\n    \"token_present\": true,\n    \"token_length\": 64,\n    \"token_preview\": \"abcd...xyz\",\n    \"ynab_env_keys_present\": [\"YNAB_ACCESS_TOKEN\"],\n    \"working_directory\": \"/path/to/project\"\n  },\n  \"security\": {\n    \"requests_processed\": 1250,\n    \"rate_limit_hits\": 0,\n    \"errors_logged\": 2\n  },\n  \"cache\": {\n    \"entries\": 15,\n    \"estimated_size_kb\": 128,\n    \"keys\": [\"budget_123\", \"account_456\"]\n  }\n}"
-    }
-  ]
-}
-```
-
-### clear_cache
-
-Clears the in-memory cache. Safe; does not modify YNAB data.
-
-**Parameters:** None
-
-Example Request:
-```json
-{ "name": "clear_cache", "arguments": {} }
-```
-
-## Error Handling
-
-All tools implement comprehensive error handling with consistent error response formats.
-
-### Error Response Format
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\n  \"error\": {\n    \"code\": \"ERROR_CODE\",\n    \"message\": \"Human-readable error message\",\n    \"tool\": \"tool_name\",\n    \"operation\": \"operation_description\"\n  }\n}"
-    }
-  ]
-}
-```
-
-### Common Error Types
-
-#### Authentication Errors (401)
-
-**Cause**: Invalid or expired YNAB access token
-
-**Example Response:**
-```json
-{
-  "error": {
-    "code": "AUTHENTICATION_ERROR",
-    "message": "Invalid or expired YNAB access token. Please check your YNAB_ACCESS_TOKEN environment variable.",
-    "tool": "list_budgets",
-    "operation": "listing budgets"
-  }
-}
-```
-
-**Solutions:**
-- Verify the `YNAB_ACCESS_TOKEN` environment variable is set correctly
-- Check if the token has expired in YNAB Developer Settings
-- Generate a new token if necessary
-
-#### Authorization Errors (403)
-
-**Cause**: Insufficient permissions for the requested operation
-
-**Example Response:**
-```json
-{
-  "error": {
-    "code": "AUTHORIZATION_ERROR",
-    "message": "Insufficient permissions to access this resource.",
-    "tool": "get_budget",
-    "operation": "retrieving budget details"
-  }
-}
-```
-
-#### Resource Not Found (404)
-
-**Cause**: Invalid budget_id, account_id, transaction_id, etc.
-
-**Example Response:**
-```json
-{
-  "error": {
-    "code": "RESOURCE_NOT_FOUND",
-    "message": "The requested resource was not found. Please verify the ID is correct.",
-    "tool": "get_account",
-    "operation": "retrieving account details"
-  }
-}
-```
-
-**Solutions:**
-- Verify the ID is correct and exists
-- Use list operations to find valid IDs
-- Check if the resource has been deleted
-
-#### Rate Limiting (429)
-
-**Cause**: Too many requests to YNAB API
-
-**Example Response:**
-```json
-{
-  "error": {
-    "code": "RATE_LIMIT_EXCEEDED",
-    "message": "Rate limit exceeded. Please wait before making more requests.",
-    "tool": "list_transactions",
-    "operation": "listing transactions"
-  }
-}
-```
-
-**Solutions:**
-- Wait before making additional requests
-- Implement exponential backoff in your client
-- Reduce the frequency of API calls
-
-#### Validation Errors
-
-**Cause**: Invalid parameters provided to tools
-
-**Example Response:**
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid parameters: date must be in ISO format (YYYY-MM-DD)",
-    "tool": "create_transaction",
-    "operation": "creating transaction"
-  }
-}
-```
-
-**Solutions:**
-- Check parameter formats and types
-- Refer to the tool documentation for valid values
-- Ensure required parameters are provided
-
-#### Server Errors (500)
-
-**Cause**: YNAB service issues or internal server errors
-
-**Example Response:**
-```json
-{
-  "error": {
-    "code": "SERVER_ERROR",
-    "message": "An internal server error occurred. Please try again later.",
-    "tool": "get_budget",
-    "operation": "retrieving budget details"
-  }
-}
-```
-
-**Solutions:**
-- Retry the request after a short delay
-- Check YNAB service status
-- Contact support if the issue persists
-
-## Best Practices
-
-### 1. Error Handling
-
-Always handle errors gracefully in your client applications:
-
-```javascript
-try {
-  const result = await mcpClient.callTool('list_budgets', {});
-  // Process successful result
-} catch (error) {
-  // Handle error based on error code
-  if (error.code === 'AUTHENTICATION_ERROR') {
-    // Prompt user to update token
-  } else if (error.code === 'RATE_LIMIT_EXCEEDED') {
-    // Implement retry with backoff
-  }
-}
-```
-
-### 2. Parameter Validation
-
-Validate parameters before making tool calls:
-
-```javascript
-// Validate date format
-const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-if (!dateRegex.test(date)) {
-  throw new Error('Date must be in YYYY-MM-DD format');
-}
-
-// Prefer decimal currency input. Use amount_milliunits only for already-converted data.
-const transactionInput = { amount_decimal: -25.50 };
-```
-
-### 3. Efficient Data Retrieval
-
-Use filtering parameters to reduce data transfer:
-
-```javascript
-// Instead of getting all transactions and filtering client-side
-const allTransactions = await mcpClient.callTool('list_transactions', {
-  budget_id: budgetId
-});
-
-// Use server-side filtering
-const recentTransactions = await mcpClient.callTool('list_transactions', {
-  budget_id: budgetId,
-  since_date: '2024-01-01',
-  account_id: specificAccountId
-});
-```
-
-### 4. Amount Handling
-
-Responses are returned in decimal currency units. Mutation inputs make the conversion boundary explicit:
-
-```javascript
-// All returned amounts are in dollars - no conversion needed
-const accounts = await mcpClient.callTool('list_accounts', { budget_id: budgetId });
-console.log(`Balance: $${accounts.accounts[0].balance}`); // Balance: $1234.56
-
-// Preferred decimal currency input
-await mcpClient.callTool('create_transaction', {
-  budget_id: budgetId,
-  account_id: accountId,
-  amount_decimal: -50.25,  // Negative for outflows
-  date: '2024-01-15',
-  payee_name: 'Coffee Shop'
-});
-
-// Explicit raw YNAB input for data already converted upstream
-await mcpClient.callTool('create_transaction', {
-  budget_id: budgetId,
-  account_id: accountId,
-  amount_milliunits: -50250,
-  date: '2024-01-15'
-});
-```
-
-### 5. Caching Strategies
-
-Cache relatively static data to improve performance:
-
-```javascript
-// Cache budget and account information
-const budgets = await mcpClient.callTool('list_budgets', {});
-// Cache for 1 hour
-
-const accounts = await mcpClient.callTool('list_accounts', {
-  budget_id: budgetId
-});
-// Cache for 30 minutes
-
-// Don't cache frequently changing data like transactions
-const transactions = await mcpClient.callTool('list_transactions', {
-  budget_id: budgetId,
-  since_date: today
-});
-// Always fetch fresh
-```
-
-This API reference provides comprehensive documentation for all available tools. For additional information, see the [Developer Guide](DEVELOPER.md) for best practices and common usage patterns.
+Dates are ISO `YYYY-MM-DD`. `ynab_get_month` takes the first day of the month (e.g. `2025-01-01`).
 
+### Response format
 
+These read tools accept `response_format` (`"markdown"` default, or `"json"`): `ynab_list_budgets`, `ynab_get_budget`, `ynab_list_accounts`, `ynab_get_account`, `ynab_list_transactions`, `ynab_get_transaction`, `ynab_list_categories`, `ynab_get_category`, `ynab_list_payees`, `ynab_get_payee`, `ynab_get_month`, `ynab_list_months`, `ynab_get_user`, `ynab_get_default_budget`, `ynab_diagnostic_info`. Every tool also returns `structuredContent` validated against its output schema.
 
+List tools paginate with `limit` and `offset` and return `total_count`, `returned_count`, `offset`, `has_more` and `next_offset`. Read tools report `cached` and cache metadata.
 
+### Write modes
 
+`YNAB_MCP_WRITE_MODE` controls the 12 write tools (create/update/delete transactions, scheduled transactions, accounts, category budgets, and `ynab_reconcile_account`).
 
+| Mode | Behavior |
+|------|----------|
+| `preview` (default) | Write tools are listed, but a call without `confirmation_token` only previews and returns a token. |
+| `enabled` | Write tools execute immediately. `dry_run: true` still previews without writing. |
+| `read-only` | Write tools are not registered. |
 
+**Preview then confirm (`preview` mode):**
 
+1. Call the write tool normally. The server runs it as a dry run and returns the preview plus `confirmation_token` and `confirmation_expires_at` (also in `structuredContent`).
+2. Call the same tool again with identical arguments plus `confirmation_token` to execute.
 
+The token is single-use, expires after 2 minutes, is held in memory only (a server restart invalidates it), and is bound to the tool name and the validated arguments. Changing any argument, reusing a token, or waiting too long is rejected with a validation error and needs a fresh preview. A failed confirmed call also consumes its token. `dry_run` itself is ignored when matching, so previews always run safely and confirmed calls always execute. `ynab_reconcile_account` executes the exact operations shown in its preview.
 
+All write tools accept `dry_run` (boolean). In `preview` mode they additionally accept `confirmation_token` (string).
 
+### Tool profiles
 
+`YNAB_MCP_TOOL_PROFILE` selects which tools are listed.
 
+| Profile | Tools |
+|---------|-------|
+| `full` (default) | All 35 tools. |
+| `core` | The 22 tools marked **core** below. |
 
+Tools filtered out by the profile or by `read-only` write mode are not registered.
+
+---
+
+## Budgets
+
+### ynab_list_budgets (core)
+List all budgets for the authenticated user.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_get_budget (core)
+Summary of one budget: id, name, currency format and counts of accounts, categories, payees and months.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | yes | |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+## Accounts
+
+### ynab_list_accounts (core)
+List accounts in a budget.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `limit` | integer | no | |
+| `offset` | integer | no | Min 0 |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_get_account (core)
+Details for one account, including current balance.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `account_id` | string | yes | |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_create_account (write)
+Create an account.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `name` | string | yes | |
+| `type` | enum | yes | `checking`, `savings`, `creditCard`, `cash`, `lineOfCredit`, `otherAsset`, `otherLiability` |
+| `balance` | number | no | Opening balance in currency units. Default 0 |
+| `dry_run` | boolean | no | |
+
+## Transactions
+
+### ynab_list_transactions (core)
+List transactions with optional filters and pagination.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `account_id` | string | no | |
+| `category_id` | string | no | When set, split lines in that category are returned |
+| `since_date` | string | no | On or after (YYYY-MM-DD) |
+| `until_date` | string | no | On or before (YYYY-MM-DD) |
+| `type` | `"uncategorized"` \| `"unapproved"` | no | |
+| `cleared` | `"cleared"` \| `"uncleared"` \| `"reconciled"` | no | |
+| `import_id` | string | no | Exact match |
+| `payee_id` | string | no | Exact match |
+| `payee_name` | string | no | Case-insensitive substring |
+| `amount_decimal` / `amount_milliunits` | number / integer | no | Exact amount; pass at most one |
+| `limit` | integer | no | Default 50 |
+| `offset` | integer | no | Default 0 |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+Output has a normal form and a preview form for large results; use `ynab_export_transactions` to save a large set to a file.
+
+### ynab_get_transaction (core)
+Full details for one transaction.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `transaction_id` | string | yes | |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_export_transactions
+Export transactions to a local JSON file (directory from `YNAB_EXPORT_PATH`, default `~/Downloads` or `~/Documents`).
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `account_id` | string | no | |
+| `category_id` | string | no | |
+| `since_date` | string | no | |
+| `type` | `"uncategorized"` \| `"unapproved"` | no | |
+| `filename` | string | no | |
+| `minimal` | boolean | no | Default `true` (reduced field set) |
+
+Returns the file path, export directory, counts and a preview of the first transactions.
+
+### ynab_create_transaction (core, write)
+Create one transaction. Use `subtransactions` for a manual split, or `ynab_create_receipt_split_transaction` for itemized receipts.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `account_id` | string | yes | |
+| `date` | string | yes | |
+| `amount_decimal` / `amount_milliunits` | number / integer | no | Negative for expenses |
+| `payee_name` | string | no | Creates the payee if not found |
+| `payee_id` | string | no | Alternative to `payee_name` |
+| `category_id` | string | no | |
+| `memo` | string | no | |
+| `cleared` | `"cleared"` \| `"uncleared"` \| `"reconciled"` | no | Default `uncleared` |
+| `approved` | boolean | no | Default `false` |
+| `flag_color` | `red` \| `orange` \| `yellow` \| `green` \| `blue` \| `purple` | no | |
+| `import_id` | string | no | Advanced. Omit to keep the transaction eligible for later bank-import matching |
+| `subtransactions` | array | no | Split lines: `amount_decimal` or `amount_milliunits`, plus optional `payee_id`, `payee_name`, `category_id`, `memo` |
+| `dry_run` | boolean | no | |
+
+### ynab_create_transactions (write)
+Create 1-100 transactions in one batch with duplicate detection.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `transactions` | array | yes | Each item: `account_id` (required), `date` (required), `amount_decimal` or `amount_milliunits`, `payee_name`, `payee_id`, `category_id`, `memo`, `cleared`, `approved`, `flag_color`, `import_id` |
+| `dry_run` | boolean | no | |
+
+### ynab_create_receipt_split_transaction (core, write)
+Create a split transaction from itemized receipt data. Tax is allocated proportionally across categories.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `account_id` | string | yes | |
+| `payee_name` | string | yes | |
+| `receipt_total` | number | yes | Positive, currency units |
+| `receipt_tax` | number | yes | 0 if none |
+| `receipt_subtotal` | number | no | Pre-tax subtotal, used for validation |
+| `categories` | array | yes | Each: `category_id` (required), `category_name`, `items` (required; each `name` and `amount` required, optional `quantity`, `memo`) |
+| `date` | string | no | Default today |
+| `memo` | string | no | Applied to the parent transaction |
+| `cleared` | `"cleared"` \| `"uncleared"` \| `"reconciled"` | no | |
+| `approved` | boolean | no | |
+| `flag_color` | enum | no | As above |
+| `dry_run` | boolean | no | |
+
+Output includes the subtransactions and a `receipt_summary`.
+
+### ynab_update_transaction (core, write)
+Update fields on one transaction. Only supplied fields change.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `transaction_id` | string | yes | |
+| `account_id`, `date`, `payee_name`, `payee_id`, `category_id`, `memo`, `cleared`, `approved`, `flag_color` | as in create | no | |
+| `amount_decimal` / `amount_milliunits` | number / integer | no | |
+| `subtransactions` | array | no | Same shape as create |
+| `dry_run` | boolean | no | |
+
+### ynab_update_transactions (write)
+Update 1-100 transactions in one batch. A non-split transaction can become a split by supplying the parent amount plus subtransactions that sum to it; lines on an existing split cannot be replaced.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `transactions` | array | yes | Each item: `id` (required) plus any of `amount_decimal`/`amount_milliunits`, `date`, `payee_name`, `payee_id`, `category_id`, `memo`, `cleared`, `approved`, `flag_color`, `subtransactions`, `original_account_id`, `original_date` |
+| `dry_run` | boolean | no | |
+
+Output has `summary` (updated, failed), `results[]` and `transactions[]`.
+
+### ynab_delete_transaction (core, write, destructive)
+Delete a transaction. Irreversible.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `transaction_id` | string | yes | |
+| `dry_run` | boolean | no | |
+
+## Scheduled transactions
+
+### ynab_list_scheduled_transactions (core)
+List scheduled transactions. Amounts are returned in decimal currency and milliunits. No `response_format`.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `limit` | integer | no | Max 500, default 100 |
+| `offset` | integer | no | Default 0 |
+
+### ynab_get_scheduled_transaction
+Get one scheduled transaction.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `scheduled_transaction_id` | string | yes | |
+
+### ynab_create_scheduled_transaction (write)
+Create a recurring scheduled transaction.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `account_id` | string | yes | |
+| `date` | string | yes | First occurrence |
+| `frequency` | enum | yes | `never`, `daily`, `weekly`, `everyOtherWeek`, `twiceAMonth`, `every4Weeks`, `monthly`, `everyOtherMonth`, `every3Months`, `every4Months`, `twiceAYear`, `yearly`, `everyOtherYear` |
+| `amount_decimal` / `amount_milliunits` | number / integer | no | |
+| `payee_id`, `payee_name`, `category_id`, `memo` | string or null | no | |
+| `flag_color` | enum or null | no | `red`, `orange`, `yellow`, `green`, `blue`, `purple` |
+| `dry_run` | boolean | no | |
+
+### ynab_update_scheduled_transaction (write)
+Update selected fields on a scheduled transaction.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `scheduled_transaction_id` | string | yes | |
+| `account_id`, `date`, `frequency`, `amount_decimal`/`amount_milliunits`, `payee_id`, `payee_name`, `category_id`, `memo`, `flag_color` | as in create | no | Nullable fields accept `null` |
+| `dry_run` | boolean | no | |
+
+### ynab_delete_scheduled_transaction (write, destructive)
+Delete a scheduled transaction.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `scheduled_transaction_id` | string | yes | |
+| `dry_run` | boolean | no | |
+
+## Categories
+
+### ynab_list_categories (core)
+List categories (also returned grouped as `category_groups`).
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `limit` | integer | no | |
+| `offset` | integer | no | Min 0 |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_get_category (core)
+Current-month details for one category.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `category_id` | string | yes | |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_update_category (write)
+Set the budgeted amount for a category in the current month.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `category_id` | string | yes | |
+| `budgeted_decimal` / `budgeted_milliunits` | number / integer | no | Funding amount in currency units / milliunits |
+| `dry_run` | boolean | no | |
+
+## Payees
+
+### ynab_list_payees (core)
+List payees.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `limit` | integer | no | Default 50 |
+| `offset` | integer | no | Default 0 |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_get_payee
+Details for one payee.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `payee_id` | string | yes | |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+## Months
+
+### ynab_get_month (core)
+Full budget data for a month, including all category balances.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `month` | string | yes | First day of the month, `YYYY-MM-DD` |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_list_months
+List month summaries.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `limit` | integer | no | |
+| `offset` | integer | no | Min 0 |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+## Reconciliation & comparison
+
+CSV input is supplied as `csv_file_path` or inline `csv_data` (one of them). `csv_format` describes the file layout; all of its fields are optional.
+
+| `csv_format` field | Type | Notes |
+|---|---|---|
+| `date_column`, `description_column` | string or number | Header name or index. Defaults on compare: `Date`, `Description` |
+| `amount_column`, `debit_column`, `credit_column` | string or number | Use `amount_column`, or `debit_column` and `credit_column` |
+| `date_format` | string | Default on compare: `MM/DD/YYYY` |
+| `has_header` | boolean | Default `true` on compare |
+| `delimiter` | string | Default `,` on compare |
+
+### ynab_compare_transactions (core)
+Compare bank CSV rows with YNAB transactions to find missing or mismatched entries. Read-only.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `account_id` | string | yes | |
+| `csv_file_path` / `csv_data` | string | one required | |
+| `csv_format` | object | no | See above |
+| `amount_tolerance` | number | no | 0-1, default 0.01 |
+| `date_tolerance_days` | number | no | 0-7, default 5 |
+| `enable_chronology_bonus` | boolean | no | Default `false` |
+| `statement_start_date` | string | no | Window start |
+| `statement_date` | string | no | Window end |
+| `auto_detect_format` | boolean | no | Default `false` |
+| `debug` | boolean | no | Default `false` |
+
+Output: `summary`, `matches`, `missing_in_ynab`, `missing_in_bank`.
+
+### ynab_reconcile_account (core, write)
+Guided reconciliation: match CSV rows to YNAB, detect discrepancies, and optionally create, clear or unclear transactions. `dry_run` defaults to `true`; set `dry_run: false` and enable the specific `auto_*` flags to write. In `preview` mode the confirmed call executes exactly the operations shown in the preview.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `account_id` | string | yes | |
+| `statement_balance` | number | yes | Currency units. Negative for credit cards and other liabilities (owed amounts) |
+| `csv_file_path` / `csv_data` | string | one required | |
+| `csv_format` | object | no | See above |
+| `statement_end_date` | string | no | Filters the CSV and triggers balance verification; auto-detected if omitted |
+| `date_tolerance_days` | number | no | 0-7, default 7 |
+| `match_strictness` | `"loose"` \| `"normal"` \| `"strict"` | no | |
+| `sign_convention` | `"auto"` \| `"invert"` \| `"as_is"` | no | How CSV amount signs are interpreted |
+| `auto_create_transactions` | boolean | no | Default `false` |
+| `auto_update_cleared_status` | boolean | no | Default `false` |
+| `auto_unclear_missing` | boolean | no | Default `false`. Unclear cleared transactions missing from the statement when still unbalanced |
+| `auto_adjust_dates` | boolean | no | Default `false` |
+| `dry_run` | boolean | no | Default `true` |
+| `max_suggestions_in_output` | integer | no | Default 20 |
+
+Output: `human` (narrative report) and, when available, `structured` data (unmatched items, suggestions, execution summary). Reports progress notifications while running.
+
+## Analytics
+
+Spending totals are computed deterministically by the server over the complete period before grouping. Transfers are excluded unless `include_transfers` is `true`.
+
+### ynab_analyze_spending (core)
+Income, spending and net totals for an inclusive date range.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `since_date` | string | yes | |
+| `until_date` | string | yes | |
+| `group_by` | enum | yes | `category`, `payee`, `account`, `week`, `month` |
+| `include_transfers` | boolean | no | Default `false` |
+
+### ynab_compare_spending_periods (core)
+Compare two periods with total and per-group differences.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | no | |
+| `period_a` | object | yes | `{ since_date, until_date }`, both required |
+| `period_b` | object | yes | `{ since_date, until_date }`, both required |
+| `group_by` | enum | yes | As above |
+| `include_transfers` | boolean | no | Default `false` |
+
+## Utilities
+
+### ynab_get_user (core)
+Information about the authenticated YNAB user.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_set_default_budget (core)
+Set the default budget used when `budget_id` is omitted. Local to the server process; not a YNAB write.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `budget_id` | string | yes | |
+
+### ynab_get_default_budget (core)
+Get the configured default budget ID.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_diagnostic_info
+Server health, memory, environment, cache, delta and security diagnostics.
+
+| Parameter | Type | Req | Notes |
+|---|---|---|---|
+| `include_memory`, `include_environment`, `include_server`, `include_security`, `include_cache`, `include_delta` | boolean | no | Each defaults to `true` |
+| `response_format` | `"markdown"` \| `"json"` | no | |
+
+### ynab_clear_cache
+Clear all in-memory caches. No YNAB data is modified. Takes no parameters.
+
+---
+
+## Prompts
+
+Prompts that take `budget_name` use the first budget when it is omitted.
+
+| Prompt | Arguments (* required) | Purpose |
+|---|---|---|
+| `create-transaction` | `account_name`*, `amount`*, `payee`*, `budget_name`, `category`, `memo` | Create a transaction |
+| `budget-summary` | `budget_name`, `month` (YYYY-MM, default current) | Summarize budget status |
+| `reconcile-account` | `account_name`*, `statement_balance`* (dollars), `budget_name`, `csv_data` | Reconcile an account against a statement |
+| `account-balances` | `budget_name`, `account_type` | Check balances across accounts |
+| `weekly-budget-review` | `since_date`*, `until_date`* | Review deterministic spending for a week |
+| `uncategorized-transaction-review` | `since_date`*, `until_date`* | Review uncategorized transactions without guessing categories |
+| `month-end-close` | `month`* (YYYY-MM) | Read-first month-end checklist |
+| `spending-period-comparison` | `period_a_since`*, `period_a_until`*, `period_b_since`*, `period_b_until`* | Compare two periods using server-calculated totals |
+| `scheduled-cash-flow-review` | `until_date`* | Review scheduled inflows and outflows |
+
+## Resources
+
+| URI | Name | Content |
+|---|---|---|
+| `ynab://budgets` | YNAB Budgets | All available budgets |
+| `ynab://user` | YNAB User Info | Current user ID and email |
+
+## Resource templates
+
+| URI template | Content |
+|---|---|
+| `ynab://budgets/{budget_id}` | Budget details |
+| `ynab://budgets/{budget_id}/accounts` | Accounts for a budget |
+| `ynab://budgets/{budget_id}/accounts/{account_id}` | One account |
+| `ynab://budgets/{budget_id}/categories` | Flattened categories |
+| `ynab://budgets/{budget_id}/months` | Month summaries |
+| `ynab://budgets/{budget_id}/months/{month}` | One month (`month` = first day, `YYYY-MM-DD`) |
+
+All resources return JSON.
+
+## Errors
+
+Failures return `isError: true` with a JSON error body containing a `code`, a user-friendly `message` and suggestions. Codes are the YNAB HTTP statuses (400, 401, 403, 404, 429, 500) or `VALIDATION_ERROR`, `RATE_LIMIT_EXCEEDED` and `UNKNOWN_ERROR`.
+
+Notable cases:
+
+- **Validation**: bad parameters, or a rejected `confirmation_token` (expired, already used, or not matching the tool and arguments). Preview again to get a new token.
+- **401**: the YNAB access token is invalid or expired.
+- **No default budget**: omit-`budget_id` calls fail until `ynab_set_default_budget` is called.
+- **Committed write with failed response validation**: the error states the write went through; do not retry, verify with a read tool.
+- **429 / rate limit**: wait and retry.

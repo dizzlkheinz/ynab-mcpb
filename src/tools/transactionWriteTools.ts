@@ -531,41 +531,7 @@ export async function handleCreateTransactions(
 ): Promise<CallToolResult> {
 	return (await withToolErrorHandling(
 		async () => {
-			const validationResult = CreateTransactionsSchema.safeParse(params);
-			if (!validationResult.success) {
-				type TransactionIssueIndex = number | null;
-				const issuesByIndex = new Map<TransactionIssueIndex, string[]>();
-				const validationIssues = validationResult.error.issues ?? [];
-				for (const issue of validationIssues) {
-					const transactionIndex = issue.path.find(
-						(segment): segment is number => typeof segment === "number",
-					);
-					const message = issue.message;
-					const issueIndex: TransactionIssueIndex =
-						transactionIndex !== undefined ? transactionIndex : null;
-					const existing = issuesByIndex.get(issueIndex) ?? [];
-					existing.push(message);
-					issuesByIndex.set(issueIndex, existing);
-				}
-
-				const details = Array.from(issuesByIndex.entries()).map(
-					([index, errors]) => ({
-						transaction_index: index,
-						errors,
-					}),
-				);
-
-				throw new ValidationError(
-					"Bulk transaction validation failed",
-					JSON.stringify(details, null, 2),
-					[
-						"Ensure each transaction includes required fields",
-						"Limit batches to 100 items",
-					],
-				);
-			}
-
-			const { budget_id, transactions, dry_run } = validationResult.data;
+			const { budget_id, transactions, dry_run } = params;
 
 			// Pre-flight duplicate import_id detection within batch
 			const importIdMap = new Map<string, number[]>();
@@ -766,42 +732,6 @@ async function fetchPreviewTransactions(
 		);
 	}
 	return details;
-}
-
-/**
- * Throws a ValidationError grouping schema issues by transaction index
- */
-function throwBulkUpdateValidationError(error: z.ZodError): never {
-	type TransactionIssueIndex = number | null;
-	const issuesByIndex = new Map<TransactionIssueIndex, string[]>();
-	const validationIssues = error.issues ?? [];
-	for (const issue of validationIssues) {
-		const transactionIndex = issue.path.find(
-			(segment): segment is number => typeof segment === "number",
-		);
-		const message = issue.message;
-		const issueIndex: TransactionIssueIndex =
-			transactionIndex !== undefined ? transactionIndex : null;
-		const existing = issuesByIndex.get(issueIndex) ?? [];
-		existing.push(message);
-		issuesByIndex.set(issueIndex, existing);
-	}
-
-	const details = Array.from(issuesByIndex.entries()).map(
-		([index, errors]) => ({
-			transaction_index: index,
-			errors,
-		}),
-	);
-
-	throw new ValidationError(
-		"Bulk transaction update validation failed",
-		JSON.stringify(details, null, 2),
-		[
-			"Ensure each transaction includes an id field",
-			"Limit batches to 100 items",
-		],
-	);
 }
 
 /**
@@ -1063,12 +993,7 @@ export async function handleUpdateTransactions(
 ): Promise<CallToolResult> {
 	return (await withToolErrorHandling(
 		async () => {
-			const validationResult = UpdateTransactionsSchema.safeParse(params);
-			if (!validationResult.success) {
-				throwBulkUpdateValidationError(validationResult.error);
-			}
-
-			const { budget_id, transactions, dry_run } = validationResult.data;
+			const { budget_id, transactions, dry_run } = params;
 
 			if (dry_run) {
 				return previewBulkUpdate(ynabAPI, budget_id, transactions);
@@ -1139,7 +1064,6 @@ Args:
   - account_id (string, required): Account UUID.
   - amount_decimal (number, preferred): Amount in decimal currency units (for example, -50.00). Negative for expenses.
   - amount_milliunits (int, alternative): Explicit raw YNAB milliunits (for example, -50000).
-  - amount (int, deprecated): Backward-compatible alias for amount_milliunits. Values are never guessed by magnitude.
   - date (string, required): ISO date YYYY-MM-DD.
   - payee_name (string, optional): Payee name (creates new payee if not found).
   - payee_id (string, optional): Existing payee UUID (alternative to payee_name).
@@ -1149,7 +1073,7 @@ Args:
   - approved (boolean, optional): Mark as approved. Default: false.
   - flag_color (string, optional): Transaction flag color ("red", "orange", "yellow", "green", "blue", "purple").
   - dry_run (boolean, optional): Preview without saving. Default: false.
-  - subtransactions (array, optional): Manual split lines. Each entry uses exactly one of amount_decimal, amount_milliunits, or deprecated amount, plus optional "memo", "category_id", "payee_id", and "payee_name".
+  - subtransactions (array, optional): Manual split lines. Each entry uses exactly one of amount_decimal or amount_milliunits, plus optional "memo", "category_id", "payee_id", and "payee_name".
 
 Use "subtransactions" for manual split transactions. Use "ynab_create_receipt_split_transaction" when you have itemized receipt data and want proportional tax allocation handled for you.
 Advanced: "import_id" is supported, but it is intentionally not part of normal guidance. Usually omit it if you want the transaction to remain eligible for later bank-import matching.
@@ -1183,7 +1107,7 @@ Examples:
 
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
-  - transactions (array, required): Up to 100 transaction objects. Each requires account_id, date, and exactly one of amount_decimal (preferred), amount_milliunits, or deprecated amount.
+  - transactions (array, required): Up to 100 transaction objects. Each requires account_id, date, and exactly one of amount_decimal (preferred) or amount_milliunits.
   - dry_run (boolean, optional): Validate without saving. Default: false.
 
 Returns: summary (created, duplicates, failed), results[], transactions[].
@@ -1223,7 +1147,7 @@ Args:
   - payee_name (string, required): Store/payee name.
   - receipt_total (number, required): Total amount in dollars (positive).
   - receipt_tax (number, required): Tax amount in dollars (0 if none).
-  - categories (array, required): Category groups with items. Each item needs name, amount.
+  - categories (array, required): One entry per category: category_id plus its items. Each item needs name and amount (dollars).
   - date (string, optional): ISO date. Default: today.
   - memo (string, optional): Memo applied to the parent transaction.
   - receipt_subtotal (number, optional): Pre-tax subtotal for validation.
@@ -1305,14 +1229,15 @@ Args:
   - transaction_id (string, required): Transaction UUID to update.
   - amount_decimal (number, preferred): New amount in decimal currency units.
   - amount_milliunits (int, alternative): Explicit raw YNAB milliunits.
-  - amount (int, deprecated): Backward-compatible alias for amount_milliunits.
+  - account_id (string, optional): New account UUID.
   - date (string, optional): New date YYYY-MM-DD.
   - payee_name / payee_id (string, optional): New payee.
   - category_id (string, optional): New category UUID.
   - memo (string, optional): New memo.
   - cleared (string, optional): "cleared", "uncleared", or "reconciled".
   - approved (boolean, optional): Approval status.
-  - subtransactions (array, optional): Convert a non-split transaction into a split. Supply the parent amount and split lines using amount_decimal, amount_milliunits, or deprecated amount; split amounts must sum to the parent and category_id must be omitted on the parent. YNAB does not support replacing lines on an existing split.
+  - flag_color (string, optional): Flag color ("red", "orange", "yellow", "green", "blue", "purple").
+  - subtransactions (array, optional): Convert a non-split transaction into a split. Supply the parent amount and split lines using amount_decimal or amount_milliunits; split amounts must sum to the parent and category_id must be omitted on the parent. YNAB does not support replacing lines on an existing split.
   - dry_run (boolean, optional): Preview without saving.
 
 Returns: the updated transaction, including split lines and explicit amount_milliunits.`,
@@ -1340,7 +1265,7 @@ Returns: the updated transaction, including split lines and explicit amount_mill
 
 Args:
   - budget_id (string, optional): Budget UUID. Omit to use the default budget.
-  - transactions (array, required): Up to 100 objects, each requires id plus fields to update. Amount updates use one of amount_decimal (preferred), amount_milliunits, or deprecated amount. A non-split transaction can be converted to a split by supplying the parent amount plus subtransactions that sum to it; YNAB does not support replacing lines on an existing split.
+  - transactions (array, required): Up to 100 objects, each requires id plus fields to update. Amount updates use one of amount_decimal (preferred) or amount_milliunits. A non-split transaction can be converted to a split by supplying the parent amount plus subtransactions that sum to it; YNAB does not support replacing lines on an existing split.
   - dry_run (boolean, optional): Preview changes without saving. Default: false.
 
 Returns: summary (updated, failed), results[], transactions[].

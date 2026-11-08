@@ -1,181 +1,87 @@
 # Receipt Itemization Specification
 
-## Overview
+`ynab_create_receipt_split_transaction` turns itemized receipt data into one split transaction. Tax is allocated across categories and many small items are collapsed into a few lines. Code: `src/tools/transactionWriteTools.ts` (handler), `src/tools/receiptSplit/collapseLogic.ts` (collapse and tax), `src/tools/transactionSchemas.ts` (input schema).
 
-The `create_receipt_split_transaction` tool creates split transactions from receipts with proportional tax allocation. This spec defines the "smart collapse" behavior that reduces clutter for large receipts while preserving visibility for important items.
+## Input
 
-## Collapsing Rules
+- Required: `account_id`, `payee_name`, `receipt_total` (greater than 0), `receipt_tax` (any sign; 0 for none), `categories` (at least one; each has `category_id` and at least one item).
+- Item: `name`, `amount` (negative for returns and discounts), optional `quantity` (greater than 0; `amount` is the line total) and `memo`.
+- Optional: `budget_id`, `date`, `memo`, `receipt_subtotal`, `cleared` (default `uncleared`), `approved`, `flag_color`, `dry_run`, `category_name` (used in tax memos).
+- `date` defaults to the earlier of today's local and UTC dates, so the receipt is never dated in the future.
+- Every item must belong to a category; there is no tax-exempt flag, so all positive items are taxable.
 
-Items are processed in this order:
+## Validation
 
-### 1. Extract Special Items (Always Get Own Subtransaction)
+- Item amounts, `receipt_total`, `receipt_tax` and `receipt_subtotal` must not be finer than the budget currency allows. The budget currency must be readable, or the tool returns an error rather than guessing.
+- Totals must match exactly: the sum of item amounts must equal `receipt_subtotal` (if given), and items plus `receipt_tax` must equal `receipt_total`.
+- The subtransactions always sum to the parent amount (`-receipt_total`). Item and tax lines are outflows (negative).
 
-These items are never collapsed into a group:
+## Collapse rules
 
-| Type | Condition | Example |
-|------|-----------|---------|
-| **Big ticket** | Unit price > $50 | TV $500 |
-| **Returns** | Negative amount | RETURN: Broken headphones -$29.99 |
-| **Discounts** | Negative amount | Member discount -$5.00 |
+Applied in order, to the items of all categories together:
 
-**Clarifications:**
+1. **Special items always get their own subtransaction**: any item with a negative amount (return or discount), and any item whose unit price (`amount / quantity`, or `amount` when no quantity) is greater than 50.00.
+2. **Count the remaining items.** Fewer than 5: each is its own subtransaction. 5 or more: collapse. This is one decision for the whole receipt, so either every category collapses or none does.
+3. **Collapse by category.** Items of a category are grouped in input order, at most 5 items per line. Memo format is `Name $X.XX, Name $Y.YY`; per-item memos and quantities are not included. A memo is limited to 150 characters: if the next item does not fit, the line is closed and the item starts a new one; a single over-long name is truncated with `...`.
 
-- **Unit price, not line total**: If a receipt shows "2x Widget @ $30 = $60", each widget is $30 (not big ticket). Only items with unit price > $50 qualify.
-- **Returns and discounts** are both negative amounts. The AI calling this tool should provide appropriate memo text to distinguish them. Both always get their own subtransaction.
+Itemized (non-collapsed) and special lines use the memo `Name (xQty) - item memo`, where the quantity and item memo parts appear only when given, truncated to 150 characters with `...`.
 
-### 2. Apply Threshold to Remaining Items
+## Tax
 
-After extracting special items, count the remaining positive items:
+- `receipt_tax = 0`: no tax lines.
+- `receipt_tax > 0`: allocated in proportion to each category's sum of positive item amounts (big-ticket items count; returns and discounts do not reduce the base and receive no tax). Each category with a non-zero share gets one line with the memo `Tax - <category_name>` (`Uncategorized` when no name was given).
+  - The allocation works in the currency's smallest unit (for example whole cents) using the largest-remainder method: every share is floored to a unit, and the leftover units go to the largest fractional remainders (ties to the earlier category). Shares therefore sum exactly to the tax and are never finer than the currency allows. 1.00 over three equal categories is 0.34 / 0.33 / 0.33.
+  - If no category has a positive item (only free or returned items), all the tax goes to the first category so the split stays balanced.
+- `receipt_tax < 0` (tax refund; `receipt_total` must still be greater than 0): a single line with the memo `Tax refund` for the full amount, on the category with the largest total of returns (the first category if there are none).
+- `receipt_summary` per-category tax comes from the same allocation as the tax lines.
 
-- **Fewer than 5 remaining items**: Itemize each individually (one subtransaction per item)
-- **5 or more remaining items**: Collapse by category (see below)
+## Output order
 
-### 3. Collapse by Category
+1. Special items, in category order and then input order.
+2. Remaining items, itemized or collapsed, in category order.
+3. Tax lines, in category order.
 
-When collapsing:
+With `dry_run: true` (and in preview write mode) the tool returns `transaction_preview`, `subtransactions` and `receipt_summary` without writing. A real write returns the created transaction plus `receipt_summary`.
 
-- Group items by category
-- Maximum **5 items per subtransaction** memo
-- If a category has more than 5 items, create multiple subtransactions for that category
-- Memo format: `"Item1 $X.XX, Item2 $Y.YY, Item3 $Z.ZZ"`
-- **Memo length limit**: 150 characters max. If exceeded, truncate item list and append "..."
-- **Consistency rule**: If ANY category gets collapsed, ALL categories get collapsed. No mixed mode.
+## Constants
 
-### 4. Tax Handling
-
-**Allocation:**
-- Tax is allocated **proportionally** across categories based on positive subtotals only
-- Returns and discounts do NOT reduce the taxable base for other items
-- Returns and discounts receive NO tax allocation
-
-**Subtransactions:**
-- Each category with a positive subtotal gets its own **separate tax subtransaction**
-- Memo format: `"Tax - CategoryName"`
-- Categories with zero or negative subtotal after discounts: **no tax subtransaction**
-
-**Edge cases:**
-- **Tax = 0**: Skip all tax subtransactions
-- **Tax < 0** (refund scenario): Create a single `"Tax refund"` subtransaction with the negative amount, allocated to the category with the largest return
-
-### 5. Output Ordering
-
-Subtransactions are ordered as follows:
-
-1. Special items (returns, discounts, big tickets) - in receipt order
-2. Collapsed/itemized category groups - categories in input order
-3. Tax subtransactions - in category order
-
-## Validation Rules
-
-- **Every item must have a category**. Uncategorized items cause validation failure.
-- **Tax-exempt items**: Not supported in this version. All positive items are assumed taxable.
-
-## Configuration
-
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| Big ticket threshold | $50.00 | Unit price, not line total |
-| Collapse threshold | 5 items | Total remaining positive items after extracting specials |
-| Max items per memo | 5 | Creates additional subtransactions if exceeded |
-| Max memo length | 150 chars | Truncates with "..." if exceeded |
+| Name | Value |
+|------|-------|
+| Big-ticket threshold | unit price greater than 50.00 |
+| Collapse threshold | 5 remaining items |
+| Max items per collapsed line | 5 |
+| Max memo length | 150 characters |
 
 ## Examples
 
-### Example 1: Small Receipt (fewer than 5 items)
+Amounts are shown as positive outflows; a return or tax refund is an inflow on the transaction.
 
-Input: 3 grocery items
+**Few items.** Milk 4.99, Bread 3.49, Eggs 5.99 in Groceries, tax 1.16, total 15.63:
 
-Output:
 ```
-$4.99  -> Groceries | memo: "Milk"
-$3.49  -> Groceries | memo: "Bread"
-$5.99  -> Groceries | memo: "Eggs"
-$1.16  -> Groceries | memo: "Tax - Groceries"
-```
-
-### Example 2: Large Single-Category Receipt
-
-Input: 12 grocery items
-
-Output:
-```
-$24.45 -> Groceries | memo: "Milk $4.99, Bread $3.49, Eggs $5.99, Cheese $10.99, Butter $2.99"
-$19.46 -> Groceries | memo: "Yogurt $6.47, Apples $4.00, Bananas $2.01, OJ $3.00, Cereal $3.98"
-$8.02  -> Groceries | memo: "Rice $5.00, Pasta $3.02"
-$4.15  -> Groceries | memo: "Tax - Groceries"
+4.99  Groceries  "Milk"
+3.49  Groceries  "Bread"
+5.99  Groceries  "Eggs"
+1.16  Groceries  "Tax - Groceries"
 ```
 
-### Example 3: Mixed Receipt with Big Ticket Item
+**Collapsed.** Six 2.00 items A to F in Groceries, tax 0.96, total 12.96:
 
-Input: TV ($500), 8 grocery items
-
-Output:
 ```
-$500.00 -> Electronics | memo: "TV"
-$24.45  -> Groceries   | memo: "Milk $4.99, Bread $3.49, Eggs $5.99, Cheese $10.99, Butter $2.99"
-$15.48  -> Groceries   | memo: "Yogurt $6.47, Apples $4.00, Bananas $2.01, OJ $3.00"
-$40.00  -> Electronics | memo: "Tax - Electronics"
-$3.19   -> Groceries   | memo: "Tax - Groceries"
+10.00 Groceries  "A $2.00, B $2.00, C $2.00, D $2.00, E $2.00"
+2.00  Groceries  "F $2.00"
+0.96  Groceries  "Tax - Groceries"
 ```
 
-### Example 4: Receipt with Return
+**Special items.** A 500.00 TV in Electronics plus three 2.00 grocery items, tax 40.50, total 546.50 (base 506.00 gives Electronics 40.02, Groceries 0.48):
 
-Input: 6 grocery items plus a return
-
-Output:
 ```
--$29.99 -> Electronics | memo: "RETURN: Broken headphones"
-$24.45  -> Groceries   | memo: "Milk $4.99, Bread $3.49, Eggs $5.99, Cheese $10.99, Butter $2.99"
-$10.48  -> Groceries   | memo: "Yogurt $6.47, Apples $4.01"
-$2.79   -> Groceries   | memo: "Tax - Groceries"
+500.00 Electronics "TV"
+2.00 / 2.00 / 2.00 Groceries (itemized, 3 remaining items)
+40.02  Electronics "Tax - Electronics"
+0.48   Groceries   "Tax - Groceries"
 ```
 
-Note: The return receives no tax allocation. Tax is only applied to positive grocery items.
+A return `-29.99` is also its own line and adds nothing to the tax base.
 
-### Example 5: Receipt with Discount
-
-Input: 6 grocery items with member discount
-
-Output:
-```
--$5.00  -> Groceries | memo: "Member discount"
-$24.45  -> Groceries | memo: "Milk $4.99, Bread $3.49, Eggs $5.99, Cheese $10.99, Butter $2.99"
-$15.48  -> Groceries | memo: "Yogurt $6.47, Apples $4.00, Bananas $2.01, OJ $3.00"
-$3.19   -> Groceries | memo: "Tax - Groceries"
-```
-
-Note: The discount is a separate line item. Tax is calculated on the positive items only.
-
-### Example 6: Quantity Items (Not Big Ticket)
-
-Input: 3x Widgets @ $30 each ($90 line), plus 4 other items
-
-Total items: 7 (3 widgets + 4 others) -> collapse mode
-
-Output:
-```
-$90.00  -> Electronics | memo: "Widget $30.00, Widget $30.00, Widget $30.00"
-$45.00  -> Groceries   | memo: "Milk $10.00, Bread $10.00, Eggs $10.00, Cheese $15.00"
-$10.80  -> Electronics | memo: "Tax - Electronics"
-$3.60   -> Groceries   | memo: "Tax - Groceries"
-```
-
-Note: Each widget is $30 (under $50 threshold), so they collapse normally.
-
-### Example 7: Tax Refund Scenario
-
-Input: Return of $100 item, receipt shows -$8.00 tax
-
-Output:
-```
--$100.00 -> Electronics | memo: "RETURN: Defective laptop"
--$8.00   -> Electronics | memo: "Tax refund"
-```
-
-## Implementation Notes
-
-1. **Rounding**: Use largest-remainder method when distributing tax to avoid penny discrepancies
-2. **Order of operations**: Extract specials -> count remaining -> decide collapse -> distribute tax
-3. **Consistency**: If ANY category gets collapsed, ALL categories get collapsed (except specials)
-4. **Negative detection**: Any item with amount < 0 is treated as return/discount (gets own subtransaction)
-5. **Unit price extraction**: When items have quantity > 1, divide total by quantity to get unit price for $50 threshold check
+**No positive item.** A free sample 0.00 and a coupon -2.00 in Groceries, tax 3.00, total 1.00: lines `0.00`, `-2.00`, and `3.00 "Tax - Groceries"`.

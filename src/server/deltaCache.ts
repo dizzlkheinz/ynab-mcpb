@@ -1,5 +1,4 @@
 import type { CacheManager } from "./cacheManager.js";
-import { isDeltaEnabled } from "./config.js";
 import { globalRequestLogger } from "./requestLogger.js";
 import type { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
 
@@ -96,7 +95,6 @@ type DeltaFetcher<T> = (
 
 /**
  * DeltaCache coordinates cache entries with server knowledge tracking to issue delta-aware requests.
- * The feature is gated by YNAB_MCP_ENABLE_DELTA for safe rollouts.
  */
 export class DeltaCache {
 	private deltaHits = 0;
@@ -141,10 +139,9 @@ export class DeltaCache {
 		const previous = this.cacheManager.peek<DeltaCacheEntry<T>>(cacheKey);
 		// Also evicts an expired entry, so a failed refresh cannot leave it behind.
 		const previousFresh = this.cacheManager.has(cacheKey);
-		// In delta mode every read asks YNAB for changes since the snapshot, so
-		// edits made outside this server (e.g. the YNAB app) appear immediately.
-		const revalidate =
-			isDeltaEnabled() && !options.forceFullRefresh && previous !== undefined;
+		// Every read asks YNAB for changes since the snapshot, so edits made
+		// outside this server (e.g. the YNAB app) appear immediately.
+		const revalidate = !options.forceFullRefresh && previous !== undefined;
 		let fetchedEntry: DeltaCacheEntry<T> | undefined;
 		let usedDelta = false;
 		let mergedOntoFreshSnapshot = false;
@@ -155,10 +152,9 @@ export class DeltaCache {
 			}),
 			...(revalidate && { revalidate }),
 			loader: async () => {
-				const requestedKnowledge =
-					isDeltaEnabled() && !options.forceFullRefresh
-						? previous?.serverKnowledge
-						: undefined;
+				const requestedKnowledge = options.forceFullRefresh
+					? undefined
+					: previous?.serverKnowledge;
 				let response = await fetcher(requestedKnowledge);
 				let fullRefresh = requestedKnowledge === undefined;
 				if (

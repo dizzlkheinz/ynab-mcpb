@@ -1,6 +1,4 @@
-import type { MCPToolAnnotations } from "../types/toolAnnotations.js";
-
-export const TOOL_PROFILES = ["core", "read-only", "full"] as const;
+export const TOOL_PROFILES = ["core", "full"] as const;
 export type ToolProfile = (typeof TOOL_PROFILES)[number];
 export const DEFAULT_TOOL_PROFILE: ToolProfile = "full";
 
@@ -37,14 +35,6 @@ export const CORE_TOOL_NAMES = new Set([
 export function toolBelongsToProfile(
 	profile: ToolProfile,
 	name: string,
-	annotations?: MCPToolAnnotations,
 ): boolean {
-	switch (profile) {
-		case "full":
-			return true;
-		case "read-only":
-			return annotations?.readOnlyHint === true;
-		case "core":
-			return CORE_TOOL_NAMES.has(name);
-	}
+	return profile === "full" || CORE_TOOL_NAMES.has(name);
 }

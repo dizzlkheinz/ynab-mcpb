@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Simplification ahead of a maintenance handover. Compatibility shims and rarely useful settings are removed rather than deprecated.
+
+### Added
+
+- `YNAB_DEFAULT_BUDGET_ID` is documented and offered as an optional field when installing the MCPB bundle. It sets the budget used when a tool call omits `budget_id`; `ynab_set_default_budget` still overrides it for the session
+- An empty or whitespace-only value for any optional setting now counts as unset, so a blank field in the MCPB install dialog no longer stops the server starting
+
+### Changed
+
+- **Breaking:** delta requests are always on and `YNAB_MCP_ENABLE_DELTA` is removed. Every delta-backed read after the first asks YNAB for changes since the cached snapshot, so edits made elsewhere show up immediately, at the cost of one small request per read against YNAB's 200 requests/hour limit
+- **Breaking:** the `read-only` tool profile is removed; `YNAB_MCP_TOOL_PROFILE` accepts `full` (default) or `core`, and `read-only` now fails startup validation. Use `YNAB_MCP_WRITE_MODE=read-only` to hide write tools
+- **Breaking:** `ynab_diagnostic_info` no longer reports `server.env`, or `enabled`/`feature_flag` in its `delta` block
+- Stack traces for startup and uncaught errors are always written to stderr, and request logging no longer switches off when `NODE_ENV=production`; the server does not read `NODE_ENV`
+- Token links point to `app.ynab.com`
+- Tool descriptions for `ynab_export_transactions`, `ynab_compare_transactions`, `ynab_create_receipt_split_transaction`, `ynab_update_transaction` and `ynab_reconcile_account` now match their input and output schemas
+- Bulk transaction tools report input errors through the standard validation error instead of a per-transaction grouping
+- The API reference, reconciliation architecture and receipt-splitting docs are rewritten against the current code, and the README is rewritten
+
+### Removed
+
+- **Breaking:** the legacy tool-input `amount` field (integer milliunits) on transaction, split-line and scheduled transaction inputs, and the legacy `budgeted` field on `ynab_update_category`. Use `amount_decimal` / `amount_milliunits` and `budgeted_decimal` / `budgeted_milliunits`; the old fields are now rejected
+- The `UTILITY_LOCAL` annotation preset and the `YNABAPIError.status` alias for `code`
+- **Breaking:** the `RATE_LIMIT_LOGGING`, `YNAB_MCP_CACHE_MAX_ENTRIES`, `YNAB_MCP_CACHE_DEFAULT_TTL_MS` and `YNAB_MCP_CACHE_STALE_MS` settings. They are ignored if set; `LOG_LEVEL=debug` or `trace` logs rate-limit checks, and the cache uses its built-in limits
+- `SKIP_E2E_TESTS`; live tests run only with `RUN_LIVE_YNAB_TESTS=true`, and offline test projects force it off
+- Outdated docs: the migration guide, completed refactor plans, the per-directory `CLAUDE.md`/`AGENTS.MD` copies (contributor guidance now lives in the root `AGENTS.md`, which `CLAUDE.md` imports), stale reconciliation JSON samples, an unused demo GIF and `scripts/watch-and-restart.ps1`
+
 ## [0.32.0] - 2026-11-07
 
 ### Added

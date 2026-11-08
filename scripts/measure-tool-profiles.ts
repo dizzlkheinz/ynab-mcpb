@@ -10,7 +10,7 @@ process.env["YNAB_ACCESS_TOKEN"] = "tool-profile-measurement-token";
 process.env["YNAB_MCP_WRITE_MODE"] = "enabled";
 
 const { YNABMCPServer } = await import("../src/server/YNABMCPServer.js");
-const profiles: ToolProfile[] = ["core", "read-only", "full"];
+const profiles: ToolProfile[] = ["core", "full"];
 
 for (const profile of profiles) {
 	process.env["YNAB_MCP_TOOL_PROFILE"] = profile;

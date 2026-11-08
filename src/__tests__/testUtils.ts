@@ -53,7 +53,6 @@ export const hasRealAccessToken = (token?: string): boolean =>
 export interface LiveTestGate {
 	hasRealApiKey: boolean;
 	liveTestsRequested: boolean;
-	skipExplicitlyRequested: boolean;
 	enabled: boolean;
 }
 
@@ -61,8 +60,7 @@ export interface LiveTestGate {
  * Resolve whether tests may contact the real YNAB API.
  *
  * A token alone is intentionally insufficient: live access requires the
- * explicit RUN_LIVE_YNAB_TESTS=true opt-in and must not be disabled through
- * SKIP_E2E_TESTS=true.
+ * explicit RUN_LIVE_YNAB_TESTS=true opt-in.
  */
 export function getLiveTestGate(
 	env: NodeJS.ProcessEnv = process.env,
@@ -70,14 +68,11 @@ export function getLiveTestGate(
 	const hasRealApiKey = hasRealAccessToken(env["YNAB_ACCESS_TOKEN"]);
 	const liveTestsRequested =
 		env["RUN_LIVE_YNAB_TESTS"]?.trim().toLowerCase() === "true";
-	const skipExplicitlyRequested =
-		env["SKIP_E2E_TESTS"]?.trim().toLowerCase() === "true";
 
 	return {
 		hasRealApiKey,
 		liveTestsRequested,
-		skipExplicitlyRequested,
-		enabled: hasRealApiKey && liveTestsRequested && !skipExplicitlyRequested,
+		enabled: hasRealApiKey && liveTestsRequested,
 	};
 }
 
@@ -102,7 +97,7 @@ export function getTestConfig(): TestConfig {
 export async function createTestServer(): Promise<YNABMCPServer> {
 	if (!getLiveTestGate().enabled) {
 		throw new Error(
-			"Live YNAB tests require RUN_LIVE_YNAB_TESTS=true, a real YNAB_ACCESS_TOKEN, and SKIP_E2E_TESTS not set to true",
+			"Live YNAB tests require RUN_LIVE_YNAB_TESTS=true, a real YNAB_ACCESS_TOKEN",
 		);
 	}
 

@@ -1,13 +1,11 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as ynab from "ynab";
 import { createReadDeps } from "../../__tests__/readDeps.js";
-import { textOf } from "../../__tests__/testUtils.js";
+import { getLiveTestGate, textOf } from "../../__tests__/testUtils.js";
 import { listBudgetsCompat } from "../../utils/ynabApiCompat.js";
 import { handleGetAccount, handleListAccounts } from "../accountTools.js";
 
-const isSkip = ["true", "1", "yes", "y", "on"].includes(
-	(process.env["SKIP_E2E_TESTS"] || "").toLowerCase().trim(),
-);
+const isSkip = !getLiveTestGate().enabled;
 const hasToken = !!process.env["YNAB_ACCESS_TOKEN"];
 const shouldSkip = isSkip || !hasToken;
 const describeIntegration = shouldSkip ? describe.skip : describe;

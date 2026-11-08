@@ -54,9 +54,7 @@ function reportError(error: unknown): void {
 		process.exit(1);
 	} else if (error instanceof Error) {
 		console.error("❌ Server Error:", error.message);
-		if (process.env["NODE_ENV"] === "development") {
-			console.error("Stack trace:", error.stack);
-		}
+		console.error("Stack trace:", error.stack);
 		process.exit(1);
 	} else {
 		console.error("❌ Unknown error:", error);
@@ -89,9 +87,7 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 // Handle uncaught exceptions
 process.on("uncaughtException", (error) => {
 	console.error("❌ Uncaught Exception:", error);
-	if (process.env["NODE_ENV"] === "development") {
-		console.error("Stack trace:", error.stack);
-	}
+	console.error("Stack trace:", error.stack);
 	process.exit(1);
 });
 

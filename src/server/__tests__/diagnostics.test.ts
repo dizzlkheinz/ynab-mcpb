@@ -168,9 +168,6 @@ describe("diagnostics module", () => {
 								pid: expect.any(Number),
 								uptime_ms: 3661500,
 								uptime_readable: "1h 1m 1s",
-								env: expect.objectContaining({
-									node_env: expect.any(String),
-								}),
 							}),
 						}),
 					);
@@ -185,32 +182,6 @@ describe("diagnostics module", () => {
 							server: expect.anything(),
 						}),
 					);
-				});
-
-				it("should handle custom NODE_ENV", async () => {
-					const originalEnv = process.env["NODE_ENV"];
-					process.env["NODE_ENV"] = "production";
-
-					try {
-						const options: DiagnosticOptions = { include_server: true };
-						await diagnosticManager.collectDiagnostics(options);
-
-						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-							expect.objectContaining({
-								server: expect.objectContaining({
-									env: expect.objectContaining({
-										node_env: "production",
-									}),
-								}),
-							}),
-						);
-					} finally {
-						if (originalEnv === undefined) {
-							Reflect.deleteProperty(process.env, "NODE_ENV");
-						} else {
-							process.env["NODE_ENV"] = originalEnv;
-						}
-					}
 				});
 			});
 
@@ -333,10 +304,6 @@ describe("diagnostics module", () => {
 
 			describe("delta diagnostics", () => {
 				it("should include delta metrics when include_delta is true", async () => {
-					const originalEnv = process.env["YNAB_MCP_ENABLE_DELTA"];
-					process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
-					resetRuntimeConfig();
-
 					try {
 						mockKnowledgeStore.getStats.mockReturnValue({
 							entryCount: 2,
@@ -357,13 +324,11 @@ describe("diagnostics module", () => {
 						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
 							expect.objectContaining({
 								delta: expect.objectContaining({
-									enabled: true,
 									knowledge_entries: 2,
 									knowledge_stats: {
 										"accounts:list:budget-1": 1000,
 										"transactions:list:budget-1": 1500,
 									},
-									feature_flag: "true",
 									delta_hits: 5,
 									delta_misses: 3,
 									delta_hit_rate: Number((5 / 8).toFixed(4)),
@@ -374,71 +339,6 @@ describe("diagnostics module", () => {
 						);
 						expect(mockDeltaCache.getStats).toHaveBeenCalled();
 					} finally {
-						if (originalEnv === undefined) {
-							// Assigning undefined would store the string "undefined"
-							Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
-						} else {
-							process.env["YNAB_MCP_ENABLE_DELTA"] = originalEnv;
-						}
-						resetRuntimeConfig();
-					}
-				});
-
-				it("should keep delta enabled when a sibling runtime key is invalid", async () => {
-					const originalDelta = process.env["YNAB_MCP_ENABLE_DELTA"];
-					const originalLogLevel = process.env["LOG_LEVEL"];
-					process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
-					process.env["LOG_LEVEL"] = "loud";
-					resetRuntimeConfig();
-
-					try {
-						await diagnosticManager.collectDiagnostics({ include_delta: true });
-
-						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-							expect.objectContaining({
-								delta: expect.objectContaining({
-									enabled: true,
-									feature_flag: "true",
-								}),
-							}),
-						);
-					} finally {
-						for (const [key, value] of [
-							["YNAB_MCP_ENABLE_DELTA", originalDelta],
-							["LOG_LEVEL", originalLogLevel],
-						] as const) {
-							if (value === undefined) {
-								Reflect.deleteProperty(process.env, key);
-							} else {
-								process.env[key] = value;
-							}
-						}
-						resetRuntimeConfig();
-					}
-				});
-
-				it("should show a malformed delta flag verbatim next to enabled:false", async () => {
-					const originalDelta = process.env["YNAB_MCP_ENABLE_DELTA"];
-					process.env["YNAB_MCP_ENABLE_DELTA"] = "TRUE";
-					resetRuntimeConfig();
-
-					try {
-						await diagnosticManager.collectDiagnostics({ include_delta: true });
-
-						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-							expect.objectContaining({
-								delta: expect.objectContaining({
-									enabled: false,
-									feature_flag: "TRUE",
-								}),
-							}),
-						);
-					} finally {
-						if (originalDelta === undefined) {
-							Reflect.deleteProperty(process.env, "YNAB_MCP_ENABLE_DELTA");
-						} else {
-							process.env["YNAB_MCP_ENABLE_DELTA"] = originalDelta;
-						}
 						resetRuntimeConfig();
 					}
 				});

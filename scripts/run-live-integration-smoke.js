@@ -30,11 +30,6 @@ const hasRealToken =
 	typeof accessToken === "string" &&
 	!invalidTokens.has(accessToken.toLowerCase());
 
-if ((process.env.SKIP_E2E_TESTS ?? "").trim().toLowerCase() === "true") {
-	console.error("Live YNAB tests are disabled by SKIP_E2E_TESTS=true.");
-	process.exit(1);
-}
-
 if (!liveOptIn) {
 	console.error("Live YNAB smoke tests require RUN_LIVE_YNAB_TESTS=true.");
 	process.exit(1);
@@ -87,7 +82,6 @@ const child = spawn(process.execPath, [vitestBin, ...vitestArgs], {
 	stdio: "inherit",
 	env: {
 		...process.env,
-		SKIP_E2E_TESTS: "false",
 		RUN_LIVE_YNAB_TESTS: "true",
 	},
 });

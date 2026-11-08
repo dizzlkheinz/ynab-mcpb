@@ -53,23 +53,29 @@ describe("Config Module", () => {
 	});
 
 	it("falls back per key when a runtime value is invalid", async () => {
-		const { getRuntimeConfig, isDeltaEnabled } = await import("../config");
-		process.env["YNAB_MCP_ENABLE_DELTA"] = "true";
+		const { getRuntimeConfig } = await import("../config");
 		process.env["LOG_LEVEL"] = "loud";
 		process.env["YNAB_EXPORT_PATH"] = "/tmp/exports";
 
 		const config = getRuntimeConfig();
 		expect(config.LOG_LEVEL).toBe("info");
 		expect(config.YNAB_EXPORT_PATH).toBe("/tmp/exports");
-		expect(isDeltaEnabled()).toBe(true);
 	});
 
-	it("treats an invalid delta flag as disabled", async () => {
-		const { getRuntimeConfig, isDeltaEnabled } = await import("../config");
-		process.env["YNAB_MCP_ENABLE_DELTA"] = "yes";
-		process.env["LOG_LEVEL"] = "loud";
-
-		expect(isDeltaEnabled()).toBe(false);
-		expect(getRuntimeConfig().LOG_LEVEL).toBe("info");
+	it("treats empty optional values as unset", async () => {
+		const { loadConfig } = await import("../config");
+		const config = loadConfig({
+			YNAB_ACCESS_TOKEN: "token",
+			YNAB_DEFAULT_BUDGET_ID: "",
+			YNAB_MCP_WRITE_MODE: "",
+			YNAB_MCP_TOOL_PROFILE: "  ",
+			LOG_LEVEL: "",
+			YNAB_EXPORT_PATH: "",
+		});
+		expect(config.YNAB_DEFAULT_BUDGET_ID).toBeUndefined();
+		expect(config.YNAB_MCP_WRITE_MODE).toBe("preview");
+		expect(config.YNAB_MCP_TOOL_PROFILE).toBe("full");
+		expect(config.LOG_LEVEL).toBe("info");
+		expect(config.YNAB_EXPORT_PATH).toBeUndefined();
 	});
 });

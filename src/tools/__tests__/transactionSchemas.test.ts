@@ -157,7 +157,7 @@ describe("Transaction Schemas", () => {
 		const validBase = {
 			budget_id: "budget-1",
 			account_id: "account-1",
-			amount: 25500,
+			amount_milliunits: 25500,
 			date: "2024-01-15",
 		};
 
@@ -218,7 +218,7 @@ describe("Transaction Schemas", () => {
 		it("should validate negative amounts", () => {
 			const result = CreateTransactionSchema.parse({
 				...validBase,
-				amount: -25500,
+				amount_milliunits: -25500,
 			});
 			expect(result.amount).toBe(-25500);
 		});
@@ -226,7 +226,7 @@ describe("Transaction Schemas", () => {
 		it("should validate zero amount", () => {
 			const result = CreateTransactionSchema.parse({
 				...validBase,
-				amount: 0,
+				amount_milliunits: 0,
 			});
 			expect(result.amount).toBe(0);
 		});
@@ -242,9 +242,9 @@ describe("Transaction Schemas", () => {
 			expect(() =>
 				CreateTransactionSchema.parse({
 					...validBase,
-					amount: 25.5,
+					amount_milliunits: 25.5,
 				}),
-			).toThrow("Amount must be an integer in milliunits");
+			).toThrow("amount_milliunits must be an integer");
 		});
 
 		it("should reject invalid date format", () => {
@@ -286,11 +286,11 @@ describe("Transaction Schemas", () => {
 		it("should validate subtransactions with matching total", () => {
 			const result = CreateTransactionSchema.parse({
 				...validBase,
-				amount: 30000,
+				amount_milliunits: 30000,
 				subtransactions: [
-					{ amount: 15000, category_id: "cat-1" },
-					{ amount: 10000, category_id: "cat-2" },
-					{ amount: 5000, category_id: "cat-3" },
+					{ amount_milliunits: 15000, category_id: "cat-1" },
+					{ amount_milliunits: 10000, category_id: "cat-2" },
+					{ amount_milliunits: 5000, category_id: "cat-3" },
 				],
 			});
 			expect(result.subtransactions).toHaveLength(3);
@@ -300,10 +300,10 @@ describe("Transaction Schemas", () => {
 		it("should validate subtransactions with all optional fields", () => {
 			const result = CreateTransactionSchema.parse({
 				...validBase,
-				amount: 10000,
+				amount_milliunits: 10000,
 				subtransactions: [
 					{
-						amount: 10000,
+						amount_milliunits: 10000,
 						payee_name: "Sub Payee",
 						payee_id: "payee-sub",
 						category_id: "cat-1",
@@ -320,10 +320,10 @@ describe("Transaction Schemas", () => {
 			expect(() =>
 				CreateTransactionSchema.parse({
 					...validBase,
-					amount: 30000,
+					amount_milliunits: 30000,
 					subtransactions: [
-						{ amount: 15000, category_id: "cat-1" },
-						{ amount: 10000, category_id: "cat-2" },
+						{ amount_milliunits: 15000, category_id: "cat-1" },
+						{ amount_milliunits: 10000, category_id: "cat-2" },
 					],
 				}),
 			).toThrow("Amount must equal the sum of subtransaction amounts");
@@ -333,10 +333,10 @@ describe("Transaction Schemas", () => {
 			expect(() =>
 				CreateTransactionSchema.parse({
 					...validBase,
-					amount: 20000,
+					amount_milliunits: 20000,
 					subtransactions: [
-						{ amount: 15000, category_id: "cat-1" },
-						{ amount: 10000, category_id: "cat-2" },
+						{ amount_milliunits: 15000, category_id: "cat-1" },
+						{ amount_milliunits: 10000, category_id: "cat-2" },
 					],
 				}),
 			).toThrow("Amount must equal the sum of subtransaction amounts");
@@ -355,20 +355,22 @@ describe("Transaction Schemas", () => {
 			expect(() =>
 				CreateTransactionSchema.parse({
 					...validBase,
-					amount: 10000,
-					subtransactions: [{ amount: 10000.5, category_id: "cat-1" }],
+					amount_milliunits: 10000,
+					subtransactions: [
+						{ amount_milliunits: 10000.5, category_id: "cat-1" },
+					],
 				}),
-			).toThrow("Subtransaction amount must be an integer in milliunits");
+			).toThrow("amount_milliunits must be an integer");
 		});
 
 		it("should reject extra fields in subtransaction", () => {
 			expect(() =>
 				CreateTransactionSchema.parse({
 					...validBase,
-					amount: 10000,
+					amount_milliunits: 10000,
 					subtransactions: [
 						{
-							amount: 10000,
+							amount_milliunits: 10000,
 							category_id: "cat-1",
 							extra_field: "value",
 						},
@@ -381,7 +383,7 @@ describe("Transaction Schemas", () => {
 	describe("CreateTransactionsSchema", () => {
 		const validTransaction = {
 			account_id: "account-1",
-			amount: 10000,
+			amount_milliunits: 10000,
 			date: "2024-01-15",
 		};
 
@@ -484,7 +486,9 @@ describe("Transaction Schemas", () => {
 					transactions: [
 						{
 							...validTransaction,
-							subtransactions: [{ amount: 10000, category_id: "cat-1" }],
+							subtransactions: [
+								{ amount_milliunits: 10000, category_id: "cat-1" },
+							],
 						},
 					],
 				}),
@@ -876,7 +880,7 @@ describe("Transaction Schemas", () => {
 			const result = UpdateTransactionSchema.parse({
 				...validBase,
 				account_id: "account-1",
-				amount: 15000,
+				amount_milliunits: 15000,
 				date: "2024-01-20",
 				payee_name: "New Payee",
 				payee_id: "payee-2",
@@ -962,9 +966,9 @@ describe("Transaction Schemas", () => {
 			expect(() =>
 				UpdateTransactionSchema.parse({
 					...validBase,
-					amount: 15.5,
+					amount_milliunits: 15.5,
 				}),
-			).toThrow("Amount must be an integer in milliunits");
+			).toThrow("amount_milliunits must be an integer");
 		});
 
 		it("should reject invalid date format", () => {
@@ -998,7 +1002,7 @@ describe("Transaction Schemas", () => {
 	describe("UpdateTransactionsSchema", () => {
 		const validUpdate = {
 			id: "trans-1",
-			amount: 10000,
+			amount_milliunits: 10000,
 		};
 
 		it("should validate with single update", () => {
@@ -1036,7 +1040,7 @@ describe("Transaction Schemas", () => {
 				transactions: [
 					{
 						id: "trans-1",
-						amount: 20000,
+						amount_milliunits: 20000,
 						date: "2024-02-01",
 						payee_name: "Updated Payee",
 						payee_id: "payee-3",
@@ -1091,7 +1095,7 @@ describe("Transaction Schemas", () => {
 				.fill(null)
 				.map((_, i) => ({
 					id: `trans-${i}`,
-					amount: 10000,
+					amount_milliunits: 10000,
 				}));
 
 			expect(() =>
@@ -1107,7 +1111,7 @@ describe("Transaction Schemas", () => {
 				.fill(null)
 				.map((_, i) => ({
 					id: `trans-${i}`,
-					amount: 10000,
+					amount_milliunits: 10000,
 				}));
 
 			const result = UpdateTransactionsSchema.parse({
@@ -1121,7 +1125,7 @@ describe("Transaction Schemas", () => {
 			expect(() =>
 				UpdateTransactionsSchema.parse({
 					budget_id: "budget-1",
-					transactions: [{ amount: 10000 }],
+					transactions: [{ amount_milliunits: 10000 }],
 				}),
 			).toThrow();
 		});
@@ -1130,7 +1134,7 @@ describe("Transaction Schemas", () => {
 			expect(() =>
 				UpdateTransactionsSchema.parse({
 					budget_id: "budget-1",
-					transactions: [{ id: "", amount: 10000 }],
+					transactions: [{ id: "", amount_milliunits: 10000 }],
 				}),
 			).toThrow("Transaction ID is required");
 		});
@@ -1142,7 +1146,7 @@ describe("Transaction Schemas", () => {
 					transactions: [
 						{
 							id: "trans-1",
-							amount: 10000,
+							amount_milliunits: 10000,
 							original_date: "2024/01/01",
 						},
 					],
@@ -1232,7 +1236,7 @@ describe("Transaction Schemas", () => {
 			const result = CreateTransactionSchema.parse({
 				budget_id: "budget-1",
 				account_id: "account-1",
-				amount: 999999999999,
+				amount_milliunits: 999999999999,
 				date: "2024-01-15",
 			});
 			expect(result.amount).toBe(999999999999);
@@ -1242,7 +1246,7 @@ describe("Transaction Schemas", () => {
 			const result = CreateTransactionSchema.parse({
 				budget_id: "budget-1",
 				account_id: "account-1",
-				amount: -999999999999,
+				amount_milliunits: -999999999999,
 				date: "2024-01-15",
 			});
 			expect(result.amount).toBe(-999999999999);
@@ -1255,7 +1259,7 @@ describe("Transaction Schemas", () => {
 				const result = CreateTransactionSchema.parse({
 					budget_id: "budget-1",
 					account_id: "account-1",
-					amount: 1000,
+					amount_milliunits: 1000,
 					date,
 				});
 				expect(result.date).toBe(date);
@@ -1267,7 +1271,7 @@ describe("Transaction Schemas", () => {
 				CreateTransactionSchema.parse({
 					budget_id: "budget-1",
 					account_id: "account-1",
-					amount: null,
+					amount_milliunits: null,
 					date: "2024-01-15",
 				}),
 			).toThrow();
@@ -1278,7 +1282,7 @@ describe("Transaction Schemas", () => {
 				CreateTransactionSchema.parse({
 					budget_id: "budget-1",
 					account_id: "account-1",
-					amount: undefined,
+					amount_milliunits: undefined,
 					date: "2024-01-15",
 				}),
 			).toThrow();
@@ -1289,7 +1293,7 @@ describe("Transaction Schemas", () => {
 			const result = CreateTransactionSchema.parse({
 				budget_id: "budget-1",
 				account_id: "account-1",
-				amount: 1000,
+				amount_milliunits: 1000,
 				date: "2024-01-15",
 				memo: longString,
 			});
@@ -1301,7 +1305,7 @@ describe("Transaction Schemas", () => {
 			const result = CreateTransactionSchema.parse({
 				budget_id: "budget-1",
 				account_id: "account-1",
-				amount: 1000,
+				amount_milliunits: 1000,
 				date: "2024-01-15",
 				payee_name: specialChars,
 				memo: specialChars,
@@ -1315,7 +1319,7 @@ describe("Transaction Schemas", () => {
 			const result = CreateTransactionSchema.parse({
 				budget_id: "budget-1",
 				account_id: "account-1",
-				amount: 1000,
+				amount_milliunits: 1000,
 				date: "2024-01-15",
 				payee_name: unicode,
 			});
@@ -1327,7 +1331,7 @@ describe("Transaction Schemas", () => {
 			const result = CreateTransactionSchema.parse({
 				budget_id: "budget-1",
 				account_id: "account-1",
-				amount: 1000,
+				amount_milliunits: 1000,
 				date: "2024-01-15",
 				memo: "",
 				payee_name: "",
