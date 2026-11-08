@@ -31,7 +31,7 @@ Simplification ahead of a maintenance handover. Compatibility shims and rarely u
 - The `UTILITY_LOCAL` annotation preset and the `YNABAPIError.status` alias for `code`
 - **Breaking:** the `RATE_LIMIT_LOGGING`, `YNAB_MCP_CACHE_MAX_ENTRIES`, `YNAB_MCP_CACHE_DEFAULT_TTL_MS` and `YNAB_MCP_CACHE_STALE_MS` settings. They are ignored if set; `LOG_LEVEL=debug` or `trace` logs rate-limit checks, and the cache uses its built-in limits
 - `SKIP_E2E_TESTS`; live tests run only with `RUN_LIVE_YNAB_TESTS=true`, and offline test projects force it off
-- Outdated docs: the migration guide, completed refactor plans, the per-directory `CLAUDE.md`/`AGENTS.MD` copies (contributor guidance now lives in the root `AGENTS.md`, which `CLAUDE.md` imports), stale reconciliation JSON samples, an unused demo GIF and `scripts/watch-and-restart.ps1`
+- Outdated docs: the migration guide, completed refactor plans, the per-directory `CLAUDE.md`/`AGENTS.MD` copies and the root `CLAUDE.md` (contributor guidance now lives only in the root `AGENTS.md`), stale reconciliation JSON samples, an unused demo GIF and `scripts/watch-and-restart.ps1`
 
 ## [0.32.0] - 2026-11-07
 

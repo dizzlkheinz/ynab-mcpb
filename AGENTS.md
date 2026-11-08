@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Guidance for anyone (human or AI agent) working on this repository. `CLAUDE.md` imports this
-file; keep all contributor guidance here.
+Guidance for anyone (human or AI agent) working on this repository. Keep all contributor
+guidance in this file.
 
 ## What this is
 
