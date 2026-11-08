@@ -1,6 +1,6 @@
 {
 	"name": "@dizzlkheinz/ynab-mcpb",
-	"version": "0.32.0",
+	"version": "0.33.0",
 	"mcpName": "io.github.dizzlkheinz/ynab-mcpb",
 	"description": "Local-first YNAB MCP workflows for reconciliation, receipt splitting, safe bulk cleanup, scheduled transactions, and spending analysis",
 	"main": "dist/index.js",

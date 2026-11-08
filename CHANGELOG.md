@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-07
+
 Simplification ahead of a maintenance handover. Compatibility shims and rarely useful settings are removed rather than deprecated.
 
 ### Added
