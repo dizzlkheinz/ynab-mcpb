@@ -3,11 +3,7 @@ import { toJSONSchema, z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import type { MCPToolAnnotations } from "../types/toolAnnotations.js";
 import { type ToolProfile, toolBelongsToProfile } from "./toolProfiles.js";
-import type {
-	ConfirmationResult,
-	PreparedExecution,
-	WriteSafetyPolicy,
-} from "./writeSafety.js";
+import type { ConfirmationResult, WriteSafetyPolicy } from "./writeSafety.js";
 
 export type SecurityWrapperFactory = <T extends Record<string, unknown>>(
 	namespace: string,
@@ -67,20 +63,8 @@ export interface ToolMetadataOptions {
 	writeSafety?: {
 		mutation: true;
 		preview: "dry-run";
-		/** Preview must capture exact operations rather than rerun mutable inputs. */
-		prepared?: boolean;
 	};
 }
-
-/**
- * Progress notification callback for long-running operations.
- * Follows MCP spec: notifications/progress
- */
-export type ProgressCallback = (params: {
-	progress: number;
-	total?: number;
-	message?: string;
-}) => Promise<void>;
 
 export interface ToolExecutionContext {
 	accessToken: string;
@@ -88,13 +72,6 @@ export interface ToolExecutionContext {
 	operation: string;
 	rawArguments: Record<string, unknown>;
 	cache?: ToolRegistryCacheHelpers;
-	/**
-	 * Optional progress callback for emitting MCP progress notifications.
-	 * Available when the client provides a progressToken in the request.
-	 */
-	sendProgress?: ProgressCallback;
-	/** Capture a prepared write during a protected preview. Never supplied by clients. */
-	prepareExecution?: (execute: PreparedExecution) => void;
 	/**
 	 * True when this write executes a request already previewed and confirmed
 	 * with a token, so checks the preview ran need not run again. Set only by
@@ -174,11 +151,6 @@ export interface ToolExecutionOptions {
 	name: string;
 	accessToken: string;
 	arguments?: Record<string, unknown>;
-	/**
-	 * Optional progress callback for emitting MCP progress notifications.
-	 * Should be provided when the request includes a progressToken.
-	 */
-	sendProgress?: ProgressCallback;
 }
 
 export interface ToolRegistryDependencies {
@@ -495,9 +467,6 @@ export class ToolRegistry {
 		if (this.deps.cacheHelpers) {
 			context.cache = this.deps.cacheHelpers;
 		}
-		if (options.sendProgress) {
-			context.sendProgress = options.sendProgress;
-		}
 		return context;
 	}
 
@@ -558,10 +527,6 @@ export class ToolRegistry {
 		const confirmationArguments = { ...validated, dry_run: false };
 
 		if (!confirmationToken) {
-			let preparedExecution: PreparedExecution | undefined;
-			context.prepareExecution = (execute) => {
-				preparedExecution = execute;
-			};
 			const preview = await this.invokeHandler(
 				tool,
 				{ ...validated, dry_run: true },
@@ -570,16 +535,7 @@ export class ToolRegistry {
 			if (preview.isError) {
 				return preview;
 			}
-			if (tool.metadata?.writeSafety?.prepared && !preparedExecution) {
-				throw new Error(
-					`${tool.name} did not capture the operations shown in its preview`,
-				);
-			}
-			const issued = policy.issue(
-				tool.name,
-				confirmationArguments,
-				preparedExecution,
-			);
+			const issued = policy.issue(tool.name, confirmationArguments);
 			// Also deliver the token in structuredContent: some clients read only
 			// structured output, and would otherwise never see it. listTools
 			// declares these fields on every branch of the output schema.
@@ -620,12 +576,10 @@ export class ToolRegistry {
 			);
 		}
 
-		return this.executeCommittedWrite(
-			tool,
-			confirmationArguments,
-			{ ...context, confirmed: true },
-			confirmation.execute,
-		);
+		return this.executeCommittedWrite(tool, confirmationArguments, {
+			...context,
+			confirmed: true,
+		});
 	}
 
 	/**
@@ -637,11 +591,8 @@ export class ToolRegistry {
 		tool: AnyRegisteredTool,
 		input: Record<string, unknown>,
 		context: ToolExecutionContext,
-		preparedExecution?: PreparedExecution,
 	): Promise<CallToolResult> {
-		const handlerResult = preparedExecution
-			? await preparedExecution(context)
-			: await tool.handler({ input, context });
+		const handlerResult = await tool.handler({ input, context });
 		if (handlerResult.isError) {
 			return handlerResult;
 		}

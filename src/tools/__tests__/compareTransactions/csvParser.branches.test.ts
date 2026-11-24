@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { parseCSV, SAFE_DELIMITERS } from "../csvParser.js";
+import { parseCSV } from "../../compareTransactions/csvParser.js";
 
 describe("csvParser bank-export branches", () => {
 	it("accepts every declared delimiter and rejects arbitrary delimiters", () => {
-		expect(SAFE_DELIMITERS).toEqual([",", ";", "\t", "|", " "]);
+		for (const delimiter of [",", ";", "\t", "|", " "]) {
+			const parsed = parseCSV(
+				`Date${delimiter}Description${delimiter}Amount\n2026-07-01${delimiter}Coffee${delimiter}-4.25`,
+				{ delimiter },
+			);
+			expect(parsed.transactions[0]?.amount).toBe(-4250);
+		}
 		expect(() =>
 			parseCSV("Date^Description^Amount", { delimiter: "^" }),
 		).toThrow("Unsafe delimiter");
-		const semicolon = parseCSV(
-			"Date;Description;Amount\n2026-07-01;Coffee;-4.25",
-			{ delimiter: ";" },
-		);
-		expect(semicolon.transactions[0]?.amount).toBe(-4250);
 	});
 
 	it("reports PapaParse failures without discarding valid metadata", () => {

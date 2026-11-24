@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
-import { CacheManager } from "../../server/cacheManager.js";
 import {
 	GetPayeeSchema,
 	handleGetPayee,

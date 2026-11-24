@@ -7,7 +7,7 @@
  *
  * Includes schemas for: utilities, budgets, accounts, transactions (list/get),
  * categories, payees, months, transaction mutations (create/update/delete),
- * reconciliation analysis, and comparison/export operations.
+ * and comparison/export operations.
  *
  * Only the tool output schemas registered with the ToolRegistry are exported here;
  * nested schemas stay in their domain files.
@@ -96,12 +96,6 @@ export {
 	UpdateTransactionOutputSchema,
 	UpdateTransactionsOutputSchema,
 } from "./transactionMutationOutputs.js";
-
-// ============================================================================
-// RECONCILIATION OUTPUT SCHEMAS
-// ============================================================================
-
-export { ReconcileAccountOutputSchema } from "./reconciliationOutputs.js";
 
 // ============================================================================
 // COMPARISON AND EXPORT OUTPUT SCHEMAS

@@ -50,13 +50,12 @@ const SUITES = {
 	delta: [
 		"--project",
 		"live",
-		"src/tools/__tests__/accountTools.delta.integration.test.ts",
-		"src/tools/__tests__/budgetTools.delta.integration.test.ts",
-		"src/tools/__tests__/categoryTools.delta.integration.test.ts",
-		"src/tools/__tests__/monthTools.delta.integration.test.ts",
-		"src/tools/__tests__/payeeTools.delta.integration.test.ts",
-		"src/tools/__tests__/deltaFetcher.scheduled.integration.test.ts",
-		"src/tools/reconciliation/__tests__/reconciliation.delta.integration.test.ts",
+		"src/tools/__tests__/accountTools.delta.e2e.test.ts",
+		"src/tools/__tests__/budgetTools.delta.e2e.test.ts",
+		"src/tools/__tests__/categoryTools.delta.e2e.test.ts",
+		"src/tools/__tests__/monthTools.delta.e2e.test.ts",
+		"src/tools/__tests__/payeeTools.delta.e2e.test.ts",
+		"src/tools/__tests__/deltaFetcher.scheduled.e2e.test.ts",
 	],
 };
 const [suiteArg, ...passthroughArgs] = process.argv.slice(2);

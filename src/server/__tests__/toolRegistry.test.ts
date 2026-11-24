@@ -1,13 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import { createReadDeps } from "../../__tests__/readDeps.js";
 import { maybeTextOf } from "../../__tests__/testUtils.js";
-import {
-	handleReconcileAccount,
-	ReconcileAccountSchema,
-} from "../../tools/reconciliation/index.js";
 import {
 	type ToolDefinition,
 	type ToolExecutionPayload,
@@ -228,72 +222,6 @@ describe("ToolRegistry", () => {
 			accessToken: "token-123",
 			params: { id: "abc" },
 		});
-	});
-
-	// NOTE: Reconcile dual-channel output is properly tested in reconciliation integration tests
-	// This test requires complex DeltaFetcher mocking that's covered elsewhere
-	it.skip("routes reconcile_account tool to handler emitting dual-channel output", async () => {
-		const mockYnabAPI = {
-			accounts: {
-				getAccountById: vi.fn().mockResolvedValue({
-					data: {
-						account: {
-							name: "Checking",
-							balance: 0,
-							cleared_balance: 0,
-							uncleared_balance: 0,
-						},
-					},
-				}),
-			},
-			budgets: {
-				getBudgetById: vi.fn().mockResolvedValue({
-					data: { budget: { currency_format: { currency_code: "USD" } } },
-				}),
-			},
-			transactions: {
-				getTransactionsByAccount: vi
-					.fn()
-					.mockResolvedValue({ data: { transactions: [] } }),
-			},
-		} as unknown as ynab.API;
-
-		const adapt =
-			<TInput extends Record<string, unknown>>(
-				handler: (api: ynab.API, params: TInput) => Promise<CallToolResult>,
-			) =>
-			async ({ input }: ToolExecutionPayload<TInput>) =>
-				handler(mockYnabAPI, input);
-
-		registry.register({
-			name: "ynab_reconcile_account",
-			description: "Guided reconciliation workflow with dual-channel output",
-			inputSchema: ReconcileAccountSchema,
-			handler: adapt((api, input) =>
-				handleReconcileAccount(api, input, createReadDeps(api)),
-			),
-		});
-
-		const result = await registry.executeTool({
-			name: "ynab_reconcile_account",
-			accessToken: "token-xyz",
-			arguments: {
-				budget_id: "budget-1",
-				account_id: "account-1",
-				csv_data: "Date,Description,Amount\n2025-10-01,Sample,-1.23",
-				statement_balance: -1.23,
-				include_structured_data: true, // Request both human + structured output
-			},
-		});
-
-		expect(result.content).toHaveLength(2);
-		expect(result.content.every((entry) => entry.type === "text")).toBe(true);
-		expect(mockYnabAPI.accounts.getAccountById).toHaveBeenCalled();
-
-		const toolNames = registry.listTools().map((tool) => tool.name);
-		expect(toolNames).toEqual(
-			expect.arrayContaining(["ynab_reconcile_account"]),
-		);
 	});
 
 	it("merges default arguments before validation", async () => {

@@ -7,7 +7,6 @@ type IntegrationTestDomain =
 	| "payees"
 	| "months"
 	| "delta"
-	| "reconciliation"
 	| "utility"
 	| "security"
 	| "server"

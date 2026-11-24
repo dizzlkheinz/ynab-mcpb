@@ -20,10 +20,10 @@ import { z } from "zod";
 import { registerAccountTools } from "../tools/accountTools.js";
 import { registerBudgetTools } from "../tools/budgetTools.js";
 import { registerCategoryTools } from "../tools/categoryTools.js";
+import { registerCompareTransactionTools } from "../tools/compareTransactions/index.js";
 import { DeltaFetcher } from "../tools/deltaFetcher.js";
 import { registerMonthTools } from "../tools/monthTools.js";
 import { registerPayeeTools } from "../tools/payeeTools.js";
-import { registerReconciliationTools } from "../tools/reconciliation/index.js";
 import { registerScheduledTransactionTools } from "../tools/scheduledTransactionTools.js";
 import { emptyObjectSchema } from "../tools/schemas/common.js";
 import {
@@ -64,11 +64,7 @@ import {
 	withSecurityWrapper,
 } from "./securityMiddleware.js";
 import { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
-import {
-	type ProgressCallback,
-	type ToolDefinition,
-	ToolRegistry,
-} from "./toolRegistry.js";
+import { type ToolDefinition, ToolRegistry } from "./toolRegistry.js";
 import { WriteSafetyPolicy } from "./writeSafety.js";
 import { YNABClient } from "./ynabClient.js";
 
@@ -134,7 +130,7 @@ export class YNABMCPServer {
 				title: "YNAB MCP Server",
 				version: this.serverVersion,
 				description:
-					"Local-first YNAB workflows for bank-statement reconciliation, receipt tax splitting, safe bulk cleanup, scheduled transactions, and deterministic spending analysis",
+					"Local-first YNAB workflows for receipt tax splitting, safe bulk cleanup, scheduled transactions, and deterministic spending analysis",
 				websiteUrl: "https://github.com/dizzlkheinz/ynab-mcpb",
 			},
 			{
@@ -365,57 +361,23 @@ export class YNABMCPServer {
 		});
 
 		// Handle tool call requests
-		this.server.setRequestHandler(
-			CallToolRequestSchema,
-			async (request, extra) => {
-				if (!this.toolRegistry.hasTool(request.params.name)) {
-					throw new McpError(
-						ErrorCode.InvalidParams,
-						`Unknown tool: ${request.params.name}`,
-					);
-				}
-				const rawArgs = (request.params.arguments ?? undefined) as
-					| Record<string, unknown>
-					| undefined;
+		this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+			if (!this.toolRegistry.hasTool(request.params.name)) {
+				throw new McpError(
+					ErrorCode.InvalidParams,
+					`Unknown tool: ${request.params.name}`,
+				);
+			}
+			const rawArgs = (request.params.arguments ?? undefined) as
+				| Record<string, unknown>
+				| undefined;
 
-				const executionOptions: {
-					name: string;
-					accessToken: string;
-					arguments: Record<string, unknown>;
-					sendProgress?: ProgressCallback;
-				} = {
-					name: request.params.name,
-					accessToken: this.configInstance.YNAB_ACCESS_TOKEN,
-					arguments: rawArgs ?? {},
-				};
-
-				// Create progress callback if client provided a progressToken
-				const progressToken = (
-					request.params as { _meta?: { progressToken?: string | number } }
-				)._meta?.progressToken;
-				if (progressToken !== undefined && extra.sendNotification) {
-					executionOptions.sendProgress = async (params) => {
-						try {
-							await extra.sendNotification({
-								method: "notifications/progress",
-								params: {
-									progressToken,
-									progress: params.progress,
-									...(params.total !== undefined && { total: params.total }),
-									...(params.message !== undefined && {
-										message: params.message,
-									}),
-								},
-							});
-						} catch {
-							// Progress notifications are non-critical; allow tool execution to continue.
-						}
-					};
-				}
-
-				return await this.toolRegistry.executeTool(executionOptions);
-			},
-		);
+			return await this.toolRegistry.executeTool({
+				name: request.params.name,
+				accessToken: this.configInstance.YNAB_ACCESS_TOKEN,
+				arguments: rawArgs ?? {},
+			});
+		});
 
 		// Handle completion requests for autocomplete
 		this.server.setRequestHandler(CompleteRequestSchema, async (request) => {
@@ -485,7 +447,7 @@ export class YNABMCPServer {
 		registerTransactionTools(this.toolRegistry, toolContext);
 		registerScheduledTransactionTools(this.toolRegistry, toolContext);
 		registerSpendingAnalyticsTools(this.toolRegistry, toolContext);
-		registerReconciliationTools(this.toolRegistry, toolContext);
+		registerCompareTransactionTools(this.toolRegistry, toolContext);
 		registerUtilityTools(this.toolRegistry, toolContext);
 
 		// Server-owned inline tools stay here because they depend on instance state (default budget,

@@ -3,9 +3,16 @@ import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import type { ErrorHandler } from "../../server/errorHandler.js";
 import { withToolErrorHandling } from "../../types/index.js";
+import type { ToolFactory } from "../../types/toolRegistration.js";
 import { formatUTCISODate, isDateInRange } from "../../utils/dateUtils.js";
-import { requireResolvedBudgetId } from "../adapters.js";
+import {
+	createAdapters,
+	createBudgetResolver,
+	requireResolvedBudgetId,
+} from "../adapters.js";
 import { optionalDateSchema } from "../schemas/common.js";
+import { CompareTransactionsOutputSchema } from "../schemas/outputs/index.js";
+import { ToolAnnotationPresets } from "../toolCategories.js";
 import { buildComparisonResult } from "./formatter.js";
 import { findMatches } from "./matcher.js";
 import { autoDetectCSVFormat, parseBankCSV, readCSVFile } from "./parser.js";
@@ -277,3 +284,45 @@ export async function handleCompareTransactions(
 		errorHandler,
 	);
 }
+
+/**
+ * Registers the read-only bank CSV comparison tool with the registry.
+ */
+export const registerCompareTransactionTools: ToolFactory = (
+	registry,
+	context,
+) => {
+	const { adapt } = createAdapters(context);
+	const budgetResolver = createBudgetResolver(context);
+
+	registry.register({
+		name: "ynab_compare_transactions",
+		description: `Compare bank CSV transactions with YNAB transactions to find missing or mismatched entries.
+
+Args:
+  - budget_id (string, optional): Budget UUID. Omit to use the default budget.
+  - account_id (string, required): Account UUID to compare against.
+  - csv_file_path or csv_data (string, required): Bank export file path or inline CSV text.
+  - statement_start_date (string, optional): Filter comparison window start date (YYYY-MM-DD).
+  - statement_date (string, optional): Filter comparison window end date (YYYY-MM-DD).
+  - amount_tolerance (number, optional): Amount match tolerance in dollars, 0-1. Default: 0.01.
+  - date_tolerance_days (number, optional): Date match tolerance, 0-7 days. Default: 5.
+  - enable_chronology_bonus (boolean, optional): Prefer matches in chronological order. Default: false.
+  - auto_detect_format (boolean, optional): Detect CSV columns automatically. Default: false.
+  - csv_format (object, optional): CSV layout (date_column, amount_column, debit_column, credit_column, description_column, date_format, has_header, delimiter).
+  - debug (boolean, optional): Include extra diagnostics. Default: false.
+
+Returns: summary (counts, date_range, parameters), matches, missing_in_ynab (bank rows with no YNAB match), missing_in_bank (YNAB transactions with no bank row).`,
+		inputSchema: CompareTransactionsSchema,
+		outputSchema: CompareTransactionsOutputSchema,
+		handler: adapt(handleCompareTransactions),
+		defaultArgumentResolver:
+			budgetResolver<z.infer<typeof CompareTransactionsSchema>>(),
+		metadata: {
+			annotations: {
+				...ToolAnnotationPresets.READ_ONLY_EXTERNAL,
+				title: "YNAB: Compare Transactions",
+			},
+		},
+	});
+};

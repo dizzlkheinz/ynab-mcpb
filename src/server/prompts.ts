@@ -106,35 +106,6 @@ const defaultPromptDefinitions: PromptDefinition[] = [
 		],
 	},
 	{
-		name: "reconcile-account",
-		description:
-			"Reconcile a YNAB account against a bank statement or CSV export",
-		arguments: [
-			{
-				name: "budget_name",
-				description:
-					"Name of the budget (optional, uses first budget if not specified)",
-				required: false,
-			},
-			{
-				name: "account_name",
-				description: "Name of the account to reconcile",
-				required: true,
-			},
-			{
-				name: "statement_balance",
-				description: "Ending balance from the bank statement (in dollars)",
-				required: true,
-			},
-			{
-				name: "csv_data",
-				description:
-					"Paste CSV data directly (optional, omit if providing a file path instead)",
-				required: false,
-			},
-		],
-	},
-	{
 		name: "account-balances",
 		description: "Check balances across all accounts",
 		arguments: [
@@ -295,18 +266,6 @@ IMPORTANT: In YNAB, understand these key fields:
 - balance: Available amount in the category = previous balance + budgeted + activity
 - OVERSPENDING occurs when balance < 0 (Available goes negative), NOT when spending > budgeted for the month
 
-SPENDING TRENDS: The analysis uses linear regression over multiple months to detect real spending patterns. Each trend includes:
-- explanation: User-friendly description of what the trend means
-- reliability_score: Confidence level (0-100%) indicating how reliable the trend is
-- data_points: Number of months used in the analysis
-Focus on trends with high reliability scores for actionable insights.
-
-BUDGET OPTIMIZATION: The system provides three types of optimization insights:
-1. "Consistently Under-Spent Categories" - Based on multi-month historical trends (reliable patterns)
-2. "Categories Over Monthly Assignment" - Current month only (spending > budgeted but Available still positive)
-3. "Large Unused Category Balances" - Categories with substantial unused funds
-Distinguish between current-month patterns vs historical trends when presenting insights.
-
 1. List all budgets and select the appropriate one
 2. Get monthly data for ${month}
 3. List categories to show budget vs actual spending
@@ -318,49 +277,6 @@ Distinguish between current-month patterns vs historical trends when presenting 
    - Any true overspending where categories went into the red (negative Available balance)
 
 Format the response in a clear, easy-to-read summary.`,
-					},
-				},
-			],
-		};
-	},
-
-	"reconcile-account": async (_name, args) => {
-		const budgetName = args?.["budget_name"] || "first available budget";
-		const accountName = args?.["account_name"] || "[ACCOUNT_NAME]";
-		const statementBalance =
-			args?.["statement_balance"] || "[STATEMENT_BALANCE]";
-		const csvData = args?.["csv_data"]
-			? `\n\nCSV data provided:\n\`\`\`\n${args["csv_data"]}\n\`\`\``
-			: "\n\nNo CSV data provided — you can pass the CSV file path to the ynab_reconcile_account tool.";
-
-		return {
-			description: `Reconcile ${accountName} against bank statement`,
-			messages: [
-				{
-					role: "user",
-					content: {
-						type: "text",
-						text: `Please reconcile the YNAB account "${accountName}" in budget "${budgetName}" against the bank statement.
-
-Statement ending balance: $${statementBalance} (this is in dollars, not milliunits)${csvData}
-
-Reconciliation workflow:
-1. Use ynab_list_budgets to find the correct budget ID
-2. Use ynab_list_accounts to find the account ID for "${accountName}"
-3. Call ynab_reconcile_account without a confirmation token to preview matches without making changes
-4. Review the output carefully:
-   - "matched" transactions are paired between YNAB and bank — verify these look correct
-   - "unmatched_ynab" transactions exist in YNAB but not the bank statement — may be future or missing
-   - "unmatched_bank" transactions are in the bank statement but not YNAB — may need to be created
-5. If the preview looks correct, repeat the identical request with the confirmation_token returned in the preview's structured output. If writes are disabled, report that the server is read-only.
-
-Important notes:
-- The statement_balance parameter is in dollars (e.g., 1234.56)
-- Date tolerance is 7 days to accommodate bank posting delays
-- Amount matching is exact — amounts must match precisely
-- Review recommendations in the output before executing
-
-The ynab_reconcile_account tool will mark cleared transactions as reconciled and can optionally create missing transactions.`,
 					},
 				},
 			],

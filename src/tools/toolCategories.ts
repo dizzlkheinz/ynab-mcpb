@@ -76,7 +76,6 @@ export const ToolAnnotationPresets = {
 	 * Examples:
 	 * - update_transaction: Updates an existing transaction
 	 * - set_default_budget: Sets the default budget preference
-	 * - reconcile_account: Updates account balances and transaction states
 	 *
 	 * Annotation rationale:
 	 * - readOnlyHint: false - Tool modifies existing data

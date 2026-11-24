@@ -1,24 +1,56 @@
 /**
- * Transaction matching algorithm for reconciliation
- *
- * V2 matcher works natively in milliunits using canonical BankTransaction
- * and NormalizedYNABTransaction types.
+ * Transaction matching engine for bank CSV comparison.
+ * Operates in integer milliunits using canonical bank and YNAB transaction views.
  */
 
 import * as fuzz from "fuzzball";
-import type {
-	BankTransaction as CanonicalBankTransaction,
-	NormalizedYNABTransaction,
-} from "../../types/reconciliation.js";
-import type { MatchingConfig } from "./types.js";
 
-export type { MatchingConfig };
+export interface CanonicalBankTransaction {
+	id: string;
+	date: string;
+	amount: number;
+	payee: string;
+	memo?: string;
+	sourceRow: number;
+	raw: {
+		date: string;
+		amount: string;
+		description: string;
+	};
+}
+
+export interface NormalizedYNABTransaction {
+	id: string;
+	date: string;
+	amount: number;
+	payee: string | null;
+	memo: string | null;
+	categoryName: string | null;
+	cleared: "cleared" | "uncleared" | "reconciled";
+	approved: boolean;
+}
+
+interface MatchingConfig {
+	weights: {
+		date: number;
+		payee: number;
+	};
+	dateToleranceDays: number;
+	autoMatchThreshold: number;
+	suggestedMatchThreshold: number;
+	minimumCandidateScore: number;
+	exactDateBonus: number;
+	exactPayeeBonus: number;
+	exactDateAutoMatchThreshold?: number;
+	amountTolerance?: number;
+	chronologyBonus?: boolean;
+}
 
 type NormalizedMatchingConfig = MatchingConfig & {
 	exactDateAutoMatchThreshold: number;
 };
 
-export interface MatchCandidate {
+interface MatchCandidate {
 	ynabTransaction: NormalizedYNABTransaction;
 	scores: {
 		amount: number; // 0-100
@@ -29,7 +61,7 @@ export interface MatchCandidate {
 	matchReasons: string[];
 }
 
-export interface MatchResult {
+interface MatchResult {
 	bankTransaction: CanonicalBankTransaction;
 	bestMatch: MatchCandidate | null;
 	candidates: MatchCandidate[]; // Top 3
@@ -51,9 +83,7 @@ export const DEFAULT_CONFIG: NormalizedMatchingConfig = {
 	exactDateAutoMatchThreshold: 65,
 };
 
-export function normalizeConfig(
-	config?: MatchingConfig,
-): NormalizedMatchingConfig {
+function normalizeConfig(config?: MatchingConfig): NormalizedMatchingConfig {
 	if (!config) {
 		return { ...DEFAULT_CONFIG };
 	}

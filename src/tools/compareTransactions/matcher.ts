@@ -1,14 +1,12 @@
-/** Compatibility view over the shared reconciliation matcher. */
+/** Compatibility view over the CSV transaction matching engine. */
 
-import type {
-	BankTransaction as CanonicalBank,
-	NormalizedYNABTransaction,
-} from "../../types/reconciliation.js";
 import { formatUTCISODate } from "../../utils/dateUtils.js";
 import {
+	type CanonicalBankTransaction as CanonicalBank,
 	DEFAULT_CONFIG,
 	findMatches as matchTransactions,
-} from "../reconciliation/matcher.js";
+	type NormalizedYNABTransaction,
+} from "./matchEngine.js";
 import type {
 	BankTransaction,
 	TransactionMatch,

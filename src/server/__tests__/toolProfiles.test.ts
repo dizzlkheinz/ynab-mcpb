@@ -15,7 +15,6 @@ describe("tool profiles", () => {
 		expect(CORE_TOOL_NAMES.size).toBeGreaterThan(10);
 		for (const name of [
 			"ynab_list_transactions",
-			"ynab_reconcile_account",
 			"ynab_create_receipt_split_transaction",
 			"ynab_compare_transactions",
 			"ynab_analyze_spending",

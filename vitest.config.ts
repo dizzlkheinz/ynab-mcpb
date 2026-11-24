@@ -33,7 +33,7 @@ export default defineConfig({
 			{
 				test: {
 					name: "live",
-					include: ["src/**/*.e2e.test.ts", "src/**/*.integration.test.ts"],
+					include: ["src/**/*.e2e.test.ts"],
 					testTimeout: 60000,
 					hookTimeout: 30000,
 					fileParallelism: false,

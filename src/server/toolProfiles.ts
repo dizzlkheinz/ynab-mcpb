@@ -25,7 +25,6 @@ export const CORE_TOOL_NAMES = new Set([
 	"ynab_update_transaction",
 	"ynab_delete_transaction",
 	"ynab_create_receipt_split_transaction",
-	"ynab_reconcile_account",
 	"ynab_compare_transactions",
 	"ynab_analyze_spending",
 	"ynab_compare_spending_periods",

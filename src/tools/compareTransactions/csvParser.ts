@@ -1,10 +1,24 @@
 import { randomUUID } from "node:crypto";
 import * as chrono from "chrono-node";
 import Papa from "papaparse";
-import type { BankTransaction } from "../../types/reconciliation.js";
+
+interface ParsedBankTransaction {
+	id: string;
+	date: string;
+	amount: number;
+	payee: string;
+	memo?: string;
+	sourceRow: number;
+	raw: {
+		date: string;
+		amount: string;
+		description: string;
+	};
+	warnings?: string[];
+}
 
 export interface CSVParseResult {
-	transactions: BankTransaction[];
+	transactions: ParsedBankTransaction[];
 	errors: ParseError[];
 	warnings: ParseWarning[];
 	meta: {
@@ -21,19 +35,19 @@ export interface CSVParseResult {
 	};
 }
 
-export interface ParseError {
+interface ParseError {
 	row: number;
 	field: string;
 	message: string;
 	rawValue: string;
 }
 
-export interface ParseWarning {
+interface ParseWarning {
 	row: number;
 	message: string;
 }
 
-export interface BankPreset {
+interface BankPreset {
 	name: string;
 	dateColumn: string | string[];
 	amountColumn?: string | string[];
@@ -48,7 +62,7 @@ export interface BankPreset {
 }
 
 // Presets for Canadian banks
-export const BANK_PRESETS: Record<string, BankPreset> = {
+const BANK_PRESETS: Record<string, BankPreset> = {
 	td: {
 		name: "TD Canada Trust",
 		// Real TD credit card exports are typically
@@ -104,8 +118,8 @@ export const BANK_PRESETS: Record<string, BankPreset> = {
  * Safe delimiters allowed for CSV parsing.
  * Restricted to common, safe characters to prevent injection attacks.
  */
-export const SAFE_DELIMITERS = [",", ";", "\t", "|", " "] as const;
-export type SafeDelimiter = (typeof SAFE_DELIMITERS)[number];
+const SAFE_DELIMITERS = [",", ";", "\t", "|", " "] as const;
+type SafeDelimiter = (typeof SAFE_DELIMITERS)[number];
 
 /**
  * Validates that a delimiter is safe for CSV parsing.
@@ -293,7 +307,7 @@ export function parseCSV(
 	const mapping = resolveColumnMapping(columns, preset, options, hasHeader);
 	errors.push(...findMissingColumnErrors(mapping, columns));
 
-	const transactions: BankTransaction[] = [];
+	const transactions: ParsedBankTransaction[] = [];
 	const rowContext: RowParseContext = {
 		mapping,
 		dateFormat: options.dateFormat ?? preset?.dateFormat,
@@ -358,7 +372,7 @@ interface RowParseContext {
 }
 
 type RowParseResult =
-	| { status: "ok"; transaction: BankTransaction }
+	| { status: "ok"; transaction: ParsedBankTransaction }
 	| { status: "error"; error: ParseError }
 	| { status: "skip" };
 
@@ -754,7 +768,7 @@ function sanitizeDescription(rawDesc: string): string {
 	);
 }
 
-export function parseDate(
+function parseDate(
 	raw: string,
 	formatHint?: "YMD" | "MDY" | "DMY",
 ): Date | null {
@@ -883,7 +897,7 @@ function detectPreset(columns: string[]): BankPreset | undefined {
 const CURRENCY_SYMBOLS = /[$€£¥]/g;
 const CURRENCY_CODES = /\b(CAD|USD|EUR|GBP)\b/gi;
 
-export function parseAmount(str: string): {
+function parseAmount(str: string): {
 	valid: boolean;
 	valueMilliunits: number;
 	reason?: string;

@@ -12,8 +12,8 @@ export interface YNABClientDependencies {
 
 /**
  * The only network boundary for a server instance. The SDK's transport hook
- * covers tools, resources, completions and reconciliation, including SDK bulk
- * operations that issue more than one HTTP request.
+ * covers tools, resources, and completions, including SDK bulk operations that
+ * issue more than one HTTP request.
  */
 export class YNABClient extends ynab.API {
 	constructor(accessToken: string, dependencies: YNABClientDependencies) {

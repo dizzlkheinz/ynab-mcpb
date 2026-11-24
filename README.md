@@ -18,14 +18,13 @@
 ## What it does
 
 A local server that gives an AI assistant safe, structured access to your YNAB budget.
-**35 YNAB tools** cover budgets, accounts, transactions, categories, payees, months and
+**34 YNAB tools** cover budgets, accounts, transactions, categories, payees, months and
 scheduled transactions, plus a few workflows YNAB itself doesn't have:
 
 - **Receipt splitting.** Paste or photograph a receipt; get one split transaction with each
   item in its category and the tax distributed exactly to the cent.
-- **Bank reconciliation.** Give it a bank CSV; it matches against YNAB (fuzzy payee, date
-  tolerance, exact amounts), shows what's missing or mismatched, and applies the fixes you
-  approve.
+- **Bank CSV comparison.** Give it a bank CSV; it compares rows against YNAB (fuzzy payee,
+  date tolerance, amount tolerance) and lists matches and missing transactions.
 - **Spending analysis.** Deterministic totals by category or payee for any period, and
   period-over-period comparisons.
 - **Bulk cleanup.** Create or update up to 100 transactions at once, including turning a
@@ -36,7 +35,7 @@ and must repeat the identical request with a short-lived, single-use token to ap
 
 ```text
 "Split this receipt across groceries and household, with tax."
-"Reconcile my checking account against this CSV."
+"Compare my checking account against this bank CSV."
 "What did I spend on takeout this month compared to last month?"
 "What scheduled bills are due before the 30th?"
 "Categorize my uncategorized transactions from last week."
@@ -130,13 +129,10 @@ Everything except the token is optional.
 | 401 / unauthorized | Generate a new token and update `YNAB_ACCESS_TOKEN`. |
 | Tools don't appear | Restart the client after changing its config. |
 | 429 / rate limited | YNAB allows 200 requests per hour per token; wait and retry. |
-| A reconciliation looks wrong | [Open an issue](https://github.com/dizzlkheinz/ynab-mcpb/issues) with an anonymized CSV sample. |
 
 ## Documentation
 
 - [Tool reference](docs/reference/API.md): every tool, prompt and resource
-- [Reconciliation design](docs/technical/reconciliation-system-architecture.md)
-- [Receipt splitting spec](docs/technical/receipt-itemization-spec.md)
 - [Contributing and architecture](AGENTS.md)
 - [Changelog](CHANGELOG.md)
 

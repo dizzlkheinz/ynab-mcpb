@@ -1,7 +1,7 @@
 {
 	"$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
 	"name": "io.github.dizzlkheinz/ynab-mcpb",
-	"description": "Local-first YNAB MCP for reconciliation, receipt splitting, safe cleanup, and spending analysis",
+	"description": "Local-first YNAB MCP for receipt splitting, safe cleanup, and spending analysis",
 	"repository": {
 		"url": "https://github.com/dizzlkheinz/ynab-mcpb",
 		"source": "github"

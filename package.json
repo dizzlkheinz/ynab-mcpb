@@ -2,7 +2,7 @@
 	"name": "@dizzlkheinz/ynab-mcpb",
 	"version": "0.33.0",
 	"mcpName": "io.github.dizzlkheinz/ynab-mcpb",
-	"description": "Local-first YNAB MCP workflows for reconciliation, receipt splitting, safe bulk cleanup, scheduled transactions, and spending analysis",
+	"description": "Local-first YNAB MCP workflows for receipt splitting, safe bulk cleanup, scheduled transactions, and spending analysis",
 	"main": "dist/index.js",
 	"type": "module",
 	"bin": {
@@ -15,7 +15,6 @@
 		"start": "node dist/index.js",
 		"verify-build": "node scripts/verify-build.js",
 		"verify:metadata": "tsx scripts/verify-metadata.ts",
-		"measure:tools": "tsx scripts/measure-tool-profiles.ts",
 		"lint": "biome lint .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
@@ -29,8 +28,6 @@
 		"test:watch": "vitest --project unit --project integration",
 		"test:all": "vitest run --project unit --project integration",
 		"package:mcpb": "node scripts/package-mcpb.js",
-		"pr:description": "node scripts/create-pr-description.js",
-		"pr:create": "npm run pr:description && gh pr create --body-file .pr-description.md",
 		"prepare": "npm run build",
 		"prepublishOnly": "npm test && npm run verify:metadata"
 	},
@@ -39,7 +36,6 @@
 		"ynab",
 		"budget",
 		"finance",
-		"reconciliation",
 		"receipts",
 		"spending-analysis"
 	],

@@ -7,7 +7,7 @@ guidance in this file.
 
 A local, stdio [Model Context Protocol](https://modelcontextprotocol.io) server for
 [YNAB](https://www.ynab.com). TypeScript (strict, ESM), Node 24+, published to npm as
-`@dizzlkheinz/ynab-mcpb` and as an MCPB bundle for Claude Desktop. 35 tools, 9 prompts,
+`@dizzlkheinz/ynab-mcpb` and as an MCPB bundle for Claude Desktop. 34 tools, 8 prompts,
 2 resources and 6 resource templates. User-facing tool reference: `docs/reference/API.md`.
 
 ## Commands
@@ -41,7 +41,7 @@ src/index.ts                 entry point (stdio transport, shutdown, error repor
 src/server/
   YNABMCPServer.ts           wires everything; owns the 4 local tools (default budget, diagnostics, clear cache)
   config.ts                  env schema (zod); loadConfig() strict at startup, getRuntimeConfig() lenient
-  toolRegistry.ts            registration, input/output validation, structuredContent, progress
+  toolRegistry.ts            registration, input/output validation, structuredContent
   writeSafety.ts             write modes and preview confirmation tokens
   toolProfiles.ts            core / full tool surfaces
   ynabClient.ts              the ONLY YNAB network boundary (rate limiting + cache invalidation)
@@ -57,8 +57,7 @@ src/tools/
   transactionModel.ts        shared transaction shaping
   scheduledTransactionTools.ts spendingAnalytics.ts exportTransactions.ts csvFilePath.ts
   receiptSplit/              receipt split collapse logic
-  compareTransactions/       read-only CSV comparison (reuses the reconciliation parser/matcher)
-  reconciliation/            ynab_reconcile_account; see docs/technical/reconciliation-system-architecture.md
+  compareTransactions/       self-contained read-only bank CSV comparison (csvParser, matchEngine)
   schemas/common.ts          shared input schemas (emptyObjectSchema, response_format, ...)
   schemas/monetaryInput.ts   amount_decimal / amount_milliunits input handling
   schemas/outputs/           output schemas; index.ts exports what registry.register() uses
@@ -69,10 +68,10 @@ src/utils/                   money.ts, dateUtils.ts, errors.ts, ynabApiCompat.ts
 ```
 
 Tests live in `__tests__/` beside the code: `*.test.ts` (unit), `*.integration.test.ts`
-(mocked API), `*.e2e.test.ts` (live). Shared helpers: `src/__tests__/testUtils.ts`,
-global setup: `src/__tests__/setup.ts`. Fixture budget IDs such as `test-budget-1` pass
-validation only because `setup.ts` calls the `@internal` `setAcceptFixtureBudgetIds(true)` seam;
-production code requires UUIDs.
+(offline mocked API), `*.e2e.test.ts` (live smoke, preview checks, and delta suites). Shared
+helpers: `src/__tests__/testUtils.ts`, global setup: `src/__tests__/setup.ts`. Fixture budget
+IDs such as `test-budget-1` pass validation only because `setup.ts` calls the `@internal`
+`setAcceptFixtureBudgetIds(true)` seam; production code requires UUIDs.
 
 ## Adding or changing a tool
 
@@ -95,8 +94,7 @@ registry.register({
 });
 ```
 
-Adapters: `adapt`, `adaptNoInput`, `adaptWithDelta`, `adaptWithDeltaAndProgress` (the last
-passes an optional `sendProgress`; always call it as `sendProgress?.(...)`).
+Adapters: `adapt`, `adaptNoInput`, `adaptWithDelta`.
 
 Checklist for a new tool:
 
@@ -117,8 +115,8 @@ Checklist for a new tool:
   `amount_decimal` (currency, preferred) or `amount_milliunits` (raw integer); category funding
   uses `budgeted_decimal` / `budgeted_milliunits`. Units are never guessed from magnitude.
   Convert once at the boundary (`utils/money.ts`); internal arithmetic stays in integer
-  milliunits. Outputs report amounts in currency units (mutation and reconciliation outputs
-  also carry `*_milliunits` fields).
+  milliunits. Outputs report amounts in currency units (mutation outputs also carry
+  `*_milliunits` fields).
 - **Dates.** `YYYY-MM-DD` everywhere. Compare dates as strings (`isDateInRange` in
   `utils/dateUtils.ts`); do any arithmetic with `Date.UTC`, never local-time `Date` parsing.
   "Today" defaults use `formatLocalISODate`.
@@ -139,10 +137,6 @@ Checklist for a new tool:
   scheduled-transaction tools don't) and every tool returns its validated output as
   `structuredContent`. Delta-backed reads ask YNAB for
   changes since the cached snapshot on every call.
-- **Reconciliation.** Amounts must match exactly; date tolerance 7 days; the score is
-  `50 + 0.15·date + 0.35·payee` plus bonuses; execution replays exactly the previewed
-  operations and aborts if the account changed. Details and thresholds:
-  `docs/technical/reconciliation-system-architecture.md`.
 - **Exports.** Only export what another file imports (knip enforces this, and its production
   pass fails on exports only tests use; tag deliberate test seams `@internal`).
 

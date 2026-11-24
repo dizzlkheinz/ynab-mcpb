@@ -84,36 +84,6 @@ describe("prompts module", () => {
 							],
 						},
 						{
-							name: "reconcile-account",
-							description:
-								"Reconcile a YNAB account against a bank statement or CSV export",
-							arguments: [
-								{
-									name: "budget_name",
-									description:
-										"Name of the budget (optional, uses first budget if not specified)",
-									required: false,
-								},
-								{
-									name: "account_name",
-									description: "Name of the account to reconcile",
-									required: true,
-								},
-								{
-									name: "statement_balance",
-									description:
-										"Ending balance from the bank statement (in dollars)",
-									required: true,
-								},
-								{
-									name: "csv_data",
-									description:
-										"Paste CSV data directly (optional, omit if providing a file path instead)",
-									required: false,
-								},
-							],
-						},
-						{
 							name: "account-balances",
 							description: "Check balances across all accounts",
 							arguments: [
@@ -357,12 +327,6 @@ describe("prompts module", () => {
 					expect(text).toContain("activity: Spending/income in the category");
 					expect(text).toContain("balance: Available amount in the category");
 					expect(text).toContain("OVERSPENDING occurs when balance < 0");
-					expect(text).toContain("SPENDING TRENDS");
-					expect(text).toContain("BUDGET OPTIMIZATION");
-					expect(text).toContain("reliability_score");
-					expect(text).toContain("Consistently Under-Spent Categories");
-					expect(text).toContain("Categories Over Monthly Assignment");
-					expect(text).toContain("Large Unused Category Balances");
 				});
 			});
 
@@ -485,19 +449,6 @@ describe("prompts module", () => {
 			});
 
 			describe("edge cases", () => {
-				it("uses reconcile placeholders when arguments are omitted", async () => {
-					const result = await promptManager.getPrompt(
-						"reconcile-account",
-						undefined,
-					);
-					expect(result.messages[0]!.content.text).toContain(
-						"first available budget",
-					);
-					expect(result.messages[0]!.content.text).toContain(
-						"No CSV data provided",
-					);
-				});
-
 				it("keeps analytics and cash-flow prompts honest about server calculations", async () => {
 					const comparison = await promptManager.getPrompt(
 						"spending-period-comparison",
@@ -551,7 +502,6 @@ describe("prompts module", () => {
 					const prompts = [
 						"create-transaction",
 						"budget-summary",
-						"reconcile-account",
 						"account-balances",
 						"weekly-budget-review",
 						"uncategorized-transaction-review",

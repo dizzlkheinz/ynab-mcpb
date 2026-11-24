@@ -5,6 +5,7 @@ import {
 	CompareTransactionsSchema,
 	handleCompareTransactions,
 } from "../../compareTransactions/index.js";
+import { CompareTransactionsOutputSchema } from "../../schemas/outputs/index.js";
 
 // The handler's steps, injected through its last argument.
 const mockParseBankCSV = vi.fn();
@@ -554,6 +555,49 @@ describe("compareTransactions index (main handler)", () => {
 				}),
 				{ debug: false },
 			);
+		});
+	});
+
+	describe("CompareTransactionsOutputSchema", () => {
+		const validOutput = {
+			summary: {
+				bank_transactions_count: 1,
+				ynab_transactions_count: 1,
+				matches_found: 1,
+				missing_in_ynab: 0,
+				missing_in_bank: 0,
+				date_range: { start: "2024-01-01", end: "2024-01-31" },
+				parameters: { amount_tolerance: 0.01, date_tolerance_days: 5 },
+			},
+			matches: [],
+			missing_in_ynab: [],
+			missing_in_bank: [],
+		};
+
+		test("rejects invalid calendar dates in date_range", () => {
+			const invalidDate = {
+				...validOutput,
+				summary: {
+					...validOutput.summary,
+					date_range: { start: "2024-02-30", end: "2024-03-01" },
+				},
+			};
+			expect(
+				CompareTransactionsOutputSchema.safeParse(invalidDate).success,
+			).toBe(false);
+		});
+
+		test("rejects date_range where start is after end", () => {
+			const invertedRange = {
+				...validOutput,
+				summary: {
+					...validOutput.summary,
+					date_range: { start: "2024-02-01", end: "2024-01-01" },
+				},
+			};
+			expect(
+				CompareTransactionsOutputSchema.safeParse(invertedRange).success,
+			).toBe(false);
 		});
 	});
 });

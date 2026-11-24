@@ -44,9 +44,9 @@ describe("YNABMCPServer isolated behavior", () => {
 		expect(server.getYNABAPI()).toBeDefined();
 		expect(server.getServer()).toBeDefined();
 		expect(server.getServerVersion()).toMatch(/^\d+\.\d+\.\d+$/);
-		expect((await server.handleListTools()).tools).toHaveLength(35);
+		expect((await server.handleListTools()).tools).toHaveLength(34);
 		expect((await server.handleListResources()).resources).toHaveLength(2);
-		expect((await server.handleListPrompts()).prompts).toHaveLength(9);
+		expect((await server.handleListPrompts()).prompts).toHaveLength(8);
 
 		expect(server.getDefaultBudget()).toBeUndefined();
 		server.setDefaultBudget("budget-1");

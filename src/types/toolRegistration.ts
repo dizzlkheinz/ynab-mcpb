@@ -59,8 +59,6 @@ export interface ReadDeps {
 	cacheManager: CacheManager;
 }
 
-export type HandlerDeltaDeps = ReadDeps;
-
 /**
  * Handler signature for operations that require delta fetching.
  */

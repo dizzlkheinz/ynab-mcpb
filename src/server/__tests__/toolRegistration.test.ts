@@ -28,7 +28,7 @@ const DEFAULT_BUDGET_ID = "11111111-1111-1111-1111-111111111111";
 
 /**
  * Expected tool names organized by domain.
- * This serves as the authoritative list of all 35 registered tools.
+ * This serves as the authoritative list of all 34 registered tools.
  */
 const EXPECTED_TOOLS_BY_DOMAIN = {
 	budget: ["ynab_list_budgets", "ynab_get_budget"],
@@ -51,7 +51,7 @@ const EXPECTED_TOOLS_BY_DOMAIN = {
 	],
 	payee: ["ynab_list_payees", "ynab_get_payee"],
 	month: ["ynab_get_month", "ynab_list_months"],
-	reconciliation: ["ynab_compare_transactions", "ynab_reconcile_account"],
+	comparison: ["ynab_compare_transactions"],
 	scheduled: [
 		"ynab_list_scheduled_transactions",
 		"ynab_get_scheduled_transaction",
@@ -73,13 +73,13 @@ const EXPECTED_TOOLS_BY_DOMAIN = {
 const ALL_EXPECTED_TOOLS = Object.values(EXPECTED_TOOLS_BY_DOMAIN).flat();
 
 /** Expected total tool count */
-const EXPECTED_TOOL_COUNT = 35;
+const EXPECTED_TOOL_COUNT = 34;
 
 describe("Tool Registration", () => {
 	// Config is mocked at module level, no env setup needed
 
 	describe("Tool Count Verification", () => {
-		it("registers exactly 35 tools", () => {
+		it("registers exactly 34 tools", () => {
 			const server = new YNABMCPServer(false);
 			const tools = server.getToolRegistry().listTools();
 			expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
@@ -103,7 +103,7 @@ describe("Tool Registration", () => {
 			["category", EXPECTED_TOOLS_BY_DOMAIN.category],
 			["payee", EXPECTED_TOOLS_BY_DOMAIN.payee],
 			["month", EXPECTED_TOOLS_BY_DOMAIN.month],
-			["reconciliation", EXPECTED_TOOLS_BY_DOMAIN.reconciliation],
+			["comparison", EXPECTED_TOOLS_BY_DOMAIN.comparison],
 			["utility", EXPECTED_TOOLS_BY_DOMAIN.utility],
 			["server", EXPECTED_TOOLS_BY_DOMAIN.server],
 		])(
@@ -340,7 +340,6 @@ describe("Tool Registration", () => {
 				"ynab_get_month",
 				"ynab_list_months",
 				"ynab_compare_transactions",
-				"ynab_reconcile_account",
 			] as const;
 
 			for (const toolName of resolverBackedTools) {

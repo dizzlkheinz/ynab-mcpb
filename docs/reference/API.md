@@ -1,6 +1,6 @@
 # API Reference
 
-This MCP server provides 35 tools, 9 prompts, 2 resources and 6 resource templates for working with YNAB budgets, accounts, transactions, categories, payees, months, scheduled transactions and reconciliation.
+This MCP server provides 34 tools, 8 prompts, 2 resources and 6 resource templates for working with YNAB budgets, accounts, transactions, categories, payees, months and scheduled transactions.
 
 Legend: **core** = included in the `core` tool profile; **destructive** = irreversible delete; **write** = mutation tool, subject to the write mode below. In parameter tables, `req` is `yes` when the schema requires the field.
 
@@ -17,9 +17,9 @@ YNAB stores money as **milliunits**: 1/1000 of a currency unit (`$12.34` = `1234
 - `amount_decimal` (number): amount in currency units, e.g. `-12.34`. Rounded to the nearest milliunit.
 - `amount_milliunits` (integer): raw YNAB milliunits, for values that are already converted.
 
-Pass at most one of the two on any single amount. Negative amounts are outflows, positive are inflows. Category funding uses the same pair as `budgeted_decimal` / `budgeted_milliunits`. Outputs report amounts in currency units; mutation and reconciliation outputs also include explicit `*_milliunits` fields.
+Pass at most one of the two on any single amount. Negative amounts are outflows, positive are inflows. Category funding uses the same pair as `budgeted_decimal` / `budgeted_milliunits`. Outputs report amounts in currency units; mutation outputs also include explicit `*_milliunits` fields.
 
-A few tools take plain currency numbers instead (`balance` on `ynab_create_account`, `statement_balance` on `ynab_reconcile_account`, the `receipt_*` fields and item `amount` on `ynab_create_receipt_split_transaction`).
+A few tools take plain currency numbers instead (`balance` on `ynab_create_account`, the `receipt_*` fields and item `amount` on `ynab_create_receipt_split_transaction`).
 
 ### Dates
 
@@ -33,7 +33,7 @@ List tools paginate with `limit` and `offset` and return `total_count`, `returne
 
 ### Write modes
 
-`YNAB_MCP_WRITE_MODE` controls the 12 write tools (create/update/delete transactions, scheduled transactions, accounts, category budgets, and `ynab_reconcile_account`).
+`YNAB_MCP_WRITE_MODE` controls the 11 write tools (create/update/delete transactions, scheduled transactions, accounts, and category budgets).
 
 | Mode | Behavior |
 |------|----------|
@@ -46,7 +46,7 @@ List tools paginate with `limit` and `offset` and return `total_count`, `returne
 1. Call the write tool normally. The server runs it as a dry run and returns the preview plus `confirmation_token` and `confirmation_expires_at` (also in `structuredContent`).
 2. Call the same tool again with identical arguments plus `confirmation_token` to execute.
 
-The token is single-use, expires after 2 minutes, is held in memory only (a server restart invalidates it), and is bound to the tool name and the validated arguments. Changing any argument, reusing a token, or waiting too long is rejected with a validation error and needs a fresh preview. A failed confirmed call also consumes its token. `dry_run` itself is ignored when matching, so previews always run safely and confirmed calls always execute. `ynab_reconcile_account` executes the exact operations shown in its preview.
+The token is single-use, expires after 2 minutes, is held in memory only (a server restart invalidates it), and is bound to the tool name and the validated arguments. Changing any argument, reusing a token, or waiting too long is rejected with a validation error and needs a fresh preview. A failed confirmed call also consumes its token. `dry_run` itself is ignored when matching, so previews always run safely and confirmed calls always execute.
 
 All write tools accept `dry_run` (boolean). In `preview` mode they additionally accept `confirmation_token` (string).
 
@@ -56,8 +56,8 @@ All write tools accept `dry_run` (boolean). In `preview` mode they additionally 
 
 | Profile | Tools |
 |---------|-------|
-| `full` (default) | All 35 tools. |
-| `core` | The 22 tools marked **core** below. |
+| `full` (default) | All 34 tools. |
+| `core` | The 21 tools marked **core** below. |
 
 Tools filtered out by the profile or by `read-only` write mode are not registered.
 
@@ -367,17 +367,17 @@ List month summaries.
 | `offset` | integer | no | Min 0 |
 | `response_format` | `"markdown"` \| `"json"` | no | |
 
-## Reconciliation & comparison
+## Bank CSV comparison
 
 CSV input is supplied as `csv_file_path` or inline `csv_data` (one of them). `csv_format` describes the file layout; all of its fields are optional.
 
 | `csv_format` field | Type | Notes |
 |---|---|---|
-| `date_column`, `description_column` | string or number | Header name or index. Defaults on compare: `Date`, `Description` |
+| `date_column`, `description_column` | string or number | Header name or index. Defaults: `Date`, `Description` |
 | `amount_column`, `debit_column`, `credit_column` | string or number | Use `amount_column`, or `debit_column` and `credit_column` |
-| `date_format` | string | Default on compare: `MM/DD/YYYY` |
-| `has_header` | boolean | Default `true` on compare |
-| `delimiter` | string | Default `,` on compare |
+| `date_format` | string | Default: `MM/DD/YYYY` |
+| `has_header` | boolean | Default `true` |
+| `delimiter` | string | Default `,` |
 
 ### ynab_compare_transactions (core)
 Compare bank CSV rows with YNAB transactions to find missing or mismatched entries. Read-only.
@@ -397,29 +397,6 @@ Compare bank CSV rows with YNAB transactions to find missing or mismatched entri
 | `debug` | boolean | no | Default `false` |
 
 Output: `summary`, `matches`, `missing_in_ynab`, `missing_in_bank`.
-
-### ynab_reconcile_account (core, write)
-Guided reconciliation: match CSV rows to YNAB, detect discrepancies, and optionally create, clear or unclear transactions. `dry_run` defaults to `true`; set `dry_run: false` and enable the specific `auto_*` flags to write. In `preview` mode the confirmed call executes exactly the operations shown in the preview.
-
-| Parameter | Type | Req | Notes |
-|---|---|---|---|
-| `budget_id` | string | no | |
-| `account_id` | string | yes | |
-| `statement_balance` | number | yes | Currency units. Negative for credit cards and other liabilities (owed amounts) |
-| `csv_file_path` / `csv_data` | string | one required | |
-| `csv_format` | object | no | See above |
-| `statement_end_date` | string | no | Filters the CSV and triggers balance verification; auto-detected if omitted |
-| `date_tolerance_days` | number | no | 0-7, default 7 |
-| `match_strictness` | `"loose"` \| `"normal"` \| `"strict"` | no | |
-| `sign_convention` | `"auto"` \| `"invert"` \| `"as_is"` | no | How CSV amount signs are interpreted |
-| `auto_create_transactions` | boolean | no | Default `false` |
-| `auto_update_cleared_status` | boolean | no | Default `false` |
-| `auto_unclear_missing` | boolean | no | Default `false`. Unclear cleared transactions missing from the statement when still unbalanced |
-| `auto_adjust_dates` | boolean | no | Default `false` |
-| `dry_run` | boolean | no | Default `true` |
-| `max_suggestions_in_output` | integer | no | Default 20 |
-
-Output: `human` (narrative report) and, when available, `structured` data (unmatched items, suggestions, execution summary). Reports progress notifications while running.
 
 ## Analytics
 
@@ -491,7 +468,6 @@ Prompts that take `budget_name` use the first budget when it is omitted.
 |---|---|---|
 | `create-transaction` | `account_name`*, `amount`*, `payee`*, `budget_name`, `category`, `memo` | Create a transaction |
 | `budget-summary` | `budget_name`, `month` (YYYY-MM, default current) | Summarize budget status |
-| `reconcile-account` | `account_name`*, `statement_balance`* (dollars), `budget_name`, `csv_data` | Reconcile an account against a statement |
 | `account-balances` | `budget_name`, `account_type` | Check balances across accounts |
 | `weekly-budget-review` | `since_date`*, `until_date`* | Review deterministic spending for a week |
 | `uncategorized-transaction-review` | `since_date`*, `until_date`* | Review uncategorized transactions without guessing categories |

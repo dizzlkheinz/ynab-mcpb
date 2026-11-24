@@ -426,7 +426,7 @@ describe("parser", () => {
 			expect(transactions.map((t) => t.amount)).toEqual([12500, 7250]);
 		});
 
-		test("should read debit/credit cells the same way as reconciliation", () => {
+		test("should read debit/credit cells into signed milliunits", () => {
 			const csvContent =
 				'Date,Description,Debit,Credit\n09/15/2023,Euro,"1.234,56",\n09/16/2023,Code,25.00 CAD,\n09/17/2023,Thousands,,"2,500"';
 			const format: CSVFormat = {

@@ -1,8 +1,8 @@
-/** Compatibility adapters: all parsing is owned by reconciliation/csvParser. */
+/** CSV parsing adapters backed by ./csvParser.ts. */
 import { readFileSync } from "node:fs";
 import { resolveCsvPathCandidates } from "../csvFilePath.js";
 
-import { type ParseCSVOptions, parseCSV } from "../reconciliation/csvParser.js";
+import { type ParseCSVOptions, parseCSV } from "./csvParser.js";
 import type { BankTransaction, CSVFormat } from "./types.js";
 
 export function dateFormatHint(
