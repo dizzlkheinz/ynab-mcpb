@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-24
+
+### Removed
+
+- **Breaking:** removed the `ynab_reconcile_account` tool, the `reconcile-account` prompt, and the reconciliation subsystem (`src/tools/reconciliation/`, `src/types/reconciliation.ts`, `reconciliationOutputs.ts`). Read-only bank CSV comparison remains available via `ynab_compare_transactions` (now self-contained under `src/tools/compareTransactions/`)
+- Removed prepared-execution and progress-notification plumbing from `ToolRegistry`, `WriteSafetyPolicy`, `YNABMCPServer`, and `adapters.ts` that was only used by `ynab_reconcile_account`
+- Removed reconciliation-only money formatting helpers from `src/utils/money.ts` (`milliunitsToAmount` and `amountToMilliunits` remain)
+- Removed `docs/technical/` specs (`reconciliation-system-architecture.md`, `receipt-itemization-spec.md`) and unused helper scripts (`scripts/create-pr-description.js`, `scripts/measure-tool-profiles.ts`)
+- Removed permanently-skipped live-only integration test files, skipped performance benchmarks, and redundant output-schema tautology tests
+
+### Changed
+
+- Moved live delta tests from `*.integration.test.ts` to `*.e2e.test.ts` so `npm run test:integration` runs offline mocked integration suites with zero skipped tests while `npm run test:live -- delta` continues to run them
+- Updated `README.md`, `docs/reference/API.md`, `AGENTS.md`, `manifest.json`, `package.json`, `server.json`, and prompts to reflect the 34-tool, 8-prompt surface without reconciliation or legacy guidance
+
 ## [0.33.0] - 2026-11-07
 
 Simplification ahead of a maintenance handover. Compatibility shims and rarely useful settings are removed rather than deprecated.
