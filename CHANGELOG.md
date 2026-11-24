@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-24
+
 ### Removed
 
 - Dropped unused/optional runtime dependencies (`date-fns`, `chrono-node`, `rimraf`) in favor of native Date utilities, lighter CSV date parsing, and Node `fs.rmSync`
