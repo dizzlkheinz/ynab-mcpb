@@ -98,6 +98,21 @@ describe("Transaction Schemas", () => {
 				}),
 			).toThrow();
 		});
+
+		it("should reject two amount filters and an inverted date window", () => {
+			expect(
+				ListTransactionsSchema.safeParse({
+					amount_decimal: -1,
+					amount_milliunits: -1000,
+				}).success,
+			).toBe(false);
+			expect(
+				ListTransactionsSchema.safeParse({
+					since_date: "2024-02-01",
+					until_date: "2024-01-01",
+				}).success,
+			).toBe(false);
+		});
 	});
 
 	describe("GetTransactionSchema", () => {
@@ -1139,6 +1154,15 @@ describe("Transaction Schemas", () => {
 			).toThrow("Transaction ID is required");
 		});
 
+		it("should validate ISO date format for optional date field", () => {
+			expect(() =>
+				UpdateTransactionsSchema.parse({
+					budget_id: "budget-1",
+					transactions: [{ id: "trans-1", date: "01/01/2024" }],
+				}),
+			).toThrow("Date must be in ISO format (YYYY-MM-DD)");
+		});
+
 		it("should reject invalid original_date format", () => {
 			expect(() =>
 				UpdateTransactionsSchema.parse({
@@ -1152,6 +1176,18 @@ describe("Transaction Schemas", () => {
 					],
 				}),
 			).toThrow("Date must be in ISO format (YYYY-MM-DD)");
+		});
+
+		it("should reject account_id field (account moves not supported)", () => {
+			const result = UpdateTransactionsSchema.safeParse({
+				budget_id: "budget-1",
+				transactions: [{ id: "trans-1", account_id: "new-account-456" }],
+			});
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]!.code).toBe("unrecognized_keys");
+				expect(result.error.issues[0]!.path).toEqual(["transactions", 0]);
+			}
 		});
 
 		it("should reject extra fields in update", () => {

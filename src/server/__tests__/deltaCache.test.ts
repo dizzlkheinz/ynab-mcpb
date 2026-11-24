@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CacheManager } from "../cacheManager.js";
 import { resetRuntimeConfig } from "../config.js";
-import { DeltaCache, type Logger, type MergeOptions } from "../deltaCache.js";
+import { DeltaCache, type Logger } from "../deltaCache.js";
 import { mergeFlatEntities } from "../deltaCache.merge.js";
 import { ServerKnowledgeStore } from "../serverKnowledgeStore.js";
 
@@ -250,35 +250,6 @@ describe("DeltaCache with the real cache lifecycle", () => {
 		expect(result.data).toEqual([{ id: "original", deleted: true }]);
 	});
 
-	it("passes custom equality options to caller-supplied mergers", async () => {
-		await seed(key, [{ id: "old", name: "same" }]);
-		expire();
-		const equalityFn = (a: unknown, b: unknown) =>
-			(a as Entity).name === (b as Entity).name;
-		const merge = (
-			previous: Entity[],
-			updates: Entity[],
-			options?: MergeOptions,
-		) => [
-			...previous.filter(
-				(item) =>
-					!updates.some((update) => options?.equalityFn?.(item, update)),
-			),
-			...updates,
-		];
-		const result = await delta.fetchWithDelta<Entity>(
-			key,
-			budget,
-			async () => ({
-				data: [{ id: "new", name: "same" }],
-				serverKnowledge: 1001,
-			}),
-			merge,
-			{ ttl, mergeOptions: { equalityFn } },
-		);
-		expect(result.data).toEqual([{ id: "new", name: "same" }]);
-	});
-
 	it.each([1101, 999])(
 		"falls back to a full response for incompatible knowledge %s",
 		async (version) => {
@@ -438,7 +409,8 @@ describe("DeltaCache with the real cache lifecycle", () => {
 			mergeFlatEntities,
 			{ ttl },
 		);
-		delta.forceFullRefresh(budget);
+		cache.delete(key);
+		knowledge.reset(key);
 		await delta.fetchWithDelta<Entity>(
 			key,
 			budget,
@@ -462,44 +434,5 @@ describe("DeltaCache with the real cache lifecycle", () => {
 		expect(nextFetcher).toHaveBeenCalledExactlyOnceWith(2);
 		expect(next.data).toEqual([{ id: "new" }]);
 		expect(knowledge.get(key)).toBe(2);
-	});
-
-	describe("invalidation scope", () => {
-		const sibling = "transactions:list:budget-1";
-		const unrelated = "accounts:list:budget-2";
-		beforeEach(async () => {
-			await seed();
-			await seed(sibling);
-			await seed(unrelated);
-		});
-
-		it("invalidates only the requested resource while retaining its diagnostic knowledge", () => {
-			delta.invalidate(budget, "accounts");
-			expect(cache.peek(key)).toBeUndefined();
-			expect(cache.peek(sibling)).toBeDefined();
-			expect(cache.peek(unrelated)).toBeDefined();
-			expect(knowledge.get(key)).toBe(1000);
-		});
-		it("ignores empty budget invalidation", () => {
-			delta.invalidate("");
-			expect(cache.getKeys()).toHaveLength(3);
-		});
-		it("fully resets one resource without affecting the rest", () => {
-			delta.forceFullRefresh(budget, "accounts");
-			expect(cache.peek(key)).toBeUndefined();
-			expect(knowledge.get(key)).toBeUndefined();
-			expect(cache.peek(sibling)).toBeDefined();
-			expect(knowledge.get(sibling)).toBe(1000);
-		});
-		it("fully resets one budget without affecting another", () => {
-			delta.forceFullRefresh(budget);
-			expect(cache.getKeys()).toEqual([unrelated]);
-			expect(knowledge.getStats().entries).toEqual({ [unrelated]: 1000 });
-		});
-		it("supports a global full refresh", () => {
-			delta.forceFullRefresh();
-			expect(cache.getKeys()).toEqual([]);
-			expect(knowledge.getStats().entryCount).toBe(0);
-		});
 	});
 });

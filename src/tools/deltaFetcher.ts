@@ -7,7 +7,6 @@ import {
 	mergeMonths,
 	mergeTransactions,
 } from "../server/deltaCache.merge.js";
-import { listBudgetsCompat, listMonthsCompat } from "../utils/ynabApiCompat.js";
 
 export interface DeltaFetchOptions {
 	forceFullRefresh?: boolean;
@@ -142,42 +141,6 @@ export class DeltaFetcher {
 		);
 	}
 
-	async fetchAccountsFull(
-		budgetId: string,
-	): Promise<DeltaFetchResult<ynab.Account>> {
-		const response = await this.ynabAPI.accounts.getAccounts(budgetId);
-		const accounts = response.data.accounts.filter(
-			(account) => !account.deleted,
-		);
-		return {
-			data: accounts,
-			wasCached: false,
-			usedDelta: false,
-			serverKnowledge: response.data.server_knowledge ?? 0,
-		};
-	}
-
-	async fetchTransactionsByAccountFull(
-		budgetId: string,
-		accountId: string,
-		sinceDate?: string,
-	): Promise<DeltaFetchResult<ynab.TransactionDetail>> {
-		const response = await this.ynabAPI.transactions.getTransactionsByAccount(
-			budgetId,
-			accountId,
-			sinceDate,
-		);
-		const transactions = response.data.transactions.filter(
-			(transaction) => !transaction.deleted,
-		);
-		return {
-			data: transactions,
-			wasCached: false,
-			usedDelta: false,
-			serverKnowledge: response.data.server_knowledge ?? 0,
-		};
-	}
-
 	async fetchScheduledTransactions(
 		budgetId: string,
 		options?: DeltaFetchOptions,
@@ -242,14 +205,13 @@ export class DeltaFetcher {
 			cacheKey,
 			budgetId,
 			async (lastKnowledge?: number) => {
-				const response = await listMonthsCompat(
-					this.ynabAPI,
-					budgetId,
-					lastKnowledge,
-				);
+				const response =
+					lastKnowledge !== undefined
+						? await this.ynabAPI.months.getPlanMonths(budgetId, lastKnowledge)
+						: await this.ynabAPI.months.getPlanMonths(budgetId);
 				return {
-					data: response.months,
-					serverKnowledge: response.serverKnowledge,
+					data: response.data.months,
+					serverKnowledge: response.data.server_knowledge ?? 0,
 				};
 			},
 			mergeMonths,
@@ -267,16 +229,16 @@ export class DeltaFetcher {
 			cacheKey,
 			"global",
 			async () => {
-				const response = await listBudgetsCompat(this.ynabAPI);
+				const response = await this.ynabAPI.plans.getPlans();
 				return {
-					data: response.budgets,
-					serverKnowledge: response.serverKnowledge,
+					data: response.data.plans,
+					serverKnowledge: 0,
 				};
 			},
 			mergeFlatEntities,
 			{
 				ttl: options?.ttl ?? CACHE_TTLS.BUDGETS,
-				// TODO: Support delta responses when merge logic can handle nested objects safely.
+				// YNAB's /plans endpoint does not support delta server_knowledge.
 				forceFullRefresh: true,
 			},
 		);

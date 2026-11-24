@@ -1,15 +1,15 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import { CacheKeys } from "../server/cacheKeys.js";
 import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
-import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../server/errorHandler.js";
 import {
 	formatAccountDetail,
 	formatAccountsList,
 } from "../server/markdownFormatter.js";
-import { responseFormatter } from "../server/responseFormatter.js";
-import { withToolErrorHandling } from "../types/index.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import { amountToMilliunits, milliunitsToAmount } from "../utils/money.js";
 import {
@@ -137,20 +137,20 @@ export async function handleListAccounts(
 						text:
 							fmt === "markdown"
 								? formatAccountsList(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:list_accounts",
+		"ynab_list_accounts",
 		"listing accounts",
 		errorHandler,
 	);
 }
 
 /**
- * Handles the ynab:get_account tool call
+ * Handles the ynab_get_account tool call
  * Gets detailed information for a specific account
  */
 export async function handleGetAccount(
@@ -165,7 +165,7 @@ export async function handleGetAccount(
 			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Use enhanced CacheManager wrap method
 			const cacheKey = CacheManager.generateKey(
-				CacheKeys.ACCOUNTS,
+				"accounts",
 				"get",
 				budgetId,
 				params.account_id,
@@ -210,20 +210,20 @@ export async function handleGetAccount(
 						text:
 							fmt === "markdown"
 								? formatAccountDetail(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:get_account",
+		"ynab_get_account",
 		"getting account details",
 		errorHandler,
 	);
 }
 
 /**
- * Handles the ynab:create_account tool call
+ * Handles the ynab_create_account tool call
  * Creates a new account in the specified budget
  */
 export async function handleCreateAccount(
@@ -248,7 +248,7 @@ export async function handleCreateAccount(
 					content: [
 						{
 							type: "text",
-							text: responseFormatter.format(dryRunData),
+							text: JSON.stringify(dryRunData, null, 2),
 						},
 					],
 					structuredContent: dryRunData,
@@ -288,13 +288,13 @@ export async function handleCreateAccount(
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format(createdAccountData),
+						text: JSON.stringify(createdAccountData, null, 2),
 					},
 				],
 				structuredContent: createdAccountData,
 			};
 		},
-		"ynab:create_account",
+		"ynab_create_account",
 		"creating account",
 		errorHandler,
 	);

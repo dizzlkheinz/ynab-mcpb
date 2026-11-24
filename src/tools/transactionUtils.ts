@@ -4,7 +4,6 @@ import type * as ynab from "ynab";
 import type { SaveTransactionsResponseData } from "ynab/dist/models/SaveTransactionsResponseData.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
 import { globalRequestLogger } from "../server/requestLogger.js";
-import { responseFormatter } from "../server/responseFormatter.js";
 import type {
 	BulkCreateResponse,
 	BulkTransactionInput,
@@ -318,18 +317,8 @@ export function correlateResults(
 		}
 
 		globalRequestLogger.logError(
-			"ynab:create_transactions",
+			"ynab_create_transactions",
 			"correlate_results",
-			{
-				request_index: index,
-				correlation_key: correlationKey,
-				request: {
-					account_id: transaction.account_id,
-					date: transaction.date,
-					amount: transaction.amount,
-					import_id: transaction.import_id,
-				},
-			},
 			"correlation_failed",
 		);
 
@@ -466,11 +455,15 @@ export function handleTransactionError(
 		content: [
 			{
 				type: "text",
-				text: responseFormatter.format({
-					error: {
-						message: errorMessage,
+				text: JSON.stringify(
+					{
+						error: {
+							message: errorMessage,
+						},
 					},
-				}),
+					null,
+					2,
+				),
 			},
 		],
 	};

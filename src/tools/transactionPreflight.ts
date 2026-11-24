@@ -17,7 +17,6 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { CacheManager } from "../server/cacheManager.js";
 import type { ErrorHandler } from "../server/errorHandler.js";
-import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolHandler } from "../server/toolRegistry.js";
 import type { ToolContext } from "../types/toolRegistration.js";
 import { formatUTCISODate } from "../utils/dateUtils.js";
@@ -410,7 +409,7 @@ function withWarnings(
 		...result,
 		structuredContent,
 		content: [
-			{ type: "text", text: responseFormatter.format(structuredContent) },
+			{ type: "text", text: JSON.stringify(structuredContent, null, 2) },
 		],
 	};
 }

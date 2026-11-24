@@ -17,9 +17,9 @@ import {
 
 // A fake YNAB client, passed to the server through its constructor.
 const mockAPI = {
-	budgets: {
-		getBudgets: vi.fn(),
-		getBudgetById: vi.fn(),
+	plans: {
+		getPlans: vi.fn(),
+		getPlanById: vi.fn(),
 	},
 	accounts: {
 		getAccounts: vi.fn(),
@@ -45,8 +45,8 @@ const mockAPI = {
 		getPayeeById: vi.fn(),
 	},
 	months: {
-		getBudgetMonth: vi.fn(),
-		getBudgetMonths: vi.fn(),
+		getPlanMonth: vi.fn(),
+		getPlanMonths: vi.fn(),
 	},
 	user: {
 		getUser: vi.fn(),
@@ -56,9 +56,7 @@ const mockAPI = {
 const TEST_BUDGET_UUID = "00000000-0000-0000-0000-000000000001";
 
 describe("YNAB SDK utils", () => {
-	it("converts milliunits using SDK rounding rules", {
-		meta: { tier: "domain", domain: "workflows" },
-	}, async () => {
+	it("converts milliunits using SDK rounding rules", async () => {
 		const { utils } = await import("ynab");
 
 		expect(utils.convertMilliUnitsToCurrencyAmount(123456, 2)).toBe(123.46);
@@ -93,13 +91,11 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 	});
 
 	describe("Complete Budget Management Integration", () => {
-		it("should handle complete budget listing and retrieval workflow", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle complete budget listing and retrieval workflow", async () => {
 			// Mock budget list response
 			const mockBudgets = {
 				data: {
-					budgets: [
+					plans: [
 						{
 							id: "budget-1",
 							name: "Test Budget 1",
@@ -140,23 +136,25 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				},
 			};
 
-			mockYnabAPI.budgets.getBudgets.mockResolvedValue(mockBudgets);
+			mockYnabAPI.plans.getPlans.mockResolvedValue(mockBudgets);
 
 			// Test budget listing
-			const listResult = await executeToolCall(server, "ynab:list_budgets", {
+			const listResult = await executeToolCall(server, "ynab_list_budgets", {
 				response_format: "json",
 			});
 			validateToolResult(listResult);
 
-			const budgets = parseToolResult(listResult);
-			expect(budgets.data.budgets).toHaveLength(2);
-			expect(budgets.data.budgets[0].name).toBe("Test Budget 1");
-			expect(budgets.data.budgets[1].name).toBe("Test Budget 2");
+			const budgets = parseToolResult<{ budgets: { name: string }[] }>(
+				listResult,
+			);
+			expect(budgets.budgets).toHaveLength(2);
+			expect(budgets.budgets[0]!.name).toBe("Test Budget 1");
+			expect(budgets.budgets[1]!.name).toBe("Test Budget 2");
 
 			// Mock specific budget response
 			const mockBudget = {
 				data: {
-					budget: {
+					plan: {
 						id: "budget-1",
 						name: "Test Budget 1",
 						last_modified_on: "2024-01-01T00:00:00Z",
@@ -181,29 +179,27 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				},
 			};
 
-			mockYnabAPI.budgets.getBudgetById.mockResolvedValue(mockBudget);
+			mockYnabAPI.plans.getPlanById.mockResolvedValue(mockBudget);
 
 			// Test specific budget retrieval
-			const getResult = await executeToolCall(server, "ynab:get_budget", {
+			const getResult = await executeToolCall(server, "ynab_get_budget", {
 				budget_id: "budget-1",
 				response_format: "json",
 			});
 			validateToolResult(getResult);
 
-			const budget = parseToolResult(getResult);
-			expect(budget.data.budget.id).toBe("budget-1");
-			expect(budget.data.budget.name).toBe("Test Budget 1");
+			const budget = parseToolResult<{ budget: { id: string; name: string } }>(
+				getResult,
+			);
+			expect(budget.budget.id).toBe("budget-1");
+			expect(budget.budget.name).toBe("Test Budget 1");
 
 			// Verify API calls
-			expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledTimes(1);
-			expect(mockYnabAPI.budgets.getBudgetById).toHaveBeenCalledWith(
-				"budget-1",
-			);
+			expect(mockYnabAPI.plans.getPlans).toHaveBeenCalledTimes(1);
+			expect(mockYnabAPI.plans.getPlanById).toHaveBeenCalledWith("budget-1");
 		});
 
-		it("should handle budget retrieval errors gracefully", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle budget retrieval errors gracefully", async () => {
 			// Mock API error
 			const apiError = new Error("Budget not found");
 			(apiError as any).error = {
@@ -211,28 +207,22 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				name: "not_found",
 				description: "Budget not found",
 			};
-			mockYnabAPI.budgets.getBudgetById.mockRejectedValue(apiError);
+			mockYnabAPI.plans.getPlanById.mockRejectedValue(apiError);
 
 			// Test error handling
-			try {
-				await executeToolCall(server, "ynab:get_budget", {
-					budget_id: "invalid-budget",
-				});
-				expect.fail("Should have thrown an error");
-			} catch (error) {
-				expect(error).toBeDefined();
-			}
+			const result = await executeToolCall(server, "ynab_get_budget", {
+				budget_id: "invalid-budget",
+			});
+			expect(result.isError).toBe(true);
 
-			expect(mockYnabAPI.budgets.getBudgetById).toHaveBeenCalledWith(
+			expect(mockYnabAPI.plans.getPlanById).toHaveBeenCalledWith(
 				"invalid-budget",
 			);
 		});
 	});
 
 	describe("Complete Account Management Integration", () => {
-		it("should handle complete account workflow", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle complete account workflow", async () => {
 			const budgetId = TEST_BUDGET_UUID;
 
 			// Mock accounts list
@@ -269,16 +259,18 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			mockYnabAPI.accounts.getAccounts.mockResolvedValue(mockAccounts);
 
 			// Test account listing
-			const listResult = await executeToolCall(server, "ynab:list_accounts", {
+			const listResult = await executeToolCall(server, "ynab_list_accounts", {
 				budget_id: budgetId,
 				response_format: "json",
 			});
 			validateToolResult(listResult);
 
-			const accounts = parseToolResult(listResult);
-			expect(accounts.data.accounts).toHaveLength(2);
-			expect(accounts.data.accounts[0].name).toBe("Checking Account");
-			expect(accounts.data.accounts[1].name).toBe("Savings Account");
+			const accounts = parseToolResult<{ accounts: { name: string }[] }>(
+				listResult,
+			);
+			expect(accounts.accounts).toHaveLength(2);
+			expect(accounts.accounts[0]!.name).toBe("Checking Account");
+			expect(accounts.accounts[1]!.name).toBe("Savings Account");
 
 			// Mock specific account response
 			const mockAccount = {
@@ -290,17 +282,19 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			mockYnabAPI.accounts.getAccountById.mockResolvedValue(mockAccount);
 
 			// Test specific account retrieval
-			const getResult = await executeToolCall(server, "ynab:get_account", {
+			const getResult = await executeToolCall(server, "ynab_get_account", {
 				budget_id: budgetId,
 				account_id: "account-1",
 				response_format: "json",
 			});
 			validateToolResult(getResult);
 
-			const account = parseToolResult(getResult);
-			expect(account.data.account.id).toBe("account-1");
-			expect(account.data.account.name).toBe("Checking Account");
-			expect(account.data.account.balance).toBe(100);
+			const account = parseToolResult<{
+				account: { id: string; name: string; balance: number };
+			}>(getResult);
+			expect(account.account.id).toBe("account-1");
+			expect(account.account.name).toBe("Checking Account");
+			expect(account.account.balance).toBe(100);
 
 			// Mock account creation
 			const newAccount = {
@@ -326,7 +320,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Test account creation
 			const createResult = await executeConfirmedToolCall(
 				server,
-				"ynab:create_account",
+				"ynab_create_account",
 				{
 					budget_id: budgetId,
 					name: "New Test Account",
@@ -336,9 +330,11 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 			validateToolResult(createResult);
 
-			const createdAccount = parseToolResult(createResult);
-			expect(createdAccount.data.account.name).toBe("New Test Account");
-			expect(createdAccount.data.account.type).toBe("checking");
+			const createdAccount = parseToolResult<{
+				account: { name: string; type: string };
+			}>(createResult);
+			expect(createdAccount.account.name).toBe("New Test Account");
+			expect(createdAccount.account.type).toBe("checking");
 
 			// Verify API calls
 			expect(mockYnabAPI.accounts.getAccounts).toHaveBeenCalledWith(budgetId);
@@ -360,9 +356,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 	});
 
 	describe("Complete Transaction Management Integration", () => {
-		it("should handle complete transaction workflow", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle complete transaction workflow", async () => {
 			const budgetId = TEST_BUDGET_UUID;
 			const accountId = "test-account";
 			mockYnabAPI.accounts.getAccounts.mockResolvedValue({
@@ -412,7 +406,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Test transaction listing
 			const listResult = await executeToolCall(
 				server,
-				"ynab:list_transactions",
+				"ynab_list_transactions",
 				{
 					budget_id: budgetId,
 					account_id: accountId,
@@ -421,10 +415,12 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 			validateToolResult(listResult);
 
-			const transactions = parseToolResult(listResult);
-			expect(transactions.data.transactions).toHaveLength(2);
-			expect(transactions.data.transactions[0].memo).toBe("Coffee shop");
-			expect(transactions.data.transactions[1].memo).toBe("Salary");
+			const transactions = parseToolResult<{
+				transactions: { memo: string }[];
+			}>(listResult);
+			expect(transactions.transactions).toHaveLength(2);
+			expect(transactions.transactions[0]!.memo).toBe("Coffee shop");
+			expect(transactions.transactions[1]!.memo).toBe("Salary");
 
 			// Mock specific transaction response
 			const mockTransaction = {
@@ -438,17 +434,19 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 
 			// Test specific transaction retrieval
-			const getResult = await executeToolCall(server, "ynab:get_transaction", {
+			const getResult = await executeToolCall(server, "ynab_get_transaction", {
 				budget_id: budgetId,
 				transaction_id: "transaction-1",
 				response_format: "json",
 			});
 			validateToolResult(getResult);
 
-			const transaction = parseToolResult(getResult);
-			expect(transaction.data.transaction.id).toBe("transaction-1");
-			expect(transaction.data.transaction.memo).toBe("Coffee shop");
-			expect(transaction.data.transaction.amount).toBe(-5);
+			const transaction = parseToolResult<{
+				transaction: { id: string; memo: string; amount: number };
+			}>(getResult);
+			expect(transaction.transaction.id).toBe("transaction-1");
+			expect(transaction.transaction.memo).toBe("Coffee shop");
+			expect(transaction.transaction.amount).toBe(-5);
 
 			// Mock transaction creation
 			const newTransaction = {
@@ -479,7 +477,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Test transaction creation
 			const createResult = await executeConfirmedToolCall(
 				server,
-				"ynab:create_transaction",
+				"ynab_create_transaction",
 				{
 					budget_id: budgetId,
 					account_id: accountId,
@@ -493,9 +491,11 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 			validateToolResult(createResult);
 
-			const createdTransaction = parseToolResult(createResult);
-			expect(createdTransaction.data.transaction.memo).toBe("Test transaction");
-			expect(createdTransaction.data.transaction.amount).toBe(-2.5);
+			const createdTransaction = parseToolResult<{
+				transaction: { memo: string; amount: number };
+			}>(createResult);
+			expect(createdTransaction.transaction.memo).toBe("Test transaction");
+			expect(createdTransaction.transaction.amount).toBe(-2.5);
 
 			// Mock transaction update
 			const updatedTransaction = { ...newTransaction, memo: "Updated memo" };
@@ -512,7 +512,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Test transaction update
 			const updateResult = await executeConfirmedToolCall(
 				server,
-				"ynab:update_transaction",
+				"ynab_update_transaction",
 				{
 					budget_id: budgetId,
 					transaction_id: "transaction-3",
@@ -521,8 +521,10 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 			validateToolResult(updateResult);
 
-			const updated = parseToolResult(updateResult);
-			expect(updated.data.transaction.memo).toBe("Updated memo");
+			const updated = parseToolResult<{ transaction: { memo: string } }>(
+				updateResult,
+			);
+			expect(updated.transaction.memo).toBe("Updated memo");
 
 			// Mock transaction deletion
 			mockYnabAPI.transactions.deleteTransaction.mockResolvedValue({
@@ -534,7 +536,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Test transaction deletion
 			const deleteResult = await executeConfirmedToolCall(
 				server,
-				"ynab:delete_transaction",
+				"ynab_delete_transaction",
 				{
 					budget_id: budgetId,
 					transaction_id: "transaction-3",
@@ -565,9 +567,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 		});
 
-		it("should handle transaction filtering", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle transaction filtering", async () => {
 			const budgetId = TEST_BUDGET_UUID;
 
 			// Mock filtered transactions
@@ -592,7 +592,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Test filtering by date
 			const dateFilterResult = await executeToolCall(
 				server,
-				"ynab:list_transactions",
+				"ynab_list_transactions",
 				{
 					budget_id: budgetId,
 					since_date: "2024-01-01",
@@ -644,7 +644,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Test filtering by account
 			const accountFilterResult = await executeToolCall(
 				server,
-				"ynab:list_transactions",
+				"ynab_list_transactions",
 				{
 					budget_id: budgetId,
 					account_id: "account-1",
@@ -655,7 +655,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Test filtering by category
 			const categoryFilterResult = await executeToolCall(
 				server,
-				"ynab:list_transactions",
+				"ynab_list_transactions",
 				{
 					budget_id: budgetId,
 					category_id: "category-1",
@@ -675,9 +675,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 	});
 
 	describe("Complete Category Management Integration", () => {
-		it("should handle complete category workflow", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle complete category workflow", async () => {
 			const budgetId = TEST_BUDGET_UUID;
 
 			// Mock categories response
@@ -721,16 +719,19 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			mockYnabAPI.categories.getCategories.mockResolvedValue(mockCategories);
 
 			// Test category listing
-			const listResult = await executeToolCall(server, "ynab:list_categories", {
+			const listResult = await executeToolCall(server, "ynab_list_categories", {
 				budget_id: budgetId,
 				response_format: "json",
 			});
 			validateToolResult(listResult);
 
-			const categories = parseToolResult(listResult);
-			expect(categories.data.category_groups).toHaveLength(1);
-			expect(categories.data.categories).toHaveLength(2);
-			expect(categories.data.categories[0].name).toBe("Rent/Mortgage");
+			const categories = parseToolResult<{
+				category_groups: unknown[];
+				categories: { name: string }[];
+			}>(listResult);
+			expect(categories.category_groups).toHaveLength(1);
+			expect(categories.categories).toHaveLength(2);
+			expect(categories.categories[0]!.name).toBe("Rent/Mortgage");
 
 			// Mock specific category response
 			const mockCategory = {
@@ -742,17 +743,19 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			mockYnabAPI.categories.getCategoryById.mockResolvedValue(mockCategory);
 
 			// Test specific category retrieval
-			const getResult = await executeToolCall(server, "ynab:get_category", {
+			const getResult = await executeToolCall(server, "ynab_get_category", {
 				budget_id: budgetId,
 				category_id: "category-1",
 				response_format: "json",
 			});
 			validateToolResult(getResult);
 
-			const category = parseToolResult(getResult);
-			expect(category.data.category.id).toBe("category-1");
-			expect(category.data.category.name).toBe("Rent/Mortgage");
-			expect(category.data.category.budgeted).toBe(150);
+			const category = parseToolResult<{
+				category: { id: string; name: string; budgeted: number };
+			}>(getResult);
+			expect(category.category.id).toBe("category-1");
+			expect(category.category.name).toBe("Rent/Mortgage");
+			expect(category.category.budgeted).toBe(150);
 
 			// Mock category update
 			const updatedCategory = {
@@ -773,7 +776,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Test category budget update
 			const updateResult = await executeConfirmedToolCall(
 				server,
-				"ynab:update_category",
+				"ynab_update_category",
 				{
 					budget_id: budgetId,
 					category_id: "category-1",
@@ -782,8 +785,10 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			);
 			validateToolResult(updateResult);
 
-			const updated = parseToolResult(updateResult);
-			expect(updated.data.category.budgeted).toBe(160);
+			const updated = parseToolResult<{ category: { budgeted: number } }>(
+				updateResult,
+			);
+			expect(updated.category.budgeted).toBe(160);
 
 			// Verify API calls
 			expect(mockYnabAPI.categories.getCategories).toHaveBeenCalledWith(
@@ -798,9 +803,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 	});
 
 	describe("Complete Utility Tools Integration", () => {
-		it("should handle user information retrieval", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle user information retrieval", async () => {
 			// Mock user response
 			const mockUser = {
 				data: {
@@ -814,22 +817,20 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			mockYnabAPI.user.getUser.mockResolvedValue(mockUser);
 
 			// Test user retrieval
-			const userResult = await executeToolCall(server, "ynab:get_user", {
+			const userResult = await executeToolCall(server, "ynab_get_user", {
 				response_format: "json",
 			});
 			validateToolResult(userResult);
 
-			const user = parseToolResult(userResult);
-			expect(user.data.user.id).toBe("user-123");
+			const user = parseToolResult<{ user: { id: string } }>(userResult);
+			expect(user.user.id).toBe("user-123");
 
 			expect(mockYnabAPI.user.getUser).toHaveBeenCalledTimes(1);
 		});
 	});
 
 	describe("Error Handling Integration", () => {
-		it("should handle various API error scenarios", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle various API error scenarios", async () => {
 			// Test 401 Unauthorized
 			const authError = new Error("Unauthorized");
 			(authError as any).error = {
@@ -837,14 +838,10 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				name: "unauthorized",
 				description: "Unauthorized",
 			};
-			mockYnabAPI.budgets.getBudgets.mockRejectedValue(authError);
+			mockYnabAPI.plans.getPlans.mockRejectedValue(authError);
 
-			try {
-				await executeToolCall(server, "ynab:list_budgets");
-				expect.fail("Should have thrown an error");
-			} catch (error) {
-				expect(error).toBeDefined();
-			}
+			const authResult = await executeToolCall(server, "ynab_list_budgets");
+			expect(authResult.isError).toBe(true);
 
 			// Test 404 Not Found
 			const notFoundError = new Error("Not Found");
@@ -853,16 +850,12 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				name: "not_found",
 				description: "Budget not found",
 			};
-			mockYnabAPI.budgets.getBudgetById.mockRejectedValue(notFoundError);
+			mockYnabAPI.plans.getPlanById.mockRejectedValue(notFoundError);
 
-			try {
-				await executeToolCall(server, "ynab:get_budget", {
-					budget_id: "invalid",
-				});
-				expect.fail("Should have thrown an error");
-			} catch (error) {
-				expect(error).toBeDefined();
-			}
+			const notFoundResult = await executeToolCall(server, "ynab_get_budget", {
+				budget_id: "invalid",
+			});
+			expect(notFoundResult.isError).toBe(true);
 
 			// Test 429 Rate Limit
 			const rateLimitError = new Error("Too Many Requests");
@@ -873,39 +866,37 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			};
 			mockYnabAPI.accounts.getAccounts.mockRejectedValue(rateLimitError);
 
-			try {
-				await executeToolCall(server, "ynab:list_accounts", {
+			const rateLimitResult = await executeToolCall(
+				server,
+				"ynab_list_accounts",
+				{
 					budget_id: "test",
-				});
-				expect.fail("Should have thrown an error");
-			} catch (error) {
-				expect(error).toBeDefined();
-			}
+				},
+			);
+			expect(rateLimitResult.isError).toBe(true);
 		});
 
-		it("should validate input parameters", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should validate input parameters", async () => {
 			// Test missing required parameters
-			try {
-				await executeToolCall(server, "ynab:get_budget", {});
-				expect.fail("Should have thrown validation error");
-			} catch (error) {
-				expect(error).toBeDefined();
-			}
+			const missingResult = await executeToolCall(
+				server,
+				"ynab_get_budget",
+				{},
+			);
+			expect(missingResult.isError).toBe(true);
 
 			// Test invalid parameter types
-			try {
-				await executeToolCall(server, "ynab:create_transaction", {
+			const invalidResult = await executeToolCall(
+				server,
+				"ynab_create_transaction",
+				{
 					budget_id: "test",
 					account_id: "test",
 					amount: "invalid-amount", // Should be number
 					date: "2024-01-01",
-				});
-				expect.fail("Should have thrown validation error");
-			} catch (error) {
-				expect(error).toBeDefined();
-			}
+				},
+			);
+			expect(invalidResult.isError).toBe(true);
 		});
 	});
 
@@ -914,12 +905,10 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			cacheManager.clear();
 		});
 
-		it("should cache budget list requests and improve performance on subsequent calls", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should cache budget list requests and improve performance on subsequent calls", async () => {
 			const mockBudgets = {
 				data: {
-					budgets: [
+					plans: [
 						{
 							id: "budget-1",
 							name: "Test Budget",
@@ -942,41 +931,45 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				},
 			};
 
-			mockYnabAPI.budgets.getBudgets.mockResolvedValue(mockBudgets);
+			mockYnabAPI.plans.getPlans.mockResolvedValue(mockBudgets);
 
 			const statsBeforeFirstCall = cacheManager.getStats();
 			const initialSize = statsBeforeFirstCall.size;
 
 			// First call - should hit API and cache result
-			const firstResult = await executeToolCall(server, "ynab:list_budgets", {
+			const firstResult = await executeToolCall(server, "ynab_list_budgets", {
 				response_format: "json",
 			});
 			validateToolResult(firstResult);
 
-			const firstParsed = parseToolResult(firstResult);
-			expect(firstParsed.data.cached).toBe(false);
-			expect(firstParsed.data.cache_info).toBe(
-				"Fresh data retrieved from YNAB API",
-			);
+			const firstParsed = parseToolResult<{
+				cached: boolean;
+				cache_info: string;
+			}>(firstResult);
+			expect(firstParsed.cached).toBe(false);
+			expect(firstParsed.cache_info).toBe("Fresh data retrieved from YNAB API");
 
 			// Cache should have grown
 			const statsAfterFirstCall = cacheManager.getStats();
 			expect(statsAfterFirstCall.size).toBeGreaterThan(initialSize);
 
 			// Second call - should hit cache
-			const secondResult = await executeToolCall(server, "ynab:list_budgets", {
+			const secondResult = await executeToolCall(server, "ynab_list_budgets", {
 				response_format: "json",
 			});
 			validateToolResult(secondResult);
 
-			const secondParsed = parseToolResult(secondResult);
-			expect(secondParsed.data.cached).toBe(true);
-			expect(secondParsed.data.cache_info).toBe(
+			const secondParsed = parseToolResult<{
+				cached: boolean;
+				cache_info: string;
+			}>(secondResult);
+			expect(secondParsed.cached).toBe(true);
+			expect(secondParsed.cache_info).toBe(
 				"Data retrieved from cache for improved performance",
 			);
 
 			// API should only have been called once
-			expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledTimes(1);
+			expect(mockYnabAPI.plans.getPlans).toHaveBeenCalledTimes(1);
 
 			// Cache hit count should have increased
 			const finalStats = cacheManager.getStats();
@@ -986,9 +979,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 		// Mutation invalidation is tested through the real SDK transport in
 		// serverTransport.integration.test.ts. SDK method mocks bypass that boundary.
 
-		it("should cache account-filtered transactions separately from budget transactions", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should cache account-filtered transactions separately from budget transactions", async () => {
 			const budgetId = TEST_BUDGET_UUID;
 
 			const mockTransactions = {
@@ -1024,14 +1015,16 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Unfiltered request - should be cached
 			const unfilteredResult = await executeToolCall(
 				server,
-				"ynab:list_transactions",
+				"ynab_list_transactions",
 				{
 					budget_id: budgetId,
 					response_format: "json",
 				},
 			);
-			const unfilteredParsed = parseToolResult(unfilteredResult);
-			expect(unfilteredParsed.data.cached).toBe(false); // First call, cache miss
+			const unfilteredParsed = parseToolResult<{ cached: boolean }>(
+				unfilteredResult,
+			);
+			expect(unfilteredParsed.cached).toBe(false); // First call, cache miss
 
 			const statsAfterUnfiltered = cacheManager.getStats();
 			expect(statsAfterUnfiltered.size).toBeGreaterThan(
@@ -1041,39 +1034,46 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			// Account filters have a separate cache entry from the whole budget.
 			const filteredResult = await executeToolCall(
 				server,
-				"ynab:list_transactions",
+				"ynab_list_transactions",
 				{
 					budget_id: budgetId,
 					account_id: "account-1",
 					response_format: "json",
 				},
 			);
-			const filteredParsed = parseToolResult(filteredResult);
-			expect(filteredParsed.data.cached).toBe(false);
-			expect(filteredParsed.data.cache_info).toBe(
+			const filteredParsed = parseToolResult<{
+				cached: boolean;
+				cache_info: string;
+			}>(filteredResult);
+			expect(filteredParsed.cached).toBe(false);
+			expect(filteredParsed.cache_info).toBe(
 				"Fresh data retrieved from YNAB API",
 			);
 
 			// Repeating each shape reuses its own snapshot.
 			const repeatedFiltered = await executeToolCall(
 				server,
-				"ynab:list_transactions",
+				"ynab_list_transactions",
 				{
 					budget_id: budgetId,
 					account_id: "account-1",
 					response_format: "json",
 				},
 			);
-			expect(parseToolResult(repeatedFiltered).data.cached).toBe(true);
+			expect(
+				parseToolResult<{ cached: boolean }>(repeatedFiltered).cached,
+			).toBe(true);
 			const repeatedUnfiltered = await executeToolCall(
 				server,
-				"ynab:list_transactions",
+				"ynab_list_transactions",
 				{
 					budget_id: budgetId,
 					response_format: "json",
 				},
 			);
-			expect(parseToolResult(repeatedUnfiltered).data.cached).toBe(true);
+			expect(
+				parseToolResult<{ cached: boolean }>(repeatedUnfiltered).cached,
+			).toBe(true);
 			expect(cacheManager.getStats().size).toBeGreaterThan(
 				statsAfterUnfiltered.size,
 			);
@@ -1085,17 +1085,15 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			).toHaveBeenCalledTimes(2);
 		});
 
-		it("should handle cache warming after setting default budget", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle cache warming after setting default budget", async () => {
 			const budgetId = TEST_BUDGET_UUID;
 
 			// Mock all the responses for cache warming
 			mockYnabAPI.accounts.getAccounts.mockResolvedValue({
 				data: { accounts: [] },
 			});
-			mockYnabAPI.budgets.getBudgetById.mockResolvedValue({
-				data: { budget: { id: budgetId, name: "Warm Cache Budget" } },
+			mockYnabAPI.plans.getPlanById.mockResolvedValue({
+				data: { plan: { id: budgetId, name: "Warm Cache Budget" } },
 			});
 			mockYnabAPI.categories.getCategories.mockResolvedValue({
 				data: { category_groups: [] },
@@ -1108,7 +1106,7 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			const initialSize = statsBeforeSet.size;
 
 			// Set default budget (should trigger cache warming)
-			await executeToolCall(server, "ynab:set_default_budget", {
+			await executeToolCall(server, "ynab_set_default_budget", {
 				budget_id: budgetId,
 			});
 
@@ -1132,22 +1130,20 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			expect(mockYnabAPI.payees.getPayees).toHaveBeenCalled();
 		});
 
-		it("should handle cache clear operation", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should handle cache clear operation", async () => {
 			// Populate cache with some data
-			mockYnabAPI.budgets.getBudgets.mockResolvedValue({
-				data: { budgets: [] },
+			mockYnabAPI.plans.getPlans.mockResolvedValue({
+				data: { plans: [] },
 			});
 
-			await executeToolCall(server, "ynab:list_budgets");
+			await executeToolCall(server, "ynab_list_budgets");
 
 			// Verify cache has entries
 			const statsAfterPopulation = cacheManager.getStats();
 			expect(statsAfterPopulation.size).toBeGreaterThan(0);
 
 			// Clear cache
-			await executeToolCall(server, "ynab:clear_cache");
+			await executeToolCall(server, "ynab_clear_cache");
 
 			// Verify cache is empty
 			const statsAfterClear = cacheManager.getStats();
@@ -1156,12 +1152,10 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 			expect(statsAfterClear.misses).toBe(0);
 		});
 
-		it("should respect cache TTL and return fresh data after expiration", {
-			meta: { tier: "domain", domain: "workflows" },
-		}, async () => {
+		it("should respect cache TTL and return fresh data after expiration", async () => {
 			const mockBudgets = {
 				data: {
-					budgets: [
+					plans: [
 						{
 							id: "budget-1",
 							name: "Test Budget",
@@ -1184,44 +1178,44 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 				},
 			};
 
-			mockYnabAPI.budgets.getBudgets.mockResolvedValue(mockBudgets);
+			mockYnabAPI.plans.getPlans.mockResolvedValue(mockBudgets);
 
 			// First call - cache miss
-			const firstResult = await executeToolCall(server, "ynab:list_budgets", {
+			const firstResult = await executeToolCall(server, "ynab_list_budgets", {
 				response_format: "json",
 			});
-			const firstParsed = parseToolResult(firstResult);
-			expect(firstParsed.data.cached).toBe(false);
+			const firstParsed = parseToolResult<{ cached: boolean }>(firstResult);
+			expect(firstParsed.cached).toBe(false);
 
 			// Second call - cache hit
-			const secondResult = await executeToolCall(server, "ynab:list_budgets", {
+			const secondResult = await executeToolCall(server, "ynab_list_budgets", {
 				response_format: "json",
 			});
-			const secondParsed = parseToolResult(secondResult);
-			expect(secondParsed.data.cached).toBe(true);
+			const secondParsed = parseToolResult<{ cached: boolean }>(secondResult);
+			expect(secondParsed.cached).toBe(true);
 
-			expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledTimes(1);
+			expect(mockYnabAPI.plans.getPlans).toHaveBeenCalledTimes(1);
 
 			// Advance only Date.now so request timeouts remain real.
 			const now = vi
 				.spyOn(Date, "now")
 				.mockReturnValue(Date.now() + CACHE_TTLS.BUDGETS + 1);
 			try {
-				mockYnabAPI.budgets.getBudgets.mockResolvedValue({
+				mockYnabAPI.plans.getPlans.mockResolvedValue({
 					data: {
-						budgets: [
-							{ ...mockBudgets.data.budgets[0], name: "Refreshed Budget" },
-						],
+						plans: [{ ...mockBudgets.data.plans[0], name: "Refreshed Budget" }],
 					},
 				});
-				const refreshed = await executeToolCall(server, "ynab:list_budgets", {
+				const refreshed = await executeToolCall(server, "ynab_list_budgets", {
 					response_format: "json",
 				});
-				expect(parseToolResult(refreshed).data.cached).toBe(false);
-				expect(parseToolResult(refreshed).data.budgets[0].name).toBe(
-					"Refreshed Budget",
-				);
-				expect(mockYnabAPI.budgets.getBudgets).toHaveBeenCalledTimes(2);
+				const refreshedParsed = parseToolResult<{
+					cached: boolean;
+					budgets: { name: string }[];
+				}>(refreshed);
+				expect(refreshedParsed.cached).toBe(false);
+				expect(refreshedParsed.budgets[0]!.name).toBe("Refreshed Budget");
+				expect(mockYnabAPI.plans.getPlans).toHaveBeenCalledTimes(2);
 			} finally {
 				now.mockRestore();
 			}

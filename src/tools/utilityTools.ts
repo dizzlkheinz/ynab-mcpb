@@ -1,10 +1,11 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../server/errorHandler.js";
 import { formatUserInfo } from "../server/markdownFormatter.js";
-import { responseFormatter } from "../server/responseFormatter.js";
-import { withToolErrorHandling } from "../types/index.js";
 import type { ToolFactory } from "../types/toolRegistration.js";
 import { createAdapters } from "./adapters.js";
 import { GetUserOutputSchema } from "./schemas/outputs/index.js";
@@ -53,13 +54,13 @@ export async function handleGetUser(
 						text:
 							fmt === "markdown"
 								? formatUserInfo(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:get_user",
+		"ynab_get_user",
 		"getting user information",
 		errorHandler,
 	);

@@ -19,11 +19,6 @@ const mockYnabAPI = {
 	},
 } as unknown as ynab.API;
 
-// Mock Response Formatter
-const mockResponseFormatter = {
-	format: vi.fn((data) => JSON.stringify(data)),
-};
-
 const mockCacheManager = {
 	wrap: vi.fn(async (_key, { loader }) => loader()),
 } as unknown as CacheManager;
@@ -35,7 +30,6 @@ describe("ResourceManager Templates", () => {
 		vi.clearAllMocks();
 		resourceManager = new ResourceManager({
 			ynabAPI: mockYnabAPI,
-			responseFormatter: mockResponseFormatter,
 			cacheManager: mockCacheManager,
 		});
 	});

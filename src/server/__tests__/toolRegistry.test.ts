@@ -21,15 +21,9 @@ function createResult(label: string): CallToolResult {
 }
 
 function makeTestDeps() {
-	const securityInvocations: {
-		namespace: string;
-		operation: string;
-		accessToken: string;
-		params: Record<string, unknown>;
-	}[] = [];
-
-	const responseFormatter = {
-		format: vi.fn((value) => JSON.stringify(value)),
+	const requestLogger = {
+		logSuccess: vi.fn(),
+		logError: vi.fn(),
 	};
 
 	const errorHandler = {
@@ -51,59 +45,30 @@ function makeTestDeps() {
 		})),
 	};
 
-	const withSecurityWrapper = vi.fn(
-		<T extends Record<string, unknown>>(
-			namespace: string,
-			operation: string,
-			schema: z.ZodSchema<T>,
-		) =>
-			(accessToken: string) =>
-			(params: Record<string, unknown>) =>
-			async (handler: (validated: T) => Promise<CallToolResult>) => {
-				securityInvocations.push({ namespace, operation, accessToken, params });
-				try {
-					const validated = schema.parse(params ?? {});
-					return await handler(validated);
-				} catch (error) {
-					return errorHandler.createValidationError(
-						`Invalid parameters for ${operation}`,
-						error instanceof Error ? error.message : undefined,
-					);
-				}
-			},
-	);
-
 	const dependencies: ToolRegistryDependencies = {
 		errorHandler,
-		responseFormatter,
-		// vi.fn drops the generic signature, so restate the contract
-		withSecurityWrapper:
-			withSecurityWrapper as ToolRegistryDependencies["withSecurityWrapper"],
+		requestLogger,
 	};
 
 	return {
 		dependencies,
-		securityInvocations,
+		requestLogger,
 		errorHandler,
-		responseFormatter,
-		withSecurityWrapper,
 	};
 }
 
 describe("ToolRegistry", () => {
 	let dependencies: ToolRegistryDependencies;
 	let registry: ToolRegistry;
-	let securityInvocations: {
-		namespace: string;
-		operation: string;
-		accessToken: string;
-		params: Record<string, unknown>;
-	}[];
+	let requestLogger: {
+		logSuccess: ReturnType<typeof vi.fn>;
+		logError: ReturnType<typeof vi.fn>;
+	};
 	const handlerResult = createResult("handler-success");
 
 	beforeEach(() => {
 		const setup = makeTestDeps();
-		({ dependencies, securityInvocations } = setup);
+		({ dependencies, requestLogger } = setup);
 		registry = new ToolRegistry(dependencies);
 
 		// Spy on error handler methods for testing
@@ -180,26 +145,13 @@ describe("ToolRegistry", () => {
 		expect(typeof schema?.["$schema"]).toBe("string");
 	});
 
-	it("prefers custom metadata JSON schema when provided", () => {
-		const customSchema = {
-			type: "object",
-			properties: { foo: { type: "string" } },
-		};
-		registry.register({
-			name: "meta_tool",
-			description: "Has metadata schema",
-			inputSchema: z.object({ foo: z.string() }),
-			handler: async () => handlerResult,
-			metadata: { inputJsonSchema: customSchema },
-		});
-
-		const tools = registry.listTools();
-		const found = tools.find((tool) => tool.name === "meta_tool");
-		expect(found?.inputSchema).toEqual(customSchema);
-	});
-
-	it("executes a registered tool via security wrapper and handler", async () => {
-		const handler = vi.fn(async () => handlerResult);
+	it("executes a registered tool with direct validation and request logging", async () => {
+		const handler = vi.fn(
+			async ({ context }: ToolExecutionPayload<{ id: string }>) => {
+				expect(context.rawArguments).toEqual({ id: "abc" });
+				return handlerResult;
+			},
+		);
 		registry.register({
 			name: "exec_tool",
 			description: "Execute tool",
@@ -209,65 +161,35 @@ describe("ToolRegistry", () => {
 
 		const result = await registry.executeTool({
 			name: "exec_tool",
-			accessToken: "token-123",
 			arguments: { id: "abc" },
 		});
 
 		expect(result).toEqual(handlerResult);
 		expect(handler).toHaveBeenCalledTimes(1);
-		expect(securityInvocations).toHaveLength(1);
-		expect(securityInvocations[0]).toMatchObject({
-			namespace: "ynab",
-			operation: "exec_tool",
-			accessToken: "token-123",
-			params: { id: "abc" },
-		});
+		expect(requestLogger.logSuccess).toHaveBeenCalledWith(
+			"exec_tool",
+			"exec_tool",
+			expect.any(Number),
+		);
 	});
 
 	it("merges default arguments before validation", async () => {
+		const handler = vi.fn(
+			async ({ input }: ToolExecutionPayload<{ id: string }>) => {
+				expect(input).toEqual({ id: "resolved-id" });
+				return handlerResult;
+			},
+		);
 		registry.register({
 			name: "defaulted_tool",
 			description: "Has defaults",
 			inputSchema: z.object({ id: z.string() }),
 			defaultArgumentResolver: vi.fn(async () => ({ id: "resolved-id" })),
-			handler: vi.fn(async () => handlerResult),
-		});
-
-		await registry.executeTool({
-			name: "defaulted_tool",
-			accessToken: "token-1",
-		});
-
-		expect(securityInvocations[0]?.params).toEqual({ id: "resolved-id" });
-	});
-
-	it("passes cache helpers to the handler context when injected", async () => {
-		const cacheHelpers = {
-			generateKey: vi.fn((...segments: unknown[]) => segments.join(":")),
-		};
-
-		dependencies.cacheHelpers = cacheHelpers;
-		registry = new ToolRegistry(dependencies);
-
-		const handler = vi.fn(
-			async (payload: ToolExecutionPayload<{ id: string }>) => {
-				expect(payload.context.cache).toBe(cacheHelpers);
-				expect(payload.context.rawArguments).toEqual({ id: "42" });
-				return handlerResult;
-			},
-		);
-
-		registry.register({
-			name: "cache_tool",
-			description: "Needs cache",
-			inputSchema: z.object({ id: z.string() }),
 			handler,
 		});
 
 		await registry.executeTool({
-			name: "cache_tool",
-			accessToken: "token",
-			arguments: { id: "42" },
+			name: "defaulted_tool",
 		});
 
 		expect(handler).toHaveBeenCalledTimes(1);
@@ -276,7 +198,6 @@ describe("ToolRegistry", () => {
 	it("returns validation error result for unknown tools", async () => {
 		const result = await registry.executeTool({
 			name: "missing_tool",
-			accessToken: "token",
 		});
 
 		expect(result).toEqual(
@@ -289,12 +210,11 @@ describe("ToolRegistry", () => {
 		).toHaveBeenCalledTimes(1);
 	});
 
-	it("surfaces validation failures from security wrapper", async () => {
+	it("surfaces validation failures from schema validation and logs error", async () => {
 		registerSampleTool();
 
 		const result = await registry.executeTool({
 			name: "sample_tool",
-			accessToken: "token",
 			arguments: {},
 		});
 
@@ -304,6 +224,12 @@ describe("ToolRegistry", () => {
 			),
 		).toBe(true);
 		expect(dependencies.errorHandler.createValidationError).toHaveBeenCalled();
+		expect(requestLogger.logError).toHaveBeenCalledWith(
+			"sample_tool",
+			"sample_tool",
+			expect.any(String),
+			expect.any(Number),
+		);
 	});
 
 	it("routes handler exceptions to error handler", async () => {
@@ -319,53 +245,34 @@ describe("ToolRegistry", () => {
 			handler,
 		});
 
+		vi.mocked(dependencies.errorHandler.handleError).mockReturnValueOnce({
+			isError: true,
+			content: [
+				{
+					type: "text",
+					text: "handled:executing error_tool - error_tool:boom",
+				},
+			],
+		});
+
 		const result = await registry.executeTool({
 			name: "error_tool",
-			accessToken: "token",
 			arguments: { id: "abc" },
 		});
 
-		expect(result).toEqual(
-			createResult("handled:executing error_tool - error_tool:boom"),
-		);
+		expect(result).toEqual({
+			isError: true,
+			...createResult("handled:executing error_tool - error_tool:boom"),
+		});
 		expect(dependencies.errorHandler.handleError).toHaveBeenCalledWith(
 			handlerError,
 			"executing error_tool - error_tool",
 		);
-	});
-
-	it("normalizes unexpected security errors", async () => {
-		const error = new Error("rate limit");
-		const customDeps: ToolRegistryDependencies = {
-			...dependencies,
-			withSecurityWrapper: vi.fn(() => () => () => {
-				throw error;
-			}),
-		};
-
-		const customRegistry = new ToolRegistry(customDeps);
-
-		// Spy on custom error handler methods for testing
-		vi.spyOn(customDeps.errorHandler, "handleError");
-
-		customRegistry.register({
-			name: "security_tool",
-			description: "Security throws",
-			inputSchema: z.object({}),
-			handler: vi.fn(async () => handlerResult),
-		});
-
-		const result = await customRegistry.executeTool({
-			name: "security_tool",
-			accessToken: "token",
-		});
-
-		expect(result).toEqual(
-			createResult("handled:executing security_tool:rate limit"),
-		);
-		expect(customDeps.errorHandler.handleError).toHaveBeenCalledWith(
-			error,
-			"executing security_tool",
+		expect(requestLogger.logError).toHaveBeenCalledWith(
+			"error_tool",
+			"error_tool",
+			"Tool returned an error",
+			expect.any(Number),
 		);
 	});
 
@@ -412,23 +319,10 @@ describe("ToolRegistry", () => {
 			// Test that the registry uses the injected error handler
 			const result = await customRegistry.executeTool({
 				name: "nonexistent_tool",
-				accessToken: "test-token",
 			});
 
 			expect(mockErrorHandler.createValidationError).toHaveBeenCalled();
 			expect(maybeTextOf(result.content[0])).toBe("Mock validation error");
-		});
-
-		it("should use the same formatter instance for both ErrorHandler and ToolRegistry", () => {
-			const {
-				dependencies: deps,
-				responseFormatter: formatter,
-				errorHandler,
-			} = makeTestDeps();
-
-			// Both should use the same formatter
-			expect(deps.errorHandler).toBe(errorHandler);
-			expect(deps.responseFormatter).toBe(formatter);
 		});
 
 		it("should implement ErrorHandler contract interface", () => {
@@ -468,7 +362,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "validated_output_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -546,7 +439,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "invalid_output_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -588,7 +480,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "missing_field_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -621,7 +512,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "markdown_output_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -665,7 +555,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "sc_fast_path_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -706,7 +595,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "sc_invalid_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -739,7 +627,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "sc_bad_content_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -768,7 +655,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "empty_content_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -802,7 +688,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "non_text_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -846,7 +731,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "multi_invalid_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 
@@ -885,7 +769,6 @@ describe("ToolRegistry", () => {
 
 			const result = await registry.executeTool({
 				name: "no_schema_tool",
-				accessToken: "token",
 				arguments: { id: "test" },
 			});
 

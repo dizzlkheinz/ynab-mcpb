@@ -229,8 +229,8 @@ describe("CacheManager", () => {
 
 	describe("Per-Entry Options", () => {
 		it("should use custom TTL from options", () => {
-			cache.set("key1", "value1", { ttl: 500, staleWhileRevalidate: 0 });
-			cache.set("key2", "value2", { ttl: 1500, staleWhileRevalidate: 0 });
+			cache.set("key1", "value1", 500);
+			cache.set("key2", "value2", 1500);
 
 			vi.advanceTimersByTime(1000);
 			expect(cache.get("key1")).toBeNull(); // Expired
@@ -247,28 +247,6 @@ describe("CacheManager", () => {
 			// Advance past the TTL (using simple set should have NO stale window)
 			vi.advanceTimersByTime(2000); // Total ~5 minutes - should be expired
 			expect(cache.get("key1")).toBeNull();
-		});
-
-		it("should support staleWhileRevalidate", () => {
-			cache.set("key1", "value1", { ttl: 1000, staleWhileRevalidate: 2000 });
-
-			vi.advanceTimersByTime(1500); // Within stale window
-			const result = cache.get("key1");
-
-			expect(result).toBe("value1"); // Should return stale data
-			const stats = cache.getStats();
-			expect(stats.hits).toBe(1); // Counted as hit
-		});
-
-		it("should not return data outside stale window", () => {
-			cache.set("key1", "value1", { ttl: 1000, staleWhileRevalidate: 2000 });
-
-			vi.advanceTimersByTime(3500); // Outside stale window
-			const result = cache.get("key1");
-
-			expect(result).toBeNull();
-			const stats = cache.getStats();
-			expect(stats.misses).toBe(1);
 		});
 
 		it("should maintain backward compatibility with number TTL", () => {
@@ -370,89 +348,6 @@ describe("CacheManager", () => {
 			expect(cache.get("key1")).toBeNull(); // Should not cache error
 		});
 
-		it("should serve stale data and trigger background refresh", async () => {
-			const loader1 = vi.fn().mockResolvedValue("initial-value");
-			const loader2 = vi.fn().mockResolvedValue("refreshed-value");
-
-			// Initial load
-			await cache.wrap("key1", {
-				loader: loader1,
-				ttl: 1000,
-				staleWhileRevalidate: 2000,
-			});
-
-			// Move to stale period
-			vi.advanceTimersByTime(1500);
-
-			// Second call should return stale data immediately and refresh in background
-			const result = await cache.wrap("key1", { loader: loader2 });
-			expect(result).toBe("initial-value"); // Stale data returned
-
-			// Advance time to allow background refresh
-			vi.advanceTimersByTime(100);
-			await vi.runAllTimersAsync();
-
-			expect(loader2).toHaveBeenCalledTimes(1);
-		});
-
-		it("should retain stale data and retry after a failed background refresh", async () => {
-			cache.set("key1", "stale-value", {
-				ttl: 1000,
-				staleWhileRevalidate: 2000,
-			});
-			vi.advanceTimersByTime(1500);
-			const loader = vi
-				.fn()
-				.mockRejectedValueOnce(new Error("Refresh failed"))
-				.mockResolvedValueOnce("fresh-value");
-
-			await expect(cache.wrap("key1", { loader })).resolves.toBe("stale-value");
-			await vi.runAllTimersAsync();
-			expect(cache.get("key1")).toBe("stale-value");
-
-			await expect(cache.wrap("key1", { loader })).resolves.toBe("stale-value");
-			await vi.runAllTimersAsync();
-			expect(loader).toHaveBeenCalledTimes(2);
-			expect(cache.get("key1")).toBe("fresh-value");
-		});
-
-		it("should serve stale data when a background loader throws synchronously", async () => {
-			cache.set("key1", "stale-value", {
-				ttl: 1000,
-				staleWhileRevalidate: 2000,
-			});
-			vi.advanceTimersByTime(1500);
-			const loader = vi.fn(() => {
-				throw new Error("Synchronous failure");
-			});
-
-			await expect(cache.wrap("key1", { loader })).resolves.toBe("stale-value");
-			await vi.runAllTimersAsync();
-			await expect(cache.wrap("key1", { loader })).resolves.toBe("stale-value");
-			await vi.runAllTimersAsync();
-			expect(loader).toHaveBeenCalledTimes(2);
-			vi.advanceTimersByTime(1501);
-			expect(cache.get("key1")).toBeNull();
-		});
-
-		it("should apply cache options from wrap call", async () => {
-			const loader = vi.fn().mockResolvedValue("loaded-value");
-
-			await cache.wrap("key1", {
-				loader,
-				ttl: 500,
-				staleWhileRevalidate: 1000,
-			});
-
-			// Verify custom TTL
-			vi.advanceTimersByTime(400);
-			expect(cache.get("key1")).toBe("loaded-value");
-
-			vi.advanceTimersByTime(200); // Total 600ms, past TTL but within stale window
-			const staleResult = cache.get("key1");
-			expect(staleResult).toBe("loaded-value"); // Should return stale data
-		});
-
 		it("should clean up pending operations on completion", async () => {
 			const loader = vi.fn().mockResolvedValue("loaded-value");
 
@@ -465,107 +360,6 @@ describe("CacheManager", () => {
 			// Should use cached value, not call loader2
 			expect(loader2).not.toHaveBeenCalled();
 		});
-
-		it("should preserve existing TTL/SWR when options omitted in background refresh", async () => {
-			const loader1 = vi.fn().mockResolvedValue("initial-value");
-			const loader2 = vi.fn().mockResolvedValue("refreshed-value");
-
-			// Initial load with specific TTL/SWR
-			await cache.wrap("key1", {
-				loader: loader1,
-				ttl: 2000,
-				staleWhileRevalidate: 3000,
-			});
-
-			// Move to stale period
-			vi.advanceTimersByTime(2500);
-
-			// Background refresh with no TTL/SWR specified - should preserve original values
-			await cache.wrap("key1", { loader: loader2 });
-
-			// Advance time to allow background refresh
-			vi.advanceTimersByTime(100);
-			await vi.runAllTimersAsync();
-
-			// Now check if the refreshed entry still has the original TTL
-			vi.advanceTimersByTime(1800); // Should still be within original TTL (2000ms)
-			const result = cache.get("key1");
-			expect(result).toBe("refreshed-value");
-
-			// Move past original TTL but within stale window
-			vi.advanceTimersByTime(300); // Total 2300ms past refresh, should be in stale window
-			const staleResult = cache.get("key1");
-			expect(staleResult).toBe("refreshed-value"); // Should still be available due to preserved SWR
-
-			// Move beyond original TTL + stale window (5000ms) from the initial load to ensure expiry
-			vi.advanceTimersByTime(3000); // Total elapsed time ~7700ms from first load
-			await vi.runAllTimersAsync();
-			expect(cache.get("key1")).toBeNull(); // Entry should be expired after preserved TTL/SWR window
-		});
-	});
-
-	describe("Cleanup Enhancement", () => {
-		it("should update lastCleanup timestamp", () => {
-			const startTime = Date.now();
-			vi.advanceTimersByTime(1000);
-
-			cache.set("key1", "value1", 500);
-			vi.advanceTimersByTime(600);
-			cache.cleanup();
-
-			const stats = cache.getStats();
-			expect(stats.lastCleanup).toBeGreaterThan(startTime);
-		});
-
-		it("should include cleanup removals in eviction count", () => {
-			cache.set("key1", "value1", 500);
-			cache.set("key2", "value2", 1000);
-
-			vi.advanceTimersByTime(600);
-			const cleaned = cache.cleanup();
-
-			expect(cleaned).toBe(1);
-			const stats = cache.getStats();
-			expect(stats.evictions).toBe(1);
-			expect(cache.get("key1")).toBeNull();
-			expect(cache.get("key2")).toBe("value2");
-		});
-
-		it("should return zero when no cleanup needed", () => {
-			cache.set("key1", "value1", 5000);
-			const cleaned = cache.cleanup();
-
-			expect(cleaned).toBe(0);
-			const stats = cache.getStats();
-			expect(stats.evictions).toBe(0);
-		});
-
-		it("should provide detailed cleanup information", () => {
-			cache.set("key1", "value1", 500);
-			cache.set("key2", "value2", 1000);
-			cache.set("key3", "value3", 5000);
-
-			vi.advanceTimersByTime(600);
-			const result = cache.cleanupDetailed();
-
-			expect(result.cleaned).toBe(1);
-			expect(result.evictions).toBe(1);
-			expect(cache.get("key1")).toBeNull();
-			expect(cache.get("key2")).toBe("value2");
-			expect(cache.get("key3")).toBe("value3");
-		});
-
-		it("should maintain backward compatibility with cleanup() method", () => {
-			cache.set("key1", "value1", 500);
-			cache.set("key2", "value2", 1000);
-
-			vi.advanceTimersByTime(600);
-			const cleaned = cache.cleanup();
-
-			expect(cleaned).toBe(1); // Should still return number of cleaned entries
-			const stats = cache.getStats();
-			expect(stats.evictions).toBe(1);
-		});
 	});
 
 	describe("Constructor Options", () => {
@@ -574,22 +368,6 @@ describe("CacheManager", () => {
 
 			const stats = configuredCache.getStats();
 			expect(stats.maxEntries).toBe(5);
-		});
-
-		it("should use constructor option for stale window", () => {
-			const configuredCache = new CacheManager({ staleMs: 30000 });
-
-			configuredCache.set("key1", "value1", {
-				ttl: 1000,
-				staleWhileRevalidate: undefined,
-			});
-
-			// The default stale window should be used from option
-			vi.advanceTimersByTime(15000); // Within default stale window from option
-			expect(configuredCache.get("key1")).toBe("value1"); // Served as stale data
-
-			vi.advanceTimersByTime(16100); // Beyond stale window now (total 31100ms > 31000ms)
-			expect(configuredCache.get("key1")).toBeNull();
 		});
 
 		it("should use constructor option for default TTL", () => {
@@ -641,7 +419,6 @@ describe("CacheManager", () => {
 				hits: 1,
 				misses: 1,
 				evictions: 0,
-				lastCleanup: null,
 				maxEntries: 1000,
 				hitRate: 0.5,
 			});
@@ -659,21 +436,10 @@ describe("CacheManager", () => {
 			expect(stats.keys).toEqual(["key1", "key2"]);
 		});
 
-		it("should handle getEntriesForSizeEstimation correctly", () => {
-			cache.set("key1", "value1", 1000);
-			cache.set("key2", "value2", 2000);
-
-			vi.advanceTimersByTime(1500);
-
-			const entries = cache.getEntriesForSizeEstimation();
-			expect(entries).toHaveLength(1); // Only non-expired entry
-			expect(entries[0]![0]).toBe("key2");
-		});
-
 		it("should provide lightweight cache metadata without full entry data", () => {
 			cache.set("key1", "string-value", 1000);
 			cache.set("key2", { prop: "object" }, 2000);
-			cache.set("key3", 42, { ttl: 3000, staleWhileRevalidate: 1000 });
+			cache.set("key3", 42, 3000);
 
 			vi.advanceTimersByTime(1500); // key1 should be expired
 
@@ -686,7 +452,6 @@ describe("CacheManager", () => {
 				key: "key1",
 				timestamp: expect.any(Number),
 				ttl: 1000,
-				staleWhileRevalidate: undefined,
 				dataType: "string",
 				isExpired: true,
 			});
@@ -697,18 +462,15 @@ describe("CacheManager", () => {
 				key: "key2",
 				timestamp: expect.any(Number),
 				ttl: 2000,
-				staleWhileRevalidate: undefined,
 				dataType: "object",
 				isExpired: false,
 			});
 
-			// Check entry with staleWhileRevalidate
 			const key3Meta = metadata.find((m) => m.key === "key3");
 			expect(key3Meta).toEqual({
 				key: "key3",
 				timestamp: expect.any(Number),
 				ttl: 3000,
-				staleWhileRevalidate: 1000,
 				dataType: "number",
 				isExpired: false,
 			});
@@ -766,62 +528,7 @@ describe("CacheManager", () => {
 		});
 	});
 
-	describe("Prefix and Budget-based Deletion", () => {
-		describe("deleteByPrefix", () => {
-			it("should delete entries matching prefix and return count", () => {
-				cache.set("transactions:list:budget-123", "list");
-				cache.set("transactions:get:budget-123", "detail");
-				cache.set("accounts:list:budget-123", "accounts");
-
-				const removed = cache.deleteByPrefix("transactions:");
-				expect(removed).toBe(2);
-				expect(cache.getKeys()).toEqual(["accounts:list:budget-123"]);
-			});
-
-			it("should return 0 when no matches found", () => {
-				cache.set("accounts:list:budget-123", "accounts");
-				const removed = cache.deleteByPrefix("payments:");
-				expect(removed).toBe(0);
-				expect(cache.getKeys()).toEqual(["accounts:list:budget-123"]);
-			});
-
-			it("should handle empty prefix safely", () => {
-				cache.set("transactions:list:budget-123", "list");
-				cache.set("accounts:list:budget-123", "accounts");
-
-				const removed = cache.deleteByPrefix("");
-				expect(removed).toBe(0);
-				expect(cache.getKeys()).toEqual([
-					"transactions:list:budget-123",
-					"accounts:list:budget-123",
-				]);
-			});
-
-			it("should not delete when prefix only partially matches a resource's namespace", () => {
-				cache.set("transactions:list:budget-123", "list");
-				cache.set("accounts:list:budget-123", "accounts");
-
-				const removed = cache.deleteByPrefix("trans");
-				expect(removed).toBe(0);
-				expect(cache.getKeys()).toEqual([
-					"transactions:list:budget-123",
-					"accounts:list:budget-123",
-				]);
-			});
-
-			it("should not affect cache hit or miss counters", () => {
-				cache.set("transactions:list:budget-123", "list");
-				cache.set("transactions:list:budget-456", "list");
-
-				const before = cache.getStats();
-				cache.deleteByPrefix("transactions:");
-				const after = cache.getStats();
-
-				expect(after.hits).toBe(before.hits);
-				expect(after.misses).toBe(before.misses);
-			});
-		});
-
+	describe("Budget-based Deletion", () => {
 		describe("deleteByBudgetId", () => {
 			it("should delete entries containing the provided budget ID", () => {
 				cache.set("transactions:list:budget-123", "txn");
@@ -830,7 +537,7 @@ describe("CacheManager", () => {
 
 				const removed = cache.deleteByBudgetId("budget-123");
 				expect(removed).toBe(2);
-				expect(cache.getKeys()).toEqual(["transactions:list:budget-456"]);
+				expect(cache.getStats().keys).toEqual(["transactions:list:budget-456"]);
 			});
 
 			it("should return 0 when budget ID does not exist in cache", () => {
@@ -838,7 +545,7 @@ describe("CacheManager", () => {
 
 				const removed = cache.deleteByBudgetId("budget-999");
 				expect(removed).toBe(0);
-				expect(cache.getKeys()).toEqual(["transactions:list:budget-123"]);
+				expect(cache.getStats().keys).toEqual(["transactions:list:budget-123"]);
 			});
 
 			it("should not match budget IDs that are substrings of other IDs", () => {
@@ -847,7 +554,7 @@ describe("CacheManager", () => {
 
 				const removed = cache.deleteByBudgetId("budget-1");
 				expect(removed).toBe(0);
-				expect(cache.getKeys()).toEqual([
+				expect(cache.getStats().keys).toEqual([
 					"transactions:list:budget-123",
 					"transactions:list:budget-1234",
 				]);
@@ -861,7 +568,7 @@ describe("CacheManager", () => {
 
 				const removed = cache.deleteByBudgetId(uuid);
 				expect(removed).toBe(2);
-				expect(cache.getKeys()).toEqual(["transactions:list:budget-456"]);
+				expect(cache.getStats().keys).toEqual(["transactions:list:budget-456"]);
 			});
 
 			it("should not affect cache stats when deleting by budget ID", () => {
@@ -874,32 +581,6 @@ describe("CacheManager", () => {
 
 				expect(after.hits).toBe(before.hits);
 				expect(after.misses).toBe(before.misses);
-			});
-		});
-
-		describe("getKeys", () => {
-			it("should return an empty array when cache is empty", () => {
-				expect(cache.getKeys()).toEqual([]);
-			});
-
-			it("should return all cache keys", () => {
-				cache.set("accounts:list:budget-123", "acct");
-				cache.set("transactions:list:budget-123", "txn");
-				cache.set("payees:list:budget-123", "payees");
-
-				expect(cache.getKeys()).toEqual([
-					"accounts:list:budget-123",
-					"transactions:list:budget-123",
-					"payees:list:budget-123",
-				]);
-			});
-
-			it("should preserve insertion order of cache keys", () => {
-				cache.set("key-a", "a");
-				cache.set("key-b", "b");
-				cache.set("key-c", "c");
-
-				expect(cache.getKeys()).toEqual(["key-a", "key-b", "key-c"]);
 			});
 		});
 	});
@@ -929,13 +610,7 @@ describe("CacheManager", () => {
 });
 
 describe("cache invalidation while reads are pending", () => {
-	it.each([
-		"delete",
-		"deleteMany",
-		"deleteByPrefix",
-		"deleteByBudgetId",
-		"clear",
-	] as const)(
+	it.each(["delete", "deleteMany", "deleteByBudgetId", "clear"] as const)(
 		"%s rejects late publication without disrupting a newer read",
 		async (method) => {
 			const cache = new CacheManager();
@@ -954,9 +629,6 @@ describe("cache invalidation while reads are pending", () => {
 					break;
 				case "deleteMany":
 					cache.deleteMany([key]);
-					break;
-				case "deleteByPrefix":
-					cache.deleteByPrefix("accounts:get");
 					break;
 				case "deleteByBudgetId":
 					cache.deleteByBudgetId("budget-a");

@@ -386,7 +386,6 @@ describe("withTransactionPreflight", () => {
 			handler({
 				input: { budget_id: BUDGET, ...input },
 				context: {
-					accessToken: "t",
 					name: "ynab_create_transaction",
 					operation: "op",
 					rawArguments: {},

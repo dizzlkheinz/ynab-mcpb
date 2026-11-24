@@ -1,14 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { createErrorHandler, type ErrorHandler } from "./errorHandler.js";
-
-/**
- * Module-level fallback ErrorHandler for convenience functions and backward compatibility.
- * Uses a simple JSON formatter; callers that have access to the injected formatter
- * should pass their own ErrorHandler instance via the optional parameter.
- */
-const fallbackErrorHandler = createErrorHandler({
-	format: (value: unknown) => JSON.stringify(value, null, 2),
-});
+import { defaultErrorHandler, type ErrorHandler } from "./errorHandler.js";
 
 const FIXTURE_ID_PATTERN =
 	/^(test|budget|account|category|transaction|payee|mock)-[a-z0-9_-]+$/i;
@@ -76,7 +67,7 @@ export class BudgetResolver {
 
 			if (trimmed === "last-used") {
 				// "last-used" keyword is not currently supported
-				const eh = errorHandler ?? fallbackErrorHandler;
+				const eh = errorHandler ?? defaultErrorHandler;
 				return eh.createValidationError(
 					"Unsupported keyword",
 					'The "last-used" keyword is not supported yet. Please use a specific budget ID or set a default budget.',
@@ -152,7 +143,7 @@ export class BudgetResolver {
 1. Provide a specific budget_id parameter
 2. Set a default budget using the ynab_set_default_budget tool first`;
 
-		const eh = errorHandler ?? fallbackErrorHandler;
+		const eh = errorHandler ?? defaultErrorHandler;
 		return eh.createValidationError(
 			"No budget ID provided and no default budget set",
 			detailMessage,
@@ -181,57 +172,11 @@ Valid formats:
 
 You can use the ynab_list_budgets tool to see available budget IDs.`;
 
-		const eh = errorHandler ?? fallbackErrorHandler;
+		const eh = errorHandler ?? defaultErrorHandler;
 		return eh.createValidationError("Invalid budget ID format", detailMessage, [
 			"Use a valid UUID format (UUID v1-v5, e.g., 123e4567-e89b-12d3-a456-426614174000; standard UUID v4 format works as well)",
 			"Run the ynab_list_budgets tool to view available budget IDs",
 			'Use the special keyword "default" for convenience',
 		]);
-	}
-
-	/**
-	 * Convenience function that throws an error if budget resolution fails
-	 *
-	 * @param providedId - The budget ID provided by the user (optional)
-	 * @param defaultId - The default budget ID to fall back to (optional)
-	 * @returns The resolved budget ID string
-	 * @throws Error if resolution fails
-	 */
-	static resolveBudgetIdOrThrow(
-		providedId?: string,
-		defaultId?: string,
-	): string {
-		const result = BudgetResolver.resolveBudgetId(providedId, defaultId);
-		if (typeof result === "string") {
-			return result;
-		}
-
-		// Extract error message from CallToolResult for throwing
-		const errorText =
-			result.content?.[0]?.type === "text"
-				? result.content[0].text
-				: "Budget resolution failed";
-		throw new Error(errorText);
-	}
-
-	/**
-	 * Convenience function that validates budget ID and throws an error if validation fails
-	 *
-	 * @param budgetId - The budget ID to validate
-	 * @returns The validated budget ID string
-	 * @throws Error if validation fails
-	 */
-	static validateBudgetIdOrThrow(budgetId: string): string {
-		const result = BudgetResolver.validateBudgetId(budgetId);
-		if (typeof result === "string") {
-			return result;
-		}
-
-		// Extract error message from CallToolResult for throwing
-		const errorText =
-			result.content?.[0]?.type === "text"
-				? result.content[0].text
-				: "Budget validation failed";
-		throw new Error(errorText);
 	}
 }

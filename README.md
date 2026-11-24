@@ -2,6 +2,9 @@
 
 # YNAB MCP Server
 
+> [!NOTE]
+> **Maintenance status:** Active development has ended because the author no longer uses YNAB. The server and existing releases remain available as-is, and forks are welcome.
+
 **Talk to your YNAB budget from Claude, Codex, Cline or any MCP client.**
 
 [![Download MCPB](https://img.shields.io/badge/Download-MCPB-2563EB?style=for-the-badge&logo=github&logoColor=white)](https://github.com/dizzlkheinz/ynab-mcpb/releases/latest)
@@ -147,7 +150,7 @@ npm test && npm run test:integration   # offline; no token needed
 
 To run it against your budget, copy `.env.example` to `.env`, add your token and run
 `npm start`. See [AGENTS.md](AGENTS.md) for architecture, conventions and the full command list.
-Bug reports and PRs are welcome.
+This repository is no longer actively maintained; forks are welcome.
 
 ## License
 

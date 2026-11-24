@@ -1,15 +1,15 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import { CacheKeys } from "../server/cacheKeys.js";
 import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
-import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../server/errorHandler.js";
 import {
 	formatPayeeDetail,
 	formatPayeesList,
 } from "../server/markdownFormatter.js";
-import { responseFormatter } from "../server/responseFormatter.js";
-import { withToolErrorHandling } from "../types/index.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import {
 	createAdapters,
@@ -104,20 +104,20 @@ export async function handleListPayees(
 						text:
 							fmt === "markdown"
 								? formatPayeesList(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:list_payees",
+		"ynab_list_payees",
 		"listing payees",
 		errorHandler,
 	);
 }
 
 /**
- * Handles the ynab:get_payee tool call
+ * Handles the ynab_get_payee tool call
  * Gets detailed information for a specific payee
  */
 export async function handleGetPayee(
@@ -132,7 +132,7 @@ export async function handleGetPayee(
 			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Use enhanced CacheManager wrap method
 			const cacheKey = CacheManager.generateKey(
-				CacheKeys.PAYEES,
+				"payees",
 				"get",
 				budgetId,
 				params.payee_id,
@@ -169,13 +169,13 @@ export async function handleGetPayee(
 						text:
 							fmt === "markdown"
 								? formatPayeeDetail(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:get_payee",
+		"ynab_get_payee",
 		"getting payee details",
 		errorHandler,
 	);

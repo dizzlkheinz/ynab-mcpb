@@ -2,19 +2,25 @@
  * ISO date (YYYY-MM-DD) validation and formatting for YNAB MCP Server
  */
 
-import { format, isValid, parse } from "date-fns";
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
- * Validates if a string is in YYYY-MM-DD format
- * @param dateString The string to validate
- * @returns True if valid ISO date format
+ * Validates if a string is in YYYY-MM-DD format and represents a real calendar date.
  */
 export function isValidISODate(dateString: string): boolean {
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+	const match = ISO_DATE_PATTERN.exec(dateString);
+	if (!match) {
 		return false;
 	}
-	const parsed = parse(dateString, "yyyy-MM-dd", new Date());
-	return isValid(parsed);
+	const year = Number(match[1]);
+	const month = Number(match[2]);
+	const day = Number(match[3]);
+	const parsed = new Date(Date.UTC(year, month - 1, day));
+	return (
+		parsed.getUTCFullYear() === year &&
+		parsed.getUTCMonth() === month - 1 &&
+		parsed.getUTCDate() === day
+	);
 }
 
 /**
@@ -45,5 +51,8 @@ export function isDateInRange(
  * defaults, where the user's calendar date matters rather than UTC's.
  */
 export function formatLocalISODate(date: Date): string {
-	return format(date, "yyyy-MM-dd");
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
 }

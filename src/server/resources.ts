@@ -13,12 +13,6 @@ import {
 	type ResourceContents,
 } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
-import {
-	getBudgetByIdCompat,
-	getMonthCompat,
-	listBudgetsCompat,
-	listMonthsCompat,
-} from "../utils/ynabApiCompat.js";
 import { CACHE_TTLS, CacheManager } from "./cacheManager.js";
 
 /**
@@ -27,13 +21,6 @@ import { CACHE_TTLS, CacheManager } from "./cacheManager.js";
  * @see https://www.jsonrpc.org/specification#error_object
  */
 const RESOURCE_NOT_FOUND_ERROR_CODE = -32002;
-
-/**
- * Response formatter interface to avoid direct dependency on concrete implementation
- */
-interface ResponseFormatter {
-	format(data: unknown): string;
-}
 
 /**
  * Resource handler function signature
@@ -85,7 +72,6 @@ export interface ResourceTemplateDefinition extends MCPResourceTemplate {
  */
 export interface ResourceDependencies {
 	ynabAPI: ynab.API;
-	responseFormatter: ResponseFormatter;
 	cacheManager: CacheManager;
 }
 
@@ -93,17 +79,14 @@ export interface ResourceDependencies {
  * Default resource handlers
  */
 const defaultResourceHandlers: Record<string, ResourceHandler> = {
-	"ynab://budgets": async (
-		uri,
-		{ ynabAPI, responseFormatter, cacheManager },
-	) => {
+	"ynab://budgets": async (uri, { ynabAPI, cacheManager }) => {
 		const cacheKey = CacheManager.generateKey("resources", "budgets", "list");
 		return cacheManager.wrap<ResourceContents[]>(cacheKey, {
 			ttl: CACHE_TTLS.BUDGETS,
 			loader: async () => {
 				try {
-					const response = await listBudgetsCompat(ynabAPI);
-					const budgets = response.budgets.map((budget) => ({
+					const response = await ynabAPI.plans.getPlans();
+					const budgets = response.data.plans.map((budget) => ({
 						id: budget.id,
 						name: budget.name,
 						last_modified_on: budget.last_modified_on,
@@ -116,7 +99,7 @@ const defaultResourceHandlers: Record<string, ResourceHandler> = {
 						{
 							uri: uri,
 							mimeType: "application/json",
-							text: responseFormatter.format({ budgets }),
+							text: JSON.stringify({ budgets }, null, 2),
 						},
 					];
 				} catch (error) {
@@ -128,7 +111,7 @@ const defaultResourceHandlers: Record<string, ResourceHandler> = {
 		});
 	},
 
-	"ynab://user": async (uri, { ynabAPI, responseFormatter, cacheManager }) => {
+	"ynab://user": async (uri, { ynabAPI, cacheManager }) => {
 		const cacheKey = CacheManager.generateKey("resources", "user");
 		return cacheManager.wrap<ResourceContents[]>(cacheKey, {
 			ttl: CACHE_TTLS.USER_INFO,
@@ -144,7 +127,7 @@ const defaultResourceHandlers: Record<string, ResourceHandler> = {
 						{
 							uri: uri,
 							mimeType: "application/json",
-							text: responseFormatter.format({ user }),
+							text: JSON.stringify({ user }, null, 2),
 						},
 					];
 				} catch (error) {
@@ -171,7 +154,7 @@ const defaultResourceDefinitions: ResourceDefinition[] = [
 	{
 		uri: "ynab://user",
 		name: "YNAB User Info",
-		description: "Current user information including ID and email address",
+		description: "Current authenticated user information",
 		mimeType: "application/json",
 		annotations: { audience: ["assistant"], priority: 0.3 },
 	},
@@ -187,11 +170,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		description: "Detailed information for a specific budget",
 		mimeType: "application/json",
 		annotations: { audience: ["assistant"], priority: 0.7 },
-		handler: async (
-			uri,
-			params,
-			{ ynabAPI, responseFormatter, cacheManager },
-		) => {
+		handler: async (uri, params, { ynabAPI, cacheManager }) => {
 			const budgetId = params["budget_id"];
 			if (!budgetId) {
 				throw new McpError(
@@ -209,12 +188,12 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				ttl: CACHE_TTLS.BUDGETS,
 				loader: async () => {
 					try {
-						const budget = await getBudgetByIdCompat(ynabAPI, budgetId);
+						const response = await ynabAPI.plans.getPlanById(budgetId);
 						return [
 							{
 								uri,
 								mimeType: "application/json",
-								text: responseFormatter.format(budget),
+								text: JSON.stringify(response.data.plan, null, 2),
 							},
 						];
 					} catch (error) {
@@ -232,11 +211,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		description: "List of accounts for a specific budget",
 		mimeType: "application/json",
 		annotations: { audience: ["assistant"], priority: 0.7 },
-		handler: async (
-			uri,
-			params,
-			{ ynabAPI, responseFormatter, cacheManager },
-		) => {
+		handler: async (uri, params, { ynabAPI, cacheManager }) => {
 			const budgetId = params["budget_id"];
 			if (!budgetId) {
 				throw new McpError(
@@ -259,7 +234,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 							{
 								uri,
 								mimeType: "application/json",
-								text: responseFormatter.format(response.data.accounts),
+								text: JSON.stringify(response.data.accounts, null, 2),
 							},
 						];
 					} catch (error) {
@@ -279,11 +254,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		description: "Flattened list of all categories for a specific budget",
 		mimeType: "application/json",
 		annotations: { audience: ["assistant"], priority: 0.6 },
-		handler: async (
-			uri,
-			params,
-			{ ynabAPI, responseFormatter, cacheManager },
-		) => {
+		handler: async (uri, params, { ynabAPI, cacheManager }) => {
 			const budgetId = params["budget_id"];
 			if (!budgetId) {
 				throw new McpError(
@@ -322,7 +293,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 							{
 								uri,
 								mimeType: "application/json",
-								text: responseFormatter.format({ categories }),
+								text: JSON.stringify({ categories }, null, 2),
 							},
 						];
 					} catch (error) {
@@ -342,11 +313,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		description: "List of month summaries for a specific budget",
 		mimeType: "application/json",
 		annotations: { audience: ["assistant"], priority: 0.5 },
-		handler: async (
-			uri,
-			params,
-			{ ynabAPI, responseFormatter, cacheManager },
-		) => {
+		handler: async (uri, params, { ynabAPI, cacheManager }) => {
 			const budgetId = params["budget_id"];
 			if (!budgetId) {
 				throw new McpError(
@@ -364,14 +331,12 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
 					try {
-						const response = await listMonthsCompat(ynabAPI, budgetId);
+						const response = await ynabAPI.months.getPlanMonths(budgetId);
 						return [
 							{
 								uri,
 								mimeType: "application/json",
-								text: responseFormatter.format({
-									months: response.months,
-								}),
+								text: JSON.stringify({ months: response.data.months }, null, 2),
 							},
 						];
 					} catch (error) {
@@ -392,11 +357,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 			"Detailed budget data for a specific month (month = YYYY-MM-DD first of month)",
 		mimeType: "application/json",
 		annotations: { audience: ["assistant"], priority: 0.5 },
-		handler: async (
-			uri,
-			params,
-			{ ynabAPI, responseFormatter, cacheManager },
-		) => {
+		handler: async (uri, params, { ynabAPI, cacheManager }) => {
 			const budgetId = params["budget_id"];
 			const month = params["month"];
 			if (!budgetId) {
@@ -419,12 +380,12 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 				ttl: CACHE_TTLS.MONTHS,
 				loader: async () => {
 					try {
-						const monthDetail = await getMonthCompat(ynabAPI, budgetId, month);
+						const response = await ynabAPI.months.getPlanMonth(budgetId, month);
 						return [
 							{
 								uri,
 								mimeType: "application/json",
-								text: responseFormatter.format(monthDetail),
+								text: JSON.stringify(response.data.month, null, 2),
 							},
 						];
 					} catch (error) {
@@ -444,11 +405,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 		description: "Detailed information for a specific account within a budget",
 		mimeType: "application/json",
 		annotations: { audience: ["assistant"], priority: 0.6 },
-		handler: async (
-			uri,
-			params,
-			{ ynabAPI, responseFormatter, cacheManager },
-		) => {
+		handler: async (uri, params, { ynabAPI, cacheManager }) => {
 			const budgetId = params["budget_id"];
 			const accountId = params["account_id"];
 			if (!budgetId) {
@@ -482,7 +439,7 @@ const defaultResourceTemplates: ResourceTemplateDefinition[] = [
 							{
 								uri,
 								mimeType: "application/json",
-								text: responseFormatter.format(response.data.account),
+								text: JSON.stringify(response.data.account, null, 2),
 							},
 						];
 					} catch (error) {

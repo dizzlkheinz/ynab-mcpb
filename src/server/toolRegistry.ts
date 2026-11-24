@@ -1,21 +1,10 @@
 import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
-import { toJSONSchema, z } from "zod/v4";
+import { toJSONSchema, type z } from "zod/v4";
 import { fromZodError } from "zod-validation-error";
 import type { MCPToolAnnotations } from "../types/toolAnnotations.js";
+import { globalRequestLogger, type RequestLogger } from "./requestLogger.js";
 import { type ToolProfile, toolBelongsToProfile } from "./toolProfiles.js";
 import type { ConfirmationResult, WriteSafetyPolicy } from "./writeSafety.js";
-
-export type SecurityWrapperFactory = <T extends Record<string, unknown>>(
-	namespace: string,
-	operation: string,
-	schema: z.ZodSchema<T>,
-) => (
-	accessToken: string,
-) => (
-	params: Record<string, unknown>,
-) => (
-	handler: (validated: T) => Promise<CallToolResult>,
-) => Promise<CallToolResult>;
 
 export interface ErrorHandlerContract {
 	handleError(error: unknown, context: string): CallToolResult;
@@ -26,19 +15,8 @@ export interface ErrorHandlerContract {
 	): CallToolResult;
 }
 
-export interface ResponseFormatterContract {
-	format(value: unknown): string;
-}
-
-export interface ToolRegistryCacheHelpers {
-	generateKey?: (...segments: unknown[]) => string;
-	invalidate?: (key: string) => void | Promise<void>;
-	clear?: () => void | Promise<void>;
-}
-
 export interface DefaultArgumentResolverContext {
 	name: string;
-	accessToken: string;
 	rawArguments: Record<string, unknown>;
 }
 export class DefaultArgumentResolutionError extends Error {
@@ -58,7 +36,6 @@ export interface ToolSecurityOptions {
 }
 
 export interface ToolMetadataOptions {
-	inputJsonSchema?: Record<string, unknown>;
 	annotations?: MCPToolAnnotations;
 	writeSafety?: {
 		mutation: true;
@@ -67,11 +44,9 @@ export interface ToolMetadataOptions {
 }
 
 export interface ToolExecutionContext {
-	accessToken: string;
 	name: string;
 	operation: string;
 	rawArguments: Record<string, unknown>;
-	cache?: ToolRegistryCacheHelpers;
 	/**
 	 * True when this write executes a request already previewed and confirmed
 	 * with a token, so checks the preview ran need not run again. Set only by
@@ -149,16 +124,12 @@ const CONFIRMATION_REJECTION_DETAILS: Record<
 
 export interface ToolExecutionOptions {
 	name: string;
-	accessToken: string;
 	arguments?: Record<string, unknown>;
 }
 
 export interface ToolRegistryDependencies {
-	withSecurityWrapper: SecurityWrapperFactory;
 	errorHandler: ErrorHandlerContract;
-	responseFormatter: ResponseFormatterContract;
-	cacheHelpers?: ToolRegistryCacheHelpers;
-	validateAccessToken?: (token: string) => Promise<void> | void;
+	requestLogger?: Pick<RequestLogger, "logSuccess" | "logError">;
 	writeSafetyPolicy?: WriteSafetyPolicy;
 	toolProfile?: ToolProfile;
 }
@@ -227,8 +198,7 @@ export class ToolRegistry {
 	listTools(): Tool[] {
 		return Array.from(this.tools.values()).map((tool) => {
 			let inputSchema = this.ensureRootObjectJsonSchema(
-				(tool.metadata?.inputJsonSchema as Tool["inputSchema"] | undefined) ??
-					(this.generateJsonSchema(tool.inputSchema) as Tool["inputSchema"]),
+				this.generateJsonSchema(tool.inputSchema),
 				"input",
 				tool.name,
 			) as Tool["inputSchema"];
@@ -298,11 +268,6 @@ export class ToolRegistry {
 			);
 		}
 
-		const authFailure = await this.authenticate(tool, options.accessToken);
-		if (authFailure) {
-			return authFailure;
-		}
-
 		const policy = this.confirmationPolicyFor(tool);
 		const providedArguments = { ...(options.arguments ?? {}) };
 		const confirmationToken = this.extractConfirmationToken(
@@ -316,7 +281,6 @@ export class ToolRegistry {
 
 		const defaults = await this.resolveDefaultArguments(
 			tool,
-			options.accessToken,
 			providedArguments,
 		);
 		if (!defaults.ok) {
@@ -328,48 +292,56 @@ export class ToolRegistry {
 			...providedArguments,
 		};
 
-		try {
-			const secured = this.deps.withSecurityWrapper(
-				tool.security.namespace,
-				tool.security.operation,
-				tool.inputSchema,
-			)(options.accessToken)(rawArguments);
-
-			return await secured((validated) =>
-				this.runValidated(
-					tool,
-					policy,
-					options,
-					rawArguments,
-					validated,
-					confirmationToken.value,
-				),
-			);
-		} catch (securityError) {
-			return this.normalizeSecurityError(securityError, tool);
-		}
+		return this.validateAndExecute(
+			tool,
+			policy,
+			rawArguments,
+			confirmationToken.value,
+		);
 	}
 
-	/** Returns the error result when authentication fails, otherwise undefined. */
-	private async authenticate(
+	private async validateAndExecute(
 		tool: AnyRegisteredTool,
-		accessToken: string,
-	): Promise<CallToolResult | undefined> {
-		if (!this.deps.validateAccessToken) {
-			return undefined;
-		}
-		try {
-			await this.deps.validateAccessToken(accessToken);
-			return undefined;
-		} catch (error) {
-			if (this.isCallToolResult(error)) {
-				return error;
-			}
-			return this.deps.errorHandler.handleError(
-				error,
-				`authenticating ${tool.name}`,
+		policy: WriteSafetyPolicy | undefined,
+		rawArguments: Record<string, unknown>,
+		confirmationToken: string | undefined,
+	): Promise<CallToolResult> {
+		const logger = this.deps.requestLogger ?? globalRequestLogger;
+		const startTime = Date.now();
+		const parsed = tool.inputSchema.safeParse(rawArguments);
+		if (!parsed.success) {
+			const message = `Validation failed: ${fromZodError(parsed.error).message}`;
+			logger.logError(
+				tool.name,
+				tool.security.operation,
+				message,
+				Date.now() - startTime,
+			);
+			return this.deps.errorHandler.createValidationError(
+				`Invalid parameters for ${tool.name}`,
+				message,
 			);
 		}
+
+		const result = await this.runValidated(
+			tool,
+			policy,
+			rawArguments,
+			parsed.data,
+			confirmationToken,
+		);
+		const duration = Date.now() - startTime;
+		if (result.isError) {
+			logger.logError(
+				tool.name,
+				tool.security.operation,
+				"Tool returned an error",
+				duration,
+			);
+		} else {
+			logger.logSuccess(tool.name, tool.security.operation, duration);
+		}
+		return result;
 	}
 
 	/**
@@ -421,7 +393,6 @@ export class ToolRegistry {
 
 	private async resolveDefaultArguments(
 		tool: AnyRegisteredTool,
-		accessToken: string,
 		providedArguments: Record<string, unknown>,
 	): Promise<ExecutionStep<Partial<Record<string, unknown>> | undefined>> {
 		if (!tool.defaultArgumentResolver) {
@@ -430,7 +401,6 @@ export class ToolRegistry {
 		try {
 			const value = await tool.defaultArgumentResolver({
 				name: tool.name,
-				accessToken,
 				rawArguments: providedArguments,
 			});
 			return { ok: true, value };
@@ -455,19 +425,13 @@ export class ToolRegistry {
 
 	private buildExecutionContext(
 		tool: AnyRegisteredTool,
-		options: ToolExecutionOptions,
 		rawArguments: Record<string, unknown>,
 	): ToolExecutionContext {
-		const context: ToolExecutionContext = {
-			accessToken: options.accessToken,
+		return {
 			name: tool.name,
 			operation: tool.security.operation,
 			rawArguments,
 		};
-		if (this.deps.cacheHelpers) {
-			context.cache = this.deps.cacheHelpers;
-		}
-		return context;
 	}
 
 	/**
@@ -479,13 +443,12 @@ export class ToolRegistry {
 	private async runValidated(
 		tool: AnyRegisteredTool,
 		policy: WriteSafetyPolicy | undefined,
-		options: ToolExecutionOptions,
 		rawArguments: Record<string, unknown>,
 		validated: Record<string, unknown>,
 		confirmationToken: string | undefined,
 	): Promise<CallToolResult> {
 		try {
-			const context = this.buildExecutionContext(tool, options, rawArguments);
+			const context = this.buildExecutionContext(tool, rawArguments);
 			if (!policy) {
 				// Without confirmation (enabled mode), a mutation that is not a dry
 				// run writes straight to YNAB.
@@ -660,28 +623,6 @@ export class ToolRegistry {
 		);
 	}
 
-	private normalizeSecurityError(
-		error: unknown,
-		tool: AnyRegisteredTool,
-	): CallToolResult {
-		if (error instanceof z.ZodError) {
-			const validationError = fromZodError(error);
-			return this.deps.errorHandler.createValidationError(
-				`Invalid parameters for ${tool.name}`,
-				validationError.message,
-			);
-		}
-
-		if (error instanceof Error && error.message.includes("Validation failed")) {
-			return this.deps.errorHandler.createValidationError(
-				`Invalid parameters for ${tool.name}`,
-				error.message,
-			);
-		}
-
-		return this.deps.errorHandler.handleError(error, `executing ${tool.name}`);
-	}
-
 	/**
 	 * Regex pattern for MCP-compliant tool names.
 	 * Tool names SHOULD be 1-128 chars, case-sensitive, only [a-zA-Z0-9_.-]
@@ -761,9 +702,7 @@ export class ToolRegistry {
 		definition: ToolDefinition<TInput, TOutput>,
 		propertyName: string,
 	): boolean {
-		const schema =
-			definition.metadata?.inputJsonSchema ??
-			this.generateJsonSchema(definition.inputSchema);
+		const schema = this.generateJsonSchema(definition.inputSchema);
 		const properties = schema["properties"];
 		return (
 			typeof properties === "object" &&

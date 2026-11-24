@@ -62,7 +62,7 @@ describe("DeltaFetcher", () => {
 			data: { months: [], server_knowledge: 0 },
 		});
 		(mockYnabAPI.plans.getPlans as unknown as Mock).mockResolvedValue({
-			data: { budgets: [], server_knowledge: 0 },
+			data: { plans: [], server_knowledge: 0 },
 		});
 	});
 
@@ -272,65 +272,5 @@ describe("DeltaFetcher", () => {
 			.calls[0]![2];
 		await fetcherFn();
 		expect(mockYnabAPI.plans.getPlans).toHaveBeenCalledWith();
-	});
-
-	it("fetchAccountsFull bypasses cache and filters deleted accounts", async () => {
-		const fetcher = new DeltaFetcher(
-			mockYnabAPI,
-			mockDeltaCache as unknown as DeltaCache,
-		);
-		(mockYnabAPI.accounts.getAccounts as unknown as Mock).mockResolvedValue({
-			data: {
-				accounts: [
-					{ id: "acct-1", deleted: false },
-					{ id: "acct-2", deleted: true },
-				],
-				server_knowledge: 12,
-			},
-		});
-
-		const result = await fetcher.fetchAccountsFull("budget-x");
-
-		expect(mockYnabAPI.accounts.getAccounts).toHaveBeenCalledWith("budget-x");
-		expect(result).toEqual({
-			data: [{ id: "acct-1", deleted: false }],
-			wasCached: false,
-			usedDelta: false,
-			serverKnowledge: 12,
-		});
-	});
-
-	it("fetchTransactionsByAccountFull bypasses delta cache", async () => {
-		const fetcher = new DeltaFetcher(
-			mockYnabAPI,
-			mockDeltaCache as unknown as DeltaCache,
-		);
-		(
-			mockYnabAPI.transactions.getTransactionsByAccount as unknown as Mock
-		).mockResolvedValue({
-			data: {
-				transactions: [
-					{ id: "tx-1", deleted: false },
-					{ id: "tx-2", deleted: true },
-				],
-				server_knowledge: 55,
-			},
-		});
-
-		const result = await fetcher.fetchTransactionsByAccountFull(
-			"budget-x",
-			"acct-1",
-			"2024-03-01",
-		);
-
-		expect(
-			mockYnabAPI.transactions.getTransactionsByAccount,
-		).toHaveBeenCalledWith("budget-x", "acct-1", "2024-03-01");
-		expect(result).toEqual({
-			data: [{ id: "tx-1", deleted: false }],
-			wasCached: false,
-			usedDelta: false,
-			serverKnowledge: 55,
-		});
 	});
 });

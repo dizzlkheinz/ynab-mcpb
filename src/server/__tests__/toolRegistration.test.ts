@@ -282,7 +282,6 @@ describe("Tool Registration", () => {
 
 			const resolved = listAccounts?.defaultArgumentResolver?.({
 				name: "ynab_list_accounts",
-				accessToken: "token",
 				rawArguments: {},
 			});
 

@@ -10,7 +10,6 @@ import {
 	YNABErrorCode,
 } from "../../server/errorHandler.js";
 import { globalRequestLogger } from "../../server/requestLogger.js";
-import { responseFormatter } from "../../server/responseFormatter.js";
 import type {
 	BulkCreateResponse,
 	BulkTransactionInput,
@@ -28,11 +27,6 @@ import {
 	toCorrelationPayload,
 } from "../transactionUtils.js";
 
-// Spy on the real formatter and logger; the formatter renders plain JSON so tests can
-// assert the payload, and the logger stays quiet.
-vi.spyOn(responseFormatter, "format").mockImplementation((data) =>
-	JSON.stringify(data),
-);
 vi.spyOn(globalRequestLogger, "logError").mockImplementation(() => undefined);
 
 describe("transactionUtils", () => {
@@ -934,6 +928,14 @@ describe("transactionUtils", () => {
 			vi.clearAllMocks();
 		});
 
+		const errorTextOf = (result: ReturnType<typeof handleTransactionError>) => {
+			const item = result.content[0];
+			if (item?.type !== "text") {
+				throw new Error("Expected text content");
+			}
+			return JSON.parse(item.text);
+		};
+
 		it("should return default message for unknown error", () => {
 			const result = handleTransactionError(
 				new Error("Unknown error"),
@@ -941,31 +943,34 @@ describe("transactionUtils", () => {
 			);
 			expect(result.isError).toBe(true);
 			expect(result.content[0]!.type).toBe("text");
-			expect(responseFormatter.format).toHaveBeenCalledWith({
+			expect(errorTextOf(result)).toEqual({
 				error: { message: "Default message" },
 			});
 		});
 
 		it("should handle 401 Unauthorized error", () => {
 			const error = new Error("401 Unauthorized: Invalid token");
-			handleTransactionError(error, "Default message");
-			expect(responseFormatter.format).toHaveBeenCalledWith({
+			const result = handleTransactionError(error, "Default message");
+			expect(result.isError).toBe(true);
+			expect(errorTextOf(result)).toEqual({
 				error: { message: "Invalid or expired YNAB access token" },
 			});
 		});
 
 		it("should handle 403 Forbidden error", () => {
 			const error = new Error("403 Forbidden");
-			handleTransactionError(error, "Default message");
-			expect(responseFormatter.format).toHaveBeenCalledWith({
+			const result = handleTransactionError(error, "Default message");
+			expect(result.isError).toBe(true);
+			expect(errorTextOf(result)).toEqual({
 				error: { message: "Insufficient permissions to access YNAB data" },
 			});
 		});
 
 		it("should handle 404 Not Found error", () => {
 			const error = new Error("404 Not Found");
-			handleTransactionError(error, "Default message");
-			expect(responseFormatter.format).toHaveBeenCalledWith({
+			const result = handleTransactionError(error, "Default message");
+			expect(result.isError).toBe(true);
+			expect(errorTextOf(result)).toEqual({
 				error: {
 					message: "Budget, account, category, or transaction not found",
 				},
@@ -974,45 +979,50 @@ describe("transactionUtils", () => {
 
 		it("should handle 429 Rate Limit error", () => {
 			const error = new Error("429 Too Many Requests");
-			handleTransactionError(error, "Default message");
-			expect(responseFormatter.format).toHaveBeenCalledWith({
+			const result = handleTransactionError(error, "Default message");
+			expect(result.isError).toBe(true);
+			expect(errorTextOf(result)).toEqual({
 				error: { message: "Rate limit exceeded. Please try again later" },
 			});
 		});
 
 		it("should handle 500 Internal Server Error", () => {
 			const error = new Error("500 Internal Server Error");
-			handleTransactionError(error, "Default message");
-			expect(responseFormatter.format).toHaveBeenCalledWith({
+			const result = handleTransactionError(error, "Default message");
+			expect(result.isError).toBe(true);
+			expect(errorTextOf(result)).toEqual({
 				error: { message: "YNAB service is currently unavailable" },
 			});
 		});
 
 		it('should handle error with "Unauthorized" keyword', () => {
 			const error = new Error("Request failed: Unauthorized access");
-			handleTransactionError(error, "Default message");
-			expect(responseFormatter.format).toHaveBeenCalledWith({
+			const result = handleTransactionError(error, "Default message");
+			expect(result.isError).toBe(true);
+			expect(errorTextOf(result)).toEqual({
 				error: { message: "Invalid or expired YNAB access token" },
 			});
 		});
 
 		it("should handle non-Error objects", () => {
-			handleTransactionError("string error", "Default message");
-			expect(responseFormatter.format).toHaveBeenCalledWith({
+			const result = handleTransactionError("string error", "Default message");
+			expect(result.isError).toBe(true);
+			expect(errorTextOf(result)).toEqual({
 				error: { message: "Default message" },
 			});
 		});
 
 		it("should handle null error", () => {
-			handleTransactionError(null, "Default message");
-			expect(responseFormatter.format).toHaveBeenCalledWith({
+			const result = handleTransactionError(null, "Default message");
+			expect(result.isError).toBe(true);
+			expect(errorTextOf(result)).toEqual({
 				error: { message: "Default message" },
 			});
 		});
 
 		it("delegates to the centralized error handler with transaction context", () => {
-			const format = vi.fn(() => "formatted error");
-			const errorHandler = new ErrorHandler({ format });
+			const errorHandler = new ErrorHandler();
+			const handleSpy = vi.spyOn(errorHandler, "handleError");
 
 			const result = handleTransactionError(
 				new YNABAPIError(YNABErrorCode.NOT_FOUND, "Missing"),
@@ -1021,11 +1031,9 @@ describe("transactionUtils", () => {
 				"updating transaction",
 			);
 
-			expect(result).toMatchObject({
-				isError: true,
-				content: [{ type: "text", text: "formatted error" }],
-			});
-			expect(format).toHaveBeenCalledWith({
+			expect(handleSpy).toHaveBeenCalledOnce();
+			expect(result.isError).toBe(true);
+			expect(errorTextOf(result)).toEqual({
 				error: expect.objectContaining({
 					code: YNABErrorCode.NOT_FOUND,
 					message: "Budget, account, category, or transaction not found",

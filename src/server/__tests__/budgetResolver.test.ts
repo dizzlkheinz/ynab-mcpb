@@ -293,46 +293,6 @@ describe("BudgetResolver", () => {
 		});
 	});
 
-	describe("convenience throw functions", () => {
-		describe("resolveBudgetIdOrThrow", () => {
-			it("should return valid budget ID when successful", () => {
-				const result = BudgetResolver.resolveBudgetIdOrThrow(validUuid);
-				expect(result).toBe(validUuid);
-			});
-
-			it("should throw error when resolution fails", () => {
-				expect(() => {
-					BudgetResolver.resolveBudgetIdOrThrow(invalidUuid);
-				}).toThrow();
-			});
-
-			it("should throw error when no budget provided and no default", () => {
-				expect(() => {
-					BudgetResolver.resolveBudgetIdOrThrow();
-				}).toThrow("No budget ID provided and no default budget set");
-			});
-		});
-
-		describe("validateBudgetIdOrThrow", () => {
-			it("should return valid budget ID when successful", () => {
-				const result = BudgetResolver.validateBudgetIdOrThrow(validUuid);
-				expect(result).toBe(validUuid);
-			});
-
-			it("should throw error when validation fails", () => {
-				expect(() => {
-					BudgetResolver.validateBudgetIdOrThrow(invalidUuid);
-				}).toThrow();
-			});
-
-			it("should throw error for empty string", () => {
-				expect(() => {
-					BudgetResolver.validateBudgetIdOrThrow("");
-				}).toThrow();
-			});
-		});
-	});
-
 	describe("error creation functions", () => {
 		describe("createMissingBudgetError", () => {
 			it("should create standardized missing budget error", () => {
@@ -412,7 +372,7 @@ describe("BudgetResolver", () => {
 			expect(result.content).toBeDefined();
 			expect(result.content?.[0]?.type).toBe("text");
 
-			// The text should be JSON formatted since ErrorHandler uses responseFormatter
+			// The text should be JSON formatted by ErrorHandler
 			const errorText = (result.content?.[0] as any)?.text;
 			expect(() => JSON.parse(errorText)).not.toThrow();
 

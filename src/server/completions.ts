@@ -5,7 +5,6 @@
  */
 
 import type * as ynab from "ynab";
-import { listBudgetsCompat } from "../utils/ynabApiCompat.js";
 import type { CacheManager } from "./cacheManager.js";
 import { CACHE_TTLS } from "./cacheManager.js";
 
@@ -94,8 +93,8 @@ export class CompletionsManager {
 		const budgets = await this.cacheManager.wrap("completions:budgets", {
 			ttl: CACHE_TTLS.BUDGETS,
 			loader: async () => {
-				const response = await listBudgetsCompat(this.ynabAPI);
-				return response.budgets.map((b) => ({
+				const response = await this.ynabAPI.plans.getPlans();
+				return response.data.plans.map((b) => ({
 					id: b.id,
 					name: b.name,
 				}));

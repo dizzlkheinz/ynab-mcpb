@@ -20,11 +20,6 @@ const mockYnabAPI = {
 	},
 } as unknown as ynab.API;
 
-// Mock response formatter
-const mockResponseFormatter = {
-	format: vi.fn((data) => JSON.stringify(data)),
-};
-
 const mockCacheManager = {
 	wrap: vi.fn(async (_key, { loader }) => loader()),
 } as unknown as CacheManager;
@@ -38,7 +33,6 @@ describe("resources module", () => {
 
 		dependencies = {
 			ynabAPI: mockYnabAPI,
-			responseFormatter: mockResponseFormatter,
 			cacheManager: mockCacheManager,
 		};
 
@@ -68,8 +62,7 @@ describe("resources module", () => {
 						{
 							uri: "ynab://user",
 							name: "YNAB User Info",
-							description:
-								"Current user information including ID and email address",
+							description: "Current authenticated user information",
 							mimeType: "application/json",
 							annotations: { audience: ["assistant"], priority: 0.3 },
 						},
@@ -132,32 +125,25 @@ describe("resources module", () => {
 					const result = await resourceManager.readResource("ynab://budgets");
 
 					expect(mockYnabAPI.plans.getPlans).toHaveBeenCalledOnce();
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith({
-						budgets: mockBudgets.map((budget) => ({
-							id: budget.id,
-							name: budget.name,
-							last_modified_on: budget.last_modified_on,
-							first_month: budget.first_month,
-							last_month: budget.last_month,
-							currency_format: budget.currency_format,
-						})),
-					});
-
 					expect(result).toEqual({
 						contents: [
 							{
 								uri: "ynab://budgets",
 								mimeType: "application/json",
-								text: JSON.stringify({
-									budgets: mockBudgets.map((budget) => ({
-										id: budget.id,
-										name: budget.name,
-										last_modified_on: budget.last_modified_on,
-										first_month: budget.first_month,
-										last_month: budget.last_month,
-										currency_format: budget.currency_format,
-									})),
-								}),
+								text: JSON.stringify(
+									{
+										budgets: mockBudgets.map((budget) => ({
+											id: budget.id,
+											name: budget.name,
+											last_modified_on: budget.last_modified_on,
+											first_month: budget.first_month,
+											last_month: budget.last_month,
+											currency_format: budget.currency_format,
+										})),
+									},
+									null,
+									2,
+								),
 							},
 						],
 					});
@@ -186,18 +172,12 @@ describe("resources module", () => {
 					const result = await resourceManager.readResource("ynab://user");
 
 					expect(mockYnabAPI.user.getUser).toHaveBeenCalledOnce();
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith({
-						user: { id: mockUser.id },
-					});
-
 					expect(result).toEqual({
 						contents: [
 							{
 								uri: "ynab://user",
 								mimeType: "application/json",
-								text: JSON.stringify({
-									user: { id: mockUser.id },
-								}),
+								text: JSON.stringify({ user: { id: mockUser.id } }, null, 2),
 							},
 						],
 					});
@@ -249,7 +229,6 @@ describe("resources module", () => {
 
 				const customDependencies = {
 					ynabAPI: customYnabAPI,
-					responseFormatter: mockResponseFormatter,
 					cacheManager: mockCacheManager,
 				};
 
@@ -258,30 +237,6 @@ describe("resources module", () => {
 
 				expect(customYnabAPI.plans.getPlans).toHaveBeenCalledOnce();
 				expect(mockYnabAPI.plans.getPlans).not.toHaveBeenCalled();
-			});
-
-			it("should use injected response formatter", async () => {
-				const customFormatter = {
-					format: vi.fn(() => "custom-formatted-response"),
-				};
-
-				const customDependencies = {
-					ynabAPI: mockYnabAPI,
-					responseFormatter: customFormatter,
-					cacheManager: mockCacheManager,
-				};
-
-				mockYnabAPI.plans.getPlans = vi.fn().mockResolvedValue({
-					data: { plans: [] },
-				});
-
-				const customResourceManager = new ResourceManager(customDependencies);
-				const result =
-					await customResourceManager.readResource("ynab://budgets");
-
-				expect(customFormatter.format).toHaveBeenCalled();
-				expect(mockResponseFormatter.format).not.toHaveBeenCalled();
-				expect(textOf(result.contents[0])).toBe("custom-formatted-response");
 			});
 		});
 
@@ -294,7 +249,7 @@ describe("resources module", () => {
 				const result = await resourceManager.readResource("ynab://budgets");
 
 				expect(textOf(result.contents[0])).toBe(
-					JSON.stringify({ budgets: [] }),
+					JSON.stringify({ budgets: [] }, null, 2),
 				);
 			});
 
@@ -310,7 +265,7 @@ describe("resources module", () => {
 				const result = await resourceManager.readResource("ynab://user");
 
 				expect(textOf(result.contents[0])).toBe(
-					JSON.stringify({ user: { id: minimalUser.id } }),
+					JSON.stringify({ user: { id: minimalUser.id } }, null, 2),
 				);
 			});
 		});

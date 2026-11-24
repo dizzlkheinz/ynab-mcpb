@@ -19,7 +19,6 @@ const cacheManager = vi.hoisted(() => ({
 	has: vi.fn(),
 	delete: vi.fn(),
 	deleteMany: vi.fn(),
-	deleteByPrefix: vi.fn(),
 	deleteByBudgetId: vi.fn(),
 	clear: vi.fn(),
 }));

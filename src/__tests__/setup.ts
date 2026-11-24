@@ -2,28 +2,9 @@
  * Test setup and configuration
  */
 
-// Load environment variables from .env for integration tests
-import "dotenv/config";
 import { setAcceptFixtureBudgetIds } from "../server/budgetResolver.js";
-import {
-	getLiveTestGate,
-	MOCK_TEST_ACCESS_TOKEN,
-	normalizeAccessToken,
-} from "./testUtils.js";
 
-// A stored token never enables external tests by itself. Unless all live-test
-// requirements are satisfied, hide the real token from the test process so a
-// misclassified test cannot accidentally contact YNAB.
-const liveTestGate = getLiveTestGate();
-if (liveTestGate.enabled) {
-	process.env["YNAB_ACCESS_TOKEN"] = normalizeAccessToken(
-		process.env["YNAB_ACCESS_TOKEN"],
-	);
-} else {
-	process.env["YNAB_ACCESS_TOKEN"] = MOCK_TEST_ACCESS_TOKEN;
-	// Offline runs must never reach the real API, whatever a local .env says.
-	process.env["RUN_LIVE_YNAB_TESTS"] = "false";
-}
+process.env["YNAB_ACCESS_TOKEN"] = "test-token-for-mocked-tests";
 
 // Accept fixture budget IDs such as "test-budget-1" in tests
 setAcceptFixtureBudgetIds(true);
@@ -35,10 +16,9 @@ if (!process.env["LOG_LEVEL"]) {
 if (!process.env["VERBOSE_TESTS"]) {
 	const originalConsoleError = console.error;
 
-	console.error = (...args: any[]) => {
+	console.error = (...args: unknown[]) => {
 		const firstArg = args[0];
 		const isString = typeof firstArg === "string";
-		// Only show errors that are part of test assertions, actual errors, or explicitly marked [ERROR]
 		if (
 			(isString &&
 				(firstArg.includes("❌") ||
@@ -50,19 +30,8 @@ if (!process.env["VERBOSE_TESTS"]) {
 		}
 	};
 
-	console.warn = () => {
-		// Suppress warnings by default
-	};
-
-	console.log = () => {
-		// Suppress logs by default
-	};
-
-	console.info = () => {
-		// Suppress info logs by default
-	};
-
-	console.debug = () => {
-		// Suppress debug logs by default
-	};
+	console.warn = () => {};
+	console.log = () => {};
+	console.info = () => {};
+	console.debug = () => {};
 }

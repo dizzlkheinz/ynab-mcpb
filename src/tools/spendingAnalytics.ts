@@ -2,7 +2,6 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import { type ErrorHandler, handleToolError } from "../server/errorHandler.js";
-import { responseFormatter } from "../server/responseFormatter.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import { formatUTCISODate } from "../utils/dateUtils.js";
 import { milliunitsToAmount } from "../utils/money.js";
@@ -254,7 +253,7 @@ async function analyze(
 
 function asResult(data: object): CallToolResult {
 	return {
-		content: [{ type: "text", text: responseFormatter.format(data) }],
+		content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
 		structuredContent: data as Record<string, unknown>,
 	};
 }

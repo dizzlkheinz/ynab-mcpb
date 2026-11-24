@@ -22,10 +22,6 @@ const api = {
 	},
 };
 
-const formatter = {
-	format: vi.fn((value: unknown) => JSON.stringify(value)),
-};
-
 const cache = {
 	wrap: vi.fn(
 		async <T>(
@@ -42,7 +38,6 @@ describe("ResourceManager template branches", () => {
 		vi.clearAllMocks();
 		manager = new ResourceManager({
 			ynabAPI: api as unknown as ynab.API,
-			responseFormatter: formatter,
 			cacheManager: cache,
 		});
 	});

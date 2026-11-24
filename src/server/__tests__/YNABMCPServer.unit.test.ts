@@ -128,7 +128,6 @@ describe("YNABMCPServer isolated behavior", () => {
 		const registry = server.getToolRegistry();
 		const first = await registry.executeTool({
 			name: "ynab_get_default_budget",
-			accessToken: "unit-test-token",
 			arguments: { response_format: "json" },
 		});
 		expect(first.structuredContent).toMatchObject({ has_default: false });
@@ -136,7 +135,6 @@ describe("YNABMCPServer isolated behavior", () => {
 		server.setDefaultBudget("budget-1");
 		const second = await registry.executeTool({
 			name: "ynab_get_default_budget",
-			accessToken: "unit-test-token",
 			arguments: { response_format: "markdown" },
 		});
 		expect(second.structuredContent).toMatchObject({
@@ -146,27 +144,9 @@ describe("YNABMCPServer isolated behavior", () => {
 
 		const cleared = await registry.executeTool({
 			name: "ynab_clear_cache",
-			accessToken: "unit-test-token",
 			arguments: {},
 		});
 		expect(cleared.structuredContent).toEqual({ success: true });
-	});
-
-	it("rejects missing and mismatched tool access tokens", async () => {
-		const registry = server.getToolRegistry();
-		const missing = await registry.executeTool({
-			name: "ynab_get_default_budget",
-			accessToken: "",
-			arguments: {},
-		});
-		expect(missing).toMatchObject({ isError: true });
-
-		const mismatch = await registry.executeTool({
-			name: "ynab_get_default_budget",
-			accessToken: "wrong-token",
-			arguments: {},
-		});
-		expect(mismatch).toMatchObject({ isError: true });
 	});
 
 	it("starts after connection and treats token validation as non-fatal", async () => {
@@ -253,7 +233,6 @@ describe("YNABMCPServer isolated behavior", () => {
 		const configured = new YNABMCPServer(false);
 		const result = await configured.getToolRegistry().executeTool({
 			name: "ynab_diagnostic_info",
-			accessToken: "unit-test-token",
 			arguments: { include_security: true, response_format: "json" },
 		});
 		expect(result.isError).toBeFalsy();
@@ -274,7 +253,6 @@ describe("YNABMCPServer isolated behavior", () => {
 	])("returns a consistent missing-budget error for %s", async (name) => {
 		const result = await server.getToolRegistry().executeTool({
 			name,
-			accessToken: "unit-test-token",
 			arguments: {},
 		});
 		expect(result.isError).toBe(true);
@@ -291,7 +269,6 @@ describe("YNABMCPServer isolated behavior", () => {
 		const request = vi.spyOn(server.getYNABAPI().accounts, "getAccounts");
 		const result = await server.getToolRegistry().executeTool({
 			name: "ynab_list_accounts",
-			accessToken: "unit-test-token",
 			arguments: { budget_id: "invalid" },
 		});
 		expect(result.isError).toBe(true);
@@ -310,7 +287,6 @@ describe("YNABMCPServer isolated behavior", () => {
 		for (let i = 0; i < 2; i++) {
 			const result = await server.getToolRegistry().executeTool({
 				name: "ynab_list_accounts",
-				accessToken: "unit-test-token",
 				arguments: {},
 			});
 			expect(result.isError).not.toBe(true);
@@ -349,7 +325,6 @@ describe("YNABMCPServer isolated behavior", () => {
 			}
 			const result = await server.getToolRegistry().executeTool({
 				name: "ynab_set_default_budget",
-				accessToken: "unit-test-token",
 				arguments: { budget_id: budgetId },
 			});
 			expect(result.structuredContent).toMatchObject({
@@ -375,7 +350,6 @@ describe("YNABMCPServer isolated behavior", () => {
 		cacheOf(otherServer).set("other:entry", 2);
 		const diagnostics = await server.getToolRegistry().executeTool({
 			name: "ynab_diagnostic_info",
-			accessToken: "unit-test-token",
 			arguments: {
 				include_server: false,
 				include_cache: true,
@@ -391,7 +365,6 @@ describe("YNABMCPServer isolated behavior", () => {
 		expect(diagnostics.structuredContent).not.toHaveProperty("memory");
 		await server.getToolRegistry().executeTool({
 			name: "ynab_clear_cache",
-			accessToken: "unit-test-token",
 			arguments: {},
 		});
 		expect(cacheOf(server).getStats().size).toBe(0);

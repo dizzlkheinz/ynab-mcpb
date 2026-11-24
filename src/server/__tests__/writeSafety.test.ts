@@ -43,18 +43,7 @@ function createDependencies(
 
 	return {
 		errorHandler,
-		responseFormatter: { format: (value) => JSON.stringify(value) },
 		writeSafetyPolicy: policy,
-		withSecurityWrapper:
-			<T extends Record<string, unknown>>(
-				_namespace: string,
-				_operation: string,
-				schema: z.ZodSchema<T>,
-			) =>
-			(_accessToken: string) =>
-			(params: Record<string, unknown>) =>
-			async (handler: (validated: T) => Promise<CallToolResult>) =>
-				handler(schema.parse(params)),
 	};
 }
 
@@ -209,7 +198,6 @@ describe("ToolRegistry write safety enforcement", () => {
 		preview.register(definition);
 		const response = await preview.executeTool({
 			name: "ynab_loose_mutation",
-			accessToken: "token",
 			arguments: { id: "txn-1" },
 		});
 		expect(handler).toHaveBeenCalledWith(
@@ -246,7 +234,6 @@ describe("ToolRegistry write safety enforcement", () => {
 
 		const preview = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1" },
 		});
 		expect(preview.structuredContent).toEqual({
@@ -269,7 +256,6 @@ describe("ToolRegistry write safety enforcement", () => {
 
 		const execution = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: {
 				id: "txn-1",
 				confirmation_token: preview.structuredContent?.["confirmation_token"],
@@ -344,12 +330,10 @@ describe("ToolRegistry write safety enforcement", () => {
 		registerMutation(preview, "ynab_create_transaction", handler);
 		const previewed = await preview.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1" },
 		});
 		await preview.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: {
 				id: "txn-1",
 				confirmation_token: confirmationToken(previewed),
@@ -362,7 +346,6 @@ describe("ToolRegistry write safety enforcement", () => {
 		registerMutation(enabled, "ynab_create_transaction", handler);
 		await enabled.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1" },
 		});
 
@@ -380,7 +363,6 @@ describe("ToolRegistry write safety enforcement", () => {
 		const handler = registerMutation(registry, "ynab_update_transaction");
 		await registry.executeTool({
 			name: "ynab_update_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1", amount: 10 },
 		});
 		expect(handler).toHaveBeenCalledWith(
@@ -401,7 +383,6 @@ describe("ToolRegistry write safety enforcement", () => {
 
 		const preview = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1", amount: 10, dry_run: true },
 		});
 		expect(handler).toHaveBeenLastCalledWith(
@@ -412,7 +393,6 @@ describe("ToolRegistry write safety enforcement", () => {
 
 		const confirmed = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: {
 				id: "txn-1",
 				amount: 10,
@@ -429,7 +409,6 @@ describe("ToolRegistry write safety enforcement", () => {
 
 		const reused = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: {
 				id: "txn-1",
 				amount: 10,
@@ -455,14 +434,12 @@ describe("ToolRegistry write safety enforcement", () => {
 		const handler = registerMutation(registry, "ynab_create_transaction");
 		const preview = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1", amount: 10 },
 		});
 
 		now = 1_101;
 		const expired = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: {
 				id: "txn-1",
 				amount: 10,
@@ -495,7 +472,6 @@ describe("ToolRegistry write safety enforcement", () => {
 		// Missing id would fail schema validation if the token check ran later
 		const malformed = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { confirmation_token: "short" },
 		});
 		expect(malformed.isError).toBe(true);
@@ -525,7 +501,6 @@ describe("ToolRegistry write safety enforcement", () => {
 		for (const name of ["ynab_update_transaction", "ynab_get_transaction"]) {
 			const rejected = await registry.executeTool({
 				name,
-				accessToken: "token",
 				arguments: { id: "txn-1", confirmation_token: FIXED_TOKEN },
 			});
 			expect(rejected.isError).toBe(true);
@@ -558,7 +533,6 @@ describe("ToolRegistry write safety enforcement", () => {
 		for (const empty of [null, ""]) {
 			const preview = await registry.executeTool({
 				name: "ynab_create_transaction",
-				accessToken: "token",
 				arguments: { id: "txn-1", confirmation_token: empty },
 			});
 			expect(preview.isError).not.toBe(true);
@@ -571,7 +545,6 @@ describe("ToolRegistry write safety enforcement", () => {
 
 			const read = await registry.executeTool({
 				name: "ynab_get_transaction",
-				accessToken: "token",
 				arguments: { id: "txn-1", confirmation_token: empty },
 			});
 			expect(read.isError).not.toBe(true);
@@ -595,7 +568,6 @@ describe("ToolRegistry write safety enforcement", () => {
 		);
 		const preview = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1" },
 		});
 		expect(preview.isError).toBe(true);
@@ -612,14 +584,12 @@ describe("ToolRegistry write safety enforcement", () => {
 
 		const preview = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1" },
 		});
 		expect(preview.isError).not.toBe(true);
 
 		const confirmed = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: {
 				id: "txn-1",
 				confirmation_token: confirmationToken(preview),
@@ -635,7 +605,6 @@ describe("ToolRegistry write safety enforcement", () => {
 
 		const reused = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1", confirmation_token: FIXED_TOKEN },
 		});
 		expect(reused.isError).toBe(true);
@@ -651,7 +620,6 @@ describe("ToolRegistry write safety enforcement", () => {
 
 		const written = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1" },
 		});
 		expect(written.isError).toBe(true);
@@ -661,7 +629,6 @@ describe("ToolRegistry write safety enforcement", () => {
 
 		const dryRun = await registry.executeTool({
 			name: "ynab_create_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1", dry_run: true },
 		});
 		expect(dryRun.isError).not.toBe(true);
@@ -680,7 +647,6 @@ describe("ToolRegistry write safety enforcement", () => {
 		);
 		const failed = await registry.executeTool({
 			name: "ynab_update_transaction",
-			accessToken: "token",
 			arguments: { id: "txn-1" },
 		});
 		expect(failed.isError).toBe(true);
@@ -698,13 +664,11 @@ describe("ToolRegistry write safety enforcement", () => {
 		const handler = registerMutation(registry, "ynab_update_transactions");
 		const preview = await registry.executeTool({
 			name: "ynab_update_transactions",
-			accessToken: "token",
 			arguments: { id: "batch-1", amount: 10 },
 		});
 
 		const altered = await registry.executeTool({
 			name: "ynab_update_transactions",
-			accessToken: "token",
 			arguments: {
 				id: "batch-1",
 				amount: 11,
@@ -727,7 +691,6 @@ describe("ToolRegistry write safety enforcement", () => {
 			const handler = registerMutation(registry, name);
 			await registry.executeTool({
 				name,
-				accessToken: "token",
 				arguments: { id: "target" },
 			});
 			expect(handler).toHaveBeenCalledWith(

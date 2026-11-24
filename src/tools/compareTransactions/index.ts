@@ -1,8 +1,10 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import type { ErrorHandler } from "../../server/errorHandler.js";
-import { withToolErrorHandling } from "../../types/index.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../../server/errorHandler.js";
 import type { ToolFactory } from "../../types/toolRegistration.js";
 import { formatUTCISODate, isDateInRange } from "../../utils/dateUtils.js";
 import {
@@ -298,7 +300,7 @@ export async function handleCompareTransactions(
 				dateRange,
 			);
 		},
-		"ynab:compare_transactions",
+		"ynab_compare_transactions",
 		"comparing bank and YNAB transactions",
 		errorHandler,
 	);

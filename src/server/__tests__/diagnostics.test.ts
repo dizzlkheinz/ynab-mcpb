@@ -23,13 +23,7 @@ const mockSecurityMiddleware = {
 // Mock CacheManager
 const mockCacheManager = {
 	getStats: vi.fn(),
-	getEntriesForSizeEstimation: vi.fn(),
 	getCacheMetadata: vi.fn(),
-};
-
-// Mock response formatter
-const mockResponseFormatter = {
-	format: vi.fn((data) => JSON.stringify(data)),
 };
 
 const mockKnowledgeStore = {
@@ -62,7 +56,6 @@ describe("diagnostics module", () => {
 		dependencies = {
 			securityMiddleware: mockSecurityMiddleware as any,
 			cacheManager: mockCacheManager as any,
-			responseFormatter: mockResponseFormatter,
 			serverVersion: "1.0.0",
 			serverKnowledgeStore: mockKnowledgeStore as any,
 			deltaCache: mockDeltaCache as any,
@@ -100,7 +93,6 @@ describe("diagnostics module", () => {
 			hits: 25,
 			misses: 5,
 			evictions: 2,
-			lastCleanup: Date.now() - 5 * 60 * 1000, // 5 minutes ago
 			maxEntries: 1000,
 			hitRate: 0.833,
 		});
@@ -141,86 +133,68 @@ describe("diagnostics module", () => {
 				const options: DiagnosticOptions = {};
 				const result = await diagnosticManager.collectDiagnostics(options);
 
-				expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-					expect.objectContaining({
-						timestamp: expect.any(String),
-					}),
-				);
-
 				expect(result).toEqual({
-					content: [{ type: "text", text: expect.any(String) }],
+					timestamp: expect.any(String),
 				});
 			});
 
 			describe("server diagnostics", () => {
 				it("should include server information when include_server is true", async () => {
 					const options: DiagnosticOptions = { include_server: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							server: expect.objectContaining({
-								name: "ynab-mcp-server",
-								version: "1.0.0",
-								node_version: expect.any(String),
-								platform: expect.any(String),
-								arch: expect.any(String),
-								pid: expect.any(Number),
-								uptime_ms: 3661500,
-								uptime_readable: "1h 1m 1s",
-							}),
+					expect(result).toMatchObject({
+						server: expect.objectContaining({
+							name: "ynab-mcp-server",
+							version: "1.0.0",
+							node_version: expect.any(String),
+							platform: expect.any(String),
+							arch: expect.any(String),
+							pid: expect.any(Number),
+							uptime_ms: 3661500,
+							uptime_readable: "1h 1m 1s",
 						}),
-					);
+					});
 				});
 
 				it("should exclude server information when include_server is false", async () => {
 					const options: DiagnosticOptions = { include_server: false };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.not.objectContaining({
-							server: expect.anything(),
-						}),
-					);
+					expect(result).not.toHaveProperty("server");
 				});
 			});
 
 			describe("memory diagnostics", () => {
 				it("should include memory information when include_memory is true", async () => {
 					const options: DiagnosticOptions = { include_memory: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							memory: {
-								rss_mb: 100,
-								heap_used_mb: 50,
-								heap_total_mb: 80,
-								external_mb: 10,
-								array_buffers_mb: 5,
-								description: {
-									rss: "Resident Set Size - total memory allocated for the process",
-									heap_used: "Used heap memory (objects, closures, etc.)",
-									heap_total: "Total heap memory allocated",
-									external:
-										"Memory used by C++ objects bound to JavaScript objects",
-									array_buffers:
-										"Memory allocated for ArrayBuffer and SharedArrayBuffer",
-								},
+					expect(result).toMatchObject({
+						memory: {
+							rss_mb: 100,
+							heap_used_mb: 50,
+							heap_total_mb: 80,
+							external_mb: 10,
+							array_buffers_mb: 5,
+							description: {
+								rss: "Resident Set Size - total memory allocated for the process",
+								heap_used: "Used heap memory (objects, closures, etc.)",
+								heap_total: "Total heap memory allocated",
+								external:
+									"Memory used by C++ objects bound to JavaScript objects",
+								array_buffers:
+									"Memory allocated for ArrayBuffer and SharedArrayBuffer",
 							},
-						}),
-					);
+						},
+					});
 				});
 
 				it("should exclude memory information when include_memory is false", async () => {
 					const options: DiagnosticOptions = { include_memory: false };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.not.objectContaining({
-							memory: expect.anything(),
-						}),
-					);
+					expect(result).not.toHaveProperty("memory");
 				});
 
 				it("should handle undefined arrayBuffers", async () => {
@@ -233,15 +207,13 @@ describe("diagnostics module", () => {
 					});
 
 					const options: DiagnosticOptions = { include_memory: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							memory: expect.objectContaining({
-								array_buffers_mb: 0,
-							}),
+					expect(result).toMatchObject({
+						memory: expect.objectContaining({
+							array_buffers_mb: 0,
 						}),
-					);
+					});
 				});
 			});
 
@@ -257,22 +229,20 @@ describe("diagnostics module", () => {
 
 					try {
 						const options: DiagnosticOptions = { include_environment: true };
-						await diagnosticManager.collectDiagnostics(options);
+						const result = await diagnosticManager.collectDiagnostics(options);
 
-						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-							expect.objectContaining({
-								environment: expect.objectContaining({
-									token_present: true,
-									token_length: 18,
-									token_preview: "test...3456",
-									ynab_env_keys_present: expect.arrayContaining([
-										"YNAB_ACCESS_TOKEN",
-										"YNAB_MCP_DEBUG",
-									]),
-									working_directory: "/test/directory",
-								}),
+						expect(result).toMatchObject({
+							environment: expect.objectContaining({
+								token_present: true,
+								token_length: 18,
+								token_preview: "test...3456",
+								ynab_env_keys_present: expect.arrayContaining([
+									"YNAB_ACCESS_TOKEN",
+									"YNAB_MCP_DEBUG",
+								]),
+								working_directory: "/test/directory",
 							}),
-						);
+						});
 					} finally {
 						process.env = originalEnv;
 					}
@@ -285,17 +255,15 @@ describe("diagnostics module", () => {
 
 					try {
 						const options: DiagnosticOptions = { include_environment: true };
-						await diagnosticManager.collectDiagnostics(options);
+						const result = await diagnosticManager.collectDiagnostics(options);
 
-						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-							expect.objectContaining({
-								environment: expect.objectContaining({
-									token_present: false,
-									token_length: 0,
-									token_preview: null,
-								}),
+						expect(result).toMatchObject({
+							environment: expect.objectContaining({
+								token_present: false,
+								token_length: 0,
+								token_preview: null,
 							}),
-						);
+						});
 					} finally {
 						process.env = originalEnv;
 					}
@@ -319,24 +287,24 @@ describe("diagnostics module", () => {
 							knowledgeGapEvents: 1,
 						});
 
-						await diagnosticManager.collectDiagnostics({ include_delta: true });
+						const result = await diagnosticManager.collectDiagnostics({
+							include_delta: true,
+						});
 
-						expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-							expect.objectContaining({
-								delta: expect.objectContaining({
-									knowledge_entries: 2,
-									knowledge_stats: {
-										"accounts:list:budget-1": 1000,
-										"transactions:list:budget-1": 1500,
-									},
-									delta_hits: 5,
-									delta_misses: 3,
-									delta_hit_rate: Number((5 / 8).toFixed(4)),
-									merge_operations: 7,
-									knowledge_gap_events: 1,
-								}),
+						expect(result).toMatchObject({
+							delta: expect.objectContaining({
+								knowledge_entries: 2,
+								knowledge_stats: {
+									"accounts:list:budget-1": 1000,
+									"transactions:list:budget-1": 1500,
+								},
+								delta_hits: 5,
+								delta_misses: 3,
+								delta_hit_rate: Number((5 / 8).toFixed(4)),
+								merge_operations: 7,
+								knowledge_gap_events: 1,
 							}),
-						);
+						});
 						expect(mockDeltaCache.getStats).toHaveBeenCalled();
 					} finally {
 						resetRuntimeConfig();
@@ -344,13 +312,9 @@ describe("diagnostics module", () => {
 				});
 
 				it("should skip delta metrics when include_delta is not explicitly true", async () => {
-					await diagnosticManager.collectDiagnostics({});
+					const result = await diagnosticManager.collectDiagnostics({});
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.not.objectContaining({
-							delta: expect.anything(),
-						}),
-					);
+					expect(result).not.toHaveProperty("delta");
 					expect(mockDeltaCache.getStats).not.toHaveBeenCalled();
 				});
 			});
@@ -358,60 +322,51 @@ describe("diagnostics module", () => {
 			describe("security diagnostics", () => {
 				it("should include security information when include_security is true", async () => {
 					const options: DiagnosticOptions = { include_security: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
 					expect(
 						mockSecurityMiddleware.getSecurityStats,
 					).toHaveBeenCalledOnce();
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							security: {
-								requests: 100,
-								blocked: 5,
-								rate_limited: 2,
-							},
-						}),
-					);
+					expect(result).toMatchObject({
+						security: {
+							requests: 100,
+							blocked: 5,
+							rate_limited: 2,
+						},
+					});
 				});
 
 				it("should exclude security information when include_security is false", async () => {
 					const options: DiagnosticOptions = { include_security: false };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
 					expect(
 						mockSecurityMiddleware.getSecurityStats,
 					).not.toHaveBeenCalled();
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.not.objectContaining({
-							security: expect.anything(),
-						}),
-					);
+					expect(result).not.toHaveProperty("security");
 				});
 			});
 
 			describe("cache diagnostics", () => {
 				it("should include cache information when include_cache is true", async () => {
 					const options: DiagnosticOptions = { include_cache: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
 					expect(mockCacheManager.getStats).toHaveBeenCalledOnce();
 					expect(mockCacheManager.getCacheMetadata).toHaveBeenCalledOnce();
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								entries: 10,
-								estimated_size_kb: expect.any(Number),
-								keys: ["key1", "key2", "key3"],
-								hits: 25,
-								misses: 5,
-								evictions: 2,
-								lastCleanup: expect.any(String),
-								maxEntries: 1000,
-								hitRate: "83.30%",
-								performance_summary: expect.stringContaining("Hit rate: 83.3%"),
-							}),
+					expect(result).toMatchObject({
+						cache: expect.objectContaining({
+							entries: 10,
+							estimated_size_kb: expect.any(Number),
+							keys: ["key1", "key2", "key3"],
+							hits: 25,
+							misses: 5,
+							evictions: 2,
+							maxEntries: 1000,
+							hitRate: "83.30%",
+							performance_summary: expect.stringContaining("Hit rate: 83.3%"),
 						}),
-					);
+					});
 				});
 
 				it("should handle cache serialization errors gracefully", async () => {
@@ -422,33 +377,28 @@ describe("diagnostics module", () => {
 					});
 
 					const options: DiagnosticOptions = { include_cache: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								estimated_size_kb: 0,
-							}),
+					expect(result).toMatchObject({
+						cache: expect.objectContaining({
+							estimated_size_kb: 0,
 						}),
-					);
+					});
 				});
 
 				it("should include enhanced cache metrics when available", async () => {
 					const options: DiagnosticOptions = { include_cache: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								hits: 25,
-								misses: 5,
-								evictions: 2,
-								lastCleanup: expect.any(String),
-								maxEntries: 1000,
-								hitRate: "83.30%",
-							}),
+					expect(result).toMatchObject({
+						cache: expect.objectContaining({
+							hits: 25,
+							misses: 5,
+							evictions: 2,
+							maxEntries: 1000,
+							hitRate: "83.30%",
 						}),
-					);
+					});
 				});
 
 				it("should handle missing enhanced metrics gracefully", async () => {
@@ -459,75 +409,20 @@ describe("diagnostics module", () => {
 					});
 
 					const options: DiagnosticOptions = { include_cache: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								entries: 5,
-								keys: ["key1", "key2"],
-								estimated_size_kb: expect.any(Number),
-							}),
+					expect(result).toMatchObject({
+						cache: expect.objectContaining({
+							entries: 5,
+							keys: ["key1", "key2"],
+							estimated_size_kb: expect.any(Number),
 						}),
-					);
+					});
 
 					// Should not include enhanced metrics
-					expect(mockResponseFormatter.format).not.toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								hits: expect.any(Number),
-							}),
-						}),
-					);
-				});
-
-				it("should format lastCleanup timestamp correctly", async () => {
-					const testTimestamp = Date.now() - 3 * 60 * 1000; // 3 minutes ago
-					mockCacheManager.getStats.mockReturnValue({
-						size: 5,
-						keys: ["key1"],
-						hits: 10,
-						misses: 2,
-						evictions: 1,
-						lastCleanup: testTimestamp,
-						maxEntries: 1000,
-						hitRate: 0.833,
-					});
-
-					const options: DiagnosticOptions = { include_cache: true };
-					await diagnosticManager.collectDiagnostics(options);
-
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								lastCleanup: new Date(testTimestamp).toISOString(),
-							}),
-						}),
-					);
-				});
-
-				it("should handle null lastCleanup timestamp", async () => {
-					mockCacheManager.getStats.mockReturnValue({
-						size: 5,
-						keys: ["key1"],
-						hits: 10,
-						misses: 2,
-						evictions: 0,
-						lastCleanup: null,
-						maxEntries: 1000,
-						hitRate: 0.833,
-					});
-
-					const options: DiagnosticOptions = { include_cache: true };
-					await diagnosticManager.collectDiagnostics(options);
-
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								lastCleanup: null,
-							}),
-						}),
-					);
+					expect(
+						(result["cache"] as Record<string, unknown>)?.["hits"],
+					).toBeUndefined();
 				});
 
 				it("should calculate and display hit rate percentage", async () => {
@@ -537,24 +432,21 @@ describe("diagnostics module", () => {
 						hits: 85,
 						misses: 15,
 						evictions: 0,
-						lastCleanup: null,
 						maxEntries: 1000,
 						hitRate: 0.85,
 					});
 
 					const options: DiagnosticOptions = { include_cache: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								hitRate: "85.00%",
-								performance_summary: expect.stringContaining(
-									"Hit rate: 85.0% (85 hits, 15 misses)",
-								),
-							}),
+					expect(result).toMatchObject({
+						cache: expect.objectContaining({
+							hitRate: "85.00%",
+							performance_summary: expect.stringContaining(
+								"Hit rate: 85.0% (85 hits, 15 misses)",
+							),
 						}),
-					);
+					});
 				});
 
 				it("should include performance summary with evictions", async () => {
@@ -564,23 +456,20 @@ describe("diagnostics module", () => {
 						hits: 75,
 						misses: 25,
 						evictions: 15,
-						lastCleanup: Date.now() - 10 * 60 * 1000, // 10 minutes ago
 						maxEntries: 1000,
 						hitRate: 0.75,
 					});
 
 					const options: DiagnosticOptions = { include_cache: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								performance_summary: expect.stringMatching(
-									/Hit rate: 75\.0%.*LRU evictions: 15.*Last cleanup: 10 minutes ago/,
-								),
-							}),
+					expect(result).toMatchObject({
+						cache: expect.objectContaining({
+							performance_summary: expect.stringMatching(
+								/Hit rate: 75\.0%.*LRU evictions: 15/,
+							),
 						}),
-					);
+					});
 				});
 
 				it("should handle zero requests for hit rate calculation", async () => {
@@ -590,24 +479,21 @@ describe("diagnostics module", () => {
 						hits: 0,
 						misses: 0,
 						evictions: 0,
-						lastCleanup: null,
 						maxEntries: 1000,
 						hitRate: 0,
 					});
 
 					const options: DiagnosticOptions = { include_cache: true };
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							cache: expect.objectContaining({
-								hitRate: "0.00%",
-								performance_summary: expect.stringContaining(
-									"Hit rate: 0.0% (0 hits, 0 misses)",
-								),
-							}),
+					expect(result).toMatchObject({
+						cache: expect.objectContaining({
+							hitRate: "0.00%",
+							performance_summary: expect.stringContaining(
+								"Hit rate: 0.0% (0 hits, 0 misses)",
+							),
 						}),
-					);
+					});
 				});
 			});
 
@@ -621,18 +507,16 @@ describe("diagnostics module", () => {
 						include_cache: true,
 					};
 
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-						expect.objectContaining({
-							timestamp: expect.any(String),
-							server: expect.any(Object),
-							memory: expect.any(Object),
-							environment: expect.any(Object),
-							security: expect.any(Object),
-							cache: expect.any(Object),
-						}),
-					);
+					expect(result).toMatchObject({
+						timestamp: expect.any(String),
+						server: expect.any(Object),
+						memory: expect.any(Object),
+						environment: expect.any(Object),
+						security: expect.any(Object),
+						cache: expect.any(Object),
+					});
 				});
 
 				it("should include only timestamp when all options are false", async () => {
@@ -644,9 +528,9 @@ describe("diagnostics module", () => {
 						include_cache: false,
 					};
 
-					await diagnosticManager.collectDiagnostics(options);
+					const result = await diagnosticManager.collectDiagnostics(options);
 
-					expect(mockResponseFormatter.format).toHaveBeenCalledWith({
+					expect(result).toEqual({
 						timestamp: expect.any(String),
 					});
 				});
@@ -753,9 +637,6 @@ describe("diagnostics module", () => {
 		it("should use injected cache manager", async () => {
 			const customCacheManager = {
 				getStats: vi.fn().mockReturnValue({ size: 5, keys: ["custom"] }),
-				getEntriesForSizeEstimation: vi
-					.fn()
-					.mockReturnValue({ custom: "data" }),
 				getCacheMetadata: vi.fn().mockReturnValue([
 					{
 						key: "custom",
@@ -781,24 +662,6 @@ describe("diagnostics module", () => {
 			expect(mockCacheManager.getCacheMetadata).not.toHaveBeenCalled();
 		});
 
-		it("should use injected response formatter", async () => {
-			const customFormatter = {
-				format: vi.fn().mockReturnValue("custom-formatted"),
-			};
-
-			const customDependencies = {
-				...dependencies,
-				responseFormatter: customFormatter,
-			};
-
-			const customDiagnosticManager = new DiagnosticManager(customDependencies);
-			const result = await customDiagnosticManager.collectDiagnostics({});
-
-			expect(customFormatter.format).toHaveBeenCalled();
-			expect(mockResponseFormatter.format).not.toHaveBeenCalled();
-			expect(result.content[0]!.text).toBe("custom-formatted");
-		});
-
 		it("should use injected server version", async () => {
 			const customDependencies = {
 				...dependencies,
@@ -806,17 +669,15 @@ describe("diagnostics module", () => {
 			};
 
 			const customDiagnosticManager = new DiagnosticManager(customDependencies);
-			await customDiagnosticManager.collectDiagnostics({
+			const result = await customDiagnosticManager.collectDiagnostics({
 				include_server: true,
 			});
 
-			expect(mockResponseFormatter.format).toHaveBeenCalledWith(
-				expect.objectContaining({
-					server: expect.objectContaining({
-						version: "2.0.0-beta",
-					}),
+			expect(result).toMatchObject({
+				server: expect.objectContaining({
+					version: "2.0.0-beta",
 				}),
-			);
+			});
 		});
 	});
 });

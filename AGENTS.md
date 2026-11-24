@@ -22,8 +22,6 @@ npm run test:coverage        # unit tests with 80% thresholds (what CI enforces)
 npm run lint                 # Biome; lint:fix / format to fix
 npm run knip                 # unused files/exports/types (default, then production mode)
 npm start                    # run dist/index.js; needs YNAB_ACCESS_TOKEN (.env is read)
-npm run test:live            # read-only live smoke; needs RUN_LIVE_YNAB_TESTS=true + token
-npm run test:live -- delta   # live delta suite; creates and deletes one transaction
 npm run package:mcpb         # package the existing build; needs global @anthropic-ai/mcpb
 ```
 
@@ -31,8 +29,7 @@ Filter tests with Vitest arguments: `npm test -- -t "receipt"`,
 `npm run test:integration -- transactionTools`.
 
 CI (`.github/workflows/ci-tests.yml`) runs type-check, knip, build, `npm pack --dry-run`,
-coverage and integration tests on every push and PR. That is the gate. `.githooks/local.sh`
-is an optional local extension of the maintainer's personal shared hooks and is not required.
+coverage and integration tests on every push and PR. That is the gate.
 
 ## Layout
 
@@ -45,7 +42,7 @@ src/server/
   writeSafety.ts             write modes and preview confirmation tokens
   toolProfiles.ts            core / full tool surfaces
   ynabClient.ts              the ONLY YNAB network boundary (rate limiting + cache invalidation)
-  cacheManager.ts            LRU cache, per-type TTLs (CACHE_TTLS), stale-while-revalidate
+  cacheManager.ts            LRU cache, per-type TTLs (CACHE_TTLS)
   deltaCache.ts(.merge)      delta requests on top of the cache; serverKnowledgeStore.ts tracks knowledge
   budgetResolver.ts          budget_id resolution against the default budget
   errorHandler.ts            error normalization -> MCP error results
@@ -57,18 +54,18 @@ src/tools/
   transactionModel.ts        shared transaction shaping
   scheduledTransactionTools.ts spendingAnalytics.ts exportTransactions.ts csvFilePath.ts
   receiptSplit/              receipt split collapse logic
-  compareTransactions/       self-contained read-only bank CSV comparison (csvParser, matchEngine)
+  compareTransactions/       self-contained read-only bank CSV comparison (csvParser, matcher)
   schemas/common.ts          shared input schemas (emptyObjectSchema, response_format, ...)
   schemas/monetaryInput.ts   amount_decimal / amount_milliunits input handling
   schemas/outputs/           output schemas; index.ts exports what registry.register() uses
   adapters.ts                createAdapters(context) and createBudgetResolver(context)
   toolCategories.ts          ToolAnnotationPresets
 src/types/                   ToolContext and handler signatures (toolRegistration.ts), annotations
-src/utils/                   money.ts, dateUtils.ts, errors.ts, ynabApiCompat.ts
+src/utils/                   money.ts, dateUtils.ts, errors.ts
 ```
 
-Tests live in `__tests__/` beside the code: `*.test.ts` (unit), `*.integration.test.ts`
-(offline mocked API), `*.e2e.test.ts` (live smoke, preview checks, and delta suites). Shared
+Tests live in `__tests__/` beside the code: `*.test.ts` (unit) and `*.integration.test.ts`
+(offline mocked API). Shared
 helpers: `src/__tests__/testUtils.ts`, global setup: `src/__tests__/setup.ts`. Fixture budget
 IDs such as `test-budget-1` pass validation only because `setup.ts` calls the `@internal`
 `setAcceptFixtureBudgetIds(true)` seam; production code requires UUIDs.
@@ -144,9 +141,7 @@ Checklist for a new tool:
 
 Server: `YNAB_ACCESS_TOKEN` (required), `YNAB_DEFAULT_BUDGET_ID`, `YNAB_MCP_WRITE_MODE`
 (`preview` | `enabled` | `read-only`), `YNAB_MCP_TOOL_PROFILE` (`full` | `core`),
-`YNAB_EXPORT_PATH`, `LOG_LEVEL`. Empty values count as unset. Tests: `RUN_LIVE_YNAB_TESTS`
-(must be exactly `true` to contact YNAB; offline projects force it off), `TEST_BUDGET_ID`,
-`TEST_ACCOUNT_ID`, `VERBOSE_TESTS`. See `.env.example`.
+`YNAB_EXPORT_PATH`, `LOG_LEVEL`. Empty values count as unset. Tests: `VERBOSE_TESTS`. See `.env.example`.
 
 ## Conventions
 

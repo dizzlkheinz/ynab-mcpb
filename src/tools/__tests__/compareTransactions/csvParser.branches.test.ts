@@ -46,10 +46,9 @@ describe("csvParser bank-export branches", () => {
 		);
 	});
 
-	it("uses explicit manual columns and amount inversion", () => {
+	it("uses explicit manual columns", () => {
 		const result = parseCSV("When|Narrative|Value\n2026-07-01|Coffee|$4.25", {
 			delimiter: "|",
-			invertAmounts: true,
 			columns: {
 				date: "When",
 				amount: "Value",
@@ -58,7 +57,7 @@ describe("csvParser bank-export branches", () => {
 		});
 		expect(result.transactions[0]).toMatchObject({
 			date: "2026-07-01",
-			amount: -4250,
+			amount: 4250,
 			payee: "Coffee",
 		});
 	});
@@ -88,18 +87,6 @@ describe("csvParser bank-export branches", () => {
 			header: true,
 		});
 		expect(result.transactions[0]?.amount).toBe(-4250);
-	});
-
-	it("supports an explicitly selected headerless TD preset", () => {
-		const result = parseCSV("07/01/2026,Coffee,4.25,,100.00", {
-			preset: "td",
-		});
-		expect(result.meta.detectedColumns).toEqual(["0", "1", "2", "3", "4"]);
-		expect(result.transactions[0]).toMatchObject({
-			date: "2026-07-01",
-			amount: -4250,
-			payee: "Coffee",
-		});
 	});
 
 	it("does not misclassify nonnumeric headerless rows as TD", () => {

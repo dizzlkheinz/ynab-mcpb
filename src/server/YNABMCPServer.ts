@@ -16,7 +16,7 @@ import {
 	ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { registerAccountTools } from "../tools/accountTools.js";
 import { registerBudgetTools } from "../tools/budgetTools.js";
 import { registerCategoryTools } from "../tools/categoryTools.js";
@@ -34,22 +34,21 @@ import {
 } from "../tools/schemas/outputs/index.js";
 import { registerSpendingAnalyticsTools } from "../tools/spendingAnalytics.js";
 import { ToolAnnotationPresets } from "../tools/toolCategories.js";
-import { registerTransactionTools } from "../tools/transactionTools.js";
+import { registerTransactionReadTools } from "../tools/transactionReadTools.js";
+import { registerTransactionWriteTools } from "../tools/transactionWriteTools.js";
 import { registerUtilityTools } from "../tools/utilityTools.js";
-import { ValidationError, YNABErrorCode } from "../types/index.js";
 import type { ToolContext } from "../types/toolRegistration.js";
 import {
 	AuthenticationError,
 	ConfigurationError,
-	ValidationError as ConfigValidationError,
+	ValidationError,
 } from "../utils/errors.js";
-import { getBudgetByIdCompat } from "../utils/ynabApiCompat.js";
 import { CacheManager } from "./cacheManager.js";
 import { CompletionsManager } from "./completions.js";
 import { type AppConfig, loadConfig } from "./config.js";
 import { DeltaCache } from "./deltaCache.js";
 import { DiagnosticManager } from "./diagnostics.js";
-import { createErrorHandler, type ErrorHandler } from "./errorHandler.js";
+import { ErrorHandler } from "./errorHandler.js";
 import {
 	formatDefaultBudget,
 	formatDiagnosticInfo,
@@ -58,11 +57,6 @@ import { PromptManager } from "./prompts.js";
 import { RateLimiter } from "./rateLimiter.js";
 import { globalRequestLogger, resolveLogLevel } from "./requestLogger.js";
 import { ResourceManager } from "./resources.js";
-import { responseFormatter } from "./responseFormatter.js";
-import {
-	SecurityMiddleware,
-	withSecurityWrapper,
-} from "./securityMiddleware.js";
 import { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
 import { type ToolDefinition, ToolRegistry } from "./toolRegistry.js";
 import { WriteSafetyPolicy } from "./writeSafety.js";
@@ -147,61 +141,11 @@ export class YNABMCPServer {
 			},
 		);
 
-		// Create ErrorHandler instance with formatter injection
-		this.errorHandler = createErrorHandler(responseFormatter);
+		this.errorHandler = new ErrorHandler();
 
 		this.toolRegistry = new ToolRegistry({
-			withSecurityWrapper,
 			errorHandler: this.errorHandler,
-			responseFormatter,
-			cacheHelpers: {
-				generateKey: (...segments: unknown[]) => {
-					const normalized = segments.map((segment) => {
-						if (
-							typeof segment === "string" ||
-							typeof segment === "number" ||
-							typeof segment === "boolean" ||
-							segment === undefined
-						) {
-							return segment;
-						}
-						return JSON.stringify(segment);
-					}) as (string | number | boolean | undefined)[];
-					return CacheManager.generateKey("tool", ...normalized);
-				},
-				invalidate: (key: string) => {
-					try {
-						this.cacheManager.delete(key);
-					} catch (error) {
-						console.error("Failed to invalidate cache key:", key, error);
-					}
-				},
-				clear: () => {
-					try {
-						this.cacheManager.clear();
-					} catch (error) {
-						console.error("Failed to clear cache:", error);
-					}
-				},
-			},
-			validateAccessToken: (token: string) => {
-				const expected = this.configInstance.YNAB_ACCESS_TOKEN.trim();
-				const provided = typeof token === "string" ? token.trim() : "";
-				if (!provided) {
-					throw this.errorHandler.createYNABError(
-						YNABErrorCode.UNAUTHORIZED,
-						"validating access token",
-						new Error("Missing access token"),
-					);
-				}
-				if (provided !== expected) {
-					throw this.errorHandler.createYNABError(
-						YNABErrorCode.UNAUTHORIZED,
-						"validating access token",
-						new Error("Access token mismatch"),
-					);
-				}
-			},
+			requestLogger: globalRequestLogger,
 			writeSafetyPolicy: new WriteSafetyPolicy({
 				mode: this.configInstance.YNAB_MCP_WRITE_MODE,
 			}),
@@ -211,7 +155,6 @@ export class YNABMCPServer {
 		// Initialize service modules
 		this.resourceManager = new ResourceManager({
 			ynabAPI: this.ynabAPI,
-			responseFormatter,
 			cacheManager: this.cacheManager,
 		});
 
@@ -226,14 +169,13 @@ export class YNABMCPServer {
 		this.diagnosticManager = new DiagnosticManager({
 			securityMiddleware: {
 				getSecurityStats: () => ({
-					...SecurityMiddleware.getSecurityStats(),
+					requestStats: globalRequestLogger.getStats(),
 					rateLimitStats: this.rateLimiter.getStatus(
 						this.configInstance.YNAB_ACCESS_TOKEN,
 					),
 				}),
 			},
 			cacheManager: this.cacheManager,
-			responseFormatter,
 			serverVersion: this.serverVersion,
 			serverKnowledgeStore: this.serverKnowledgeStore,
 			deltaCache: this.deltaCache,
@@ -374,7 +316,6 @@ export class YNABMCPServer {
 
 			return await this.toolRegistry.executeTool({
 				name: request.params.name,
-				accessToken: this.configInstance.YNAB_ACCESS_TOKEN,
 				arguments: rawArgs ?? {},
 			});
 		});
@@ -444,14 +385,15 @@ export class YNABMCPServer {
 		registerCategoryTools(this.toolRegistry, toolContext);
 		registerAccountTools(this.toolRegistry, toolContext);
 		registerMonthTools(this.toolRegistry, toolContext);
-		registerTransactionTools(this.toolRegistry, toolContext);
+		registerTransactionReadTools(this.toolRegistry, toolContext);
+		registerTransactionWriteTools(this.toolRegistry, toolContext);
 		registerScheduledTransactionTools(this.toolRegistry, toolContext);
 		registerSpendingAnalyticsTools(this.toolRegistry, toolContext);
 		registerCompareTransactionTools(this.toolRegistry, toolContext);
 		registerUtilityTools(this.toolRegistry, toolContext);
 
 		// Server-owned inline tools stay here because they depend on instance state (default budget,
-		// diagnostics manager, cache manager, response formatter) rather than the factory context.
+		// diagnostics manager, cache manager) rather than the factory context.
 		register({
 			name: "ynab_set_default_budget",
 			description: `Set a default budget so other tools don't require budget_id every call.
@@ -470,7 +412,7 @@ Errors:
 			outputSchema: SetDefaultBudgetOutputSchema,
 			handler: async ({ input }) => {
 				const { budget_id } = input;
-				await getBudgetByIdCompat(this.ynabAPI, budget_id);
+				await this.ynabAPI.plans.getPlanById(budget_id);
 				this.setDefaultBudget(budget_id);
 
 				// Cache warming for frequently accessed data (fire-and-forget)
@@ -488,7 +430,7 @@ Errors:
 					content: [
 						{
 							type: "text",
-							text: responseFormatter.format(setDefaultData),
+							text: JSON.stringify(setDefaultData, null, 2),
 						},
 					],
 					structuredContent: setDefaultData,
@@ -541,7 +483,7 @@ Returns: default_budget_id (null if not set), has_default.`,
 								text:
 									fmtGDB === "markdown"
 										? formatDefaultBudget(dataObjectGDB)
-										: responseFormatter.format(dataObjectGDB),
+										: JSON.stringify(dataObjectGDB, null, 2),
 							},
 						],
 						structuredContent: dataObjectGDB,
@@ -557,7 +499,7 @@ Returns: default_budget_id (null if not set), has_default.`,
 				annotations: {
 					// Intentionally categorized as local read-only (not READ_ONLY_EXTERNAL) because
 					// this tool only reads local server state without making any YNAB API calls.
-					// Compare with set_default_budget which calls ynabAPI.budgets.getBudgetById().
+					// Compare with set_default_budget which calls ynabAPI.plans.getPlanById().
 					...ToolAnnotationPresets.UTILITY_LOCAL_READ_ONLY,
 					title: "YNAB: Get Default Budget",
 				},
@@ -581,26 +523,21 @@ Returns: diagnostics object with requested sections.`,
 			inputSchema: diagnosticInfoSchema,
 			outputSchema: DiagnosticInfoOutputSchema,
 			handler: async ({ input }) => {
-				const diagnosticsResult =
-					await this.diagnosticManager.collectDiagnostics(input);
-				const diagData = parseDiagnosticsPayload(diagnosticsResult);
-				if (!diagData) {
-					return diagnosticsResult;
-				}
+				const diagData = await this.diagnosticManager.collectDiagnostics(input);
 				const fmtDiag =
 					(input as Record<string, unknown>)["response_format"] ?? "markdown";
-				if (fmtDiag === "markdown") {
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: formatDiagnosticInfo(diagData),
-							},
-						],
-						structuredContent: diagData,
-					};
-				}
-				return { ...diagnosticsResult, structuredContent: diagData };
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text:
+								fmtDiag === "markdown"
+									? formatDiagnosticInfo(diagData)
+									: JSON.stringify(diagData, null, 2),
+						},
+					],
+					structuredContent: diagData,
+				};
 			},
 			metadata: {
 				annotations: {
@@ -626,7 +563,7 @@ Use when: you need fresh data after external YNAB changes, or to free memory.`,
 				const clearCacheData = { success: true };
 				return {
 					content: [
-						{ type: "text", text: responseFormatter.format(clearCacheData) },
+						{ type: "text", text: JSON.stringify(clearCacheData, null, 2) },
 					],
 					structuredContent: clearCacheData,
 				};
@@ -665,7 +602,6 @@ Use when: you need fresh data after external YNAB changes, or to free memory.`,
 		} catch (error) {
 			if (
 				error instanceof ConfigurationError ||
-				error instanceof ConfigValidationError ||
 				error instanceof ValidationError ||
 				(error as { name?: string })?.name === "ValidationError"
 			) {
@@ -853,20 +789,6 @@ Use when: you need fresh data after external YNAB changes, or to free memory.`,
 				// ignore and try next
 			}
 		}
-		return null;
-	}
-}
-
-function parseDiagnosticsPayload(result: {
-	content: { type: "text"; text: string }[];
-}): Record<string, unknown> | null {
-	const textContent = result.content.find((c) => c.type === "text");
-	if (!textContent || !("text" in textContent)) {
-		return null;
-	}
-	try {
-		return JSON.parse(textContent.text) as Record<string, unknown>;
-	} catch {
 		return null;
 	}
 }

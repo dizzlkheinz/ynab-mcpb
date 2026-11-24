@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { textOf } from "../../__tests__/testUtils.js";
 import {
-	createErrorHandler,
+	ErrorHandler,
 	handleToolError,
 	ValidationError,
 	withToolErrorHandling,
@@ -9,13 +9,8 @@ import {
 	YNABErrorCode,
 } from "../errorHandler.js";
 
-/**
- * Helper to create an ErrorHandler with a simple JSON formatter for tests.
- */
 function createTestErrorHandler() {
-	return createErrorHandler({
-		format: (value: unknown) => JSON.stringify(value, null, 2),
-	});
+	return new ErrorHandler();
 }
 
 describe("ErrorHandler", () => {
@@ -256,21 +251,16 @@ describe("handleToolError", () => {
 	});
 
 	it("should use injected errorHandler when provided", () => {
-		const mockFormatter = {
-			format: vi.fn((value) => `CUSTOM: ${JSON.stringify(value)}`),
-		};
-		const errorHandler = createErrorHandler(mockFormatter);
+		const errorHandler = new ErrorHandler();
+		const spy = vi.spyOn(errorHandler, "handleError");
 
 		const error = new Error("Test error");
-		const result = handleToolError(
-			error,
-			"ynab:test_tool",
-			"testing operation",
-			errorHandler,
-		);
+		handleToolError(error, "ynab:test_tool", "testing operation", errorHandler);
 
-		expect(mockFormatter.format).toHaveBeenCalled();
-		expect(textOf(result.content[0])).toContain("CUSTOM:");
+		expect(spy).toHaveBeenCalledWith(
+			error,
+			"executing ynab:test_tool - testing operation",
+		);
 	});
 });
 
@@ -305,10 +295,8 @@ describe("withToolErrorHandling", () => {
 	});
 
 	it("should use injected errorHandler when provided", async () => {
-		const mockFormatter = {
-			format: vi.fn((value) => `CUSTOM: ${JSON.stringify(value)}`),
-		};
-		const errorHandler = createErrorHandler(mockFormatter);
+		const errorHandler = new ErrorHandler();
+		const spy = vi.spyOn(errorHandler, "handleError");
 
 		const operation = vi.fn().mockRejectedValue(new Error("Tool failed"));
 		await withToolErrorHandling(
@@ -318,7 +306,7 @@ describe("withToolErrorHandling", () => {
 			errorHandler,
 		);
 
-		expect(mockFormatter.format).toHaveBeenCalled();
+		expect(spy).toHaveBeenCalledOnce();
 	});
 });
 
@@ -345,77 +333,5 @@ describe("ValidationError", () => {
 		expect(error.name).toBe("ValidationError");
 		expect(error.message).toBe("Test message");
 		expect(error.details).toBe("Test details");
-	});
-});
-
-describe("ErrorHandler with formatter injection", () => {
-	it("should use injected formatter for error responses", () => {
-		const mockFormatter = {
-			format: vi.fn((value) => `CUSTOM: ${JSON.stringify(value)}`),
-		};
-		const errorHandler = createErrorHandler(mockFormatter);
-
-		const error = new ValidationError("Test error");
-		const result = errorHandler.handleError(error, "testing");
-
-		expect(mockFormatter.format).toHaveBeenCalledOnce();
-		expect(textOf(result.content[0])).toContain("CUSTOM:");
-	});
-
-	it("should call formatter with error response object", () => {
-		const mockFormatter = {
-			format: vi.fn((value) => JSON.stringify(value)),
-		};
-		const errorHandler = createErrorHandler(mockFormatter);
-
-		const error = new YNABAPIError(YNABErrorCode.UNAUTHORIZED, "Test");
-		errorHandler.handleError(error, "testing");
-
-		expect(mockFormatter.format).toHaveBeenCalledWith(
-			expect.objectContaining({
-				error: expect.objectContaining({
-					code: YNABErrorCode.UNAUTHORIZED,
-					message: expect.any(String),
-					userMessage: expect.any(String),
-				}),
-			}),
-		);
-	});
-
-	it("should create different instances with different formatters", () => {
-		const formatter1 = { format: (v: unknown) => `F1: ${JSON.stringify(v)}` };
-		const formatter2 = { format: (v: unknown) => `F2: ${JSON.stringify(v)}` };
-
-		const handler1 = createErrorHandler(formatter1);
-		const handler2 = createErrorHandler(formatter2);
-
-		const error = new ValidationError("Test");
-		const result1 = handler1.handleError(error, "testing");
-		const result2 = handler2.handleError(error, "testing");
-
-		expect(textOf(result1.content[0])).toContain("F1:");
-		expect(textOf(result2.content[0])).toContain("F2:");
-	});
-});
-
-describe("Error scenarios", () => {
-	it("should handle formatter errors gracefully", () => {
-		const faultyFormatter = {
-			format: () => {
-				throw new Error("Formatter error");
-			},
-		};
-		const errorHandler = createErrorHandler(faultyFormatter);
-
-		const error = new ValidationError("Test error");
-
-		// Should not throw despite formatter error
-		expect(() => errorHandler.handleError(error, "testing")).not.toThrow();
-
-		const result = errorHandler.handleError(error, "testing");
-
-		// Should still return a valid CallToolResult
-		expect(result.content).toBeDefined();
-		expect(result.content[0]!.type).toBe("text");
 	});
 });

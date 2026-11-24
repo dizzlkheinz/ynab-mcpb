@@ -1,33 +1,13 @@
 /**
- * Request logging functionality that sanitizes sensitive data
+ * Request logging that sanitizes sensitive data and tracks O(1) usage counters.
  */
 
 import { getRuntimeConfig } from "./config.js";
 
-export interface LogEntry {
-	timestamp: Date;
-	toolName: string;
-	operation: string;
-	parameters: Record<string, unknown>;
-	success: boolean;
-	duration?: number;
-	error?: string;
-	rateLimitInfo?: {
-		remaining: number;
-		isLimited: boolean;
-	};
-}
-
 export interface LoggerConfig {
 	enabled: boolean;
 	logLevel: "error" | "warn" | "info" | "debug";
-	maxLogEntries: number;
-	sanitizeParameters: boolean;
 }
-
-/**
- * Request logger that sanitizes sensitive information
- */
 
 const LOG_LEVEL_ALIASES: Record<string, LoggerConfig["logLevel"]> = {
 	trace: "debug",
@@ -50,21 +30,24 @@ function defaultLogLevel(): LoggerConfig["logLevel"] {
 }
 
 export class RequestLogger {
-	private logs: LogEntry[] = [];
 	private config: LoggerConfig;
+	private totalRequests = 0;
+	private successfulRequests = 0;
+	private failedRequests = 0;
+	private totalDuration = 0;
+	private durationCount = 0;
+	private toolUsage: Record<string, number> = {};
 
 	constructor(config: Partial<LoggerConfig> = {}) {
 		this.config = {
 			enabled: true,
 			logLevel: config.logLevel ?? defaultLogLevel(),
-			maxLogEntries: 1000,
-			sanitizeParameters: true,
 			...config,
 		};
 	}
 
 	/**
-	 * Update logger configuration (useful for testing)
+	 * Update logger configuration
 	 */
 	setConfig(config: Partial<LoggerConfig>): void {
 		this.config = {
@@ -74,8 +57,8 @@ export class RequestLogger {
 	}
 
 	/**
-	 * Write a debug line to stderr when the log level is debug. Debug lines are not stored as request logs, so they do not
-	 * depend on `enabled`.
+	 * Write a debug line to stderr when the log level is debug. Debug lines are
+	 * not counted as request stats, so they do not depend on `enabled`.
 	 */
 	debug(message: string): void {
 		if (this.shouldLog("debug")) {
@@ -84,129 +67,56 @@ export class RequestLogger {
 	}
 
 	/**
-	 * Log a tool request with sanitized parameters
+	 * Log a tool request and update counters
 	 */
 	logRequest(
 		toolName: string,
 		operation: string,
-		parameters: Record<string, unknown>,
 		success: boolean,
 		duration?: number,
 		error?: string,
-		rateLimitInfo?: { remaining: number; isLimited: boolean },
 	): void {
 		if (!this.config.enabled) return;
 
-		const logEntry: LogEntry = {
-			timestamp: new Date(),
-			toolName,
-			operation,
-			parameters: this.config.sanitizeParameters
-				? this.sanitizeParameters(parameters)
-				: parameters,
-			success,
-			...(duration !== undefined && { duration }),
-			...(error && { error: this.sanitizeError(error) }),
-			...(rateLimitInfo && { rateLimitInfo }),
-		};
-
-		this.logs.push(logEntry);
-
-		// Maintain log size limit
-		if (this.logs.length > this.config.maxLogEntries) {
-			this.logs.shift();
+		this.totalRequests++;
+		if (success) {
+			this.successfulRequests++;
+		} else {
+			this.failedRequests++;
 		}
+		if (duration !== undefined) {
+			this.totalDuration += duration;
+			this.durationCount++;
+		}
+		this.toolUsage[toolName] = (this.toolUsage[toolName] ?? 0) + 1;
 
-		// Output to console based on log level
-		this.outputLog(logEntry);
+		const sanitizedError = error ? this.sanitizeError(error) : undefined;
+		this.outputLog(toolName, operation, success, duration, sanitizedError);
 	}
 
-	/**
-	 * Log a successful request
-	 */
-	logSuccess(
-		toolName: string,
-		operation: string,
-		parameters: Record<string, unknown>,
-		duration?: number,
-		rateLimitInfo?: { remaining: number; isLimited: boolean },
-	): void {
-		this.logRequest(
-			toolName,
-			operation,
-			parameters,
-			true,
-			duration,
-			undefined,
-			rateLimitInfo,
-		);
+	logSuccess(toolName: string, operation: string, duration?: number): void {
+		this.logRequest(toolName, operation, true, duration);
 	}
 
-	/**
-	 * Log a failed request
-	 */
 	logError(
 		toolName: string,
 		operation: string,
-		parameters: Record<string, unknown>,
 		error: string,
 		duration?: number,
-		rateLimitInfo?: { remaining: number; isLimited: boolean },
 	): void {
-		this.logRequest(
-			toolName,
-			operation,
-			parameters,
-			false,
-			duration,
-			error,
-			rateLimitInfo,
-		);
+		this.logRequest(toolName, operation, false, duration, error);
 	}
 
 	/**
-	 * Get recent log entries
-	 */
-	getRecentLogs(count = 50): LogEntry[] {
-		return this.logs.slice(-count);
-	}
-
-	/**
-	 * Get logs filtered by criteria
-	 */
-	getFilteredLogs(filter: {
-		toolName?: string;
-		success?: boolean;
-		since?: Date;
-		limit?: number;
-	}): LogEntry[] {
-		let filtered = this.logs;
-
-		if (filter.toolName) {
-			filtered = filtered.filter((log) => log.toolName === filter.toolName);
-		}
-
-		if (filter.success !== undefined) {
-			filtered = filtered.filter((log) => log.success === filter.success);
-		}
-
-		if (filter.since) {
-			const since = filter.since;
-			filtered = filtered.filter((log) => log.timestamp >= since);
-		}
-
-		if (filter.limit) {
-			filtered = filtered.slice(-filter.limit);
-		}
-
-		return filtered;
-	}
-
-	/**
-	 * Clear all logs
+	 * Reset request counters
 	 */
 	clearLogs(): void {
-		this.logs = [];
+		this.totalRequests = 0;
+		this.successfulRequests = 0;
+		this.failedRequests = 0;
+		this.totalDuration = 0;
+		this.durationCount = 0;
+		this.toolUsage = {};
 	}
 
 	/**
@@ -217,201 +127,57 @@ export class RequestLogger {
 		successfulRequests: number;
 		failedRequests: number;
 		averageDuration: number;
-		rateLimitedRequests: number;
 		toolUsage: Record<string, number>;
 	} {
-		const totalRequests = this.logs.length;
-		const successfulRequests = this.logs.filter((log) => log.success).length;
-		const failedRequests = totalRequests - successfulRequests;
-
-		const durationsWithValues = this.logs
-			.map((log) => log.duration)
-			.filter((duration): duration is number => duration !== undefined);
-
-		const averageDuration =
-			durationsWithValues.length > 0
-				? durationsWithValues.reduce((sum, duration) => sum + duration, 0) /
-					durationsWithValues.length
-				: 0;
-
-		const rateLimitedRequests = this.logs.filter(
-			(log) => log.rateLimitInfo?.isLimited,
-		).length;
-
-		const toolUsage: Record<string, number> = {};
-		for (const log of this.logs) {
-			toolUsage[log.toolName] = (toolUsage[log.toolName] || 0) + 1;
-		}
-
 		return {
-			totalRequests,
-			successfulRequests,
-			failedRequests,
-			averageDuration,
-			rateLimitedRequests,
-			toolUsage,
+			totalRequests: this.totalRequests,
+			successfulRequests: this.successfulRequests,
+			failedRequests: this.failedRequests,
+			averageDuration:
+				this.durationCount > 0 ? this.totalDuration / this.durationCount : 0,
+			toolUsage: { ...this.toolUsage },
 		};
 	}
 
-	/**
-	 * Sanitize parameters to remove sensitive information
-	 */
-	private sanitizeParameters(
-		parameters: Record<string, unknown>,
-	): Record<string, unknown> {
-		const sanitized: Record<string, unknown> = {};
-
-		for (const [key, value] of Object.entries(parameters)) {
-			// Sanitize sensitive parameter names
-			if (this.isSensitiveParameter(key)) {
-				sanitized[key] = "***";
-			} else if (typeof value === "string") {
-				sanitized[key] = this.sanitizeString(value);
-			} else if (typeof value === "object" && value !== null) {
-				sanitized[key] = this.sanitizeObject(value);
-			} else {
-				sanitized[key] = value;
-			}
-		}
-
-		return sanitized;
-	}
-
-	/**
-	 * Check if a parameter name is sensitive
-	 */
-	private isSensitiveParameter(key: string): boolean {
-		const sensitiveKeys = [
-			"token",
-			"access_token",
-			"api_key",
-			"password",
-			"secret",
-			"authorization",
-			"auth",
-			"key",
-			"credential",
-		];
-
-		return sensitiveKeys.some((sensitiveKey) =>
-			key.toLowerCase().includes(sensitiveKey),
-		);
-	}
-
-	/**
-	 * Sanitize string values
-	 */
-	private sanitizeString(value: string): string {
-		// Remove potential tokens or sensitive data patterns
+	private sanitizeError(value: string): string {
 		return value
-			.replace(/[a-zA-Z0-9]{30,}/g, "***") // Long alphanumeric strings (potential tokens)
+			.replace(/[a-zA-Z0-9]{30,}/g, "***")
 			.replace(/Bearer\s+[a-zA-Z0-9_-]+/gi, "Bearer ***")
 			.replace(/token[s]?[:\s=]+[a-zA-Z0-9_-]+/gi, "token=***")
 			.replace(/key[s]?[:\s=]+[a-zA-Z0-9_-]+/gi, "key=***");
 	}
 
-	/**
-	 * Sanitize object values recursively
-	 */
-	private sanitizeObject(obj: unknown): unknown {
-		if (Array.isArray(obj)) {
-			return obj.map((item) =>
-				typeof item === "object" && item !== null
-					? this.sanitizeObject(item)
-					: item,
-			);
+	private outputLog(
+		toolName: string,
+		operation: string,
+		success: boolean,
+		duration?: number,
+		error?: string,
+	): void {
+		const parts = [`${toolName}:${operation}`, success ? "SUCCESS" : "FAILED"];
+		if (duration !== undefined) {
+			parts.push(`${duration}ms`);
 		}
-
-		if (typeof obj !== "object" || obj === null) {
-			return obj;
+		if (error) {
+			parts.push(`error:"${error}"`);
 		}
+		const logMessage = parts.join(" | ");
 
-		const sanitized: Record<string, unknown> = {};
-		for (const [key, value] of Object.entries(obj)) {
-			sanitized[key] = this.sanitizeEntryValue(key, value);
-		}
-		return sanitized;
-	}
-
-	private sanitizeEntryValue(key: string, value: unknown): unknown {
-		if (this.isSensitiveParameter(key)) {
-			return "***";
-		}
-		if (typeof value === "string") {
-			return this.sanitizeString(value);
-		}
-		if (typeof value === "object" && value !== null) {
-			return this.sanitizeObject(value);
-		}
-		return value;
-	}
-
-	/**
-	 * Sanitize error messages
-	 */
-	private sanitizeError(error: string): string {
-		return this.sanitizeString(error);
-	}
-
-	/**
-	 * Output log entry to console based on configuration
-	 */
-	private outputLog(logEntry: LogEntry): void {
-		const logMessage = this.formatLogMessage(logEntry);
-
-		if (logEntry.success) {
+		if (success) {
 			if (this.shouldLog("info")) {
 				console.error(`[INFO] ${logMessage}`);
 			}
-		} else {
-			if (this.shouldLog("error")) {
-				console.error(`[ERROR] ${logMessage}`);
-			}
-		}
-
-		// Always log rate limit warnings
-		if (logEntry.rateLimitInfo?.isLimited && this.shouldLog("warn")) {
-			console.error(`[WARN] Rate limit exceeded for ${logEntry.toolName}`);
+		} else if (this.shouldLog("error")) {
+			console.error(`[ERROR] ${logMessage}`);
 		}
 	}
 
-	/**
-	 * Check if we should log at the given level
-	 */
 	private shouldLog(level: LoggerConfig["logLevel"]): boolean {
 		const levels = ["error", "warn", "info", "debug"];
 		const currentLevelIndex = levels.indexOf(this.config.logLevel);
 		const requestedLevelIndex = levels.indexOf(level);
-
 		return requestedLevelIndex <= currentLevelIndex;
-	}
-
-	/**
-	 * Format log message for output
-	 */
-	private formatLogMessage(logEntry: LogEntry): string {
-		const parts = [
-			`${logEntry.toolName}:${logEntry.operation}`,
-			logEntry.success ? "SUCCESS" : "FAILED",
-		];
-
-		if (logEntry.duration !== undefined) {
-			parts.push(`${logEntry.duration}ms`);
-		}
-
-		if (logEntry.rateLimitInfo) {
-			parts.push(`rate_limit_remaining:${logEntry.rateLimitInfo.remaining}`);
-		}
-
-		if (logEntry.error) {
-			parts.push(`error:"${logEntry.error}"`);
-		}
-
-		return parts.join(" | ");
 	}
 }
 
-/**
- * Global request logger instance
- */
 export const globalRequestLogger = new RequestLogger();

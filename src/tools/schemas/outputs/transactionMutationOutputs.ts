@@ -3,7 +3,7 @@
  * Defines Zod validation schemas for transaction, account, and category mutation operations
  * including single/bulk creates, updates, deletes with dry-run and balance tracking.
  *
- * @see src/tools/transactionTools.ts - Transaction mutation handlers (create, update, delete, bulk operations)
+ * @see src/tools/transactionWriteTools.ts - Transaction mutation handlers (create, update, delete, bulk operations)
  * @see src/tools/accountTools.ts - Account creation handler (create_account)
  * @see src/tools/categoryTools.ts - Category update handler (update_category)
  *
@@ -37,7 +37,7 @@
  * }
  */
 
-import { z } from "zod";
+import { z } from "zod/v4";
 import { TransactionLineOutputSchema } from "../../transactionModel.js";
 import { AccountSchema } from "./accountOutputs.js";
 import { CategorySchema } from "./categoryOutputs.js";

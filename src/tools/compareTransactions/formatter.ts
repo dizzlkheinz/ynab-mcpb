@@ -1,6 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
-import { responseFormatter } from "../../server/responseFormatter.js";
 import { formatUTCISODate } from "../../utils/dateUtils.js";
 import type {
 	BankTransaction,
@@ -174,7 +173,7 @@ export function buildComparisonResult(
 		content: [
 			{
 				type: "text",
-				text: responseFormatter.format(comparisonData),
+				text: JSON.stringify(comparisonData, null, 2),
 			},
 		],
 		structuredContent: comparisonData,

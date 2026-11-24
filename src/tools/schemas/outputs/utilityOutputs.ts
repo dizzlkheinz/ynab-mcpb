@@ -178,7 +178,6 @@ export const CacheInfoSchema = z.object({
 	hits: z.number().optional(),
 	misses: z.number().optional(),
 	evictions: z.number().optional(),
-	lastCleanup: z.string().nullable().optional(),
 	maxEntries: z.number().optional(),
 	hitRate: z.string().optional(),
 	performance_summary: z.string().optional(),

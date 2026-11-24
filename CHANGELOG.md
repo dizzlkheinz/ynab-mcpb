@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Dropped unused/optional runtime dependencies (`date-fns`, `chrono-node`, `rimraf`) in favor of native Date utilities, lighter CSV date parsing, and Node `fs.rmSync`
+- Removed stale CI workflows and local maintenance files (`.github/workflows/full-integration.yml`, `.github/workflows/claude.yml`, `.github/dependabot.yml`, `.githooks/`)
+- Removed internal compatibility shims, unused wrappers, and dead code: `ynabApiCompat.ts` (use YNAB SDK v4 `plans`/`months` APIs directly), `securityMiddleware.ts` (moved direct Zod validation and request logging into `ToolRegistry`), `responseFormatter.ts`, `cacheKeys.ts`, `baseError.ts`, `validationError.ts` (consolidated into `errors.ts`), `tools/transactionTools.ts` barrel, `types/index.ts`, stale-while-revalidate and prefix/cleanup methods in `CacheManager`/`DeltaCache`, unused `DeltaFetcher` full-fetch helpers, and `compareTransactions/matchEngine.ts` (merged into `matcher.ts`)
+- Removed live-account E2E test suites (`*.e2e.test.ts`, `npm run test:live`), `IntegrationTestMeta` annotations, and redundant test cases
+
 ### Changed
 
+- Marked the repository as no longer actively maintained in `README.md`, cleaned `.env.example`, and updated `AGENTS.md` and `docs/maintainers/npm-publishing.md`
+- Simplified `RequestLogger` to O(1) counters instead of buffering up to 1,000 log entries in memory, and normalized remaining internal log/error tags from `ynab:*` to `ynab_*`
 - Enforced strict Biome lint rules (including `project`/`types` domains, MCP stdio `noConsole` guard, and `noExcessiveCognitiveComplexity` <= 15), switched `npm run lint` to `biome check .`, and refactored functions across `src/` and tests to meet the complexity ceiling
 
 ## [0.34.0] - 2026-11-24

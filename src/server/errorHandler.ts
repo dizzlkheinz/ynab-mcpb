@@ -4,13 +4,6 @@ import { ValidationError } from "../utils/errors.js";
 export { ValidationError };
 
 /**
- * Response formatter contract for dependency injection in error handling
- */
-interface ErrorResponseFormatter {
-	format(value: unknown): string;
-}
-
-/**
  * YNAB API error codes and their corresponding HTTP status codes
  */
 
@@ -95,12 +88,6 @@ const YNAB_ERROR_NAME_CODES: ReadonlyArray<
  * Centralized error handling middleware for all YNAB MCP tools
  */
 export class ErrorHandler {
-	private formatter: ErrorResponseFormatter;
-
-	constructor(formatter: ErrorResponseFormatter) {
-		this.formatter = formatter;
-	}
-
 	/**
 	 * Handles errors from YNAB API calls and returns standardized MCP responses
 	 */
@@ -109,15 +96,10 @@ export class ErrorHandler {
 
 		let formattedText: string;
 		try {
-			formattedText = this.formatter.format(errorResponse);
+			formattedText = JSON.stringify(errorResponse, null, 2);
 		} catch {
-			// Fallback to JSON.stringify if formatter fails
-			try {
-				formattedText = JSON.stringify(errorResponse, null, 2);
-			} catch {
-				// Final fallback if JSON serialization fails (e.g. circular references)
-				formattedText = `Error processing request: ${this.getGenericErrorMessage(context)}`;
-			}
+			// Final fallback if JSON serialization fails (e.g. circular references)
+			formattedText = `Error processing request: ${this.getGenericErrorMessage(context)}`;
 		}
 
 		return {
@@ -349,7 +331,7 @@ export class ErrorHandler {
 				return [
 					"Wait 1-2 minutes before trying again",
 					"Try making fewer requests at once",
-					"The system will automatically retry after a short delay",
+					"YNAB allows 200 requests per hour per token",
 				];
 			case YNABErrorCode.INTERNAL_SERVER_ERROR:
 				return [
@@ -738,25 +720,7 @@ export class ErrorHandler {
 	}
 }
 
-/**
- * Create an ErrorHandler configured with the given response formatter.
- *
- * @param formatter - Formatter used to convert structured error responses into strings for tool output
- * @returns A new ErrorHandler configured to use the provided `formatter`
- */
-export function createErrorHandler(
-	formatter: ErrorResponseFormatter,
-): ErrorHandler {
-	return new ErrorHandler(formatter);
-}
-
-/**
- * Module-level fallback ErrorHandler for standalone functions when no instance
- * is provided. Uses a simple JSON formatter.
- */
-const fallbackErrorHandler = new ErrorHandler({
-	format: (value: unknown) => JSON.stringify(value, null, 2),
-});
+export const defaultErrorHandler = new ErrorHandler();
 
 /**
  * Utility function for handling errors in tool handlers
@@ -767,7 +731,7 @@ export function handleToolError(
 	operation: string,
 	errorHandler?: ErrorHandler,
 ): CallToolResult {
-	const eh = errorHandler ?? fallbackErrorHandler;
+	const eh = errorHandler ?? defaultErrorHandler;
 	return eh.handleError(error, `executing ${toolName} - ${operation}`);
 }
 
@@ -780,7 +744,7 @@ export async function withToolErrorHandling<T>(
 	operationName: string,
 	errorHandler?: ErrorHandler,
 ): Promise<T | CallToolResult> {
-	const eh = errorHandler ?? fallbackErrorHandler;
+	const eh = errorHandler ?? defaultErrorHandler;
 	return eh.withErrorHandling(
 		operation,
 		`executing ${toolName} - ${operationName}`,

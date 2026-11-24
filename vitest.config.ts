@@ -2,7 +2,6 @@ import { defineConfig } from "vitest/config";
 
 const offlineEnvironment = {
 	YNAB_ACCESS_TOKEN: "test-token-for-mocked-tests",
-	RUN_LIVE_YNAB_TESTS: "false",
 };
 
 export default defineConfig({
@@ -15,7 +14,7 @@ export default defineConfig({
 				test: {
 					name: "unit",
 					include: ["src/**/*.{test,spec}.ts"],
-					exclude: ["src/**/*.integration.test.ts", "src/**/*.e2e.test.ts"],
+					exclude: ["src/**/*.integration.test.ts"],
 					env: offlineEnvironment,
 				},
 			},
@@ -25,16 +24,6 @@ export default defineConfig({
 					include: ["src/**/*.integration.test.ts"],
 					env: offlineEnvironment,
 					testTimeout: 120000,
-					hookTimeout: 30000,
-					fileParallelism: false,
-					maxWorkers: 1,
-				},
-			},
-			{
-				test: {
-					name: "live",
-					include: ["src/**/*.e2e.test.ts"],
-					testTimeout: 60000,
 					hookTimeout: 30000,
 					fileParallelism: false,
 					maxWorkers: 1,

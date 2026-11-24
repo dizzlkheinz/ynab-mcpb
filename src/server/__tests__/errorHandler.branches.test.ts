@@ -1,15 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { maybeTextOf } from "../../__tests__/testUtils.js";
 import {
-	createErrorHandler,
+	ErrorHandler,
 	ValidationError,
 	YNABAPIError,
 	YNABErrorCode,
 } from "../errorHandler.js";
 
-const handler = createErrorHandler({
-	format: (value: unknown) => JSON.stringify(value),
-});
+const handler = new ErrorHandler();
 
 function parse(error: unknown, context: string) {
 	const result = handler.handleError(error, context);

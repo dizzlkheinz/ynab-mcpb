@@ -3,9 +3,7 @@
 	"compilerOptions": {
 		"sourceMap": false,
 		"declarationMap": false,
-		"removeComments": true,
-		"noUnusedLocals": false,
-		"noUnusedParameters": false
+		"removeComments": true
 	},
 	"exclude": [
 		"node_modules",

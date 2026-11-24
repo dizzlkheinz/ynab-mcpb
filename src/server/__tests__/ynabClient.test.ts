@@ -42,10 +42,7 @@ describe("YNAB network and cache boundary", () => {
 		expect(limiter.getStatus("mock-token").remaining).toBe(1);
 		await api.user.getUser();
 		const error = await api.user.getUser().catch((cause: unknown) => cause);
-		const result = new ErrorHandler({ format: JSON.stringify }).handleError(
-			error,
-			"getting user",
-		);
+		const result = new ErrorHandler().handleError(error, "getting user");
 		expect(result.isError).toBe(true);
 		expect(
 			JSON.parse((result.content[0] as { text: string }).text).error.code,
@@ -95,7 +92,7 @@ describe("YNAB network and cache boundary", () => {
 				amount: -10000,
 			},
 		});
-		expect(cache.getKeys()).toEqual(["accounts:get:b:savings"]);
+		expect(cache.getStats().keys).toEqual(["accounts:get:b:savings"]);
 		expect(knowledge.get("transactions:account:a:checking")).toBeUndefined();
 	});
 

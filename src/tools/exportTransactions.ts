@@ -2,13 +2,14 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve, sep } from "node:path";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { format } from "date-fns";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
 import { getRuntimeConfig } from "../server/config.js";
-import type { ErrorHandler } from "../server/errorHandler.js";
-import { responseFormatter } from "../server/responseFormatter.js";
-import { ValidationError, withToolErrorHandling } from "../types/index.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../server/errorHandler.js";
+import { ValidationError } from "../utils/errors.js";
 import { requireResolvedBudgetId } from "./adapters.js";
 import { toTransactionOutput } from "./transactionModel.js";
 
@@ -82,6 +83,11 @@ function buildExportFilePath(exportDir: string, filename: string): string {
 	return resolvedFile;
 }
 
+function formatExportTimestamp(date: Date): string {
+	const pad = (value: number) => String(value).padStart(2, "0");
+	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+
 /**
  * Generate a descriptive filename for transaction export
  */
@@ -93,7 +99,7 @@ function generateExportFilename(
 		return sanitizeExportFilename(params.filename);
 	}
 
-	const timestamp = format(new Date(), "yyyy-MM-dd_HH-mm-ss");
+	const timestamp = formatExportTimestamp(new Date());
 	let description = "transactions";
 
 	// Add filters to filename for clarity
@@ -294,13 +300,13 @@ export async function handleExportTransactions(
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format(exportResult),
+						text: JSON.stringify(exportResult, null, 2),
 					},
 				],
 				structuredContent: exportResult,
 			};
 		},
-		"ynab:export_transactions",
+		"ynab_export_transactions",
 		"exporting transactions",
 		errorHandler,
 	);

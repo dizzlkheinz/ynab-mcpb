@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import type * as ynab from "ynab";
-import { responseFormatter } from "../../../server/responseFormatter.js";
+import { textOf } from "../../../__tests__/testUtils.js";
 import {
 	buildComparisonResult,
 	buildSummary,
@@ -14,12 +14,6 @@ import type {
 	TransactionMatch,
 	YNABTransaction,
 } from "../../compareTransactions/types.js";
-
-// Spy on the real formatter; stand in a plain JSON rendering so tests can read the payload.
-const formatSpy = vi
-	.spyOn(responseFormatter, "format")
-	.mockImplementation((data) => JSON.stringify(data, null, 2));
-const mockResponseFormatter = { format: formatSpy };
 
 // Helper functions to create test data
 function createBankTransaction(
@@ -80,10 +74,6 @@ function createPayee(id: string, name: string): ynab.Payee {
 }
 
 describe("formatter", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
-
 	describe("findSuggestedPayee", () => {
 		const payees = [
 			createPayee("payee1", "Starbucks"),
@@ -445,22 +435,19 @@ describe("formatter", () => {
 
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
-			expect(mockResponseFormatter.format).toHaveBeenCalledOnce();
 
-			// Verify the structure passed to responseFormatter
-			const formatterArg = mockResponseFormatter.format.mock
-				.calls[0]![0] as any;
-			expect(formatterArg).toHaveProperty("summary");
-			expect(formatterArg).toHaveProperty("matches");
-			expect(formatterArg).toHaveProperty("missing_in_ynab");
-			expect(formatterArg).toHaveProperty("missing_in_bank");
+			const payload = JSON.parse(textOf(result.content[0]));
+			expect(payload).toHaveProperty("summary");
+			expect(payload).toHaveProperty("matches");
+			expect(payload).toHaveProperty("missing_in_ynab");
+			expect(payload).toHaveProperty("missing_in_bank");
 
-			expect(formatterArg.summary.bank_transactions_count).toBe(2);
-			expect(formatterArg.summary.ynab_transactions_count).toBe(2);
-			expect(formatterArg.summary.matches_found).toBe(1);
-			expect(formatterArg.matches).toHaveLength(1);
-			expect(formatterArg.missing_in_ynab).toHaveLength(1);
-			expect(formatterArg.missing_in_bank).toHaveLength(1);
+			expect(payload.summary.bank_transactions_count).toBe(2);
+			expect(payload.summary.ynab_transactions_count).toBe(2);
+			expect(payload.summary.matches_found).toBe(1);
+			expect(payload.matches).toHaveLength(1);
+			expect(payload.missing_in_ynab).toHaveLength(1);
+			expect(payload.missing_in_bank).toHaveLength(1);
 		});
 
 		test("should handle empty results", () => {
@@ -482,17 +469,16 @@ describe("formatter", () => {
 			expect(result.content).toHaveLength(1);
 			expect(result.content[0]!.type).toBe("text");
 
-			const formatterArg = mockResponseFormatter.format.mock
-				.calls[0]![0] as any;
-			expect(formatterArg.summary.bank_transactions_count).toBe(0);
-			expect(formatterArg.summary.ynab_transactions_count).toBe(0);
-			expect(formatterArg.summary.matches_found).toBe(0);
-			expect(formatterArg.matches).toEqual([]);
-			expect(formatterArg.missing_in_ynab).toEqual([]);
-			expect(formatterArg.missing_in_bank).toEqual([]);
+			const payload = JSON.parse(textOf(result.content[0]));
+			expect(payload.summary.bank_transactions_count).toBe(0);
+			expect(payload.summary.ynab_transactions_count).toBe(0);
+			expect(payload.summary.matches_found).toBe(0);
+			expect(payload.matches).toEqual([]);
+			expect(payload.missing_in_ynab).toEqual([]);
+			expect(payload.missing_in_bank).toEqual([]);
 		});
 
-		test("should call responseFormatter.format with correct structure", () => {
+		test("should return structured JSON payload and structuredContent", () => {
 			const bankTxns = [createBankTransaction("2023-09-15", 123450, "Test", 1)];
 			const ynabTxns = [createYNABTransaction("ynab1", "2023-09-15", 123450)];
 			const matches = [createTransactionMatch(bankTxns[0]!, ynabTxns[0]!)];
@@ -503,7 +489,7 @@ describe("formatter", () => {
 				unmatched_ynab: [],
 			};
 
-			buildComparisonResult(
+			const result = buildComparisonResult(
 				matchResults,
 				bankTxns,
 				ynabTxns,
@@ -512,7 +498,8 @@ describe("formatter", () => {
 				{ start: "", end: "" },
 			);
 
-			expect(mockResponseFormatter.format).toHaveBeenCalledWith({
+			const payload = JSON.parse(textOf(result.content[0]));
+			expect(payload).toEqual({
 				summary: expect.objectContaining({
 					bank_transactions_count: 1,
 					ynab_transactions_count: 1,
@@ -531,35 +518,7 @@ describe("formatter", () => {
 				missing_in_ynab: [],
 				missing_in_bank: [],
 			});
-		});
-
-		test("should return CallToolResult with correct format", () => {
-			const mockFormattedText = "Formatted comparison result";
-			mockResponseFormatter.format.mockReturnValue(mockFormattedText);
-
-			const matchResults = {
-				matches: [],
-				unmatched_bank: [],
-				unmatched_ynab: [],
-			};
-			const result = buildComparisonResult(
-				matchResults,
-				[],
-				[],
-				[],
-				{},
-				{ start: "", end: "" },
-			);
-
-			expect(result).toMatchObject({
-				content: [
-					{
-						type: "text",
-						text: mockFormattedText,
-					},
-				],
-			});
-			expect(result.structuredContent).toBeDefined();
+			expect(result.structuredContent).toEqual(payload);
 		});
 	});
 });

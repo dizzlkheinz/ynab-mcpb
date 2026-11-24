@@ -1,18 +1,17 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import { CacheKeys } from "../server/cacheKeys.js";
 import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
-import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../server/errorHandler.js";
 import {
 	formatMonthDetail,
 	formatMonthsList,
 } from "../server/markdownFormatter.js";
-import { responseFormatter } from "../server/responseFormatter.js";
-import { withToolErrorHandling } from "../types/index.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import { milliunitsToAmount } from "../utils/money.js";
-import { getMonthCompat } from "../utils/ynabApiCompat.js";
 import {
 	createAdapters,
 	createBudgetResolver,
@@ -75,7 +74,7 @@ export async function handleGetMonth(
 			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Always use cache
 			const cacheKey = CacheManager.generateKey(
-				CacheKeys.MONTHS,
+				"months",
 				"get",
 				budgetId,
 				params.month,
@@ -83,7 +82,9 @@ export async function handleGetMonth(
 			const wasCached = cacheManager.has(cacheKey);
 			const month = await cacheManager.wrap<ynab.MonthDetail>(cacheKey, {
 				ttl: CACHE_TTLS.MONTHS,
-				loader: async () => getMonthCompat(ynabAPI, budgetId, params.month),
+				loader: async () =>
+					(await ynabAPI.months.getPlanMonth(budgetId, params.month)).data
+						.month,
 			});
 
 			const fmt = params.response_format ?? "markdown";
@@ -144,13 +145,13 @@ export async function handleGetMonth(
 						text:
 							fmt === "markdown"
 								? formatMonthDetail(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:get_month",
+		"ynab_get_month",
 		"getting month data",
 		errorHandler,
 	);
@@ -212,13 +213,13 @@ export async function handleListMonths(
 						text:
 							fmt === "markdown"
 								? formatMonthsList(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:list_months",
+		"ynab_list_months",
 		"listing months",
 		errorHandler,
 	);

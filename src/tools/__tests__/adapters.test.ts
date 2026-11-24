@@ -1,13 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { createErrorHandler } from "../../server/errorHandler.js";
+import { ErrorHandler } from "../../server/errorHandler.js";
 import { DefaultArgumentResolutionError } from "../../server/toolRegistry.js";
 import type { ToolContext } from "../../types/toolRegistration.js";
 import { createAdapters, createBudgetResolver } from "../adapters.js";
 
-const createMockErrorHandler = () =>
-	createErrorHandler({
-		format: (value: unknown) => JSON.stringify(value, null, 2),
-	});
+const createMockErrorHandler = () => new ErrorHandler();
 
 const createMockContext = (
 	overrides: Partial<ToolContext> = {},
@@ -112,7 +109,6 @@ describe("createBudgetResolver", () => {
 
 		const result = resolver({
 			name: "tool",
-			accessToken: "token",
 			rawArguments: { budget_id: "123e4567-e89b-12d3-a456-426614174000" },
 		});
 
@@ -129,7 +125,6 @@ describe("createBudgetResolver", () => {
 
 		const result = resolver({
 			name: "tool",
-			accessToken: "token",
 			rawArguments: {},
 		});
 
@@ -145,7 +140,6 @@ describe("createBudgetResolver", () => {
 		expect(() =>
 			resolver({
 				name: "tool",
-				accessToken: "token",
 				rawArguments: {},
 			}),
 		).toThrow(DefaultArgumentResolutionError);

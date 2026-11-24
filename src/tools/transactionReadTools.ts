@@ -3,14 +3,15 @@ import type * as ynab from "ynab";
 import type { z } from "zod/v4";
 import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
 import { RESPONSE_SIZE_LIMIT_BYTES } from "../server/config.js";
-import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../server/errorHandler.js";
 import {
 	formatTransactionDetail,
 	formatTransactionsList,
 } from "../server/markdownFormatter.js";
-import { responseFormatter } from "../server/responseFormatter.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
-import { withToolErrorHandling } from "../types/index.js";
 import type { ReadDeps, ToolContext } from "../types/toolRegistration.js";
 import { amountToMilliunits } from "../utils/money.js";
 import {
@@ -189,7 +190,7 @@ function buildOversizedTransactionsResult(
 				text:
 					format === "markdown"
 						? formatTransactionsList(previewData)
-						: responseFormatter.format(previewData),
+						: JSON.stringify(previewData, null, 2),
 			},
 		],
 		structuredContent: previewData,
@@ -255,20 +256,20 @@ export async function handleListTransactions(
 						text:
 							fmt === "markdown"
 								? formatTransactionsList(normalData)
-								: responseFormatter.format(normalData),
+								: JSON.stringify(normalData, null, 2),
 					},
 				],
 				structuredContent: normalData,
 			};
 		},
-		"ynab:list_transactions",
+		"ynab_list_transactions",
 		"listing transactions",
 		errorHandler,
 	);
 }
 
 /**
- * Handles the ynab:get_transaction tool call
+ * Handles the ynab_get_transaction tool call
  * Gets detailed information for a specific transaction
  */
 export async function handleGetTransaction(
@@ -316,7 +317,7 @@ export async function handleGetTransaction(
 					text:
 						fmtTx === "markdown"
 							? formatTransactionDetail(txData)
-							: responseFormatter.format(txData),
+							: JSON.stringify(txData, null, 2),
 				},
 			],
 			structuredContent: txData,

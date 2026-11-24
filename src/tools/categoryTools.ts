@@ -1,15 +1,15 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import { CacheKeys } from "../server/cacheKeys.js";
 import { CACHE_TTLS, CacheManager } from "../server/cacheManager.js";
-import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../server/errorHandler.js";
 import {
 	formatCategoriesList,
 	formatCategoryDetail,
 } from "../server/markdownFormatter.js";
-import { responseFormatter } from "../server/responseFormatter.js";
-import { withToolErrorHandling } from "../types/index.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
 import { formatLocalISODate } from "../utils/dateUtils.js";
 import { milliunitsToAmount } from "../utils/money.js";
@@ -175,20 +175,20 @@ export async function handleListCategories(
 						text:
 							fmt === "markdown"
 								? formatCategoriesList(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:list_categories",
+		"ynab_list_categories",
 		"listing categories",
 		errorHandler,
 	);
 }
 
 /**
- * Handles the ynab:get_category tool call
+ * Handles the ynab_get_category tool call
  * Gets detailed information for a specific category
  */
 export async function handleGetCategory(
@@ -203,7 +203,7 @@ export async function handleGetCategory(
 			const budgetId = requireResolvedBudgetId(params.budget_id);
 			// Use enhanced CacheManager wrap method
 			const cacheKey = CacheManager.generateKey(
-				CacheKeys.CATEGORIES,
+				"categories",
 				"get",
 				budgetId,
 				params.category_id,
@@ -250,20 +250,20 @@ export async function handleGetCategory(
 						text:
 							fmt === "markdown"
 								? formatCategoryDetail(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:get_category",
+		"ynab_get_category",
 		"getting category",
 		errorHandler,
 	);
 }
 
 /**
- * Handles the ynab:update_category tool call
+ * Handles the ynab_update_category tool call
  * Updates the budgeted amount for a category in the current month
  */
 export async function handleUpdateCategory(
@@ -289,7 +289,7 @@ export async function handleUpdateCategory(
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format(dryRunData),
+						text: JSON.stringify(dryRunData, null, 2),
 					},
 				],
 				structuredContent: dryRunData,
@@ -329,7 +329,7 @@ export async function handleUpdateCategory(
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format(updatedCategoryData),
+					text: JSON.stringify(updatedCategoryData, null, 2),
 				},
 			],
 			structuredContent: updatedCategoryData,
@@ -465,11 +465,15 @@ function handleCategoryError(
 		content: [
 			{
 				type: "text",
-				text: responseFormatter.format({
-					error: {
-						message: errorMessage,
+				text: JSON.stringify(
+					{
+						error: {
+							message: errorMessage,
+						},
 					},
-				}),
+					null,
+					2,
+				),
 			},
 		],
 	};

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import * as chrono from "chrono-node";
 import Papa from "papaparse";
 
 interface ParsedBankTransaction {
@@ -136,10 +135,6 @@ function validateDelimiter(
 }
 
 export interface ParseCSVOptions {
-	/** Bank preset key (e.g., 'td', 'rbc') */
-	preset?: string;
-	/** Multiply all amounts by -1 */
-	invertAmounts?: boolean;
 	/**
 	 * Explicit CSV delimiter override (defaults to PapaParse auto-detection).
 	 * Must be one of: comma (,), semicolon (;), tab (\t), pipe (|), or space ( )
@@ -308,10 +303,7 @@ export function parseCSV(
 	const rowContext: RowParseContext = {
 		mapping,
 		dateFormat: options.dateFormat ?? preset?.dateFormat,
-		// Apply amount inversion if needed
-		amountMultiplier: options.invertAmounts
-			? -1
-			: (preset?.amountMultiplier ?? 1),
+		amountMultiplier: preset?.amountMultiplier ?? 1,
 	};
 
 	const {
@@ -449,22 +441,19 @@ function resolveFormat(
 	content: string,
 	options: ParseCSVOptions,
 ): { presetKey: string | undefined; hasHeader: boolean } {
-	let presetKey: string | undefined = options.preset;
+	let presetKey: string | undefined;
 	let header: boolean | undefined = options.header;
 
-	if (!presetKey || header === undefined) {
+	if (header === undefined) {
 		const autoResult = autoDetectFormat(content);
 		if (autoResult) {
-			if (!presetKey) {
-				presetKey = autoResult.preset;
-			}
-			if (header === undefined && autoResult.header !== undefined) {
+			presetKey = autoResult.preset;
+			if (autoResult.header !== undefined) {
 				header = autoResult.header;
 			}
 		}
 	}
 
-	// Determine header setting: Explicit > Detected > Preset > Default (true)
 	const presetHeader = presetKey ? BANK_PRESETS[presetKey]?.header : undefined;
 	return { presetKey, hasHeader: header ?? presetHeader ?? true };
 }
@@ -880,6 +869,86 @@ function parseHintedNumericDate(
 	return null;
 }
 
+const MONTH_INDEX: Record<string, number> = {
+	jan: 0,
+	january: 0,
+	feb: 1,
+	february: 1,
+	mar: 2,
+	march: 2,
+	apr: 3,
+	april: 3,
+	may: 4,
+	jun: 5,
+	june: 5,
+	jul: 6,
+	july: 6,
+	aug: 7,
+	august: 7,
+	sep: 8,
+	sept: 8,
+	september: 8,
+	oct: 9,
+	october: 9,
+	nov: 10,
+	november: 10,
+	dec: 11,
+	december: 11,
+};
+
+function makeValidatedUtcDate(
+	year: number,
+	monthIndex: number,
+	day: number,
+): Date | null {
+	const parsed = new Date(Date.UTC(year, monthIndex, day));
+	if (
+		parsed.getUTCFullYear() !== year ||
+		parsed.getUTCMonth() !== monthIndex ||
+		parsed.getUTCDate() !== day
+	) {
+		return null;
+	}
+	return parsed;
+}
+
+function buildNamedDate(
+	monthName: string,
+	dayText: string,
+	yearText: string,
+): Date | null {
+	const monthIndex = MONTH_INDEX[monthName.toLowerCase()];
+	if (monthIndex === undefined) return null;
+	let year = Number.parseInt(yearText, 10);
+	if (year < 100) year += 2000;
+	const day = Number.parseInt(dayText, 10);
+	return makeValidatedUtcDate(year, monthIndex, day);
+}
+
+function parseMonthNameDate(raw: string): Date | null {
+	const trimmed = raw.trim();
+	const monthFirst = trimmed.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{2,4})$/);
+	if (monthFirst?.[1] && monthFirst[2] && monthFirst[3]) {
+		return buildNamedDate(monthFirst[1], monthFirst[2], monthFirst[3]);
+	}
+
+	const dayFirst = trimmed.match(/^(\d{1,2})[\s-]+([A-Za-z]+)[\s-]+(\d{2,4})$/);
+	if (dayFirst?.[1] && dayFirst[2] && dayFirst[3]) {
+		return buildNamedDate(dayFirst[2], dayFirst[1], dayFirst[3]);
+	}
+
+	return null;
+}
+
+function parseUnhintedNumericDate(raw: string): Date | null {
+	const match = raw.trim().match(/^(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})$/);
+	if (!match) return null;
+	const first = Number.parseInt(match[1] ?? "", 10);
+	const hint =
+		(match[1] ?? "").length === 4 ? "YMD" : first > 12 ? "DMY" : "MDY";
+	return parseHintedNumericDate(raw.trim(), hint);
+}
+
 function parseDate(
 	raw: string,
 	formatHint?: "YMD" | "MDY" | "DMY",
@@ -896,18 +965,8 @@ function parseDate(
 		if (hintedDate) return hintedDate;
 	}
 
-	// 3. Fallback to chrono-node (handles natural language, many formats)
-	// Timezone strategy: chrono-node returns local time, but we extract only date components
-	// and reconstruct as UTC to ensure consistent date handling across all parsing paths.
-	// This prevents "off-by-one-day" errors from timezone conversions during date comparison.
-	const parsed = chrono.parseDate(raw);
-	if (parsed) {
-		return new Date(
-			Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()),
-		);
-	}
-
-	return null;
+	// 3. Fallback to named-month dates (e.g. "July 8 2026") and unhinted numeric dates
+	return parseMonthNameDate(raw) ?? parseUnhintedNumericDate(raw);
 }
 
 function formatLocalDate(date: Date): string {

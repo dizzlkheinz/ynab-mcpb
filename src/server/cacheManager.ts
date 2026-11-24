@@ -1,33 +1,20 @@
 /**
  * Cache Manager for YNAB API responses
- * Provides in-memory caching with TTL to reduce API calls and improve performance
+ * Provides in-memory LRU caching with TTL and concurrent request deduplication.
  */
 
 interface CacheEntry<T> {
 	data: T;
 	timestamp: number;
 	ttl: number;
-	staleWhileRevalidate?: number;
-}
-
-interface CacheSetOptions {
-	ttl?: number;
-	/**
-	 * Stale-while-revalidate window in milliseconds.
-	 * When explicitly set to undefined, uses the default stale window.
-	 * When omitted entirely, no stale-while-revalidate is applied.
-	 */
-	staleWhileRevalidate?: number | undefined;
 }
 
 const DEFAULT_MAX_ENTRIES = 1000;
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
-const DEFAULT_STALE_MS = 2 * 60 * 1000;
 
 export interface CacheManagerOptions {
 	maxEntries?: number;
 	defaultTtlMs?: number;
-	staleMs?: number;
 }
 
 export class CacheManager {
@@ -36,15 +23,11 @@ export class CacheManager {
 	private hits = 0;
 	private misses = 0;
 	private evictions = 0;
-	private lastCleanup: number | null = null;
 	private maxEntries: number;
-	private defaultStaleWindow: number;
 	private pendingFetches = new Map<string, Promise<unknown>>();
-	private pendingRefresh = new Set<string>();
 
 	constructor(options: CacheManagerOptions = {}) {
 		this.maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
-		this.defaultStaleWindow = options.staleMs ?? DEFAULT_STALE_MS;
 		this.defaultTTL = options.defaultTtlMs ?? DEFAULT_TTL_MS;
 	}
 
@@ -59,25 +42,8 @@ export class CacheManager {
 			return null;
 		}
 
-		const now = Date.now();
-		const age = now - entry.timestamp;
-
-		// Check if entry is expired
-		if (age > entry.ttl) {
-			// Check if we're within stale-while-revalidate window
-			const staleWindow = entry.staleWhileRevalidate || 0;
-			if (staleWindow > 0 && age <= entry.ttl + staleWindow) {
-				this.hits++;
-				// Update access order for LRU
-				this.cache.delete(key);
-				this.cache.set(key, entry);
-				// Mark for background refresh
-				this.pendingRefresh.add(key);
-				return entry.data as T;
-			}
-
+		if (Date.now() - entry.timestamp > entry.ttl) {
 			this.cache.delete(key);
-			this.pendingRefresh.delete(key);
 			this.misses++;
 			return null;
 		}
@@ -98,16 +64,8 @@ export class CacheManager {
 			return false;
 		}
 
-		const now = Date.now();
-		const age = now - entry.timestamp;
-		if (age > entry.ttl) {
-			const staleWindow = entry.staleWhileRevalidate || 0;
-			if (staleWindow > 0 && age <= entry.ttl + staleWindow) {
-				return true;
-			}
-
+		if (Date.now() - entry.timestamp > entry.ttl) {
 			this.cache.delete(key);
-			this.pendingRefresh.delete(key);
 			return false;
 		}
 
@@ -115,48 +73,9 @@ export class CacheManager {
 	}
 
 	/**
-	 * Set cache entry with optional TTL or options
-	 *
-	 * @param key - Cache key
-	 * @param data - Data to cache
-	 * @param ttlOrOptions - TTL in milliseconds (number) or options object
-	 *
-	 * Note: Default stale-while-revalidate window is applied only when:
-	 * - An options object is provided AND
-	 * - The staleWhileRevalidate property is explicitly present (even if undefined)
-	 *
-	 * When using the simple number interface or when staleWhileRevalidate property
-	 * is not present in the options object, no default stale window is applied.
+	 * Set cache entry with optional TTL in milliseconds
 	 */
-	private resolveSetOptions(ttlOrOptions?: number | CacheSetOptions): {
-		ttl: number;
-		staleWhileRevalidate: number | undefined;
-	} {
-		if (typeof ttlOrOptions === "number") {
-			return {
-				ttl: Number.isFinite(ttlOrOptions) ? ttlOrOptions : this.defaultTTL,
-				staleWhileRevalidate: undefined,
-			};
-		}
-		if (ttlOrOptions === undefined) {
-			return { ttl: this.defaultTTL, staleWhileRevalidate: undefined };
-		}
-
-		const ttl = ttlOrOptions.ttl ?? this.defaultTTL;
-		if (!("staleWhileRevalidate" in ttlOrOptions)) {
-			return { ttl, staleWhileRevalidate: undefined };
-		}
-
-		const staleWhileRevalidate =
-			ttlOrOptions.staleWhileRevalidate === undefined &&
-			this.defaultStaleWindow > 0
-				? this.defaultStaleWindow
-				: ttlOrOptions.staleWhileRevalidate;
-		return { ttl, staleWhileRevalidate };
-	}
-
-	set<T>(key: string, data: T, ttlOrOptions?: number | CacheSetOptions): void {
-		// Don't cache anything if maxEntries is 0
+	set<T>(key: string, data: T, ttl?: number): void {
 		if (this.maxEntries <= 0) {
 			return;
 		}
@@ -166,24 +85,20 @@ export class CacheManager {
 			this.evictIfNeeded();
 		}
 
-		const { ttl, staleWhileRevalidate } = this.resolveSetOptions(ttlOrOptions);
+		const resolvedTtl =
+			typeof ttl === "number" && Number.isFinite(ttl) ? ttl : this.defaultTTL;
 		const entry: CacheEntry<T> = {
 			data,
 			timestamp: Date.now(),
-			ttl,
+			ttl: resolvedTtl,
 		};
-		if (staleWhileRevalidate !== undefined) {
-			entry.staleWhileRevalidate = staleWhileRevalidate;
-		}
 
 		if (isUpdate) {
 			// When updating, delete then set to preserve MRU ordering
 			this.cache.delete(key);
 		}
 		this.cache.set(key, entry);
-		// Clear any pending operations since we have fresh data
 		this.pendingFetches.delete(key);
-		this.pendingRefresh.delete(key);
 	}
 
 	/**
@@ -194,7 +109,6 @@ export class CacheManager {
 		// A first load may still be pending without a cached entry. Removing its
 		// identity also prevents that older read from publishing after a write.
 		this.pendingFetches.delete(key);
-		this.pendingRefresh.delete(key);
 		return deleted;
 	}
 
@@ -205,47 +119,12 @@ export class CacheManager {
 		for (const key of keys) {
 			this.cache.delete(key);
 			this.pendingFetches.delete(key);
-			this.pendingRefresh.delete(key);
 		}
-	}
-
-	/**
-	 * Delete cache entries whose keys begin with the provided prefix.
-	 * Useful for invalidating a specific resource type across budgets.
-	 *
-	 * @param prefix - Cache key prefix (e.g., 'transactions:' or 'accounts:list:')
-	 * @returns The number of entries removed
-	 */
-	deleteByPrefix(prefix: string): number {
-		if (!prefix) {
-			return 0;
-		}
-
-		const normalizedPrefix = prefix.endsWith(":")
-			? prefix.slice(0, -1)
-			: prefix;
-		const prefixWithColon = `${normalizedPrefix}:`;
-
-		let removed = 0;
-		for (const key of new Set([
-			...this.cache.keys(),
-			...this.pendingFetches.keys(),
-		])) {
-			if (key === normalizedPrefix || key.startsWith(prefixWithColon)) {
-				this.cache.delete(key);
-				this.pendingFetches.delete(key);
-				this.pendingRefresh.delete(key);
-				removed++;
-			}
-		}
-		return removed;
 	}
 
 	/**
 	 * Delete cache entries that belong to a specific budget.
 	 * Matches keys containing the budget ID (e.g., '...:budget-123:...').
-	 *
-	 * @param budgetId - Budget identifier to match
 	 */
 	deleteByBudgetId(budgetId: string): number {
 		if (!budgetId) {
@@ -261,20 +140,10 @@ export class CacheManager {
 			if (segments.some((segment) => segment === budgetId)) {
 				this.cache.delete(key);
 				this.pendingFetches.delete(key);
-				this.pendingRefresh.delete(key);
 				removed++;
 			}
 		}
 		return removed;
-	}
-
-	/**
-	 * Return all cache keys for debugging and diagnostics.
-	 *
-	 * @returns Snapshot of cache keys in insertion order
-	 */
-	getKeys(): string[] {
-		return Array.from(this.cache.keys());
 	}
 
 	/** Retain an expired snapshot for a delta refresh without serving it as fresh. */
@@ -290,9 +159,7 @@ export class CacheManager {
 		this.hits = 0;
 		this.misses = 0;
 		this.evictions = 0;
-		this.lastCleanup = null;
 		this.pendingFetches.clear();
-		this.pendingRefresh.clear();
 	}
 
 	/**
@@ -304,7 +171,6 @@ export class CacheManager {
 		hits: number;
 		misses: number;
 		evictions: number;
-		lastCleanup: number | null;
 		maxEntries: number;
 		hitRate: number;
 	} {
@@ -315,114 +181,48 @@ export class CacheManager {
 			hits: this.hits,
 			misses: this.misses,
 			evictions: this.evictions,
-			lastCleanup: this.lastCleanup,
 			maxEntries: this.maxEntries,
 			hitRate: totalRequests > 0 ? this.hits / totalRequests : 0,
 		};
 	}
 
 	/**
-	 * Provide a filtered snapshot for cache size estimation without exposing expired entries.
-	 */
-	getEntriesForSizeEstimation(): [string, CacheEntry<unknown>][] {
-		const now = Date.now();
-		return Array.from(this.cache.entries()).filter(
-			([, entry]) => now - entry.timestamp <= entry.ttl,
-		);
-	}
-
-	/**
 	 * Get lightweight cache metadata for size estimation without full entry data.
-	 * Returns summaries with keys, timestamps, and TTLs for estimating memory usage.
 	 */
 	getCacheMetadata(): {
 		key: string;
 		timestamp: number;
 		ttl: number;
-		staleWhileRevalidate?: number;
 		dataType: string;
 		isExpired: boolean;
 	}[] {
 		const now = Date.now();
-		return Array.from(this.cache.entries()).map(([key, entry]) => {
-			const metadata: {
-				key: string;
-				timestamp: number;
-				ttl: number;
-				staleWhileRevalidate?: number;
-				dataType: string;
-				isExpired: boolean;
-			} = {
-				key,
-				timestamp: entry.timestamp,
-				ttl: entry.ttl,
-				dataType: typeof entry.data,
-				isExpired: now - entry.timestamp > entry.ttl,
-			};
-			if (entry.staleWhileRevalidate !== undefined) {
-				metadata.staleWhileRevalidate = entry.staleWhileRevalidate;
-			}
-			return metadata;
-		});
+		return Array.from(this.cache.entries()).map(([key, entry]) => ({
+			key,
+			timestamp: entry.timestamp,
+			ttl: entry.ttl,
+			dataType: typeof entry.data,
+			isExpired: now - entry.timestamp > entry.ttl,
+		}));
 	}
 
 	/**
-	 * Clean up expired entries
-	 */
-	cleanup(): number {
-		const result = this.cleanupDetailed();
-		return result.cleaned;
-	}
-
-	/**
-	 * Clean up expired entries with detailed information
-	 */
-	cleanupDetailed(): { cleaned: number; evictions: number } {
-		const now = Date.now();
-		let cleaned = 0;
-		const initialEvictions = this.evictions;
-
-		for (const [key, entry] of this.cache.entries()) {
-			if (now - entry.timestamp > entry.ttl) {
-				this.cache.delete(key);
-				this.pendingRefresh.delete(key);
-				cleaned++;
-				this.evictions++;
-			}
-		}
-
-		this.lastCleanup = now;
-		return { cleaned, evictions: this.evictions - initialEvictions };
-	}
-
-	/**
-	 * Wrap a loader with caching, concurrent deduplication and background refresh.
-	 * Foreground failures propagate; failed background refreshes leave stale data
-	 * available until its existing stale window expires.
+	 * Wrap a loader with caching and concurrent deduplication.
 	 *
 	 * `revalidate` always runs the loader, even over a fresh entry, while keeping
 	 * deduplication and the guard against publishing after invalidation.
 	 */
 	async wrap<T>(
 		key: string,
-		options: CacheSetOptions & {
+		options: {
+			ttl?: number;
 			loader: () => Promise<T>;
 			revalidate?: boolean;
 		},
 	): Promise<T> {
 		if (!options.revalidate) {
-			const existingEntry = this.cache.get(key);
 			const cached = this.get<T>(key);
 			if (cached !== null) {
-				if (this.pendingRefresh.has(key) && !this.pendingFetches.has(key)) {
-					const refreshOptions = this.getRefreshOptions(options, existingEntry);
-					const refreshPromise = this.loadAndCache(
-						key,
-						options.loader,
-						refreshOptions,
-					);
-					void this.observeBackgroundRefresh(refreshPromise);
-				}
 				return cached;
 			}
 		}
@@ -434,28 +234,14 @@ export class CacheManager {
 			return existingFetch;
 		}
 
-		return this.loadAndCache(key, options.loader, options);
-	}
-
-	/** Preserve the entry's TTL and stale window when refresh options omit them. */
-	private getRefreshOptions(
-		options: CacheSetOptions,
-		entry: CacheEntry<unknown> | undefined,
-	): CacheSetOptions {
-		const ttl = options.ttl ?? entry?.ttl;
-		const staleWhileRevalidate =
-			options.staleWhileRevalidate ?? entry?.staleWhileRevalidate;
-		return {
-			...(ttl !== undefined && { ttl }),
-			...(staleWhileRevalidate !== undefined && { staleWhileRevalidate }),
-		};
+		return this.loadAndCache(key, options.loader, options.ttl);
 	}
 
 	/** Cache only successful loads and release pending state on either outcome. */
 	private loadAndCache<T>(
 		key: string,
 		loader: () => Promise<T>,
-		options: CacheSetOptions,
+		ttl?: number,
 	): Promise<T> {
 		let loading: Promise<T>;
 		try {
@@ -466,7 +252,7 @@ export class CacheManager {
 		const pending = loading
 			.then((result) => {
 				if (this.pendingFetches.get(key) === pending) {
-					this.set(key, result, options);
+					this.set(key, result, ttl);
 				}
 				return result;
 			})
@@ -475,23 +261,10 @@ export class CacheManager {
 				// must neither publish its result nor release the newer read's lock.
 				if (this.pendingFetches.get(key) === pending) {
 					this.pendingFetches.delete(key);
-					this.pendingRefresh.delete(key);
 				}
 			});
 		this.pendingFetches.set(key, pending);
 		return pending;
-	}
-
-	/** Observe a detached refresh so its rejection cannot escape to the process. */
-	private async observeBackgroundRefresh(
-		refresh: Promise<unknown>,
-	): Promise<void> {
-		try {
-			await refresh;
-		} catch {
-			// loadAndCache releases pending state; the next stale read can retry.
-			// Foreground callers awaiting the original promise still receive the error.
-		}
 	}
 
 	/**
@@ -501,12 +274,10 @@ export class CacheManager {
 		if (this.maxEntries <= 0) return;
 
 		while (this.cache.size >= this.maxEntries) {
-			// Get the first (oldest) entry
 			const firstKey = this.cache.keys().next().value;
 			if (firstKey) {
 				this.cache.delete(firstKey);
 				this.pendingFetches.delete(firstKey);
-				this.pendingRefresh.delete(firstKey);
 				this.evictions++;
 			} else {
 				break;

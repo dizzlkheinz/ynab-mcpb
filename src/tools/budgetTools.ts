@@ -1,15 +1,15 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type * as ynab from "ynab";
 import { z } from "zod/v4";
-import type { ErrorHandler } from "../server/errorHandler.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../server/errorHandler.js";
 import {
 	formatBudgetDetail,
 	formatBudgetsList,
 } from "../server/markdownFormatter.js";
-import { responseFormatter } from "../server/responseFormatter.js";
-import { withToolErrorHandling } from "../types/index.js";
 import type { ReadDeps, ToolFactory } from "../types/toolRegistration.js";
-import { getBudgetByIdCompat } from "../utils/ynabApiCompat.js";
 import { createAdapters } from "./adapters.js";
 import {
 	GetBudgetOutputSchema,
@@ -85,20 +85,20 @@ export async function handleListBudgets(
 						text:
 							fmt === "markdown"
 								? formatBudgetsList(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:list_budgets",
+		"ynab_list_budgets",
 		"listing budgets",
 		errorHandler,
 	);
 }
 
 /**
- * Handles the ynab:get_budget tool call
+ * Handles the ynab_get_budget tool call
  * Gets detailed information for a specific budget
  */
 export async function handleGetBudget(
@@ -108,7 +108,8 @@ export async function handleGetBudget(
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
-			const budget = await getBudgetByIdCompat(ynabAPI, params.budget_id);
+			const response = await ynabAPI.plans.getPlanById(params.budget_id);
+			const budget = response.data.plan;
 
 			const dataObject = {
 				budget: {
@@ -138,13 +139,13 @@ export async function handleGetBudget(
 						text:
 							fmt === "markdown"
 								? formatBudgetDetail(dataObject)
-								: responseFormatter.format(dataObject),
+								: JSON.stringify(dataObject, null, 2),
 					},
 				],
 				structuredContent: dataObject,
 			};
 		},
-		"ynab:get_budget",
+		"ynab_get_budget",
 		"getting budget details",
 		errorHandler,
 	);

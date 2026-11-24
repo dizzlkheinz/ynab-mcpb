@@ -1,8 +1,5 @@
 /**
  * Diagnostics module for YNAB MCP Server
- *
- * Handles comprehensive system diagnostics collection.
- * Extracted from YNABMCPServer to provide focused, testable diagnostics management.
  */
 
 import type { CacheManager } from "./cacheManager.js";
@@ -14,13 +11,6 @@ import type { ServerKnowledgeStore } from "./serverKnowledgeStore.js";
  */
 export interface SecurityStatsProvider {
 	getSecurityStats(): unknown;
-}
-
-/**
- * Response formatter interface to avoid direct dependency on concrete implementation
- */
-interface ResponseFormatter {
-	format(data: unknown): string;
 }
 
 /**
@@ -41,7 +31,6 @@ export interface DiagnosticOptions {
 export interface DiagnosticDependencies {
 	securityMiddleware: SecurityStatsProvider;
 	cacheManager: CacheManager;
-	responseFormatter: ResponseFormatter;
 	serverVersion: string;
 	serverKnowledgeStore?: ServerKnowledgeStore;
 	deltaCache?: DeltaCache;
@@ -49,9 +38,6 @@ export interface DiagnosticDependencies {
 
 /**
  * Formats a duration given in milliseconds into a concise human-readable uptime string.
- *
- * @param ms - Duration in milliseconds
- * @returns A string such as "1d 2h 3m 4s", "2h 3m 4s", "3m 4s", or "45s" depending on the magnitude
  */
 export function formatUptime(ms: number): string {
 	const seconds = Math.floor(ms / 1000);
@@ -73,9 +59,6 @@ export function formatUptime(ms: number): string {
 
 /**
  * Convert a byte count to megabytes with two-decimal precision.
- *
- * @param bytes - The number of bytes to convert
- * @returns The size in megabytes rounded to two decimal places
  */
 export function formatBytes(bytes: number): number {
 	return Math.round((bytes / 1024 / 1024) * 100) / 100;
@@ -83,15 +66,6 @@ export function formatBytes(bytes: number): number {
 
 /**
  * Produce a masked preview of an access token for safe display.
- *
- * The masking rules:
- * - If `token` is falsy, returns `null`.
- * - If `token` length is less than 8, returns the first character followed by `***`.
- * - Otherwise, returns the first four characters, `...`, and the last four characters.
- * - If the token contains a trailing hyphen segment within 6 characters of the end, the trailing segment (including the hyphen) is used as the last part.
- *
- * @param token - The token to mask
- * @returns The masked token preview, or `null` if `token` is falsy
  */
 export function maskToken(token: string | undefined): string | null {
 	if (!token) return null;
@@ -124,9 +98,9 @@ export class DiagnosticManager {
 	/**
 	 * Collects comprehensive diagnostic information
 	 */
-	async collectDiagnostics(options: DiagnosticOptions): Promise<{
-		content: { type: "text"; text: string }[];
-	}> {
+	async collectDiagnostics(
+		options: DiagnosticOptions,
+	): Promise<Record<string, unknown>> {
 		const diagnostics: Record<string, unknown> = {
 			timestamp: new Date().toISOString(),
 		};
@@ -158,14 +132,7 @@ export class DiagnosticManager {
 			);
 		}
 
-		return {
-			content: [
-				{
-					type: "text",
-					text: this.dependencies.responseFormatter.format(diagnostics),
-				},
-			],
-		};
+		return diagnostics;
 	}
 
 	private collectServerDiagnostics(): Record<string, unknown> {
@@ -224,7 +191,6 @@ export class DiagnosticManager {
 
 	private estimateCacheSize(): number {
 		try {
-			// Use lightweight metadata instead of full entry data for size estimation
 			const metadata = this.dependencies.cacheManager.getCacheMetadata();
 			const serialized = JSON.stringify(metadata);
 			return Math.round(Buffer.byteLength(serialized, "utf8") / 1024);
@@ -246,13 +212,6 @@ export class DiagnosticManager {
 		if ("evictions" in cacheStats && cacheStats.evictions > 0) {
 			performanceParts.push(`LRU evictions: ${cacheStats.evictions}`);
 		}
-		if ("lastCleanup" in cacheStats && cacheStats.lastCleanup) {
-			const lastCleanupDate = new Date(cacheStats.lastCleanup);
-			const minutesAgo = Math.round(
-				(Date.now() - lastCleanupDate.getTime()) / (60 * 1000),
-			);
-			performanceParts.push(`Last cleanup: ${minutesAgo} minutes ago`);
-		}
 		return performanceParts;
 	}
 
@@ -267,7 +226,6 @@ export class DiagnosticManager {
 			hits?: number;
 			misses?: number;
 			evictions?: number;
-			lastCleanup?: string | null;
 			maxEntries?: number;
 			hitRate?: string;
 			performance_summary?: string;
@@ -277,14 +235,10 @@ export class DiagnosticManager {
 			keys: cacheStats.keys,
 		};
 
-		// Add enhanced metrics if available
 		if ("hits" in cacheStats) {
 			cacheData.hits = cacheStats.hits;
 			cacheData.misses = cacheStats.misses;
 			cacheData.evictions = cacheStats.evictions;
-			cacheData.lastCleanup = cacheStats.lastCleanup
-				? new Date(cacheStats.lastCleanup).toISOString()
-				: null;
 			cacheData.maxEntries = cacheStats.maxEntries;
 			cacheData.hitRate = `${(cacheStats.hitRate * 100).toFixed(2)}%`;
 
@@ -306,7 +260,7 @@ export class DiagnosticManager {
 		const deltaHitRate =
 			totalDeltaRequests > 0 ? deltaStats.deltaHits / totalDeltaRequests : 0;
 		return {
-			knowledge_entries: Object.keys(knowledgeStats.entries).length, // Canonical count from entries
+			knowledge_entries: Object.keys(knowledgeStats.entries).length,
 			knowledge_stats: knowledgeStats.entries,
 			delta_hits: deltaStats.deltaHits,
 			delta_misses: deltaStats.deltaMisses,

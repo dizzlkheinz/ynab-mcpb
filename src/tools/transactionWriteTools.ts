@@ -4,12 +4,14 @@ import type { ExistingTransaction, NewTransaction } from "ynab";
 import type { SaveSubTransaction } from "ynab/dist/models/SaveSubTransaction.js";
 import type { SaveTransactionWithIdOrImportId } from "ynab/dist/models/SaveTransactionWithIdOrImportId.js";
 import type { z } from "zod/v4";
-import type { ErrorHandler } from "../server/errorHandler.js";
-import { responseFormatter } from "../server/responseFormatter.js";
+import {
+	type ErrorHandler,
+	withToolErrorHandling,
+} from "../server/errorHandler.js";
 import type { ToolRegistry } from "../server/toolRegistry.js";
-import { ValidationError, withToolErrorHandling } from "../types/index.js";
 import type { ToolContext } from "../types/toolRegistration.js";
 import { formatLocalISODate, formatUTCISODate } from "../utils/dateUtils.js";
+import { ValidationError } from "../utils/errors.js";
 import { amountToMilliunits, milliunitsToAmount } from "../utils/money.js";
 import {
 	createAdapters,
@@ -128,7 +130,7 @@ export async function handleCreateTransaction(
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format(dryRunData),
+						text: JSON.stringify(dryRunData, null, 2),
 					},
 				],
 				structuredContent: dryRunData,
@@ -174,7 +176,7 @@ export async function handleCreateTransaction(
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format(createdTxData),
+					text: JSON.stringify(createdTxData, null, 2),
 				},
 			],
 			structuredContent: createdTxData,
@@ -322,7 +324,7 @@ export async function handleCreateReceiptSplitTransaction(
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format(receiptDryRunData),
+					text: JSON.stringify(receiptDryRunData, null, 2),
 				},
 			],
 			structuredContent: receiptDryRunData,
@@ -357,7 +359,7 @@ export async function handleCreateReceiptSplitTransaction(
 		receipt_summary: receiptSummary,
 	};
 	return {
-		content: [{ type: "text", text: responseFormatter.format(data) }],
+		content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
 		structuredContent: data,
 	};
 }
@@ -382,7 +384,7 @@ export async function handleUpdateTransaction(
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format(updateDryRunData),
+						text: JSON.stringify(updateDryRunData, null, 2),
 					},
 				],
 				structuredContent: updateDryRunData,
@@ -449,7 +451,7 @@ export async function handleUpdateTransaction(
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format(updatedTxData),
+					text: JSON.stringify(updatedTxData, null, 2),
 				},
 			],
 			structuredContent: updatedTxData,
@@ -484,7 +486,7 @@ export async function handleDeleteTransaction(
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format(deleteDryRunData),
+						text: JSON.stringify(deleteDryRunData, null, 2),
 					},
 				],
 				structuredContent: deleteDryRunData,
@@ -509,7 +511,7 @@ export async function handleDeleteTransaction(
 			content: [
 				{
 					type: "text",
-					text: responseFormatter.format(deletedTxData),
+					text: JSON.stringify(deletedTxData, null, 2),
 				},
 			],
 			structuredContent: deletedTxData,
@@ -615,7 +617,7 @@ function buildBulkCreateDryRunResult(
 		content: [
 			{
 				type: "text",
-				text: responseFormatter.format(bulkCreateDryRunData),
+				text: JSON.stringify(bulkCreateDryRunData, null, 2),
 			},
 		],
 		structuredContent: bulkCreateDryRunData,
@@ -704,7 +706,7 @@ export async function handleCreateTransactions(
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format(finalizedResponse),
+						text: JSON.stringify(finalizedResponse, null, 2),
 					},
 				],
 				structuredContent: finalizedResponse as unknown as Record<
@@ -713,7 +715,7 @@ export async function handleCreateTransactions(
 				>,
 			};
 		},
-		"ynab:create_transactions",
+		"ynab_create_transactions",
 		"bulk transaction creation",
 		errorHandler,
 	)) as CallToolResult;
@@ -847,7 +849,7 @@ async function previewBulkUpdate(
 		content: [
 			{
 				type: "text",
-				text: responseFormatter.format(response),
+				text: JSON.stringify(response, null, 2),
 			},
 		],
 		structuredContent: response,
@@ -1045,7 +1047,7 @@ export async function handleUpdateTransactions(
 				content: [
 					{
 						type: "text",
-						text: responseFormatter.format(finalizedResponse),
+						text: JSON.stringify(finalizedResponse, null, 2),
 					},
 				],
 				structuredContent: finalizedResponse as unknown as Record<
@@ -1054,7 +1056,7 @@ export async function handleUpdateTransactions(
 				>,
 			};
 		},
-		"ynab:update_transactions",
+		"ynab_update_transactions",
 		"bulk transaction update",
 		errorHandler,
 	)) as CallToolResult;
