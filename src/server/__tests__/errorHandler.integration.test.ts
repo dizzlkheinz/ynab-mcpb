@@ -16,9 +16,6 @@ import { handleListPayees } from "../../tools/payeeTools";
 import { handleListTransactions } from "../../tools/transactionReadTools";
 import { handleGetUser } from "../../tools/utilityTools";
 
-// Mock the YNAB API
-vi.mock("ynab");
-
 describe("Error Handler Integration Tests", () => {
 	let mockYnabAPI: any;
 

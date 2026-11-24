@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransactionDetail } from "ynab";
 import { analyzeReconciliation } from "../../analyzer.js";
-import * as csvParser from "../../csvParser.js";
-
-vi.mock("../../csvParser.js", () => ({
-	parseCSV: vi.fn(),
-}));
+import type { CSVParseResult } from "../../csvParser.js";
 
 describe("scenario: repeat amount collisions", () => {
 	beforeEach(() => {
@@ -13,7 +9,7 @@ describe("scenario: repeat amount collisions", () => {
 	});
 
 	it("prioritizes repeat-amount insight when multiple bank rows share totals", () => {
-		vi.mocked(csvParser.parseCSV).mockReturnValue({
+		const parsed: CSVParseResult = {
 			transactions: [
 				// Three -22.22 transactions in milliunits: one will match YNAB, two will remain unmatched
 				{
@@ -74,7 +70,7 @@ describe("scenario: repeat amount collisions", () => {
 				validRows: 4,
 				skippedRows: 0,
 			},
-		});
+		};
 
 		const ynabTxns: TransactionDetail[] = [
 			{
@@ -98,7 +94,7 @@ describe("scenario: repeat amount collisions", () => {
 		];
 
 		// Statement balance now accounts for 3 x -22.22 + 1 x -15.00 = -81.66
-		const result = analyzeReconciliation("csv", undefined, ynabTxns, -81.66);
+		const result = analyzeReconciliation(parsed, undefined, ynabTxns, -81.66);
 
 		const repeatInsight = result.insights.find((insight) =>
 			insight.id.startsWith("repeat--22220"),

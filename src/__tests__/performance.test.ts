@@ -58,38 +58,28 @@ Full response: ${JSON.stringify(parsed, null, 2)}`,
 }
 
 // Mock the YNAB SDK for performance tests
-vi.mock("ynab", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("ynab")>();
-	const mockAPI = {
-		plans: {
-			getPlans: vi.fn(),
-			getPlanById: vi.fn(),
-		},
-		accounts: {
-			getAccounts: vi.fn(),
-			getAccountById: vi.fn(),
-		},
-		transactions: {
-			getTransactions: vi.fn(),
-			getTransactionById: vi.fn(),
-			createTransaction: vi.fn(),
-		},
-		categories: {
-			getCategories: vi.fn(),
-		},
-		user: {
-			getUser: vi.fn(),
-		},
-	};
-
-	return {
-		...actual,
-		// biome-ignore lint: Vitest 4 requires non-arrow function for constructors
-		API: vi.fn(function () {
-			return mockAPI;
-		}),
-	};
-});
+// A fake YNAB client, passed to the server through its constructor.
+const mockAPI = {
+	plans: {
+		getPlans: vi.fn(),
+		getPlanById: vi.fn(),
+	},
+	accounts: {
+		getAccounts: vi.fn(),
+		getAccountById: vi.fn(),
+	},
+	transactions: {
+		getTransactions: vi.fn(),
+		getTransactionById: vi.fn(),
+		createTransaction: vi.fn(),
+	},
+	categories: {
+		getCategories: vi.fn(),
+	},
+	user: {
+		getUser: vi.fn(),
+	},
+};
 
 /** Count the planned operations YNAB acknowledged. */
 function appliedCount(
@@ -405,11 +395,12 @@ describe("YNAB MCP Server - Performance Tests", () => {
 		// Clear modules to ensure fresh import of server with new env var
 		vi.resetModules();
 		const { YNABMCPServer } = await import("../server/YNABMCPServer.js");
-		server = new YNABMCPServer();
+		server = new YNABMCPServer(true, {
+			ynabAPI: mockAPI as unknown as ynab.API,
+		});
 
 		// Mock the YNAB API constructor to ensure it receives the correct access token
-		const { API } = await import("ynab");
-		mockYnabAPI = new (API as any)("test-token-performance");
+		mockYnabAPI = mockAPI;
 
 		vi.clearAllMocks();
 		// Clear cache to ensure mocks are called in each test

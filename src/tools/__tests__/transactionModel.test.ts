@@ -1,7 +1,18 @@
-import { writeFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import type * as ynab from "ynab";
 import { CacheManager } from "../../server/cacheManager.js";
+import { resetRuntimeConfig } from "../../server/config.js";
 import type { ReadDeps } from "../../types/toolRegistration.js";
 import type { DeltaFetcher } from "../deltaFetcher.js";
 import { handleExportTransactions } from "../exportTransactions.js";
@@ -33,7 +44,18 @@ import {
 	handleUpdateTransactions,
 } from "../transactionWriteTools.js";
 
-vi.mock("node:fs", () => ({ mkdirSync: vi.fn(), writeFileSync: vi.fn() }));
+// The full export writes a real file into a temp directory (YNAB_EXPORT_PATH).
+let exportDir = "";
+beforeAll(() => {
+	exportDir = mkdtempSync(join(tmpdir(), "ynab-mcpb-model-"));
+	vi.stubEnv("YNAB_EXPORT_PATH", exportDir);
+	resetRuntimeConfig();
+});
+afterAll(() => {
+	vi.unstubAllEnvs();
+	resetRuntimeConfig();
+	rmSync(exportDir, { recursive: true, force: true });
+});
 
 const transaction = TransactionModelSchema.parse({
 	id: "transaction-1",
@@ -146,7 +168,8 @@ describe("shared transaction representation", () => {
 			budget_id: "budget",
 			minimal: false,
 		});
-		const fileContents = vi.mocked(writeFileSync).mock.calls[0]?.[1];
+		const exportedPath = exportResult.structuredContent?.["full_path"];
+		const fileContents = readFileSync(String(exportedPath), "utf-8");
 		const exported = JSON.parse(String(fileContents));
 
 		expect(list.structuredContent?.["transactions"]).toEqual([expected]);

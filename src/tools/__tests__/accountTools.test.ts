@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
+import { CacheManager } from "../../server/cacheManager.js";
 import {
 	CreateAccountSchema,
 	GetAccountSchema,
@@ -25,14 +26,6 @@ const cacheManager = vi.hoisted(() => ({
 	deleteByBudgetId: vi.fn(),
 	clear: vi.fn(),
 }));
-vi.mock("../../server/cacheManager.js", () => ({
-	CacheManager: {
-		generateKey: vi.fn(),
-	},
-	CACHE_TTLS: {
-		ACCOUNTS: 300000,
-	},
-}));
 
 // Mock the YNAB API
 const mockYnabAPI = {
@@ -43,8 +36,8 @@ const mockYnabAPI = {
 	},
 } as unknown as ynab.API;
 
-// Import mocked cache manager
-const { CacheManager } = await import("../../server/cacheManager.js");
+// Spy on the real key builder so tests can assert whether a cache key was built.
+vi.spyOn(CacheManager, "generateKey");
 
 describe("Account Tools", () => {
 	beforeEach(() => {
@@ -60,10 +53,6 @@ describe("Account Tools", () => {
 			},
 		);
 		(cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValue(false);
-		(CacheManager.generateKey as ReturnType<typeof vi.fn>).mockImplementation(
-			(prefix: string, ...parts: (string | number | boolean | undefined)[]) =>
-				[prefix, ...parts.filter((part) => part !== undefined)].join(":"),
-		);
 	});
 
 	afterAll(() => {});

@@ -15,14 +15,11 @@ import type {
 	YNABTransaction,
 } from "../../compareTransactions/types.js";
 
-// Mock responseFormatter
-vi.mock("../../../server/responseFormatter.js", () => ({
-	responseFormatter: {
-		format: vi.fn((data) => JSON.stringify(data, null, 2)),
-	},
-}));
-
-const mockResponseFormatter = vi.mocked(responseFormatter);
+// Spy on the real formatter; stand in a plain JSON rendering so tests can read the payload.
+const formatSpy = vi
+	.spyOn(responseFormatter, "format")
+	.mockImplementation((data) => JSON.stringify(data, null, 2));
+const mockResponseFormatter = { format: formatSpy };
 
 // Helper functions to create test data
 function createBankTransaction(

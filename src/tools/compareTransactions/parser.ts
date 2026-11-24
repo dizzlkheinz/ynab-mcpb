@@ -104,13 +104,16 @@ export function parseBankCSV(
 	}));
 }
 
-export function readCSVFile(filePath: string): string {
+export function readCSVFile(
+	filePath: string,
+	readFile: (path: string) => string = (path) => readFileSync(path, "utf-8"),
+): string {
 	const pathCandidates = resolveCsvPathCandidates(filePath);
 	let lastReadError: unknown;
 
 	for (const candidatePath of pathCandidates) {
 		try {
-			return readFileSync(candidatePath, "utf-8");
+			return readFile(candidatePath);
 		} catch (error) {
 			lastReadError = error;
 		}

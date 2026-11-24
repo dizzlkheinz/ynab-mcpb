@@ -1,5 +1,7 @@
-import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, test } from "vitest";
 import {
 	autoDetectCSVFormat,
 	detectDateFormat,
@@ -8,18 +10,12 @@ import {
 } from "../../compareTransactions/parser.js";
 import type { CSVFormat } from "../../compareTransactions/types.js";
 
-// Mock fs module
-vi.mock("fs", () => ({
-	readFileSync: vi.fn(),
-}));
-
-const mockReadFileSync = vi.mocked(readFileSync);
+const tempDir = mkdtempSync(join(tmpdir(), "ynab-mcpb-parser-"));
+afterAll(() => {
+	rmSync(tempDir, { recursive: true, force: true });
+});
 
 describe("parser", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
-
 	describe("detectDateFormat", () => {
 		test("should detect MM/DD/YYYY format", () => {
 			expect(detectDateFormat("09/15/2023")).toBe("MM/DD/YYYY");
@@ -760,35 +756,27 @@ describe("parser", () => {
 
 	describe("readCSVFile", () => {
 		test("should read file successfully", () => {
-			const mockContent = "Date,Amount,Description\n09/15/2023,123.45,Test";
-			mockReadFileSync.mockReturnValue(mockContent);
+			const content = "Date,Amount,Description\n09/15/2023,123.45,Test";
+			const filePath = join(tempDir, "file.csv");
+			writeFileSync(filePath, content, "utf-8");
 
-			const result = readCSVFile("/path/to/file.csv");
-
-			expect(result).toBe(mockContent);
-			expect(mockReadFileSync).toHaveBeenCalledWith(
-				"/path/to/file.csv",
-				"utf-8",
-			);
+			expect(readCSVFile(filePath)).toBe(content);
 		});
 
 		test("should throw error when file reading fails", () => {
-			const error = new Error("File not found");
-			mockReadFileSync.mockImplementation(() => {
-				throw error;
-			});
+			const missing = join(tempDir, "missing.csv");
 
-			expect(() => readCSVFile("/nonexistent/file.csv")).toThrow(
-				"Unable to read CSV file. Tried path(s): /nonexistent/file.csv. File not found",
+			expect(() => readCSVFile(missing)).toThrow(
+				`Unable to read CSV file. Tried path(s): ${missing}. ENOENT`,
 			);
 		});
 
 		test("should handle unknown errors", () => {
-			mockReadFileSync.mockImplementation(() => {
+			const throwsNonError = (): string => {
 				throw "String error";
-			});
+			};
 
-			expect(() => readCSVFile("/path/to/file.csv")).toThrow(
+			expect(() => readCSVFile("/path/to/file.csv", throwsNonError)).toThrow(
 				"Unable to read CSV file. Tried path(s): /path/to/file.csv. Unknown error",
 			);
 		});

@@ -4,30 +4,23 @@
  * Verifies that all expected tools are registered through the factory pattern
  * and that tool metadata (annotations, schemas) are properly configured.
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 // Mock config before importing YNABMCPServer
-vi.mock("../config.js", () => ({
-	getRuntimeConfig: () => ({
-		LOG_LEVEL: "error",
-		YNAB_EXPORT_PATH: undefined,
-		XDG_DOCUMENTS_DIR: undefined,
-	}),
-	loadConfig: () => ({
-		YNAB_ACCESS_TOKEN: "test-token-for-registration-tests",
-		YNAB_DEFAULT_BUDGET_ID: undefined,
-		YNAB_MCP_WRITE_MODE: "preview",
-		YNAB_MCP_TOOL_PROFILE: "full",
-		LOG_LEVEL: "info",
-	}),
-	config: {
-		YNAB_ACCESS_TOKEN: "test-token-for-registration-tests",
-		YNAB_DEFAULT_BUDGET_ID: undefined,
-		YNAB_MCP_WRITE_MODE: "preview",
-		YNAB_MCP_TOOL_PROFILE: "full",
-		LOG_LEVEL: "info",
-	},
-}));
+// Configure through the environment the real config module reads; hoisted so
+// it is in place before the server modules are imported.
+vi.hoisted(() => {
+	vi.stubEnv("YNAB_ACCESS_TOKEN", "test-token-for-registration-tests");
+	vi.stubEnv("YNAB_MCP_WRITE_MODE", "preview");
+	vi.stubEnv("YNAB_MCP_TOOL_PROFILE", "full");
+	vi.stubEnv("YNAB_DEFAULT_BUDGET_ID", undefined);
+	vi.stubEnv("YNAB_EXPORT_PATH", undefined);
+	vi.stubEnv("XDG_DOCUMENTS_DIR", undefined);
+	vi.stubEnv("LOG_LEVEL", "error");
+});
+afterAll(() => {
+	vi.unstubAllEnvs();
+});
 
 import { YNABMCPServer } from "../YNABMCPServer.js";
 

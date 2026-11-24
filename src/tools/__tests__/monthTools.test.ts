@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { createReadDeps } from "../../__tests__/readDeps.js";
 import { textOf } from "../../__tests__/testUtils.js";
+import { CacheManager } from "../../server/cacheManager.js";
 import {
 	GetMonthSchema,
 	handleGetMonth,
@@ -23,14 +24,6 @@ const cacheManager = vi.hoisted(() => ({
 	deleteByBudgetId: vi.fn(),
 	clear: vi.fn(),
 }));
-vi.mock("../../server/cacheManager.js", () => ({
-	CacheManager: {
-		generateKey: vi.fn(),
-	},
-	CACHE_TTLS: {
-		MONTHS: 600000,
-	},
-}));
 
 // Mock the YNAB API
 const mockYnabAPI = {
@@ -39,9 +32,6 @@ const mockYnabAPI = {
 		getPlanMonths: vi.fn(),
 	},
 } as unknown as ynab.API;
-
-// Import mocked cache manager
-const { CacheManager } = await import("../../server/cacheManager.js");
 
 describe("Month Tools", () => {
 	beforeEach(() => {
@@ -58,10 +48,6 @@ describe("Month Tools", () => {
 			},
 		);
 		(cacheManager.has as ReturnType<typeof vi.fn>).mockReturnValue(false);
-		(CacheManager.generateKey as ReturnType<typeof vi.fn>).mockImplementation(
-			(prefix: string, ...parts: (string | number | boolean | undefined)[]) =>
-				[prefix, ...parts.filter((part) => part !== undefined)].join(":"),
-		);
 	});
 
 	describe("handleGetMonth", () => {

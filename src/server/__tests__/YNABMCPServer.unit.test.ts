@@ -1,23 +1,31 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { textOf } from "../../__tests__/testUtils.js";
 import { ConfigurationError } from "../../utils/errors.js";
 import type { CacheManager } from "../cacheManager.js";
 import * as config from "../config.js";
 
-vi.mock("../config.js", () => ({
-	getRuntimeConfig: () => ({
-		LOG_LEVEL: "error",
-		YNAB_EXPORT_PATH: undefined,
-		XDG_DOCUMENTS_DIR: undefined,
-	}),
-	loadConfig: () => ({
-		YNAB_ACCESS_TOKEN: "unit-test-token",
-		YNAB_DEFAULT_BUDGET_ID: undefined,
-		YNAB_MCP_WRITE_MODE: "preview",
-		YNAB_MCP_TOOL_PROFILE: "full",
-		LOG_LEVEL: "error",
-	}),
-}));
+// Configure through the environment the real config module reads; hoisted so
+// it is in place before the server modules are imported.
+vi.hoisted(() => {
+	vi.stubEnv("YNAB_ACCESS_TOKEN", "unit-test-token");
+	vi.stubEnv("YNAB_MCP_WRITE_MODE", "preview");
+	vi.stubEnv("YNAB_MCP_TOOL_PROFILE", "full");
+	vi.stubEnv("YNAB_DEFAULT_BUDGET_ID", undefined);
+	vi.stubEnv("YNAB_EXPORT_PATH", undefined);
+	vi.stubEnv("XDG_DOCUMENTS_DIR", undefined);
+	vi.stubEnv("LOG_LEVEL", "error");
+});
+afterAll(() => {
+	vi.unstubAllEnvs();
+});
 
 import { YNABMCPServer } from "../YNABMCPServer.js";
 

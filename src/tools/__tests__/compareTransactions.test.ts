@@ -1,5 +1,7 @@
-import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { textOf } from "../../__tests__/testUtils.js";
 import {
@@ -7,10 +9,10 @@ import {
 	handleCompareTransactions,
 } from "../compareTransactions/index.js";
 
-// Mock filesystem
-vi.mock("fs", () => ({
-	readFileSync: vi.fn(),
-}));
+const tempDir = mkdtempSync(join(tmpdir(), "ynab-mcpb-compare-"));
+afterAll(() => {
+	rmSync(tempDir, { recursive: true, force: true });
+});
 
 // Mock the YNAB API
 const mockYnabAPI = {
@@ -138,7 +140,8 @@ describe("compareTransactions", () => {
 
 		it("should handle CSV file path", async () => {
 			const csvData = "Date,Amount,Description\n2024-01-01,100.00,Test Payee";
-			(readFileSync as any).mockReturnValue(csvData);
+			const csvPath = join(tempDir, "transactions.csv");
+			writeFileSync(csvPath, csvData, "utf-8");
 
 			(
 				mockYnabAPI.transactions.getTransactionsByAccount as any
@@ -156,16 +159,14 @@ describe("compareTransactions", () => {
 			const params = CompareTransactionsSchema.parse({
 				budget_id: "budget-123",
 				account_id: "account-456",
-				csv_file_path: "/path/to/transactions.csv",
+				csv_file_path: csvPath,
 			});
 
 			const result = await handleCompareTransactions(mockYnabAPI, params);
 
-			expect(readFileSync).toHaveBeenCalledWith(
-				"/path/to/transactions.csv",
-				"utf-8",
-			);
 			expect(result.content).toHaveLength(1);
+			const response = JSON.parse(textOf(result.content[0]));
+			expect(response.summary.bank_transactions_count).toBe(1);
 		});
 
 		it("should handle custom CSV format", async () => {

@@ -1,61 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
+import { textOf } from "../../../__tests__/testUtils.js";
 import { CacheManager } from "../../../server/cacheManager.js";
-import { toMoneyValue } from "../../../utils/money.js";
 import { DeltaFetcher } from "../../deltaFetcher.js";
-import type { ReconciliationAnalysis } from "../types.js";
-
-const analyzerMocks = vi.hoisted(() => ({
-	analyzeReconciliation: vi.fn(),
-}));
-
-vi.mock("../analyzer.js", () => ({
-	analyzeReconciliation: analyzerMocks.analyzeReconciliation,
-}));
 
 import { handleReconcileAccount, ReconcileAccountSchema } from "../index.js";
 
-const buildAnalysis = (): ReconciliationAnalysis => ({
-	success: true,
-	phase: "analysis",
-	summary: {
-		statement_date_range: "Unknown",
-		bank_transactions_count: 0,
-		ynab_transactions_count: 0,
-		ynab_in_range_count: 0,
-		ynab_outside_range_count: 0,
-		auto_matched: 0,
-		suggested_matches: 0,
-		unmatched_bank: 0,
-		unmatched_ynab: 0,
-		current_cleared_balance: toMoneyValue(0, "USD"),
-		target_statement_balance: toMoneyValue(10000, "USD"),
-		discrepancy: toMoneyValue(-10000, "USD"),
-		discrepancy_explanation: "No transactions",
-	},
-	auto_matches: [],
-	suggested_matches: [],
-	unmatched_bank: [],
-	unmatched_ynab: [],
-	ynab_outside_date_range: [],
-	balance_info: {
-		current_cleared: toMoneyValue(0, "USD"),
-		current_uncleared: toMoneyValue(0, "USD"),
-		current_total: toMoneyValue(0, "USD"),
-		target_statement: toMoneyValue(10000, "USD"),
-		discrepancy: toMoneyValue(-10000, "USD"),
-		on_track: false,
-	},
-	next_steps: [],
-	insights: [],
-});
-
 describe("handleReconcileAccount statement balance handling", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		analyzerMocks.analyzeReconciliation.mockReturnValue(buildAnalysis());
-	});
-
 	it("preserves a positive liability statement balance instead of forcing it negative", async () => {
 		const ynabAPI = {
 			accounts: {
@@ -99,7 +50,7 @@ describe("handleReconcileAccount statement balance handling", () => {
 		} as unknown as ynab.API;
 		const deltaFetcher = new DeltaFetcher(ynabAPI, {} as any);
 
-		await handleReconcileAccount(
+		const result = await handleReconcileAccount(
 			ynabAPI,
 			ReconcileAccountSchema.parse({
 				budget_id: "budget-1",
@@ -115,7 +66,9 @@ describe("handleReconcileAccount statement balance handling", () => {
 			{ cacheManager: new CacheManager(), deltaFetcher: deltaFetcher },
 		);
 
-		expect(analyzerMocks.analyzeReconciliation).toHaveBeenCalled();
-		expect(analyzerMocks.analyzeReconciliation.mock.calls[0]?.[3]).toBe(10);
+		// The real analyzer reports the statement balance it was given: +10, not -10.
+		const report = textOf(result.content[0]);
+		expect(report).toMatch(/Statement Balance:\s+\$10\.00/);
+		expect(report).not.toMatch(/Statement Balance:\s+-\$10\.00/);
 	});
 });

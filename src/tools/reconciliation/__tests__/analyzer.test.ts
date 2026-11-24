@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransactionDetail as YNABAPITransaction } from "ynab";
 import { analyzeReconciliation } from "../analyzer.js";
-import * as csvParser from "../csvParser.js";
-
-// Mock the parser module
-vi.mock("../csvParser.js", () => ({
-	parseCSV: vi.fn(),
-}));
+import type { CSVParseResult } from "../csvParser.js";
 
 describe("analyzer", () => {
 	beforeEach(() => {
@@ -16,7 +11,7 @@ describe("analyzer", () => {
 	describe("analyzeReconciliation", () => {
 		it("should perform full analysis and return structured results", () => {
 			// Mock CSV parsing
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b1",
@@ -54,7 +49,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns: YNABAPITransaction[] = [
 				{
@@ -78,7 +73,7 @@ describe("analyzer", () => {
 			];
 
 			const result = analyzeReconciliation(
-				"csv content",
+				parsed,
 				undefined,
 				ynabTxns,
 				-145.23, // Target balance
@@ -99,7 +94,7 @@ describe("analyzer", () => {
 		});
 
 		it("should categorize high-confidence matches as auto-matches", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b1",
@@ -120,7 +115,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns: YNABAPITransaction[] = [
 				{
@@ -134,14 +129,14 @@ describe("analyzer", () => {
 				} as YNABAPITransaction,
 			];
 
-			const result = analyzeReconciliation("csv", undefined, ynabTxns, -50.0);
+			const result = analyzeReconciliation(parsed, undefined, ynabTxns, -50.0);
 
 			expect(result.auto_matches.length).toBeGreaterThan(0);
 			expect(result.auto_matches[0]!.confidence).toBe("high");
 		});
 
 		it("should categorize medium-confidence matches as suggested", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b1",
@@ -162,7 +157,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns: YNABAPITransaction[] = [
 				{
@@ -176,7 +171,7 @@ describe("analyzer", () => {
 				} as YNABAPITransaction,
 			];
 
-			const result = analyzeReconciliation("csv", undefined, ynabTxns, -50.0);
+			const result = analyzeReconciliation(parsed, undefined, ynabTxns, -50.0);
 
 			// Should be suggested (medium)
 			expect(result.suggested_matches.length).toBeGreaterThan(0);
@@ -184,7 +179,7 @@ describe("analyzer", () => {
 		});
 
 		it("keeps a bank transaction unmatched when its medium YNAB candidate is claimed by a high-confidence match", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b-medium",
@@ -214,7 +209,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns: YNABAPITransaction[] = [
 				{
@@ -228,7 +223,7 @@ describe("analyzer", () => {
 				} as YNABAPITransaction,
 			];
 
-			const result = analyzeReconciliation("csv", undefined, ynabTxns, -50.0);
+			const result = analyzeReconciliation(parsed, undefined, ynabTxns, -50.0);
 
 			expect(result.auto_matches).toHaveLength(1);
 			expect(result.auto_matches[0]!.bankTransaction.id).toBe("b-high");
@@ -237,7 +232,7 @@ describe("analyzer", () => {
 		});
 
 		it("should identify unmatched bank transactions", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b1",
@@ -258,18 +253,18 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns: YNABAPITransaction[] = [];
 
-			const result = analyzeReconciliation("csv", undefined, ynabTxns, 0);
+			const result = analyzeReconciliation(parsed, undefined, ynabTxns, 0);
 
 			expect(result.unmatched_bank.length).toBe(1);
 			expect(result.unmatched_bank[0]!.payee).toBe("New Store");
 		});
 
 		it("should identify unmatched YNAB transactions", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [],
 				meta: {
 					detectedDelimiter: ",",
@@ -280,7 +275,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns: YNABAPITransaction[] = [
 				{
@@ -294,14 +289,14 @@ describe("analyzer", () => {
 				} as YNABAPITransaction,
 			];
 
-			const result = analyzeReconciliation("csv", undefined, ynabTxns, 0);
+			const result = analyzeReconciliation(parsed, undefined, ynabTxns, 0);
 
 			expect(result.unmatched_ynab.length).toBe(1);
 			expect(result.unmatched_ynab[0]!.payee).toBe("Restaurant");
 		});
 
 		it("should calculate balance information correctly", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [],
 				meta: {
 					detectedDelimiter: ",",
@@ -312,7 +307,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns: YNABAPITransaction[] = [
 				{
@@ -335,7 +330,7 @@ describe("analyzer", () => {
 				} as YNABAPITransaction,
 			];
 
-			const result = analyzeReconciliation("csv", undefined, ynabTxns, -50.0);
+			const result = analyzeReconciliation(parsed, undefined, ynabTxns, -50.0);
 
 			expect(result.balance_info.current_cleared.value).toBe(-50.0);
 			expect(result.balance_info.current_uncleared.value).toBe(-30.0);
@@ -346,7 +341,7 @@ describe("analyzer", () => {
 		});
 
 		it("should generate appropriate summary", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b1",
@@ -376,7 +371,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns: YNABAPITransaction[] = [
 				{
@@ -390,7 +385,7 @@ describe("analyzer", () => {
 				} as YNABAPITransaction,
 			];
 
-			const result = analyzeReconciliation("csv", undefined, ynabTxns, -80.0);
+			const result = analyzeReconciliation(parsed, undefined, ynabTxns, -80.0);
 
 			expect(result.summary.bank_transactions_count).toBe(2);
 			expect(result.summary.ynab_transactions_count).toBe(1);
@@ -403,7 +398,7 @@ describe("analyzer", () => {
 			// Previously, ALL YNAB transactions were compared against bank CSV,
 			// causing transactions outside the statement period to be incorrectly
 			// flagged as "missing from bank"
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b1",
@@ -424,7 +419,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns: YNABAPITransaction[] = [
 				// Transaction OUTSIDE statement period (December, before January statement)
@@ -449,7 +444,7 @@ describe("analyzer", () => {
 				} as YNABAPITransaction,
 			];
 
-			const result = analyzeReconciliation("csv", undefined, ynabTxns, -50.0);
+			const result = analyzeReconciliation(parsed, undefined, ynabTxns, -50.0);
 
 			// The outside-range transaction should be in ynab_outside_date_range, not unmatched_ynab
 			expect(result.ynab_outside_date_range).toHaveLength(1);
@@ -464,7 +459,7 @@ describe("analyzer", () => {
 		});
 
 		it("treats statement_end_date as a hard upper bound", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b1",
@@ -485,7 +480,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns = [
 				{
@@ -499,7 +494,7 @@ describe("analyzer", () => {
 			] as YNABAPITransaction[];
 
 			const result = analyzeReconciliation(
-				"csv",
+				parsed,
 				undefined,
 				ynabTxns,
 				0,
@@ -520,7 +515,7 @@ describe("analyzer", () => {
 		});
 
 		it("falls back to the tolerance bound for a non-ISO statement_end_date", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b1",
@@ -541,7 +536,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns = [
 				{
@@ -555,7 +550,7 @@ describe("analyzer", () => {
 			] as YNABAPITransaction[];
 
 			const result = analyzeReconciliation(
-				"csv",
+				parsed,
 				undefined,
 				ynabTxns,
 				0,
@@ -576,7 +571,7 @@ describe("analyzer", () => {
 		});
 
 		it("does not report balance-adjustment payees as unmatched", () => {
-			vi.mocked(csvParser.parseCSV).mockReturnValue({
+			const parsed: CSVParseResult = {
 				transactions: [
 					{
 						id: "b1",
@@ -597,7 +592,7 @@ describe("analyzer", () => {
 				},
 				errors: [],
 				warnings: [],
-			});
+			};
 
 			const ynabTxns = [
 				{
@@ -610,7 +605,7 @@ describe("analyzer", () => {
 				},
 			] as YNABAPITransaction[];
 
-			const result = analyzeReconciliation("csv", undefined, ynabTxns, 0);
+			const result = analyzeReconciliation(parsed, undefined, ynabTxns, 0);
 
 			expect(result.unmatched_ynab).toHaveLength(0);
 		});

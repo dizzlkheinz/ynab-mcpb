@@ -9,6 +9,7 @@ import {
 	YNABAPIError,
 	YNABErrorCode,
 } from "../../server/errorHandler.js";
+import { globalRequestLogger } from "../../server/requestLogger.js";
 import { responseFormatter } from "../../server/responseFormatter.js";
 import type {
 	BulkCreateResponse,
@@ -27,19 +28,12 @@ import {
 	toCorrelationPayload,
 } from "../transactionUtils.js";
 
-// Mock the responseFormatter module
-vi.mock("../../server/responseFormatter.js", () => ({
-	responseFormatter: {
-		format: vi.fn((data) => JSON.stringify(data)),
-	},
-}));
-
-// Mock the global request logger
-vi.mock("../../server/requestLogger.js", () => ({
-	globalRequestLogger: {
-		logError: vi.fn(),
-	},
-}));
+// Spy on the real formatter and logger; the formatter renders plain JSON so tests can
+// assert the payload, and the logger stays quiet.
+vi.spyOn(responseFormatter, "format").mockImplementation((data) =>
+	JSON.stringify(data),
+);
+vi.spyOn(globalRequestLogger, "logError").mockImplementation(() => undefined);
 
 describe("transactionUtils", () => {
 	describe("ensureTransaction", () => {

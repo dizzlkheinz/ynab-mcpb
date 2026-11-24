@@ -4,6 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as ynab from "ynab";
 import { CACHE_TTLS, type CacheManager } from "../server/cacheManager.js";
 import { YNABMCPServer } from "../server/YNABMCPServer.js";
 import {
@@ -14,69 +15,47 @@ import {
 	waitFor,
 } from "./testUtils.js";
 
-// Mock the YNAB SDK
-vi.mock("ynab", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("ynab")>();
-	const mockAPI = {
-		budgets: {
-			getBudgets: vi.fn(),
-			getBudgetById: vi.fn(),
-		},
-		accounts: {
-			getAccounts: vi.fn(),
-			getAccountById: vi.fn(),
-			createAccount: vi.fn(),
-		},
-		transactions: {
-			getTransactions: vi.fn(),
-			getTransactionsByAccount: vi.fn(),
-			getTransactionsByCategory: vi.fn(),
-			getTransactionById: vi.fn(),
-			createTransaction: vi.fn(),
-			updateTransaction: vi.fn(),
-			deleteTransaction: vi.fn(),
-		},
-		categories: {
-			getCategories: vi.fn(),
-			getCategoryById: vi.fn(),
-			updateMonthCategory: vi.fn(),
-		},
-		payees: {
-			getPayees: vi.fn(),
-			getPayeeById: vi.fn(),
-		},
-		months: {
-			getBudgetMonth: vi.fn(),
-			getBudgetMonths: vi.fn(),
-		},
-		user: {
-			getUser: vi.fn(),
-		},
-	};
-
-	return {
-		...actual,
-		// biome-ignore lint: Vitest 4 requires non-arrow function for constructors
-		API: vi.fn(function () {
-			return mockAPI;
-		}),
-		utils: {
-			convertMilliUnitsToCurrencyAmount: vi.fn(
-				(milliunits: number, currencyDecimalDigits = 2) => {
-					const amount = milliunits / 1000;
-					return Number(amount.toFixed(currencyDecimalDigits));
-				},
-			),
-			convertCurrencyAmountToMilliUnits: vi.fn((amount: number) =>
-				Math.round(amount * 1000),
-			),
-		},
-	};
-});
+// A fake YNAB client, passed to the server through its constructor.
+const mockAPI = {
+	budgets: {
+		getBudgets: vi.fn(),
+		getBudgetById: vi.fn(),
+	},
+	accounts: {
+		getAccounts: vi.fn(),
+		getAccountById: vi.fn(),
+		createAccount: vi.fn(),
+	},
+	transactions: {
+		getTransactions: vi.fn(),
+		getTransactionsByAccount: vi.fn(),
+		getTransactionsByCategory: vi.fn(),
+		getTransactionById: vi.fn(),
+		createTransaction: vi.fn(),
+		updateTransaction: vi.fn(),
+		deleteTransaction: vi.fn(),
+	},
+	categories: {
+		getCategories: vi.fn(),
+		getCategoryById: vi.fn(),
+		updateMonthCategory: vi.fn(),
+	},
+	payees: {
+		getPayees: vi.fn(),
+		getPayeeById: vi.fn(),
+	},
+	months: {
+		getBudgetMonth: vi.fn(),
+		getBudgetMonths: vi.fn(),
+	},
+	user: {
+		getUser: vi.fn(),
+	},
+};
 
 const TEST_BUDGET_UUID = "00000000-0000-0000-0000-000000000001";
 
-describe("YNAB utils mock", () => {
+describe("YNAB SDK utils", () => {
 	it("converts milliunits using SDK rounding rules", {
 		meta: { tier: "domain", domain: "workflows" },
 	}, async () => {
@@ -84,7 +63,9 @@ describe("YNAB utils mock", () => {
 
 		expect(utils.convertMilliUnitsToCurrencyAmount(123456, 2)).toBe(123.46);
 		expect(utils.convertMilliUnitsToCurrencyAmount(123456, 3)).toBe(123.456);
-		expect(utils.convertMilliUnitsToCurrencyAmount(-98765, 2)).toBe(-98.77);
+		// The SDK rounds halves toward +infinity (Math.round), so -98.765 becomes
+		// -98.76, not -98.77. The old module mock claimed otherwise.
+		expect(utils.convertMilliUnitsToCurrencyAmount(-98765, 2)).toBe(-98.76);
 	});
 });
 
@@ -98,13 +79,14 @@ describe("YNAB MCP Server - Comprehensive Integration Tests", () => {
 		process.env["YNAB_ACCESS_TOKEN"] = "test-token";
 
 		// Create server instance
-		server = new YNABMCPServer();
+		server = new YNABMCPServer(true, {
+			ynabAPI: mockAPI as unknown as ynab.API,
+		});
 		cacheManager = (server as unknown as { cacheManager: CacheManager })
 			.cacheManager;
 
 		// Get the mocked YNAB API instance
-		const { API } = await import("ynab");
-		mockYnabAPI = new (API as any)();
+		mockYnabAPI = mockAPI;
 
 		// Reset all mocks
 		vi.clearAllMocks();

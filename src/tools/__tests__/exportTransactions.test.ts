@@ -1,26 +1,27 @@
-import { writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ynab from "ynab";
 import { textOf } from "../../__tests__/testUtils.js";
+import { resetRuntimeConfig } from "../../server/config.js";
 import {
 	ExportTransactionsSchema,
 	handleExportTransactions,
 } from "../exportTransactions.js";
 
-// Mock filesystem functions
-vi.mock("fs", () => ({
-	writeFileSync: vi.fn(),
-	mkdirSync: vi.fn(),
-}));
+// Exports go to a fresh temp directory per test (YNAB_EXPORT_PATH), and tests read
+// back the file the handler reports writing.
+let exportDir = "";
 
-vi.mock("path", async () => {
-	const actual = await vi.importActual("path");
-	return actual;
-});
-
-vi.mock("os", () => ({
-	homedir: vi.fn(() => "/home/user"),
-}));
+function exportedFile(result: { content: unknown[] }): {
+	path: string;
+	content: string;
+} {
+	const response = JSON.parse(textOf(result.content[0] as object));
+	const path: string = response.full_path;
+	return { path, content: readFileSync(path, "utf-8") };
+}
 
 // Mock the YNAB API
 const mockYnabAPI = {
@@ -77,6 +78,9 @@ describe("exportTransactions", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		exportDir = mkdtempSync(join(tmpdir(), "ynab-mcpb-export-"));
+		vi.stubEnv("YNAB_EXPORT_PATH", exportDir);
+		resetRuntimeConfig();
 		// Set up successful API response
 		(mockYnabAPI.transactions.getTransactions as any).mockResolvedValue({
 			data: { transactions: mockTransactions },
@@ -84,8 +88,10 @@ describe("exportTransactions", () => {
 	});
 
 	afterEach(() => {
-		// Clean up test files
 		vi.restoreAllMocks();
+		vi.unstubAllEnvs();
+		resetRuntimeConfig();
+		rmSync(exportDir, { recursive: true, force: true });
 	});
 
 	describe("ExportTransactionsSchema", () => {
@@ -135,8 +141,7 @@ describe("exportTransactions", () => {
 
 			const result = await handleExportTransactions(mockYnabAPI, params);
 
-			expect(writeFileSync).toHaveBeenCalledTimes(1);
-			const [, fileContent] = (writeFileSync as any).mock.calls[0];
+			const { content: fileContent } = exportedFile(result);
 			const exportData = JSON.parse(fileContent);
 
 			// Check that export_info shows minimal mode
@@ -179,8 +184,7 @@ describe("exportTransactions", () => {
 
 			const result = await handleExportTransactions(mockYnabAPI, params);
 
-			expect(writeFileSync).toHaveBeenCalledTimes(1);
-			const [, fileContent] = (writeFileSync as any).mock.calls[0];
+			const { content: fileContent } = exportedFile(result);
 			const exportData = JSON.parse(fileContent);
 
 			// Check that export_info shows full mode
@@ -233,7 +237,7 @@ describe("exportTransactions", () => {
 				}),
 			);
 
-			expect(writeFileSync).not.toHaveBeenCalled();
+			expect(readdirSync(exportDir)).toHaveLength(0);
 			const responseJson = JSON.parse(textOf(result.content[0]));
 			expect(responseJson.error.message).toContain(
 				"Filename must be a file name",
@@ -245,20 +249,18 @@ describe("exportTransactions", () => {
 				budget_id: "test-budget",
 			});
 
-			await handleExportTransactions(mockYnabAPI, params);
+			const result = await handleExportTransactions(mockYnabAPI, params);
 
-			expect(writeFileSync).toHaveBeenCalledTimes(1);
-			const [filePath] = (writeFileSync as any).mock.calls[0];
+			const { path: filePath } = exportedFile(result);
 			expect(filePath).toContain("minimal");
 		});
 
 		it('should not include "minimal" in filename when minimal is false', async () => {
 			const params = { budget_id: "test-budget", minimal: false };
 
-			await handleExportTransactions(mockYnabAPI, params);
+			const result = await handleExportTransactions(mockYnabAPI, params);
 
-			expect(writeFileSync).toHaveBeenCalledTimes(1);
-			const [filePath] = (writeFileSync as any).mock.calls[0];
+			const { path: filePath } = exportedFile(result);
 			expect(filePath).not.toContain("minimal");
 		});
 	});

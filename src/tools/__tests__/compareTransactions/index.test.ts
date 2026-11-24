@@ -1,39 +1,24 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type * as ynab from "ynab";
+import { textOf } from "../../../__tests__/testUtils.js";
 import {
 	CompareTransactionsSchema,
 	handleCompareTransactions,
 } from "../../compareTransactions/index.js";
 
-// Create hoisted mock functions
-const mockParseBankCSV = vi.hoisted(() => vi.fn());
-const mockReadCSVFile = vi.hoisted(() => vi.fn());
-const mockAutoDetectCSVFormat = vi.hoisted(() => vi.fn());
-const mockFindMatches = vi.hoisted(() => vi.fn());
-const mockBuildComparisonResult = vi.hoisted(() => vi.fn());
-
-// Mock all the sub-modules with hoisted mocks wired directly
-vi.mock("../../compareTransactions/parser.js", () => ({
-	parseBankCSV: mockParseBankCSV,
+// The handler's steps, injected through its last argument.
+const mockParseBankCSV = vi.fn();
+const mockReadCSVFile = vi.fn();
+const mockAutoDetectCSVFormat = vi.fn();
+const mockFindMatches = vi.fn();
+const mockBuildComparisonResult = vi.fn();
+const steps: NonNullable<Parameters<typeof handleCompareTransactions>[3]> = {
 	readCSVFile: mockReadCSVFile,
 	autoDetectCSVFormat: mockAutoDetectCSVFormat,
-}));
-
-vi.mock("../../compareTransactions/matcher.js", () => ({
+	parseBankCSV: mockParseBankCSV,
 	findMatches: mockFindMatches,
-}));
-
-vi.mock("../../compareTransactions/formatter.js", () => ({
 	buildComparisonResult: mockBuildComparisonResult,
-}));
-
-vi.mock("fs", () => ({
-	readFileSync: vi.fn(),
-}));
-
-vi.mock("../../../types/index.js", () => ({
-	withToolErrorHandling: vi.fn((fn) => fn()),
-}));
+};
 
 // Create mock YNAB API
 const mockYnabAPI = {
@@ -210,7 +195,7 @@ describe("compareTransactions index (main handler)", () => {
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			// Verify that parser was called with CSV data
 			expect(mockParseBankCSV).toHaveBeenCalledWith(
@@ -236,7 +221,7 @@ describe("compareTransactions index (main handler)", () => {
 				csv_file_path: "/path/to/file.csv",
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			// Verify file reading and parsing
 			expect(mockReadCSVFile).toHaveBeenCalledWith("/path/to/file.csv");
@@ -267,7 +252,7 @@ describe("compareTransactions index (main handler)", () => {
 				auto_detect_format: true,
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			// Verify auto-detection was called and used
 			expect(mockAutoDetectCSVFormat).toHaveBeenCalledWith(params.csv_data);
@@ -287,7 +272,7 @@ describe("compareTransactions index (main handler)", () => {
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			// Verify YNAB API calls
 			expect(mockYnabAPI.payees.getPayees).toHaveBeenCalledWith("budget-123");
@@ -308,7 +293,7 @@ describe("compareTransactions index (main handler)", () => {
 				date_tolerance_days: 3,
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			// Verify YNAB API was called with extended date range
 			// The exact date will depend on date parsing logic - verify the call was made
@@ -335,7 +320,7 @@ describe("compareTransactions index (main handler)", () => {
 				date_tolerance_days: 0,
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			expect(
 				mockYnabAPI.transactions.getTransactionsByAccount,
@@ -351,7 +336,7 @@ describe("compareTransactions index (main handler)", () => {
 				date_tolerance_days: 7,
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			// Verify matcher was called with correct parameters
 			expect(mockFindMatches).toHaveBeenCalledWith(
@@ -410,7 +395,7 @@ describe("compareTransactions index (main handler)", () => {
 				statement_date: "2024-01-31",
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			// Both sides are clamped to the inclusive statement window before matching
 			const [bankTxns, ynabTxns] = mockFindMatches.mock.calls[0]!;
@@ -446,7 +431,7 @@ describe("compareTransactions index (main handler)", () => {
 				date_tolerance_days: 0,
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			const [, ynabTxns] = mockFindMatches.mock.calls[0]!;
 			expect(ynabTxns.map((t: { id: string }) => t.id)).toEqual([
@@ -475,7 +460,7 @@ describe("compareTransactions index (main handler)", () => {
 				statement_start_date: "2024-01-01",
 			});
 
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			const [bankTxns] = mockFindMatches.mock.calls[0]!;
 			expect(
@@ -490,7 +475,12 @@ describe("compareTransactions index (main handler)", () => {
 				csv_data: "Date,Amount,Description\n2024-01-01,100.00,Test Transaction",
 			});
 
-			const result = await handleCompareTransactions(mockYnabAPI, params);
+			const result = await handleCompareTransactions(
+				mockYnabAPI,
+				params,
+				undefined,
+				steps,
+			);
 
 			// Verify formatter was called with correct structure
 			expect(mockBuildComparisonResult).toHaveBeenCalledWith(
@@ -527,9 +517,17 @@ describe("compareTransactions index (main handler)", () => {
 				csv_data: "Date,Amount,Description", // Header only
 			});
 
-			await expect(
-				handleCompareTransactions(mockYnabAPI, params),
-			).rejects.toThrow("No valid transactions found in CSV data");
+			// The real error wrapper turns the failure into a tool error result.
+			const result = await handleCompareTransactions(
+				mockYnabAPI,
+				params,
+				undefined,
+				steps,
+			);
+			expect(result.isError).toBe(true);
+			expect(textOf(result.content[0])).toContain(
+				"No valid transactions found in CSV data",
+			);
 		});
 
 		test("should handle auto-detection errors gracefully", async () => {
@@ -545,7 +543,7 @@ describe("compareTransactions index (main handler)", () => {
 			});
 
 			// Should not throw, should fall back to provided format
-			await handleCompareTransactions(mockYnabAPI, params);
+			await handleCompareTransactions(mockYnabAPI, params, undefined, steps);
 
 			// Should have tried auto-detection but used fallback
 			expect(mockAutoDetectCSVFormat).toHaveBeenCalled();

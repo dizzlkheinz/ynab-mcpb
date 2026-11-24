@@ -22,14 +22,6 @@ const cacheManager = vi.hoisted(() => ({
 	deleteByBudgetId: vi.fn(),
 	clear: vi.fn(),
 }));
-vi.mock("../../server/cacheManager.js", () => ({
-	CacheManager: {
-		generateKey: vi.fn(),
-	},
-	CACHE_TTLS: {
-		BUDGETS: 300000,
-	},
-}));
 
 // Mock the YNAB API
 const mockYnabAPI = {

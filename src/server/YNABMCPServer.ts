@@ -94,7 +94,11 @@ export class YNABMCPServer {
 	private errorHandler: ErrorHandler;
 	private completionsManager: CompletionsManager;
 
-	constructor(exitOnError = true) {
+	/**
+	 * @param options.ynabAPI - The YNAB client to use; defaults to a real client for
+	 *   the configured token. Tests pass a fake here.
+	 */
+	constructor(exitOnError = true, options: { ynabAPI?: ynab.API } = {}) {
 		this.exitOnError = exitOnError;
 		this.configInstance = loadConfig();
 		// Config is now imported and validated at startup
@@ -112,11 +116,13 @@ export class YNABMCPServer {
 
 		// Initialize YNAB API
 		this.serverKnowledgeStore = new ServerKnowledgeStore();
-		this.ynabAPI = new YNABClient(this.configInstance.YNAB_ACCESS_TOKEN, {
-			cacheManager: this.cacheManager,
-			knowledgeStore: this.serverKnowledgeStore,
-			rateLimiter: this.rateLimiter,
-		});
+		this.ynabAPI =
+			options.ynabAPI ??
+			new YNABClient(this.configInstance.YNAB_ACCESS_TOKEN, {
+				cacheManager: this.cacheManager,
+				knowledgeStore: this.serverKnowledgeStore,
+				rateLimiter: this.rateLimiter,
+			});
 
 		// Determine server version (prefer package.json)
 		this.serverVersion = this.readPackageVersion() ?? "0.0.0";

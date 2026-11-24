@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransactionDetail } from "ynab";
 import { analyzeReconciliation } from "../../analyzer.js";
-import * as csvParser from "../../csvParser.js";
-
-vi.mock("../../csvParser.js", () => ({
-	parseCSV: vi.fn(),
-}));
+import type { CSVParseResult } from "../../csvParser.js";
 
 describe("scenario: zero, negative, and large statements", () => {
 	beforeEach(() => {
@@ -13,7 +9,7 @@ describe("scenario: zero, negative, and large statements", () => {
 	});
 
 	it("handles zero and negative statement balances with mixed unmatched items", () => {
-		vi.mocked(csvParser.parseCSV).mockReturnValue({
+		const parsed: CSVParseResult = {
 			transactions: [
 				{
 					id: "b1",
@@ -51,7 +47,7 @@ describe("scenario: zero, negative, and large statements", () => {
 				validRows: 2,
 				skippedRows: 0,
 			},
-		});
+		};
 
 		const ynabTxns: TransactionDetail[] = [
 			{
@@ -65,7 +61,7 @@ describe("scenario: zero, negative, and large statements", () => {
 			} as TransactionDetail,
 		];
 
-		const result = analyzeReconciliation("csv", undefined, ynabTxns, 0);
+		const result = analyzeReconciliation(parsed, undefined, ynabTxns, 0);
 
 		expect(result.summary.unmatched_bank).toBeGreaterThan(0);
 		// The YNAB transaction from Oct 31 is within the 7-day tolerance buffer

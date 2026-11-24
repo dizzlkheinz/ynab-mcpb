@@ -96,6 +96,15 @@ function dateBounds(dates: Date[]): { min: Date; max: Date } {
 	return { min: new Date(min), max: new Date(max) };
 }
 
+/** The parsing, matching and formatting steps; tests substitute their own. */
+const defaultCompareSteps = {
+	readCSVFile,
+	autoDetectCSVFormat,
+	parseBankCSV,
+	findMatches,
+	buildComparisonResult,
+};
+
 /**
  * Handles the ynab:compare_transactions tool call
  */
@@ -103,6 +112,7 @@ export async function handleCompareTransactions(
 	ynabAPI: ynab.API,
 	params: CompareTransactionsParams,
 	errorHandler?: ErrorHandler,
+	steps: typeof defaultCompareSteps = defaultCompareSteps,
 ): Promise<CallToolResult> {
 	return await withToolErrorHandling(
 		async () => {
@@ -116,7 +126,7 @@ export async function handleCompareTransactions(
 			// Get CSV data
 			let csvContent: string;
 			if (parsed.csv_file_path) {
-				csvContent = readCSVFile(parsed.csv_file_path);
+				csvContent = steps.readCSVFile(parsed.csv_file_path);
 			} else if (parsed.csv_data) {
 				csvContent = parsed.csv_data;
 			} else {
@@ -127,7 +137,7 @@ export async function handleCompareTransactions(
 			let csvFormat = parsed.csv_format;
 			if (parsed.auto_detect_format) {
 				try {
-					csvFormat = autoDetectCSVFormat(csvContent);
+					csvFormat = steps.autoDetectCSVFormat(csvContent);
 					if (parsed.debug) {
 						console.warn("Auto-detected CSV format:", csvFormat);
 					}
@@ -142,7 +152,7 @@ export async function handleCompareTransactions(
 			}
 
 			// Parse bank transactions from CSV
-			const bankTransactions = parseBankCSV(csvContent, csvFormat, {
+			const bankTransactions = steps.parseBankCSV(csvContent, csvFormat, {
 				debug: parsed.debug,
 			});
 
@@ -207,7 +217,7 @@ export async function handleCompareTransactions(
 			// Find matches
 			const amountTolerance = parsed.amount_tolerance ?? 0.01;
 			const chronologyBonus = parsed.enable_chronology_bonus ?? false;
-			const matchResults = findMatches(
+			const matchResults = steps.findMatches(
 				filteredBankTransactions,
 				filteredYnabTransactions,
 				amountTolerance,
@@ -253,7 +263,7 @@ export async function handleCompareTransactions(
 				date_tolerance_days: parsed.date_tolerance_days,
 			};
 
-			return buildComparisonResult(
+			return steps.buildComparisonResult(
 				matchResults,
 				filteredBankTransactions,
 				filteredYnabTransactions,
