@@ -33,8 +33,9 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 function assertSameSet(label: string, left: string[], right: string[]): void {
-	const leftSorted = [...left].sort();
-	const rightSorted = [...right].sort();
+	const byCodeUnit = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+	const leftSorted = [...left].sort(byCodeUnit);
+	const rightSorted = [...right].sort(byCodeUnit);
 	assert(
 		JSON.stringify(leftSorted) === JSON.stringify(rightSorted),
 		`${label} differ:\nsource=${leftSorted.join(",")}\nruntime=${rightSorted.join(",")}`,

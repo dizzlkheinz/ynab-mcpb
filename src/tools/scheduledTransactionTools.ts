@@ -278,6 +278,48 @@ export async function handleCreateScheduledTransaction(
 	}
 }
 
+function resolveScheduledPayeeId(
+	changes: Pick<
+		z.infer<typeof UpdateScheduledTransactionSchema>,
+		"payee_id" | "payee_name"
+	>,
+	current: ynab.ScheduledTransactionDetail,
+): string | null {
+	if (changes.payee_id !== undefined) {
+		return changes.payee_id;
+	}
+	return changes.payee_name !== undefined ? null : (current.payee_id ?? null);
+}
+
+function resolveNullableField<T>(
+	next: T | null | undefined,
+	current: T | null | undefined,
+): T | null {
+	return next !== undefined ? next : (current ?? null);
+}
+
+function buildScheduledUpdateRequest(
+	current: ynab.ScheduledTransactionDetail,
+	changes: Omit<
+		z.infer<typeof UpdateScheduledTransactionSchema>,
+		"budget_id" | "scheduled_transaction_id" | "dry_run"
+	>,
+): ynab.SaveScheduledTransaction {
+	return {
+		account_id: changes.account_id ?? current.account_id,
+		date: changes.date ?? current.date_next,
+		amount: changes.amount ?? current.amount,
+		frequency: changes.frequency ?? current.frequency,
+		payee_id: resolveScheduledPayeeId(changes, current),
+		category_id: resolveNullableField(changes.category_id, current.category_id),
+		memo: resolveNullableField(changes.memo, current.memo),
+		flag_color: resolveNullableField(changes.flag_color, current.flag_color),
+		...(changes.payee_name !== undefined && {
+			payee_name: changes.payee_name,
+		}),
+	};
+}
+
 export async function handleUpdateScheduledTransaction(
 	api: ynab.API,
 	params: z.infer<typeof UpdateScheduledTransactionSchema>,
@@ -290,37 +332,16 @@ export async function handleUpdateScheduledTransaction(
 				budgetId,
 				params.scheduled_transaction_id,
 			);
-		const current = currentResponse.data.scheduled_transaction;
 		const {
 			budget_id: _budgetId,
 			scheduled_transaction_id: id,
 			dry_run: _dryRun,
 			...changes
 		} = params;
-		const request: ynab.SaveScheduledTransaction = {
-			account_id: changes.account_id ?? current.account_id,
-			date: changes.date ?? current.date_next,
-			amount: changes.amount ?? current.amount,
-			frequency: changes.frequency ?? current.frequency,
-			payee_id:
-				changes.payee_id !== undefined
-					? changes.payee_id
-					: changes.payee_name !== undefined
-						? null
-						: (current.payee_id ?? null),
-			category_id:
-				changes.category_id !== undefined
-					? changes.category_id
-					: (current.category_id ?? null),
-			memo: changes.memo !== undefined ? changes.memo : (current.memo ?? null),
-			flag_color:
-				changes.flag_color !== undefined
-					? changes.flag_color
-					: (current.flag_color ?? null),
-			...(changes.payee_name !== undefined && {
-				payee_name: changes.payee_name,
-			}),
-		};
+		const request = buildScheduledUpdateRequest(
+			currentResponse.data.scheduled_transaction,
+			changes,
+		);
 		if (params.dry_run) {
 			return asResult({
 				dry_run: true,

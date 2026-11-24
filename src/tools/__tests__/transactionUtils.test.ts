@@ -684,7 +684,7 @@ describe("transactionUtils", () => {
 		it("should downgrade to ids_only when summary exceeds threshold", () => {
 			// Create a response with enough data to exceed summary threshold (96KB) but not ids_only threshold (100KB)
 			// The 4KB window between thresholds is very narrow - test the downgrade logic
-			const results = [];
+			const results: BulkCreateResponse["results"] = [];
 			for (let i = 0; i < 800; i++) {
 				results.push({
 					request_index: i,
@@ -715,7 +715,7 @@ describe("transactionUtils", () => {
 
 		it("should preserve execution status when response details are too large", () => {
 			// Create an extremely large response that cannot fit even with ids_only
-			const results = [];
+			const results: BulkCreateResponse["results"] = [];
 			for (let i = 0; i < 10000; i++) {
 				results.push({
 					request_index: i,
@@ -838,7 +838,7 @@ describe("transactionUtils", () => {
 
 		it("should preserve error_code in ids_only mode when response is large", () => {
 			// Create a large response - test that error_code is preserved regardless of mode
-			const results = [];
+			const results: BulkUpdateResponse["results"] = [];
 			for (let i = 0; i < 800; i++) {
 				results.push({
 					request_index: i,
@@ -869,7 +869,7 @@ describe("transactionUtils", () => {
 		});
 
 		it("should preserve execution status when response details are too large", () => {
-			const results = [];
+			const results: BulkUpdateResponse["results"] = [];
 			for (let i = 0; i < 10000; i++) {
 				results.push({
 					request_index: i,

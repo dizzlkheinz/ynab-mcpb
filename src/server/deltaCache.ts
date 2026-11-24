@@ -152,50 +152,20 @@ export class DeltaCache {
 			}),
 			...(revalidate && { revalidate }),
 			loader: async () => {
-				const requestedKnowledge = options.forceFullRefresh
-					? undefined
-					: previous?.serverKnowledge;
-				let response = await fetcher(requestedKnowledge);
-				let fullRefresh = requestedKnowledge === undefined;
-				if (
-					requestedKnowledge !== undefined &&
-					(response.serverKnowledge < requestedKnowledge ||
-						response.serverKnowledge - requestedKnowledge >
-							LARGE_KNOWLEDGE_GAP_THRESHOLD)
-				) {
-					this.knowledgeGapEvents++;
-					this.logger.warn("delta-cache.knowledge-gap", {
-						budgetId,
-						cacheKey,
-						lastKnowledge: requestedKnowledge,
-						serverKnowledge: response.serverKnowledge,
-					});
-					response = await fetcher(undefined);
-					fullRefresh = true;
-				}
-				let snapshot: T[];
-				if (!fullRefresh && previous) {
-					this.deltaHits++;
-					mergedOntoFreshSnapshot = previousFresh;
-					usedDelta = response.serverKnowledge !== requestedKnowledge;
-					if (usedDelta) this.mergeOperations++;
-					snapshot = usedDelta
-						? merger(previous.snapshot, response.data, options.mergeOptions)
-						: previous.snapshot;
-				} else {
-					this.deltaMisses++;
-					snapshot = this.filterDeleted(response.data);
-				}
-				fetchedEntry = {
-					snapshot,
-					serverKnowledge: response.serverKnowledge,
-					timestamp: Date.now(),
-					ttl: effectiveTtl,
-					...(options.staleWhileRevalidate !== undefined && {
-						staleWhileRevalidate: options.staleWhileRevalidate,
-					}),
-				};
-				return fetchedEntry;
+				const loaded = await this.loadDeltaEntry(
+					cacheKey,
+					budgetId,
+					fetcher,
+					merger,
+					previous,
+					previousFresh,
+					effectiveTtl,
+					options,
+				);
+				fetchedEntry = loaded.entry;
+				usedDelta = loaded.usedDelta;
+				mergedOntoFreshSnapshot = loaded.mergedOntoFreshSnapshot;
+				return loaded.entry;
 			},
 		});
 		// An invalidated load is still returned to its original caller, but must
@@ -210,6 +180,78 @@ export class DeltaCache {
 			usedDelta: entry === fetchedEntry && usedDelta,
 			serverKnowledge: entry.serverKnowledge,
 		};
+	}
+
+	private isKnowledgeGap(
+		requested: number | undefined,
+		received: number,
+	): boolean {
+		return (
+			requested !== undefined &&
+			(received < requested ||
+				received - requested > LARGE_KNOWLEDGE_GAP_THRESHOLD)
+		);
+	}
+
+	private async loadDeltaEntry<T extends { deleted?: boolean }>(
+		cacheKey: string,
+		budgetId: string,
+		fetcher: DeltaFetcher<T>,
+		merger: MergeFn<T>,
+		previous: DeltaCacheEntry<T> | undefined,
+		previousFresh: boolean,
+		effectiveTtl: number,
+		options: {
+			forceFullRefresh?: boolean;
+			mergeOptions?: MergeOptions;
+			staleWhileRevalidate?: number;
+		},
+	): Promise<{
+		entry: DeltaCacheEntry<T>;
+		usedDelta: boolean;
+		mergedOntoFreshSnapshot: boolean;
+	}> {
+		const requestedKnowledge = options.forceFullRefresh
+			? undefined
+			: previous?.serverKnowledge;
+		let response = await fetcher(requestedKnowledge);
+		let fullRefresh = requestedKnowledge === undefined;
+		if (this.isKnowledgeGap(requestedKnowledge, response.serverKnowledge)) {
+			this.knowledgeGapEvents++;
+			this.logger.warn("delta-cache.knowledge-gap", {
+				budgetId,
+				cacheKey,
+				lastKnowledge: requestedKnowledge,
+				serverKnowledge: response.serverKnowledge,
+			});
+			response = await fetcher(undefined);
+			fullRefresh = true;
+		}
+		let usedDelta = false;
+		let mergedOntoFreshSnapshot = false;
+		let snapshot: T[];
+		if (!fullRefresh && previous) {
+			this.deltaHits++;
+			mergedOntoFreshSnapshot = previousFresh;
+			usedDelta = response.serverKnowledge !== requestedKnowledge;
+			if (usedDelta) this.mergeOperations++;
+			snapshot = usedDelta
+				? merger(previous.snapshot, response.data, options.mergeOptions)
+				: previous.snapshot;
+		} else {
+			this.deltaMisses++;
+			snapshot = this.filterDeleted(response.data);
+		}
+		const entry: DeltaCacheEntry<T> = {
+			snapshot,
+			serverKnowledge: response.serverKnowledge,
+			timestamp: Date.now(),
+			ttl: effectiveTtl,
+			...(options.staleWhileRevalidate !== undefined && {
+				staleWhileRevalidate: options.staleWhileRevalidate,
+			}),
+		};
+		return { entry, usedDelta, mergedOntoFreshSnapshot };
 	}
 
 	getStats(): DeltaCacheStats {

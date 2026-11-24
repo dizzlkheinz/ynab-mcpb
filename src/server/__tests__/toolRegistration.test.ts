@@ -88,8 +88,9 @@ describe("Tool Registration", () => {
 		it("registers all expected tools with correct names", () => {
 			const server = new YNABMCPServer(false);
 			const tools = server.getToolRegistry().listTools();
-			const toolNames = tools.map((t) => t.name).sort();
-			const expectedNames = [...ALL_EXPECTED_TOOLS].sort();
+			const byCodeUnit = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+			const toolNames = tools.map((t) => t.name).sort(byCodeUnit);
+			const expectedNames = [...ALL_EXPECTED_TOOLS].sort(byCodeUnit);
 
 			expect(toolNames).toEqual(expectedNames);
 		});

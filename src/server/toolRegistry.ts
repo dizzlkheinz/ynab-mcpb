@@ -910,111 +910,94 @@ export class ToolRegistry {
 		// Validate content items regardless of whether structuredContent is present.
 		// This must run before the structuredContent fast-path so that malformed
 		// content is caught centrally rather than surfacing as an MCP SDK error later.
-		if (!output.content || output.content.length === 0) {
-			return this.deps.errorHandler.createValidationError(
-				`Output validation failed for ${toolName}`,
-				"Handler returned empty content",
-				["Ensure the handler returns valid content in the response"],
-			);
-		}
-
-		// Validate all content items (not just the first one)
-		const invalidItems: { index: number; reason: string }[] = [];
-
-		for (let i = 0; i < output.content.length; i++) {
-			const item = output.content[i];
-			if (!item) {
-				invalidItems.push({ index: i, reason: "item is null or undefined" });
-			} else if (item.type !== "text") {
-				invalidItems.push({
-					index: i,
-					reason: `type is "${item.type}" instead of "text"`,
-				});
-			} else if (typeof item.text !== "string") {
-				invalidItems.push({
-					index: i,
-					reason: `text property is ${typeof item.text} instead of string`,
-				});
-			}
-		}
-
-		if (invalidItems.length > 0) {
-			const invalidItemsDetails = invalidItems
-				.map((inv) => `  - Item ${inv.index}: ${inv.reason}`)
-				.join("\n");
-
-			return this.deps.errorHandler.createValidationError(
-				`Output validation failed for ${toolName}`,
-				`Handler returned invalid content items (${invalidItems.length} of ${output.content.length} failed):\n${invalidItemsDetails}`,
-				['Ensure all content items have type="text" and a valid text property'],
-			);
-		}
-
-		const firstContent = output.content[0];
-		if (!firstContent) {
-			return this.deps.errorHandler.createValidationError(
-				`Output validation failed for ${toolName}`,
-				"Handler returned empty content",
-				["Ensure the handler returns valid content in the response"],
-			);
-		}
-		// TypeScript: After validation above, we know firstContent.type === 'text'
-		if (firstContent.type !== "text") {
-			throw new Error("Unexpected: firstContent is not text after validation");
+		const contentCheck = this.validateContentItems(toolName, output.content);
+		if (!contentCheck.ok) {
+			return contentCheck.error;
 		}
 
 		// Fast-path: handler already provided structuredContent — validate it and
 		// replace with result.data so Zod's schema stripping is always authoritative.
 		// This must come after content validation so malformed content is still caught.
 		if (output.structuredContent !== undefined) {
-			const scResult = validator.safeParse(output.structuredContent);
-			if (!scResult.success) {
-				const validationError = fromZodError(scResult.error);
-				return this.deps.errorHandler.createValidationError(
-					`Output validation failed for ${toolName}`,
-					`Handler output does not match declared output schema: ${validationError.message}`,
-					[
-						"Check that the handler returns data matching the output schema",
-						"Review the tool definition output schema",
-					],
-				);
-			}
-			if (
-				typeof scResult.data !== "object" ||
-				scResult.data === null ||
-				Array.isArray(scResult.data)
-			) {
-				return this.deps.errorHandler.createValidationError(
-					`Output validation failed for ${toolName}`,
-					"Handler output schema must resolve to a JSON object for structuredContent",
-					[
-						"Ensure outputSchema root type is object",
-						"Return a JSON object from the tool handler",
-					],
-				);
-			}
-			return {
-				...output,
-				structuredContent: scResult.data as Record<string, unknown>,
-			};
+			return this.validateAgainstOutputSchema(
+				toolName,
+				validator,
+				output.structuredContent,
+				output,
+			);
 		}
 
 		let parsedOutput: unknown;
 		try {
-			parsedOutput = JSON.parse(firstContent.text);
+			parsedOutput = JSON.parse(contentCheck.firstText);
 		} catch {
 			// Non-JSON response (e.g. markdown) and no structuredContent — pass through.
 			return output;
 		}
 
-		// Validate against schema
-		const result = validator.safeParse(parsedOutput);
+		return this.validateAgainstOutputSchema(
+			toolName,
+			validator,
+			parsedOutput,
+			output,
+		);
+	}
+
+	private validateContentItems(
+		toolName: string,
+		content: CallToolResult["content"] | undefined,
+	): { ok: true; firstText: string } | { ok: false; error: CallToolResult } {
+		if (!content || content.length === 0) {
+			return {
+				ok: false,
+				error: this.deps.errorHandler.createValidationError(
+					`Output validation failed for ${toolName}`,
+					"Handler returned empty content",
+					["Ensure the handler returns valid content in the response"],
+				),
+			};
+		}
+
+		const invalidItems = collectInvalidContentItems(content);
+		if (invalidItems.length > 0) {
+			const invalidItemsDetails = invalidItems
+				.map((inv) => `  - Item ${inv.index}: ${inv.reason}`)
+				.join("\n");
+
+			return {
+				ok: false,
+				error: this.deps.errorHandler.createValidationError(
+					`Output validation failed for ${toolName}`,
+					`Handler returned invalid content items (${invalidItems.length} of ${content.length} failed):\n${invalidItemsDetails}`,
+					[
+						'Ensure all content items have type="text" and a valid text property',
+					],
+				),
+			};
+		}
+
+		const firstContent = content[0];
+		if (!firstContent) {
+			throw new Error("Unexpected: firstContent is missing after validation");
+		}
+		if (firstContent.type !== "text") {
+			throw new Error("Unexpected: firstContent is not text after validation");
+		}
+		return { ok: true, firstText: firstContent.text };
+	}
+
+	private validateAgainstOutputSchema(
+		toolName: string,
+		validator: z.ZodType<unknown>,
+		candidate: unknown,
+		output: CallToolResult,
+	): CallToolResult {
+		const result = validator.safeParse(candidate);
 		if (!result.success) {
 			const validationError = fromZodError(result.error);
-			const validationErrors = validationError.message;
 			return this.deps.errorHandler.createValidationError(
 				`Output validation failed for ${toolName}`,
-				`Handler output does not match declared output schema: ${validationErrors}`,
+				`Handler output does not match declared output schema: ${validationError.message}`,
 				[
 					"Check that the handler returns data matching the output schema",
 					"Review the tool definition output schema",
@@ -1042,4 +1025,26 @@ export class ToolRegistry {
 			structuredContent: result.data as Record<string, unknown>,
 		};
 	}
+}
+
+function collectInvalidContentItems(
+	content: CallToolResult["content"],
+): { index: number; reason: string }[] {
+	const invalidItems: { index: number; reason: string }[] = [];
+	for (const [index, item] of content.entries()) {
+		if (!item) {
+			invalidItems.push({ index, reason: "item is null or undefined" });
+		} else if (item.type !== "text") {
+			invalidItems.push({
+				index,
+				reason: `type is "${item.type}" instead of "text"`,
+			});
+		} else if (typeof item.text !== "string") {
+			invalidItems.push({
+				index,
+				reason: `text property is ${typeof item.text} instead of string`,
+			});
+		}
+	}
+	return invalidItems;
 }

@@ -112,6 +112,76 @@ const defaultCompareSteps = {
 	buildComparisonResult,
 };
 
+function loadCsvContent(
+	parsed: CompareTransactionsParams,
+	steps: typeof defaultCompareSteps,
+): string {
+	if (parsed.csv_file_path) {
+		return steps.readCSVFile(parsed.csv_file_path);
+	}
+	if (parsed.csv_data) {
+		return parsed.csv_data;
+	}
+	throw new Error("Missing CSV data: csv_data is required");
+}
+
+function resolveCsvFormat(
+	parsed: CompareTransactionsParams,
+	csvContent: string,
+	steps: typeof defaultCompareSteps,
+): CompareTransactionsParams["csv_format"] {
+	if (!parsed.auto_detect_format) {
+		return parsed.csv_format;
+	}
+	try {
+		const detected = steps.autoDetectCSVFormat(csvContent);
+		if (parsed.debug) {
+			console.warn("Auto-detected CSV format:", detected);
+		}
+		return detected;
+	} catch (error) {
+		if (parsed.debug) {
+			console.warn("Auto-detection failed, using provided format:", error);
+		}
+		return parsed.csv_format;
+	}
+}
+
+function computeComparisonDateRange(
+	parsed: CompareTransactionsParams,
+	filteredBankTransactions: { date: Date }[],
+	minDate: Date,
+	maxDate: Date,
+): { start: string; end: string } {
+	if (!parsed.statement_start_date && !parsed.statement_date) {
+		return {
+			start: formatUTCISODate(minDate),
+			end: formatUTCISODate(maxDate),
+		};
+	}
+
+	if (filteredBankTransactions.length > 0) {
+		const { min: filteredMinDate, max: filteredMaxDate } = dateBounds(
+			filteredBankTransactions.map((t) => t.date),
+		);
+		return {
+			start: formatUTCISODate(filteredMinDate),
+			end: formatUTCISODate(filteredMaxDate),
+		};
+	}
+
+	return {
+		start:
+			parsed.statement_start_date ||
+			parsed.statement_date ||
+			formatUTCISODate(minDate),
+		end:
+			parsed.statement_date ||
+			parsed.statement_start_date ||
+			formatUTCISODate(maxDate),
+	};
+}
+
 /**
  * Handles the ynab:compare_transactions tool call
  */
@@ -130,33 +200,8 @@ export async function handleCompareTransactions(
 			const payeesResponse = await ynabAPI.payees.getPayees(budgetId);
 			const payees = payeesResponse.data.payees;
 
-			// Get CSV data
-			let csvContent: string;
-			if (parsed.csv_file_path) {
-				csvContent = steps.readCSVFile(parsed.csv_file_path);
-			} else if (parsed.csv_data) {
-				csvContent = parsed.csv_data;
-			} else {
-				throw new Error("Missing CSV data: csv_data is required");
-			}
-
-			// Auto-detect format if requested
-			let csvFormat = parsed.csv_format;
-			if (parsed.auto_detect_format) {
-				try {
-					csvFormat = steps.autoDetectCSVFormat(csvContent);
-					if (parsed.debug) {
-						console.warn("Auto-detected CSV format:", csvFormat);
-					}
-				} catch (error) {
-					if (parsed.debug) {
-						console.warn(
-							"Auto-detection failed, using provided format:",
-							error,
-						);
-					}
-				}
-			}
+			const csvContent = loadCsvContent(parsed, steps);
+			const csvFormat = resolveCsvFormat(parsed, csvContent, steps);
 
 			// Parse bank transactions from CSV
 			const bankTransactions = steps.parseBankCSV(csvContent, csvFormat, {
@@ -232,38 +277,12 @@ export async function handleCompareTransactions(
 				chronologyBonus,
 			);
 
-			// Build comparison result - compute date range from filtered transactions when statement window is applied
-			let dateRange: { start: string; end: string };
-			if (parsed.statement_start_date || parsed.statement_date) {
-				// Use filtered bank transactions for date range when statement window filtering is applied
-				if (filteredBankTransactions.length > 0) {
-					const { min: filteredMinDate, max: filteredMaxDate } = dateBounds(
-						filteredBankTransactions.map((t) => t.date),
-					);
-					dateRange = {
-						start: formatUTCISODate(filteredMinDate),
-						end: formatUTCISODate(filteredMaxDate),
-					};
-				} else {
-					// Fallback to statement window if no filtered transactions
-					dateRange = {
-						start:
-							parsed.statement_start_date ||
-							parsed.statement_date ||
-							formatUTCISODate(minDate),
-						end:
-							parsed.statement_date ||
-							parsed.statement_start_date ||
-							formatUTCISODate(maxDate),
-					};
-				}
-			} else {
-				// Use original unfiltered date range when no statement window filtering
-				dateRange = {
-					start: formatUTCISODate(minDate),
-					end: formatUTCISODate(maxDate),
-				};
-			}
+			const dateRange = computeComparisonDateRange(
+				parsed,
+				filteredBankTransactions,
+				minDate,
+				maxDate,
+			);
 
 			const parameters = {
 				amount_tolerance: parsed.amount_tolerance,

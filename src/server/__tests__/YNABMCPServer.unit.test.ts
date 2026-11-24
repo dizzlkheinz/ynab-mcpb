@@ -106,6 +106,7 @@ describe("YNABMCPServer isolated behavior", () => {
 		[new Error("403 request failed"), "insufficient permissions"],
 		[new Error("Forbidden request"), "insufficient permissions"],
 		[new Error("network unavailable"), "network unavailable"],
+		// biome-ignore lint/suspicious/useErrorMessage: intentionally testing empty Error message classification
 		[new Error(""), "Token validation failed"],
 		[42, "Token validation failed: 42"],
 	] as const)(

@@ -96,6 +96,106 @@ function isUncategorized(transaction: TransactionModel): boolean {
  * Lists transactions for a budget with optional filtering
  */
 
+async function fetchTransactionsForList(
+	ynabAPI: ynab.API,
+	deltaFetcher: ReadDeps["deltaFetcher"],
+	budgetId: string,
+	params: ListTransactionsParams,
+): Promise<{
+	transactions: TransactionModel[];
+	cacheHit: boolean;
+	usedDelta: boolean;
+}> {
+	if (params.account_id) {
+		// Validate that the account exists before fetching transactions.
+		// YNAB API returns empty array for invalid account IDs instead of an error.
+		const accountsResult = await deltaFetcher.fetchAccounts(budgetId);
+		const accountExists = accountsResult.data.some(
+			(account) => account.id === params.account_id,
+		);
+		if (!accountExists) {
+			throw new Error(
+				`Account ${params.account_id} not found in budget ${budgetId}`,
+			);
+		}
+
+		const result = await deltaFetcher.fetchTransactionsByAccount(
+			budgetId,
+			params.account_id,
+			params.since_date,
+		);
+		return {
+			transactions: result.data,
+			cacheHit: result.wasCached,
+			usedDelta: result.usedDelta,
+		};
+	}
+
+	if (params.category_id) {
+		const response = await ynabAPI.transactions.getTransactionsByCategory(
+			budgetId,
+			params.category_id,
+			params.since_date,
+			undefined,
+			params.type as ynab.GetTransactionsByCategoryTypeEnum | undefined,
+		);
+		return {
+			transactions: response.data.transactions,
+			cacheHit: false,
+			usedDelta: false,
+		};
+	}
+
+	const result = await deltaFetcher.fetchTransactions(
+		budgetId,
+		params.since_date,
+		params.type as ynab.GetTransactionsTypeEnum | undefined,
+	);
+	return {
+		transactions: result.data,
+		cacheHit: result.wasCached,
+		usedDelta: result.usedDelta,
+	};
+}
+
+function buildOversizedTransactionsResult(
+	totalCount: number,
+	paged: TransactionModel[],
+	estimatedSize: number,
+	format: "markdown" | "json",
+): CallToolResult {
+	// Return summary and suggest export (show most recent entries)
+	const preview = [...paged]
+		.sort((a, b) => {
+			const dateA = a.date ?? "";
+			const dateB = b.date ?? "";
+			if (dateA === dateB) return 0;
+			return dateA < dateB ? 1 : -1;
+		})
+		.slice(0, 50);
+	const previewData = {
+		message: `Found ${totalCount} transactions (${Math.round(estimatedSize / 1024)}KB). Too large to display all.`,
+		suggestion:
+			"Use 'export_transactions' tool to save all transactions to a file.",
+		showing: `Most recent ${preview.length} transactions:`,
+		total_count: totalCount,
+		estimated_size_kb: Math.round(estimatedSize / 1024),
+		preview_transactions: preview.map(toTransactionOutput),
+	};
+	return {
+		content: [
+			{
+				type: "text",
+				text:
+					format === "markdown"
+						? formatTransactionsList(previewData)
+						: responseFormatter.format(previewData),
+			},
+		],
+		structuredContent: previewData,
+	};
+}
+
 export async function handleListTransactions(
 	ynabAPI: ynab.API,
 	params: ListTransactionsParams,
@@ -106,113 +206,45 @@ export async function handleListTransactions(
 	return await withToolErrorHandling(
 		async () => {
 			const budgetId = requireResolvedBudgetId(params.budget_id);
-			// Always use cache
-			let transactions: TransactionModel[];
-			let cacheHit = false;
-			let usedDelta = false;
-
-			if (params.account_id) {
-				// Validate that the account exists before fetching transactions
-				// YNAB API returns empty array for invalid account IDs instead of an error
-				const accountsResult = await deltaFetcher.fetchAccounts(budgetId);
-				const accountExists = accountsResult.data.some(
-					(account) => account.id === params.account_id,
-				);
-				if (!accountExists) {
-					throw new Error(
-						`Account ${params.account_id} not found in budget ${budgetId}`,
-					);
-				}
-
-				const result = await deltaFetcher.fetchTransactionsByAccount(
-					budgetId,
-					params.account_id,
-					params.since_date,
-				);
-				transactions = result.data;
-				cacheHit = result.wasCached;
-				usedDelta = result.usedDelta;
-			} else if (params.category_id) {
-				const response = await ynabAPI.transactions.getTransactionsByCategory(
-					budgetId,
-					params.category_id,
-					params.since_date,
-					undefined,
-					params.type as ynab.GetTransactionsByCategoryTypeEnum | undefined,
-				);
-				transactions = response.data.transactions;
-			} else {
-				const result = await deltaFetcher.fetchTransactions(
-					budgetId,
-					params.since_date,
-					params.type as ynab.GetTransactionsTypeEnum | undefined,
-				);
-				transactions = result.data;
-				cacheHit = result.wasCached;
-				usedDelta = result.usedDelta;
-			}
+			const fetched = await fetchTransactionsForList(
+				ynabAPI,
+				deltaFetcher,
+				budgetId,
+				params,
+			);
 
 			// Apply filters before pagination to avoid client-side post-filtering.
 			// YNAB applies type server-side everywhere except the cached
 			// account path, which fetches every type.
-			transactions = transactions.filter(
+			const transactions = fetched.transactions.filter(
 				transactionFilter(params, !params.account_id),
 			);
 
-			// Apply pagination before size check
 			const limit = params.limit ?? 50;
 			const offset = params.offset ?? 0;
 			const paged = transactions.slice(offset, offset + limit);
 			const hasMore = offset + limit < transactions.length;
-
-			// Check if response might be too large for MCP
 			const estimatedSize = JSON.stringify(paged).length;
-			const sizeLimit = RESPONSE_SIZE_LIMIT_BYTES;
+			const fmt = params.response_format ?? "markdown";
 
-			if (estimatedSize > sizeLimit) {
-				// Return summary and suggest export (show most recent entries)
-				const preview = [...paged]
-					.sort((a, b) => {
-						const dateA = a.date ?? "";
-						const dateB = b.date ?? "";
-						if (dateA === dateB) return 0;
-						return dateA < dateB ? 1 : -1;
-					})
-					.slice(0, 50);
-				const fmt = params.response_format ?? "markdown";
-				const previewData = {
-					message: `Found ${transactions.length} transactions (${Math.round(estimatedSize / 1024)}KB). Too large to display all.`,
-					suggestion:
-						"Use 'export_transactions' tool to save all transactions to a file.",
-					showing: `Most recent ${preview.length} transactions:`,
-					total_count: transactions.length,
-					estimated_size_kb: Math.round(estimatedSize / 1024),
-					preview_transactions: preview.map(toTransactionOutput),
-				};
-				return {
-					content: [
-						{
-							type: "text",
-							text:
-								fmt === "markdown"
-									? formatTransactionsList(previewData)
-									: responseFormatter.format(previewData),
-						},
-					],
-					structuredContent: previewData,
-				};
+			if (estimatedSize > RESPONSE_SIZE_LIMIT_BYTES) {
+				return buildOversizedTransactionsResult(
+					transactions.length,
+					paged,
+					estimatedSize,
+					fmt,
+				);
 			}
 
-			const fmtNormal = params.response_format ?? "markdown";
 			const normalData = {
 				total_count: transactions.length,
 				returned_count: paged.length,
 				offset,
 				has_more: hasMore,
 				next_offset: hasMore ? offset + limit : undefined,
-				cached: cacheHit,
-				cache_info: cacheHit
-					? `Data retrieved from cache for improved performance${usedDelta ? " (delta merge applied)" : ""}`
+				cached: fetched.cacheHit,
+				cache_info: fetched.cacheHit
+					? `Data retrieved from cache for improved performance${fetched.usedDelta ? " (delta merge applied)" : ""}`
 					: "Fresh data retrieved from YNAB API",
 				transactions: paged.map(toTransactionOutput),
 			};
@@ -221,7 +253,7 @@ export async function handleListTransactions(
 					{
 						type: "text",
 						text:
-							fmtNormal === "markdown"
+							fmt === "markdown"
 								? formatTransactionsList(normalData)
 								: responseFormatter.format(normalData),
 					},

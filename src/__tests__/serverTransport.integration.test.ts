@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { YNABMCPServer } from "../server/YNABMCPServer.js";
 import { executeConfirmedToolCall, executeToolCall } from "./testUtils.js";
 
+function extractRequestUrl(input: string | URL | Request): URL {
+	if (typeof input === "string") return new URL(input);
+	return new URL(input instanceof URL ? input.href : input.url);
+}
+
 afterEach(() => {
 	vi.restoreAllMocks();
 	vi.unstubAllEnvs();
@@ -33,24 +38,18 @@ describe("server tools through the SDK transport", () => {
 		const fetch = vi
 			.spyOn(globalThis, "fetch")
 			.mockImplementation(async (input, init) => {
-				const url = new URL(
-					typeof input === "string"
-						? input
-						: input instanceof URL
-							? input.href
-							: input.url,
-				);
+				const url = extractRequestUrl(input);
 				expect(url.pathname).toContain(`/plans/${budgetId}/accounts`);
-				let data: Record<string, unknown>;
-				if (init?.method === "POST") {
+				const isPost = init?.method === "POST";
+				if (isPost) {
 					created = true;
-					data = { account: added };
-				} else {
-					data = {
-						accounts: created ? [account, added] : [account],
-						server_knowledge: created ? 2 : 1,
-					};
 				}
+				const data: Record<string, unknown> = isPost
+					? { account: added }
+					: {
+							accounts: created ? [account, added] : [account],
+							server_knowledge: created ? 2 : 1,
+						};
 				return new Response(JSON.stringify({ data }), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },

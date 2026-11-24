@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Enforced strict Biome lint rules (including `project`/`types` domains, MCP stdio `noConsole` guard, and `noExcessiveCognitiveComplexity` <= 15), switched `npm run lint` to `biome check .`, and refactored functions across `src/` and tests to meet the complexity ceiling
+
 ## [0.34.0] - 2026-11-24
 
 ### Removed

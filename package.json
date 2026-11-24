@@ -15,7 +15,7 @@
 		"start": "node dist/index.js",
 		"verify-build": "node scripts/verify-build.js",
 		"verify:metadata": "tsx scripts/verify-metadata.ts",
-		"lint": "biome lint .",
+		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
 		"format:check": "biome format .",

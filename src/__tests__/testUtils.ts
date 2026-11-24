@@ -101,8 +101,10 @@ export async function createTestServer(): Promise<YNABMCPServer> {
 		);
 	}
 
-	const { YNABMCPServer } = await import("../server/YNABMCPServer.js");
-	return new YNABMCPServer();
+	const { YNABMCPServer: YNABMCPServerClass } = await import(
+		"../server/YNABMCPServer.js"
+	);
+	return new YNABMCPServerClass();
 }
 
 /**
@@ -371,29 +373,12 @@ export async function waitFor(
 	throw new Error(`Condition not met within ${timeout}ms`);
 }
 
-/**
- * Determine whether a value represents a rate-limit (HTTP 429 / "too many requests") error.
- *
- * Inspects common error shapes and messages to identify rate-limit responses.
- *
- * @param error - The error value to inspect (may be a string, Error, or an object with status/statusCode/error fields)
- * @returns `true` if the provided value represents a rate limit error, `false` otherwise.
- */
-export function isRateLimitError(error: any): boolean {
-	if (!error) return false;
-
-	// Check various ways rate limit errors can appear
-	const errorString = error.toString
-		? error.toString().toLowerCase()
-		: String(error).toLowerCase();
+function hasRateLimitTextPattern(errorString: string): boolean {
 	const hasRateLimitMessage =
 		errorString.includes("rate limit") ||
 		errorString.includes("too many requests") ||
 		errorString.includes("429");
 
-	// Check for HTML responses (YNAB API returns HTML when rate limited or down)
-	// This manifests as JSON parsing errors with messages like:
-	// "SyntaxError: Unexpected token '<', "<style>..." is not valid JSON"
 	const looksLikeHTML =
 		errorString.includes("<html") ||
 		errorString.includes("<head") ||
@@ -409,30 +394,50 @@ export function isRateLimitError(error: any): boolean {
 				errorString.includes("<style") ||
 				errorString.includes("not valid json")));
 
-	// Check for VALIDATION_ERROR from output schema validation failures
-	// These occur when YNAB API returns error responses instead of data during rate limiting
-	// Example: {"code":"VALIDATION_ERROR","message":"Output validation failed for list_budgets",...}
+	// VALIDATION_ERROR occurs when YNAB API returns error responses instead of data during rate limiting
 	const isValidationError =
 		errorString.includes("validation_error") ||
 		errorString.includes("output validation failed");
 
-	// Check error object properties
-	if (error && typeof error === "object") {
-		const statusCode = error.status || error.statusCode || error.error?.id;
-		if (statusCode === 429 || statusCode === "429") return true;
+	return hasRateLimitMessage || isHTMLResponse || isValidationError;
+}
 
-		const errorName = error.name || error.error?.name || "";
-		if (errorName.toLowerCase().includes("too_many_requests")) return true;
+function hasRateLimitObjectFields(error: any): boolean {
+	const statusCode = error.status || error.statusCode || error.error?.id;
+	if (statusCode === 429 || statusCode === "429") return true;
 
-		// Check nested error objects
-		if (error.error && typeof error.error === "object") {
-			const nestedId = error.error.id;
-			const nestedName = error.error.name;
-			if (nestedId === "429" || nestedName === "too_many_requests") return true;
-		}
+	const errorName = error.name || error.error?.name || "";
+	if (errorName.toLowerCase().includes("too_many_requests")) return true;
+
+	if (error.error && typeof error.error === "object") {
+		const nestedId = error.error.id;
+		const nestedName = error.error.name;
+		if (nestedId === "429" || nestedName === "too_many_requests") return true;
 	}
 
-	return hasRateLimitMessage || isHTMLResponse || isValidationError;
+	return false;
+}
+
+/**
+ * Determine whether a value represents a rate-limit (HTTP 429 / "too many requests") error.
+ *
+ * Inspects common error shapes and messages to identify rate-limit responses.
+ *
+ * @param error - The error value to inspect (may be a string, Error, or an object with status/statusCode/error fields)
+ * @returns `true` if the provided value represents a rate limit error, `false` otherwise.
+ */
+export function isRateLimitError(error: any): boolean {
+	if (!error) return false;
+
+	const errorString = error.toString
+		? error.toString().toLowerCase()
+		: String(error).toLowerCase();
+
+	if (typeof error === "object" && hasRateLimitObjectFields(error)) {
+		return true;
+	}
+
+	return hasRateLimitTextPattern(errorString);
 }
 
 /**

@@ -189,6 +189,8 @@ function groupIdentity(
 			const key = transaction.date.slice(0, 7);
 			return { key, name: key };
 		}
+		default:
+			throw new Error(`Unsupported group_by: ${String(groupBy)}`);
 	}
 }
 

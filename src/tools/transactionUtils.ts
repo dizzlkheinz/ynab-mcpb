@@ -123,6 +123,157 @@ export function toCorrelationPayload(
 	return payload;
 }
 
+interface IndexedResponses {
+	createdByImportId: Map<string, string[]>;
+	createdByHash: Map<string, string[]>;
+	createdByPayeeAgnosticHash: Map<string, string[]>;
+	claimedTransactionIds: Set<string>;
+}
+
+function registerCorrelationId(
+	map: Map<string, string[]>,
+	key: string,
+	transactionId: string,
+): void {
+	const existing = map.get(key);
+	if (existing) {
+		existing.push(transactionId);
+		return;
+	}
+	map.set(key, [transactionId]);
+}
+
+function indexResponseTransactions(
+	responseTransactions: NonNullable<
+		SaveTransactionsResponseData["transactions"]
+	>,
+): IndexedResponses {
+	const createdByImportId = new Map<string, string[]>();
+	const createdByHash = new Map<string, string[]>();
+	const createdByPayeeAgnosticHash = new Map<string, string[]>();
+
+	for (const transaction of responseTransactions) {
+		if (!transaction.id) continue;
+		const key = generateCorrelationKey(transaction);
+		if (key.startsWith("hash:")) {
+			registerCorrelationId(createdByHash, key, transaction.id);
+			const payeeAgnosticKey = generateCorrelationKey({
+				...transaction,
+				payee_id: null,
+				payee_name: null,
+			});
+			registerCorrelationId(
+				createdByPayeeAgnosticHash,
+				payeeAgnosticKey,
+				transaction.id,
+			);
+		} else {
+			registerCorrelationId(createdByImportId, key, transaction.id);
+		}
+	}
+
+	return {
+		createdByImportId,
+		createdByHash,
+		createdByPayeeAgnosticHash,
+		claimedTransactionIds: new Set<string>(),
+	};
+}
+
+function popCorrelationId(
+	map: Map<string, string[]>,
+	key: string,
+	claimedTransactionIds: Set<string>,
+): string | undefined {
+	const bucket = map.get(key);
+	if (!bucket || bucket.length === 0) {
+		return undefined;
+	}
+	let transactionId: string | undefined;
+	while (bucket.length > 0 && transactionId === undefined) {
+		const [candidate] = bucket.splice(0, 1);
+		if (candidate && !claimedTransactionIds.has(candidate)) {
+			transactionId = candidate;
+		}
+	}
+	if (bucket.length === 0) {
+		map.delete(key);
+	}
+	if (transactionId) {
+		claimedTransactionIds.add(transactionId);
+	}
+	return transactionId;
+}
+
+function popUniqueCorrelationId(
+	map: Map<string, string[]>,
+	key: string,
+	claimedTransactionIds: Set<string>,
+): string | undefined {
+	const candidates = (map.get(key) ?? []).filter(
+		(id) => !claimedTransactionIds.has(id),
+	);
+	if (candidates.length !== 1) {
+		return undefined;
+	}
+	const [transactionId] = candidates;
+	if (transactionId) {
+		claimedTransactionIds.add(transactionId);
+	}
+	return transactionId;
+}
+
+function resolveMatchedTransactionId(
+	transaction: BulkTransactionInput,
+	correlationKey: string,
+	indexed: IndexedResponses,
+): string | undefined {
+	const primaryMap = correlationKey.startsWith("hash:")
+		? indexed.createdByHash
+		: indexed.createdByImportId;
+	const primaryMatch = popCorrelationId(
+		primaryMap,
+		correlationKey,
+		indexed.claimedTransactionIds,
+	);
+	if (primaryMatch) {
+		return primaryMatch;
+	}
+
+	if (!correlationKey.startsWith("hash:")) {
+		// Attempt hash-based fallback if import_id was not matched.
+		const hashKey = generateCorrelationKey(
+			toCorrelationPayload({ ...transaction, import_id: undefined }),
+		);
+		const hashMatch = popCorrelationId(
+			indexed.createdByHash,
+			hashKey,
+			indexed.claimedTransactionIds,
+		);
+		if (hashMatch) {
+			return hashMatch;
+		}
+	}
+
+	// YNAB responses may contain only payee_id even when the request used
+	// payee_name. Ignore payee only when the remaining fields identify one
+	// unclaimed response; ambiguous matches are left failed rather than
+	// assigning the wrong transaction ID.
+	const payeeAgnosticKey = generateCorrelationKey(
+		toCorrelationPayload({
+			...transaction,
+			payee_id: undefined,
+			payee_name: undefined,
+			import_id: undefined,
+		}),
+	);
+	return popUniqueCorrelationId(
+		indexed.createdByPayeeAgnosticHash,
+		payeeAgnosticKey,
+		indexed.claimedTransactionIds,
+	);
+}
+
 /**
  * Correlates bulk transaction requests with YNAB response data
  */
@@ -131,84 +282,7 @@ export function correlateResults(
 	responseData: SaveTransactionsResponseData,
 	duplicateImportIds: Set<string>,
 ): BulkTransactionResult[] {
-	const createdByImportId = new Map<string, string[]>();
-	const createdByHash = new Map<string, string[]>();
-	const createdByPayeeAgnosticHash = new Map<string, string[]>();
-	const claimedTransactionIds = new Set<string>();
-	const responseTransactions = responseData.transactions ?? [];
-
-	const register = (
-		map: Map<string, string[]>,
-		key: string,
-		transactionId: string,
-	): void => {
-		const existing = map.get(key);
-		if (existing) {
-			existing.push(transactionId);
-			return;
-		}
-		map.set(key, [transactionId]);
-	};
-
-	for (const transaction of responseTransactions) {
-		if (!transaction.id) {
-			continue;
-		}
-		const key = generateCorrelationKey(transaction);
-		if (key.startsWith("hash:")) {
-			register(createdByHash, key, transaction.id);
-			const payeeAgnosticKey = generateCorrelationKey({
-				...transaction,
-				payee_id: null,
-				payee_name: null,
-			});
-			register(createdByPayeeAgnosticHash, payeeAgnosticKey, transaction.id);
-		} else {
-			register(createdByImportId, key, transaction.id);
-		}
-	}
-
-	const popId = (
-		map: Map<string, string[]>,
-		key: string,
-	): string | undefined => {
-		const bucket = map.get(key);
-		if (!bucket || bucket.length === 0) {
-			return undefined;
-		}
-		let transactionId: string | undefined;
-		while (bucket.length > 0 && transactionId === undefined) {
-			const [candidate] = bucket.splice(0, 1);
-			if (candidate && !claimedTransactionIds.has(candidate)) {
-				transactionId = candidate;
-			}
-		}
-		if (bucket.length === 0) {
-			map.delete(key);
-		}
-		if (transactionId) {
-			claimedTransactionIds.add(transactionId);
-		}
-		return transactionId;
-	};
-
-	const popUniqueId = (
-		map: Map<string, string[]>,
-		key: string,
-	): string | undefined => {
-		const candidates = (map.get(key) ?? []).filter(
-			(id) => !claimedTransactionIds.has(id),
-		);
-		if (candidates.length !== 1) {
-			return undefined;
-		}
-		const [transactionId] = candidates;
-		if (transactionId) {
-			claimedTransactionIds.add(transactionId);
-		}
-		return transactionId;
-	};
-
+	const indexed = indexResponseTransactions(responseData.transactions ?? []);
 	const correlatedResults: BulkTransactionResult[] = [];
 
 	for (const [index, transaction] of requests.entries()) {
@@ -227,45 +301,19 @@ export function correlateResults(
 			continue;
 		}
 
-		let transactionId: string | undefined;
-		if (correlationKey.startsWith("hash:")) {
-			transactionId = popId(createdByHash, correlationKey);
-		} else {
-			transactionId = popId(createdByImportId, correlationKey);
-		}
-
-		if (!transactionId && !correlationKey.startsWith("hash:")) {
-			// Attempt hash-based fallback if import_id was not matched.
-			const hashKey = generateCorrelationKey(
-				toCorrelationPayload({ ...transaction, import_id: undefined }),
-			);
-			transactionId = popId(createdByHash, hashKey);
-		}
-
-		if (!transactionId) {
-			// YNAB responses may contain only payee_id even when the request used
-			// payee_name. Ignore payee only when the remaining fields identify one
-			// unclaimed response; ambiguous matches are left failed rather than
-			// assigning the wrong transaction ID.
-			const payeeAgnosticKey = generateCorrelationKey(
-				toCorrelationPayload({
-					...transaction,
-					payee_id: undefined,
-					payee_name: undefined,
-					import_id: undefined,
-				}),
-			);
-			transactionId = popUniqueId(createdByPayeeAgnosticHash, payeeAgnosticKey);
-		}
+		const transactionId = resolveMatchedTransactionId(
+			transaction,
+			correlationKey,
+			indexed,
+		);
 
 		if (transactionId) {
-			const successResult: BulkTransactionResult = {
+			correlatedResults.push({
 				request_index: index,
 				status: "created",
 				correlation_key: correlationKey,
-			};
-			successResult.transaction_id = transactionId;
-			correlatedResults.push(successResult);
+				transaction_id: transactionId,
+			});
 			continue;
 		}
 
@@ -382,6 +430,16 @@ export function finalizeBulkUpdateResponse(
 // Error Handling
 // ============================================================================
 
+const TRANSACTION_ERROR_PATTERNS: ReadonlyArray<
+	readonly [readonly string[], string]
+> = [
+	[["401", "Unauthorized"], "Invalid or expired YNAB access token"],
+	[["403", "Forbidden"], "Insufficient permissions to access YNAB data"],
+	[["404", "Not Found"], "Budget, account, category, or transaction not found"],
+	[["429", "Too Many Requests"], "Rate limit exceeded. Please try again later"],
+	[["500", "Internal Server Error"], "YNAB service is currently unavailable"],
+];
+
 /**
  * Handles errors from transaction-related API calls
  */
@@ -395,36 +453,13 @@ export function handleTransactionError(
 		return errorHandler.handleError(error, context);
 	}
 
-	let errorMessage = defaultMessage;
-
-	if (error instanceof Error) {
-		if (
-			error.message.includes("401") ||
-			error.message.includes("Unauthorized")
-		) {
-			errorMessage = "Invalid or expired YNAB access token";
-		} else if (
-			error.message.includes("403") ||
-			error.message.includes("Forbidden")
-		) {
-			errorMessage = "Insufficient permissions to access YNAB data";
-		} else if (
-			error.message.includes("404") ||
-			error.message.includes("Not Found")
-		) {
-			errorMessage = "Budget, account, category, or transaction not found";
-		} else if (
-			error.message.includes("429") ||
-			error.message.includes("Too Many Requests")
-		) {
-			errorMessage = "Rate limit exceeded. Please try again later";
-		} else if (
-			error.message.includes("500") ||
-			error.message.includes("Internal Server Error")
-		) {
-			errorMessage = "YNAB service is currently unavailable";
-		}
-	}
+	const matchedMessage =
+		error instanceof Error
+			? TRANSACTION_ERROR_PATTERNS.find(([needles]) =>
+					needles.some((needle) => error.message.includes(needle)),
+				)?.[1]
+			: undefined;
+	const errorMessage = matchedMessage ?? defaultMessage;
 
 	return {
 		isError: true,

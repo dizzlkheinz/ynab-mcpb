@@ -128,6 +128,33 @@ export class CacheManager {
 	 * When using the simple number interface or when staleWhileRevalidate property
 	 * is not present in the options object, no default stale window is applied.
 	 */
+	private resolveSetOptions(ttlOrOptions?: number | CacheSetOptions): {
+		ttl: number;
+		staleWhileRevalidate: number | undefined;
+	} {
+		if (typeof ttlOrOptions === "number") {
+			return {
+				ttl: Number.isFinite(ttlOrOptions) ? ttlOrOptions : this.defaultTTL,
+				staleWhileRevalidate: undefined,
+			};
+		}
+		if (ttlOrOptions === undefined) {
+			return { ttl: this.defaultTTL, staleWhileRevalidate: undefined };
+		}
+
+		const ttl = ttlOrOptions.ttl ?? this.defaultTTL;
+		if (!("staleWhileRevalidate" in ttlOrOptions)) {
+			return { ttl, staleWhileRevalidate: undefined };
+		}
+
+		const staleWhileRevalidate =
+			ttlOrOptions.staleWhileRevalidate === undefined &&
+			this.defaultStaleWindow > 0
+				? this.defaultStaleWindow
+				: ttlOrOptions.staleWhileRevalidate;
+		return { ttl, staleWhileRevalidate };
+	}
+
 	set<T>(key: string, data: T, ttlOrOptions?: number | CacheSetOptions): void {
 		// Don't cache anything if maxEntries is 0
 		if (this.maxEntries <= 0) {
@@ -139,31 +166,7 @@ export class CacheManager {
 			this.evictIfNeeded();
 		}
 
-		let ttl: number;
-		let staleWhileRevalidate: number | undefined;
-
-		if (typeof ttlOrOptions === "number") {
-			ttl = Number.isFinite(ttlOrOptions) ? ttlOrOptions : this.defaultTTL;
-			// When using simple number interface, no stale window is applied
-			staleWhileRevalidate = undefined;
-		} else if (ttlOrOptions === undefined) {
-			// When called without any options (simple set), use defaults but NO stale window
-			ttl = this.defaultTTL;
-			staleWhileRevalidate = undefined;
-		} else {
-			const providedTtl = ttlOrOptions?.ttl;
-			ttl = providedTtl !== undefined ? providedTtl : this.defaultTTL;
-			const hasStaleWhileRevalidate =
-				ttlOrOptions !== undefined && "staleWhileRevalidate" in ttlOrOptions;
-			if (hasStaleWhileRevalidate) {
-				staleWhileRevalidate = ttlOrOptions.staleWhileRevalidate;
-				if (staleWhileRevalidate === undefined && this.defaultStaleWindow > 0) {
-					staleWhileRevalidate = this.defaultStaleWindow;
-				}
-			} else {
-				staleWhileRevalidate = undefined;
-			}
-		}
+		const { ttl, staleWhileRevalidate } = this.resolveSetOptions(ttlOrOptions);
 		const entry: CacheEntry<T> = {
 			data,
 			timestamp: Date.now(),

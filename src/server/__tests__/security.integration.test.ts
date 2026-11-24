@@ -341,7 +341,7 @@ describe("Security Integration", () => {
 			const startTime = Date.now();
 
 			// Make multiple rapid requests (within rate limit)
-			const promises = [];
+			const promises: Promise<unknown>[] = [];
 			for (let i = 0; i < 3; i++) {
 				promises.push(
 					SecurityMiddleware.withSecurity(context, testSchema, mockOperation),

@@ -524,6 +524,131 @@ export async function handleDeleteTransaction(
 	}
 }
 
+function assertNoDuplicateImportIds(
+	transactions: CreateTransactionsParams["transactions"],
+): void {
+	const importIdMap = new Map<string, number[]>();
+	for (const [index, transaction] of transactions.entries()) {
+		if (!transaction.import_id || transaction.import_id.trim().length === 0) {
+			continue;
+		}
+		const existing = importIdMap.get(transaction.import_id);
+		if (existing) {
+			existing.push(index);
+		} else {
+			importIdMap.set(transaction.import_id, [index]);
+		}
+	}
+
+	const duplicates = Array.from(importIdMap.entries())
+		.filter(([, indices]) => indices.length > 1)
+		.map(([importId, indices]) => ({ import_id: importId, indices }));
+
+	if (duplicates.length > 0) {
+		const details = duplicates.map(({ import_id, indices }) => ({
+			import_id,
+			transaction_indices: indices,
+			count: indices.length,
+		}));
+
+		throw new ValidationError(
+			"Duplicate import_id values detected within batch",
+			JSON.stringify(details, null, 2),
+			[
+				"Ensure each transaction has a unique import_id within the batch",
+				"Remove duplicate import_id values or omit import_id to use hash-based correlation",
+			],
+		);
+	}
+}
+
+function buildBulkCreateDryRunResult(
+	transactions: CreateTransactionsParams["transactions"],
+): CallToolResult {
+	const totalAmount = transactions.reduce(
+		(sum, transaction) => sum + transaction.amount,
+		0,
+	);
+	const accountsAffected = Array.from(
+		new Set(transactions.map((transaction) => transaction.account_id)),
+	);
+	const categoriesAffected = Array.from(
+		new Set(
+			transactions
+				.map((transaction) => transaction.category_id)
+				.filter((id): id is string => id !== undefined),
+		),
+	);
+	const sortedDates = [
+		...transactions.map((transaction) => transaction.date),
+	].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+	const dateRange =
+		sortedDates.length > 0
+			? {
+					earliest: sortedDates[0],
+					latest: sortedDates[sortedDates.length - 1],
+				}
+			: undefined;
+
+	const transactionsPreview = transactions
+		.slice(0, 10)
+		.map((transaction, index) => ({
+			request_index: index,
+			...toTransactionOutput(transaction),
+		}));
+
+	const bulkCreateDryRunData = {
+		dry_run: true as const,
+		action: "ynab_create_transactions" as const,
+		validation: "passed" as const,
+		summary: {
+			total_transactions: transactions.length,
+			total_amount: milliunitsToAmount(totalAmount),
+			accounts_affected: accountsAffected,
+			date_range: dateRange,
+			categories_affected: categoriesAffected,
+		},
+		transactions_preview: transactionsPreview,
+		note: "Dry run complete. No transactions created. No caches invalidated. No server_knowledge updated.",
+	};
+	return {
+		content: [
+			{
+				type: "text",
+				text: responseFormatter.format(bulkCreateDryRunData),
+			},
+		],
+		structuredContent: bulkCreateDryRunData,
+	};
+}
+
+function toNewTransaction(
+	transaction: CreateTransactionsParams["transactions"][number],
+): NewTransaction {
+	const payload: NewTransaction = {
+		account_id: transaction.account_id,
+		amount: transaction.amount,
+		date: transaction.date,
+	};
+	const optionalFields = [
+		"payee_id",
+		"payee_name",
+		"category_id",
+		"memo",
+		"cleared",
+		"approved",
+		"flag_color",
+		"import_id",
+	] as const;
+	for (const field of optionalFields) {
+		const value = transaction[field];
+		if (value !== undefined) {
+			(payload as Record<string, unknown>)[field] = value;
+		}
+	}
+	return payload;
+}
+
 export async function handleCreateTransactions(
 	ynabAPI: ynab.API,
 	params: CreateTransactionsParams,
@@ -532,127 +657,13 @@ export async function handleCreateTransactions(
 	return (await withToolErrorHandling(
 		async () => {
 			const { budget_id, transactions, dry_run } = params;
-
-			// Pre-flight duplicate import_id detection within batch
-			const importIdMap = new Map<string, number[]>();
-			for (const [index, transaction] of transactions.entries()) {
-				if (transaction.import_id && transaction.import_id.trim().length > 0) {
-					const existing = importIdMap.get(transaction.import_id);
-					if (existing) {
-						existing.push(index);
-					} else {
-						importIdMap.set(transaction.import_id, [index]);
-					}
-				}
-			}
-
-			const duplicates = Array.from(importIdMap.entries())
-				.filter(([, indices]) => indices.length > 1)
-				.map(([importId, indices]) => ({ import_id: importId, indices }));
-
-			if (duplicates.length > 0) {
-				const details = duplicates.map(({ import_id, indices }) => ({
-					import_id,
-					transaction_indices: indices,
-					count: indices.length,
-				}));
-
-				throw new ValidationError(
-					"Duplicate import_id values detected within batch",
-					JSON.stringify(details, null, 2),
-					[
-						"Ensure each transaction has a unique import_id within the batch",
-						"Remove duplicate import_id values or omit import_id to use hash-based correlation",
-					],
-				);
-			}
+			assertNoDuplicateImportIds(transactions);
 
 			if (dry_run) {
-				const totalAmount = transactions.reduce(
-					(sum, transaction) => sum + transaction.amount,
-					0,
-				);
-				const accountsAffected = Array.from(
-					new Set(transactions.map((transaction) => transaction.account_id)),
-				);
-				const categoriesAffected = Array.from(
-					new Set(
-						transactions
-							.map((transaction) => transaction.category_id)
-							.filter((id): id is string => id !== undefined),
-					),
-				);
-				const sortedDates = [
-					...transactions.map((transaction) => transaction.date),
-				].sort();
-				const dateRange =
-					sortedDates.length > 0
-						? {
-								earliest: sortedDates[0],
-								latest: sortedDates[sortedDates.length - 1],
-							}
-						: undefined;
-
-				const transactionsPreview = transactions
-					.slice(0, 10)
-					.map((transaction, index) => ({
-						request_index: index,
-						...toTransactionOutput(transaction),
-					}));
-
-				const bulkCreateDryRunData = {
-					dry_run: true as const,
-					action: "ynab_create_transactions" as const,
-					validation: "passed" as const,
-					summary: {
-						total_transactions: transactions.length,
-						total_amount: milliunitsToAmount(totalAmount),
-						accounts_affected: accountsAffected,
-						date_range: dateRange,
-						categories_affected: categoriesAffected,
-					},
-					transactions_preview: transactionsPreview,
-					note: "Dry run complete. No transactions created. No caches invalidated. No server_knowledge updated.",
-				};
-				return {
-					content: [
-						{
-							type: "text",
-							text: responseFormatter.format(bulkCreateDryRunData),
-						},
-					],
-					structuredContent: bulkCreateDryRunData,
-				};
+				return buildBulkCreateDryRunResult(transactions);
 			}
 			const budgetId = requireResolvedBudgetId(budget_id);
-
-			const saveTransactions: NewTransaction[] = transactions.map(
-				(transaction) => {
-					const payload: NewTransaction = {
-						account_id: transaction.account_id,
-						amount: transaction.amount,
-						date: transaction.date,
-					};
-
-					if (transaction.payee_id !== undefined)
-						payload.payee_id = transaction.payee_id;
-					if (transaction.payee_name !== undefined)
-						payload.payee_name = transaction.payee_name;
-					if (transaction.category_id !== undefined)
-						payload.category_id = transaction.category_id;
-					if (transaction.memo !== undefined) payload.memo = transaction.memo;
-					if (transaction.cleared !== undefined)
-						payload.cleared = transaction.cleared;
-					if (transaction.approved !== undefined)
-						payload.approved = transaction.approved;
-					if (transaction.flag_color !== undefined)
-						payload.flag_color = transaction.flag_color;
-					if (transaction.import_id !== undefined)
-						payload.import_id = transaction.import_id;
-
-					return payload;
-				},
-			);
+			const saveTransactions = transactions.map(toNewTransaction);
 
 			const response = await ynabAPI.transactions.createTransactions(budgetId, {
 				transactions: saveTransactions,
@@ -783,7 +794,11 @@ async function previewBulkUpdate(
 		previewTransactionIds,
 	);
 
-	const transactionsPreview = [];
+	const transactionsPreview: Array<{
+		transaction_id: string;
+		before: Record<string, unknown> | "unavailable";
+		after: Record<string, unknown>;
+	}> = [];
 	const unavailablePreviewIds: string[] = [];
 
 	for (const transaction of previewTransactions) {

@@ -436,6 +436,16 @@ Errors:
 	});
 };
 
+const CATEGORY_ERROR_PATTERNS: ReadonlyArray<
+	readonly [readonly string[], string]
+> = [
+	[["401", "Unauthorized"], "Invalid or expired YNAB access token"],
+	[["403", "Forbidden"], "Insufficient permissions to access YNAB data"],
+	[["404", "Not Found"], "Budget or category not found"],
+	[["429", "Too Many Requests"], "Rate limit exceeded. Please try again later"],
+	[["500", "Internal Server Error"], "YNAB service is currently unavailable"],
+];
+
 /**
  * Handles errors from category-related API calls
  */
@@ -443,36 +453,13 @@ function handleCategoryError(
 	error: unknown,
 	defaultMessage: string,
 ): CallToolResult {
-	let errorMessage = defaultMessage;
-
-	if (error instanceof Error) {
-		if (
-			error.message.includes("401") ||
-			error.message.includes("Unauthorized")
-		) {
-			errorMessage = "Invalid or expired YNAB access token";
-		} else if (
-			error.message.includes("403") ||
-			error.message.includes("Forbidden")
-		) {
-			errorMessage = "Insufficient permissions to access YNAB data";
-		} else if (
-			error.message.includes("404") ||
-			error.message.includes("Not Found")
-		) {
-			errorMessage = "Budget or category not found";
-		} else if (
-			error.message.includes("429") ||
-			error.message.includes("Too Many Requests")
-		) {
-			errorMessage = "Rate limit exceeded. Please try again later";
-		} else if (
-			error.message.includes("500") ||
-			error.message.includes("Internal Server Error")
-		) {
-			errorMessage = "YNAB service is currently unavailable";
-		}
-	}
+	const matchedMessage =
+		error instanceof Error
+			? CATEGORY_ERROR_PATTERNS.find(([needles]) =>
+					needles.some((needle) => error.message.includes(needle)),
+				)?.[1]
+			: undefined;
+	const errorMessage = matchedMessage ?? defaultMessage;
 
 	return {
 		content: [

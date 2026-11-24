@@ -168,6 +168,77 @@ export function findMatches(
 	return results;
 }
 
+function isEligibleCandidate(
+	bankTxn: CanonicalBankTransaction,
+	ynabTxn: NormalizedYNABTransaction,
+	usedIds: Set<string>,
+	config: MatchingConfig,
+): number | null {
+	if (usedIds.has(ynabTxn.id)) return null;
+
+	const bankSign = Math.sign(bankTxn.amount);
+	const ynabSign = Math.sign(ynabTxn.amount);
+	if (bankSign !== ynabSign && bankSign !== 0 && ynabSign !== 0) {
+		return null;
+	}
+
+	const amountDifference = Math.abs(bankTxn.amount - ynabTxn.amount);
+	if (
+		amountDifference >
+		Math.abs(bankTxn.amount) * (config.amountTolerance ?? 0)
+	) {
+		return null;
+	}
+
+	const daysDifference =
+		Math.abs(Date.parse(bankTxn.date) - Date.parse(ynabTxn.date)) / 86400000;
+	return daysDifference > config.dateToleranceDays ? null : daysDifference;
+}
+
+function buildCandidateReasons(
+	bankTxn: CanonicalBankTransaction,
+	ynabTxn: NormalizedYNABTransaction,
+	scores: MatchCandidate["scores"],
+	daysDifference: number,
+	config: MatchingConfig,
+): string[] {
+	const reasons = buildMatchReasons(scores, config);
+	if (config.chronologyBonus && daysDifference <= 3) {
+		reasons.push(
+			`Chronological order bonus (+${daysDifference <= 1 ? 15 : 10})`,
+		);
+	}
+	if (
+		ynabTxn.memo &&
+		calculatePayeeScore(bankTxn.payee, ynabTxn.memo) >
+			calculatePayeeScore(bankTxn.payee, ynabTxn.payee)
+	) {
+		reasons.push("Memo similarity");
+	}
+	return reasons;
+}
+
+function compareCandidates(
+	bankTime: number,
+	a: MatchCandidate,
+	b: MatchCandidate,
+): number {
+	const scoreDiff = b.scores.combined - a.scores.combined;
+	if (scoreDiff !== 0) {
+		return scoreDiff;
+	}
+
+	const aUncleared = a.ynabTransaction.cleared === "uncleared" ? 1 : 0;
+	const bUncleared = b.ynabTransaction.cleared === "uncleared" ? 1 : 0;
+	if (aUncleared !== bUncleared) {
+		return bUncleared - aUncleared;
+	}
+
+	const aDiff = Math.abs(bankTime - new Date(a.ynabTransaction.date).getTime());
+	const bDiff = Math.abs(bankTime - new Date(b.ynabTransaction.date).getTime());
+	return aDiff - bDiff;
+}
+
 function findCandidates(
 	bankTxn: CanonicalBankTransaction,
 	ynabTransactions: NormalizedYNABTransaction[],
@@ -177,74 +248,32 @@ function findCandidates(
 	const candidates: MatchCandidate[] = [];
 
 	for (const ynabTxn of ynabTransactions) {
-		if (usedIds.has(ynabTxn.id)) continue;
-
-		// Sign check - both must be same sign (or both zero)
-		const bankSign = Math.sign(bankTxn.amount);
-		const ynabSign = Math.sign(ynabTxn.amount);
-		if (bankSign !== ynabSign && bankSign !== 0 && ynabSign !== 0) {
-			continue;
-		}
-
-		// Amounts must match exactly (milliunits)
-		const amountDifference = Math.abs(bankTxn.amount - ynabTxn.amount);
-		if (
-			amountDifference >
-			Math.abs(bankTxn.amount) * (config.amountTolerance ?? 0)
-		) {
-			continue;
-		}
-		const daysDifference =
-			Math.abs(Date.parse(bankTxn.date) - Date.parse(ynabTxn.date)) / 86400000;
-		if (daysDifference > config.dateToleranceDays) continue;
+		const daysDifference = isEligibleCandidate(
+			bankTxn,
+			ynabTxn,
+			usedIds,
+			config,
+		);
+		if (daysDifference === null) continue;
 
 		const scores = calculateScores(bankTxn, ynabTxn, config);
-
 		if (scores.combined >= config.minimumCandidateScore) {
-			const reasons = buildMatchReasons(scores, config);
-			if (config.chronologyBonus && daysDifference <= 3)
-				reasons.push(
-					`Chronological order bonus (+${daysDifference <= 1 ? 15 : 10})`,
-				);
-			if (
-				ynabTxn.memo &&
-				calculatePayeeScore(bankTxn.payee, ynabTxn.memo) >
-					calculatePayeeScore(bankTxn.payee, ynabTxn.payee)
-			)
-				reasons.push("Memo similarity");
 			candidates.push({
 				ynabTransaction: ynabTxn,
 				scores,
-				matchReasons: reasons,
+				matchReasons: buildCandidateReasons(
+					bankTxn,
+					ynabTxn,
+					scores,
+					daysDifference,
+					config,
+				),
 			});
 		}
 	}
 
-	candidates.sort((a, b) => {
-		const scoreDiff = b.scores.combined - a.scores.combined;
-		if (scoreDiff !== 0) {
-			return scoreDiff;
-		}
-
-		const aUncleared = a.ynabTransaction.cleared === "uncleared" ? 1 : 0;
-		const bUncleared = b.ynabTransaction.cleared === "uncleared" ? 1 : 0;
-		if (aUncleared !== bUncleared) {
-			return bUncleared - aUncleared;
-		}
-
-		const bankTime = new Date(bankTxn.date).getTime();
-		const aDiff = Math.abs(
-			bankTime - new Date(a.ynabTransaction.date).getTime(),
-		);
-		const bDiff = Math.abs(
-			bankTime - new Date(b.ynabTransaction.date).getTime(),
-		);
-		if (aDiff !== bDiff) {
-			return aDiff - bDiff;
-		}
-
-		return 0;
-	});
+	const bankTime = new Date(bankTxn.date).getTime();
+	candidates.sort((a, b) => compareCandidates(bankTime, a, b));
 	return candidates;
 }
 

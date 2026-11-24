@@ -194,7 +194,8 @@ describe("exportTransactions", () => {
 			expect(exportData.transactions).toHaveLength(2);
 
 			const firstTransaction = exportData.transactions[0];
-			expect(Object.keys(firstTransaction).sort()).toEqual(
+			const byCodeUnit = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+			expect(Object.keys(firstTransaction).sort(byCodeUnit)).toEqual(
 				[
 					"id",
 					"date",
@@ -215,7 +216,7 @@ describe("exportTransactions", () => {
 					"account_name",
 					"payee_name",
 					"category_name",
-				].sort(),
+				].sort(byCodeUnit),
 			);
 			expect(firstTransaction.amount).toBe(1);
 

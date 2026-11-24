@@ -29,6 +29,19 @@ import {
 	handleUpdateTransactions,
 } from "../transactionWriteTools.js";
 
+function mergeNonNullish(
+	defaults: Record<string, unknown>,
+	overrides: Record<string, unknown>,
+): Record<string, unknown> {
+	const result: Record<string, unknown> = { ...defaults };
+	for (const [key, value] of Object.entries(overrides)) {
+		if (value !== null && value !== undefined) {
+			result[key] = value;
+		}
+	}
+	return result;
+}
+
 // Mock the YNAB API without global service fallbacks.
 const mockYnabAPI = {
 	transactions: {
@@ -3290,27 +3303,31 @@ describe("transactionTools", () => {
 			...overrides,
 		});
 
-		const buildApiTransaction = (overrides: Record<string, unknown> = {}) => ({
-			id: overrides["id"] ?? `transaction-${++transactionCounter}`,
-			account_id: overrides["account_id"] ?? "account-001",
-			date: overrides["date"] ?? "2024-01-01",
-			amount: overrides["amount"] ?? -1500,
-			memo: overrides["memo"] ?? "Bulk test",
-			cleared: overrides["cleared"] ?? "cleared",
-			approved: overrides["approved"] ?? true,
-			flag_color: overrides["flag_color"] ?? null,
-			account_name: overrides["account_name"] ?? "Checking",
-			payee_id: overrides["payee_id"] ?? null,
-			payee_name: overrides["payee_name"] ?? null,
-			category_id: overrides["category_id"] ?? null,
-			category_name: overrides["category_name"] ?? null,
-			transfer_account_id: overrides["transfer_account_id"] ?? null,
-			transfer_transaction_id: overrides["transfer_transaction_id"] ?? null,
-			matched_transaction_id: overrides["matched_transaction_id"] ?? null,
-			import_id: overrides["import_id"] ?? null,
-			deleted: overrides["deleted"] ?? false,
-			subtransactions: [],
-		});
+		const buildApiTransaction = (overrides: Record<string, unknown> = {}) =>
+			mergeNonNullish(
+				{
+					id: `transaction-${++transactionCounter}`,
+					account_id: "account-001",
+					date: "2024-01-01",
+					amount: -1500,
+					memo: "Bulk test",
+					cleared: "cleared",
+					approved: true,
+					flag_color: null,
+					account_name: "Checking",
+					payee_id: null,
+					payee_name: null,
+					category_id: null,
+					category_name: null,
+					transfer_account_id: null,
+					transfer_transaction_id: null,
+					matched_transaction_id: null,
+					import_id: null,
+					deleted: false,
+					subtransactions: [],
+				},
+				overrides,
+			);
 
 		const buildApiResponse = (
 			transactions: Record<string, unknown>[],
@@ -3928,27 +3945,31 @@ describe("transactionTools", () => {
 			...overrides,
 		});
 
-		const buildApiTransaction = (overrides: Record<string, unknown> = {}) => ({
-			id: overrides["id"] ?? `transaction-${++transactionCounter}`,
-			account_id: overrides["account_id"] ?? "account-001",
-			date: overrides["date"] ?? "2024-01-01",
-			amount: overrides["amount"] ?? -1500,
-			memo: overrides["memo"] ?? "Updated",
-			cleared: overrides["cleared"] ?? "cleared",
-			approved: overrides["approved"] ?? true,
-			flag_color: overrides["flag_color"] ?? null,
-			account_name: overrides["account_name"] ?? "Checking",
-			payee_id: overrides["payee_id"] ?? null,
-			payee_name: overrides["payee_name"] ?? null,
-			category_id: overrides["category_id"] ?? null,
-			category_name: overrides["category_name"] ?? null,
-			transfer_account_id: overrides["transfer_account_id"] ?? null,
-			transfer_transaction_id: overrides["transfer_transaction_id"] ?? null,
-			matched_transaction_id: overrides["matched_transaction_id"] ?? null,
-			import_id: overrides["import_id"] ?? null,
-			deleted: overrides["deleted"] ?? false,
-			subtransactions: [],
-		});
+		const buildApiTransaction = (overrides: Record<string, unknown> = {}) =>
+			mergeNonNullish(
+				{
+					id: `transaction-${++transactionCounter}`,
+					account_id: "account-001",
+					date: "2024-01-01",
+					amount: -1500,
+					memo: "Updated",
+					cleared: "cleared",
+					approved: true,
+					flag_color: null,
+					account_name: "Checking",
+					payee_id: null,
+					payee_name: null,
+					category_id: null,
+					category_name: null,
+					transfer_account_id: null,
+					transfer_transaction_id: null,
+					matched_transaction_id: null,
+					import_id: null,
+					deleted: false,
+					subtransactions: [],
+				},
+				overrides,
+			);
 
 		const buildApiResponse = (
 			transactions: Record<string, unknown>[],

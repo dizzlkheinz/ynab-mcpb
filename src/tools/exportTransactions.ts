@@ -97,7 +97,7 @@ function generateExportFilename(
 	let description = "transactions";
 
 	// Add filters to filename for clarity
-	const filters = [];
+	const filters: string[] = [];
 
 	if (params.since_date) {
 		filters.push(`since_${params.since_date}`);

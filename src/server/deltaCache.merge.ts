@@ -46,6 +46,25 @@ export const mergeMonths: MergeFn<ynab.MonthSummary> = (
 	return Array.from(monthMap.values());
 };
 
+function mergeNestedItems<T extends { id: string; deleted?: boolean }>(
+	existing: T[] | undefined,
+	delta: T[],
+	preserveDeleted: boolean,
+): T[] {
+	const itemMap = new Map(
+		(existing ?? []).map((item) => [item.id, { ...item }]),
+	);
+	for (const deltaItem of delta) {
+		if (deltaItem.deleted && !preserveDeleted) {
+			itemMap.delete(deltaItem.id);
+		} else {
+			const base = itemMap.get(deltaItem.id) ?? {};
+			itemMap.set(deltaItem.id, { ...base, ...deltaItem } as T);
+		}
+	}
+	return Array.from(itemMap.values());
+}
+
 export const mergeCategories: MergeFn<ynab.CategoryGroupWithCategories> = (
 	snapshot,
 	delta,
@@ -71,25 +90,14 @@ export const mergeCategories: MergeFn<ynab.CategoryGroupWithCategories> = (
 		const mergedGroup: ynab.CategoryGroupWithCategories = {
 			...existingGroup,
 			...deltaGroup,
-			categories: existingGroup.categories
-				? existingGroup.categories.map((cat) => ({ ...cat }))
-				: existingGroup.categories,
+			categories: deltaGroup.categories
+				? mergeNestedItems(
+						existingGroup.categories,
+						deltaGroup.categories,
+						preserveDeleted,
+					)
+				: existingGroup.categories?.map((cat) => ({ ...cat })),
 		};
-
-		if (deltaGroup.categories) {
-			const categoryMap = new Map(
-				(existingGroup.categories ?? []).map((cat) => [cat.id, { ...cat }]),
-			);
-			for (const deltaCategory of deltaGroup.categories) {
-				if (deltaCategory.deleted && !preserveDeleted) {
-					categoryMap.delete(deltaCategory.id);
-				} else {
-					const base = categoryMap.get(deltaCategory.id) ?? {};
-					categoryMap.set(deltaCategory.id, { ...base, ...deltaCategory });
-				}
-			}
-			mergedGroup.categories = Array.from(categoryMap.values());
-		}
 
 		groupMap.set(deltaGroup.id, mergedGroup);
 	}
@@ -122,25 +130,14 @@ export const mergeTransactions: MergeFn<ynab.TransactionDetail> = (
 		const mergedTxn: ynab.TransactionDetail = {
 			...existingTxn,
 			...deltaTxn,
-			subtransactions: existingTxn.subtransactions
-				? existingTxn.subtransactions.map((sub) => ({ ...sub }))
-				: existingTxn.subtransactions,
+			subtransactions: deltaTxn.subtransactions
+				? mergeNestedItems(
+						existingTxn.subtransactions,
+						deltaTxn.subtransactions,
+						preserveDeleted,
+					)
+				: existingTxn.subtransactions?.map((sub) => ({ ...sub })),
 		};
-
-		if (deltaTxn.subtransactions) {
-			const subMap = new Map(
-				(existingTxn.subtransactions ?? []).map((sub) => [sub.id, { ...sub }]),
-			);
-			for (const deltaSub of deltaTxn.subtransactions) {
-				if (deltaSub.deleted && !preserveDeleted) {
-					subMap.delete(deltaSub.id);
-				} else {
-					const base = subMap.get(deltaSub.id) ?? {};
-					subMap.set(deltaSub.id, { ...base, ...deltaSub });
-				}
-			}
-			mergedTxn.subtransactions = Array.from(subMap.values());
-		}
 
 		txnMap.set(deltaTxn.id, mergedTxn);
 	}

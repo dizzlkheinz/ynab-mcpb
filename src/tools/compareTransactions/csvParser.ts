@@ -260,14 +260,17 @@ export function parseCSV(
 ): CSVParseResult {
 	// Some bank exports omit quotes around a leading month-name date containing
 	// a comma. Repair that narrowly recognized field before the common parser.
-	content = content.replace(/^([A-Za-z]{3}\s+\d{1,2},\s*\d{4})(?=,)/gm, '"$1"');
+	const normalizedContent = content.replace(
+		/^([A-Za-z]{3}\s+\d{1,2},\s*\d{4})(?=,)/gm,
+		'"$1"',
+	);
 	const errors: ParseError[] = [];
 	const warnings: ParseWarning[] = [];
 
-	assertWithinParseLimits(content, options);
+	assertWithinParseLimits(normalizedContent, options);
 
 	const { presetKey: detectedPreset, hasHeader } = resolveFormat(
-		content,
+		normalizedContent,
 		options,
 	);
 
@@ -275,7 +278,7 @@ export function parseCSV(
 
 	// Parse with PapaParse
 	// Security: Use preview to limit rows parsed into memory (prevents memory exhaustion)
-	const parsed = Papa.parse(content, {
+	const parsed = Papa.parse(normalizedContent, {
 		header: hasHeader,
 		preview: maxRows + (hasHeader ? 1 : 0), // +1 for header row if present
 		dynamicTyping: false, // We'll handle type conversion ourselves
@@ -298,16 +301,10 @@ export function parseCSV(
 		? (parsed.meta.fields ?? [])
 		: buildIndexColumns(rows);
 
-	const preset = detectedPreset
-		? BANK_PRESETS[detectedPreset]
-		: hasHeader
-			? detectPreset(columns)
-			: undefined;
-
+	const preset = resolveBankPreset(detectedPreset, hasHeader, columns);
 	const mapping = resolveColumnMapping(columns, preset, options, hasHeader);
 	errors.push(...findMissingColumnErrors(mapping, columns));
 
-	const transactions: ParsedBankTransaction[] = [];
 	const rowContext: RowParseContext = {
 		mapping,
 		dateFormat: options.dateFormat ?? preset?.dateFormat,
@@ -316,6 +313,58 @@ export function parseCSV(
 			? -1
 			: (preset?.amountMultiplier ?? 1),
 	};
+
+	const {
+		transactions,
+		errors: rowErrors,
+		warnings: rowWarnings,
+	} = parseCsvRows(rows, maxRows, hasHeader, rowContext);
+	errors.push(...rowErrors);
+	warnings.push(...rowWarnings);
+
+	return {
+		transactions,
+		errors,
+		warnings,
+		meta: {
+			detectedDelimiter: parsed.meta.delimiter || ",",
+			detectedColumns: columns,
+			totalRows: rows.length,
+			validRows: transactions.length,
+			skippedRows: rows.length - transactions.length,
+			format: {
+				columns: mapping,
+				header: hasHeader,
+				...(rowContext.dateFormat ? { dateFormat: rowContext.dateFormat } : {}),
+			},
+		},
+	};
+}
+
+function resolveBankPreset(
+	detectedPreset: string | undefined,
+	hasHeader: boolean,
+	columns: string[],
+): BankPreset | undefined {
+	if (detectedPreset) {
+		return BANK_PRESETS[detectedPreset];
+	}
+	return hasHeader ? detectPreset(columns) : undefined;
+}
+
+function parseCsvRows(
+	rows: CSVRow[],
+	maxRows: number,
+	hasHeader: boolean,
+	rowContext: RowParseContext,
+): {
+	transactions: ParsedBankTransaction[];
+	errors: ParseError[];
+	warnings: ParseWarning[];
+} {
+	const transactions: ParsedBankTransaction[] = [];
+	const errors: ParseError[] = [];
+	const warnings: ParseWarning[] = [];
 
 	// Papa.parse preview already limited rows, but keep defensive check
 	for (let i = 0; i < Math.min(rows.length, maxRows); i++) {
@@ -336,23 +385,7 @@ export function parseCSV(
 		transactions.push(result.transaction);
 	}
 
-	return {
-		transactions,
-		errors,
-		warnings,
-		meta: {
-			detectedDelimiter: parsed.meta.delimiter || ",",
-			detectedColumns: columns,
-			totalRows: rows.length,
-			validRows: transactions.length,
-			skippedRows: rows.length - transactions.length,
-			format: {
-				columns: mapping,
-				header: hasHeader,
-				...(rowContext.dateFormat ? { dateFormat: rowContext.dateFormat } : {}),
-			},
-		},
-	};
+	return { transactions, errors, warnings };
 }
 
 type CSVRow = Record<string, string> | string[];
@@ -669,6 +702,37 @@ function parseRowAmount(
 	return { status: "skip" };
 }
 
+function makeAmountError(
+	rowNum: number,
+	message: string,
+	rawValue: string,
+): AmountParseResult {
+	return {
+		status: "error",
+		error: { row: rowNum, field: "amount", message, rawValue },
+	};
+}
+
+function resolveSplitMilliunits(
+	debit: string,
+	credit: string,
+	debitValid: boolean,
+	creditValid: boolean,
+	debitMilliunits: number,
+	creditMilliunits: number,
+): number | null {
+	if (Math.abs(debitMilliunits) > 0) {
+		return -Math.abs(debitMilliunits); // Debits are outflows (negative)
+	}
+	if (Math.abs(creditMilliunits) > 0) {
+		return Math.abs(creditMilliunits); // Credits are inflows (positive)
+	}
+	if ((debit && debitValid) || (credit && creditValid)) {
+		return 0;
+	}
+	return null;
+}
+
 /**
  * Combine separate Debit/Credit columns into a signed amount
  * (debits are outflows, credits are inflows).
@@ -685,26 +749,18 @@ function parseSplitAmount(
 	const parsedCredit = parseAmount(credit);
 
 	if (!parsedDebit.valid && debit) {
-		return {
-			status: "error",
-			error: {
-				row: rowNum,
-				field: "amount",
-				message: parsedDebit.reason ?? `Invalid debit amount: "${debit}"`,
-				rawValue: debit,
-			},
-		};
+		return makeAmountError(
+			rowNum,
+			parsedDebit.reason ?? `Invalid debit amount: "${debit}"`,
+			debit,
+		);
 	}
 	if (!parsedCredit.valid && credit) {
-		return {
-			status: "error",
-			error: {
-				row: rowNum,
-				field: "amount",
-				message: parsedCredit.reason ?? `Invalid credit amount: "${credit}"`,
-				rawValue: credit,
-			},
-		};
+		return makeAmountError(
+			rowNum,
+			parsedCredit.reason ?? `Invalid credit amount: "${credit}"`,
+			credit,
+		);
 	}
 
 	const debitMilliunits = parsedDebit.valid ? parsedDebit.valueMilliunits : 0;
@@ -719,23 +775,20 @@ function parseSplitAmount(
 		);
 	}
 
-	let amountMilliunits: number;
-	if (Math.abs(debitMilliunits) > 0) {
-		amountMilliunits = -Math.abs(debitMilliunits); // Debits are outflows (negative)
-	} else if (Math.abs(creditMilliunits) > 0) {
-		amountMilliunits = Math.abs(creditMilliunits); // Credits are inflows (positive)
-	} else if ((debit && parsedDebit.valid) || (credit && parsedCredit.valid)) {
-		amountMilliunits = 0;
-	} else {
-		return {
-			status: "error",
-			error: {
-				row: rowNum,
-				field: "amount",
-				message: "Missing debit/credit amount",
-				rawValue: `${debit}|${credit}`,
-			},
-		};
+	const amountMilliunits = resolveSplitMilliunits(
+		debit,
+		credit,
+		parsedDebit.valid,
+		parsedCredit.valid,
+		debitMilliunits,
+		creditMilliunits,
+	);
+	if (amountMilliunits === null) {
+		return makeAmountError(
+			rowNum,
+			"Missing debit/credit amount",
+			`${debit}|${credit}`,
+		);
 	}
 
 	// Warn if debit column contains negative value (unusual)
@@ -768,6 +821,65 @@ function sanitizeDescription(rawDesc: string): string {
 	);
 }
 
+function parseIsoDate(raw: string): Date | null {
+	const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+	if (!isoMatch) return null;
+	const [, year, month, day] = isoMatch;
+	if (!year || !month || !day) return null;
+	return new Date(
+		Date.UTC(
+			Number.parseInt(year, 10),
+			Number.parseInt(month, 10) - 1,
+			Number.parseInt(day, 10),
+		),
+	);
+}
+
+function parseHintedNumericDate(
+	raw: string,
+	formatHint: "YMD" | "MDY" | "DMY",
+): Date | null {
+	const numericMatch = raw.match(/^(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})$/);
+	if (!numericMatch) return null;
+	const [, a, b, c] = numericMatch;
+	if (!a || !b || !c) return null;
+
+	const [first, second, third] = [
+		Number.parseInt(a, 10),
+		Number.parseInt(b, 10),
+		Number.parseInt(c, 10),
+	];
+
+	let year: number;
+	let month: number;
+	let day: number;
+	switch (formatHint) {
+		case "YMD":
+			year = first;
+			month = second;
+			day = third;
+			break;
+		case "MDY":
+			month = first;
+			day = second;
+			year = third;
+			break;
+		case "DMY":
+			day = first;
+			month = second;
+			year = third;
+			break;
+		default:
+			return null;
+	}
+
+	if (year < 100) year += 2000; // 25 -> 2025
+	if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+		return new Date(Date.UTC(year, month - 1, day));
+	}
+	return null;
+}
+
 function parseDate(
 	raw: string,
 	formatHint?: "YMD" | "MDY" | "DMY",
@@ -775,53 +887,13 @@ function parseDate(
 	if (!raw) return null;
 
 	// 1. Try ISO format first (unambiguous)
-	const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-	if (isoMatch) {
-		const [, year, month, day] = isoMatch;
-		if (!year || !month || !day) return null;
-		return new Date(
-			Date.UTC(
-				Number.parseInt(year, 10),
-				Number.parseInt(month, 10) - 1,
-				Number.parseInt(day, 10),
-			),
-		);
-	}
+	const isoDate = parseIsoDate(raw);
+	if (isoDate) return isoDate;
 
 	// 2. Try explicit format hint for ambiguous numeric dates
-	// Pattern: X/X/X or X-X-X where X can be 1-4 digits
-	const numericMatch = raw.match(/^(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})$/);
-	if (numericMatch && formatHint) {
-		const [, a, b, c] = numericMatch;
-		if (!a || !b || !c) return null;
-
-		let year: number;
-		let month: number;
-		let day: number;
-		switch (formatHint) {
-			case "YMD": // YYYY/MM/DD or YY/MM/DD
-				year = Number.parseInt(a, 10);
-				month = Number.parseInt(b, 10);
-				day = Number.parseInt(c, 10);
-				break;
-			case "MDY": // US format: MM/DD/YYYY or MM/DD/YY
-				month = Number.parseInt(a, 10);
-				day = Number.parseInt(b, 10);
-				year = Number.parseInt(c, 10);
-				break;
-			case "DMY": // European/UK format: DD/MM/YYYY or DD/MM/YY
-				day = Number.parseInt(a, 10);
-				month = Number.parseInt(b, 10);
-				year = Number.parseInt(c, 10);
-				break;
-		}
-
-		// Handle 2-digit years
-		if (year < 100) year += 2000; // 25 -> 2025
-
-		if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-			return new Date(Date.UTC(year, month - 1, day));
-		}
+	if (formatHint) {
+		const hintedDate = parseHintedNumericDate(raw, formatHint);
+		if (hintedDate) return hintedDate;
 	}
 
 	// 3. Fallback to chrono-node (handles natural language, many formats)
@@ -845,34 +917,44 @@ function formatLocalDate(date: Date): string {
 	return `${year}-${month}-${day}`;
 }
 
+function findColumnExact(
+	available: string[],
+	candidateList: string[],
+	exactIndex: boolean,
+): string | null {
+	for (const candidate of candidateList) {
+		if (exactIndex) {
+			if (available.includes(candidate)) return candidate;
+			continue;
+		}
+		const lower = candidate.toLowerCase();
+		const found = available.find((col) => col.toLowerCase() === lower);
+		if (found) return found;
+	}
+	return null;
+}
+
+function findColumnPartial(
+	available: string[],
+	candidateList: string[],
+): string | null {
+	for (const candidate of candidateList) {
+		const lower = candidate.toLowerCase();
+		const found = available.find((col) => col.toLowerCase().includes(lower));
+		if (found) return found;
+	}
+	return null;
+}
+
 function findColumn(
 	available: string[],
 	candidates: string | string[],
 	exactIndex = false,
 ): string | null {
 	const candidateList = Array.isArray(candidates) ? candidates : [candidates];
-
-	for (const candidate of candidateList) {
-		if (exactIndex) {
-			// If exact index required (no header), check if candidate matches an index
-			if (available.includes(candidate)) return candidate;
-		} else {
-			const lower = candidate.toLowerCase();
-			const found = available.find((col) => col.toLowerCase() === lower);
-			if (found) return found;
-		}
-	}
-
-	if (!exactIndex) {
-		// Try partial match
-		for (const candidate of candidateList) {
-			const lower = candidate.toLowerCase();
-			const found = available.find((col) => col.toLowerCase().includes(lower));
-			if (found) return found;
-		}
-	}
-
-	return null;
+	const exact = findColumnExact(available, candidateList, exactIndex);
+	if (exact) return exact;
+	return exactIndex ? null : findColumnPartial(available, candidateList);
 }
 
 function detectPreset(columns: string[]): BankPreset | undefined {

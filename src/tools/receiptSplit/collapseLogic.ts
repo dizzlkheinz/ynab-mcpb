@@ -41,6 +41,75 @@ function buildItemMemo(item: {
 	return truncateToLength(result, MAX_MEMO_LENGTH);
 }
 
+interface SpecialItem {
+	item: ReceiptCategoryCalculation["items"][0];
+	category_id: string;
+	category_name: string | undefined;
+}
+
+interface CategoryItems {
+	category_id: string;
+	category_name: string | undefined;
+	items: ReceiptCategoryCalculation["items"][0][];
+}
+
+function buildItemSubtransaction(
+	item: ReceiptCategoryCalculation["items"][0],
+	categoryId: string,
+): SubtransactionInput {
+	const memo = buildItemMemo({
+		name: item.name,
+		quantity: item.quantity,
+		memo: item.memo,
+	});
+	const payload: SubtransactionInput = {
+		amount: -item.amount_milliunits,
+		category_id: categoryId,
+	};
+	if (memo) payload.memo = memo;
+	return payload;
+}
+
+function partitionReceiptItems(
+	categoryCalculations: ReceiptCategoryCalculation[],
+): {
+	specialItems: SpecialItem[];
+	remainingItemsByCategory: CategoryItems[];
+} {
+	const specialItems: SpecialItem[] = [];
+	const remainingItemsByCategory: CategoryItems[] = [];
+
+	for (const category of categoryCalculations) {
+		const categoryRemaining: ReceiptCategoryCalculation["items"][0][] = [];
+
+		for (const item of category.items) {
+			const isNegative = item.amount_milliunits < 0;
+			const unitPrice = item.quantity
+				? item.amount_milliunits / item.quantity
+				: item.amount_milliunits;
+			if (isNegative || unitPrice > BIG_TICKET_THRESHOLD_MILLIUNITS) {
+				specialItems.push({
+					item,
+					category_id: category.category_id,
+					category_name: category.category_name,
+				});
+			} else {
+				categoryRemaining.push(item);
+			}
+		}
+
+		if (categoryRemaining.length > 0) {
+			remainingItemsByCategory.push({
+				category_id: category.category_id,
+				category_name: category.category_name,
+				items: categoryRemaining,
+			});
+		}
+	}
+
+	return { specialItems, remainingItemsByCategory };
+}
+
 /**
  * Applies smart collapse logic to receipt items according to the specification:
  * 1. Extract special items (big ticket, returns, discounts)
@@ -54,113 +123,33 @@ export function applySmartCollapseLogic(
 	/** Smallest currency unit in milliunits (10 for cents). Default: 1. */
 	step = 1,
 ): SubtransactionInput[] {
-	// Step 1: Extract special items and classify remaining items
-	interface SpecialItem {
-		item: ReceiptCategoryCalculation["items"][0];
-		category_id: string;
-		category_name: string | undefined;
-	}
+	const { specialItems, remainingItemsByCategory } =
+		partitionReceiptItems(categoryCalculations);
 
-	interface CategoryItems {
-		category_id: string;
-		category_name: string | undefined;
-		items: ReceiptCategoryCalculation["items"][0][];
-	}
-
-	const specialItems: SpecialItem[] = [];
-	const remainingItemsByCategory: CategoryItems[] = [];
-
-	for (const category of categoryCalculations) {
-		const categorySpecials: ReceiptCategoryCalculation["items"][0][] = [];
-		const categoryRemaining: ReceiptCategoryCalculation["items"][0][] = [];
-
-		for (const item of category.items) {
-			const isNegative = item.amount_milliunits < 0;
-			const unitPrice = item.quantity
-				? item.amount_milliunits / item.quantity
-				: item.amount_milliunits;
-			const isBigTicket = unitPrice > BIG_TICKET_THRESHOLD_MILLIUNITS;
-
-			if (isNegative || isBigTicket) {
-				categorySpecials.push(item);
-			} else {
-				categoryRemaining.push(item);
-			}
-		}
-
-		// Add specials to the special items list (preserving category order)
-		for (const item of categorySpecials) {
-			specialItems.push({
-				item,
-				category_id: category.category_id,
-				category_name: category.category_name,
-			});
-		}
-
-		// Track remaining items by category
-		if (categoryRemaining.length > 0) {
-			remainingItemsByCategory.push({
-				category_id: category.category_id,
-				category_name: category.category_name,
-				items: categoryRemaining,
-			});
-		}
-	}
-
-	// Step 2: Count total remaining positive items
 	const totalRemainingItems = remainingItemsByCategory.reduce(
 		(sum, cat) => sum + cat.items.length,
 		0,
 	);
-
-	// Step 3: Decide whether to collapse
 	const shouldCollapse = totalRemainingItems >= COLLAPSE_THRESHOLD;
 
-	// Build subtransactions
-	const subtransactions: SubtransactionInput[] = [];
+	const subtransactions: SubtransactionInput[] = specialItems.map((special) =>
+		buildItemSubtransaction(special.item, special.category_id),
+	);
 
-	// Add special items first (returns, discounts, big tickets)
-	for (const special of specialItems) {
-		const memo = buildItemMemo({
-			name: special.item.name,
-			quantity: special.item.quantity,
-			memo: special.item.memo,
-		});
-		const payload: SubtransactionInput = {
-			amount: -special.item.amount_milliunits,
-			category_id: special.category_id,
-		};
-		if (memo) payload.memo = memo;
-		subtransactions.push(payload);
-	}
-
-	// Add remaining items (collapsed or itemized)
 	if (shouldCollapse) {
-		// Collapse by category
 		for (const categoryGroup of remainingItemsByCategory) {
-			const collapsedSubtransactions = collapseItemsByCategory(categoryGroup);
-			subtransactions.push(...collapsedSubtransactions);
+			subtransactions.push(...collapseItemsByCategory(categoryGroup));
 		}
 	} else {
-		// Itemize each remaining item individually
 		for (const categoryGroup of remainingItemsByCategory) {
 			for (const item of categoryGroup.items) {
-				const memo = buildItemMemo({
-					name: item.name,
-					quantity: item.quantity,
-					memo: item.memo,
-				});
-				const payload: SubtransactionInput = {
-					amount: -item.amount_milliunits,
-					category_id: categoryGroup.category_id,
-				};
-				if (memo) payload.memo = memo;
-				subtransactions.push(payload);
+				subtransactions.push(
+					buildItemSubtransaction(item, categoryGroup.category_id),
+				);
 			}
 		}
 	}
 
-	// Step 4: Handle tax allocation
 	const taxSubtransactions = allocateTax(
 		categoryCalculations,
 		taxMilliunits,

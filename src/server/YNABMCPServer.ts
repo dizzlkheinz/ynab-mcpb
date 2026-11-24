@@ -583,48 +583,24 @@ Returns: diagnostics object with requested sections.`,
 			handler: async ({ input }) => {
 				const diagnosticsResult =
 					await this.diagnosticManager.collectDiagnostics(input);
+				const diagData = parseDiagnosticsPayload(diagnosticsResult);
+				if (!diagData) {
+					return diagnosticsResult;
+				}
 				const fmtDiag =
 					(input as Record<string, unknown>)["response_format"] ?? "markdown";
 				if (fmtDiag === "markdown") {
-					const textContent = diagnosticsResult.content.find(
-						(c) => c.type === "text",
-					);
-					if (textContent && "text" in textContent) {
-						try {
-							const diagData = JSON.parse(textContent.text) as Record<
-								string,
-								unknown
-							>;
-							return {
-								content: [
-									{
-										type: "text" as const,
-										text: formatDiagnosticInfo(diagData),
-									},
-								],
-								structuredContent: diagData,
-							};
-						} catch {
-							// Fall through to return original
-						}
-					}
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: formatDiagnosticInfo(diagData),
+							},
+						],
+						structuredContent: diagData,
+					};
 				}
-				// For JSON format path: add structuredContent from parsed text
-				const jsonTextContent = diagnosticsResult.content.find(
-					(c) => c.type === "text",
-				);
-				if (jsonTextContent && "text" in jsonTextContent) {
-					try {
-						const diagData = JSON.parse(jsonTextContent.text) as Record<
-							string,
-							unknown
-						>;
-						return { ...diagnosticsResult, structuredContent: diagData };
-					} catch {
-						// Fall through to return original without structuredContent
-					}
-				}
-				return diagnosticsResult;
+				return { ...diagnosticsResult, structuredContent: diagData };
 			},
 			metadata: {
 				annotations: {
@@ -877,6 +853,20 @@ Use when: you need fresh data after external YNAB changes, or to free memory.`,
 				// ignore and try next
 			}
 		}
+		return null;
+	}
+}
+
+function parseDiagnosticsPayload(result: {
+	content: { type: "text"; text: string }[];
+}): Record<string, unknown> | null {
+	const textContent = result.content.find((c) => c.type === "text");
+	if (!textContent || !("text" in textContent)) {
+		return null;
+	}
+	try {
+		return JSON.parse(textContent.text) as Record<string, unknown>;
+	} catch {
 		return null;
 	}
 }

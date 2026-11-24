@@ -964,6 +964,8 @@ describe("cache invalidation while reads are pending", () => {
 				case "clear":
 					cache.clear();
 					break;
+				default:
+					throw new Error(`Unexpected invalidation method: ${String(method)}`);
 			}
 			const fresh = cache.wrap(key, {
 				loader: () =>

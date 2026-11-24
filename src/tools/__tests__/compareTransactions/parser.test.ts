@@ -464,24 +464,30 @@ describe("parser", () => {
 			).toThrow(/debit_column "Debit" must be a column index/);
 		});
 
+		const buildDebitCreditFormat = (hasHeader: boolean): CSVFormat => ({
+			date_column: hasHeader ? "Date" : 0,
+			description_column: hasHeader ? "Description" : 1,
+			debit_column: hasHeader ? "Debit" : 2,
+			credit_column: hasHeader ? "Credit" : 3,
+			date_format: "YYYY-MM-DD",
+			has_header: hasHeader,
+			delimiter: ",",
+		});
+
+		const buildDebitCreditCsv = (hasHeader: boolean, rows: string[]): string =>
+			[...(hasHeader ? ["Date,Description,Debit,Credit"] : []), ...rows].join(
+				"\n",
+			);
+
 		test.each([true, false])(
 			"should preserve whitespace-grouped debit/credit amounts (header=%s)",
 			(hasHeader) => {
-				const format: CSVFormat = {
-					date_column: hasHeader ? "Date" : 0,
-					description_column: hasHeader ? "Description" : 1,
-					debit_column: hasHeader ? "Debit" : 2,
-					credit_column: hasHeader ? "Credit" : 3,
-					date_format: "YYYY-MM-DD",
-					has_header: hasHeader,
-					delimiter: ",",
-				};
+				const format = buildDebitCreditFormat(hasHeader);
 				for (const space of [" ", "\u00a0", "\u202f"]) {
-					const csv = [
-						...(hasHeader ? ["Date,Description,Debit,Credit"] : []),
+					const csv = buildDebitCreditCsv(hasHeader, [
 						`2026-01-01,Debit,1${space}234.56,`,
 						`2026-01-02,Credit,,1${space}234.56`,
-					].join("\n");
+					]);
 					expect(parseBankCSV(csv, format).map((t) => t.amount)).toEqual([
 						-1234560, 1234560,
 					]);
@@ -492,23 +498,14 @@ describe("parser", () => {
 		test.each([true, false])(
 			"should skip malformed debit/credit cells without using the other cell (header=%s)",
 			(hasHeader) => {
-				const format: CSVFormat = {
-					date_column: hasHeader ? "Date" : 0,
-					description_column: hasHeader ? "Description" : 1,
-					debit_column: hasHeader ? "Debit" : 2,
-					credit_column: hasHeader ? "Credit" : 3,
-					date_format: "YYYY-MM-DD",
-					has_header: hasHeader,
-					delimiter: ",",
-				};
+				const format = buildDebitCreditFormat(hasHeader);
 				for (const amount of ["123abc", "12.34.56", "$", "CAD"]) {
 					for (const otherCell of ["", "0", "25.00"]) {
-						const csv = [
-							...(hasHeader ? ["Date,Description,Debit,Credit"] : []),
+						const csv = buildDebitCreditCsv(hasHeader, [
 							`2026-01-01,Invalid debit,${amount},${otherCell}`,
 							`2026-01-02,Invalid credit,${otherCell},${amount}`,
 							"2026-01-03,Valid,12.00,",
-						].join("\n");
+						]);
 						expect(parseBankCSV(csv, format).map((t) => t.amount)).toEqual([
 							-12000,
 						]);
@@ -773,6 +770,7 @@ describe("parser", () => {
 
 		test("should handle unknown errors", () => {
 			const throwsNonError = (): string => {
+				// biome-ignore lint/style/useThrowOnlyError: intentionally testing non-Error throw handling
 				throw "String error";
 			};
 

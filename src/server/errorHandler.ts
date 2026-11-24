@@ -60,6 +60,37 @@ export class YNABAPIError extends Error {
 	}
 }
 
+const GENERIC_ERROR_MESSAGES: ReadonlyArray<readonly [string, string]> = [
+	["listing accounts", "Failed to list accounts"],
+	["getting account", "Failed to get account"],
+	["creating account", "Failed to create account"],
+	["listing budgets", "Failed to list budgets"],
+	["getting budget", "Failed to get budget"],
+	["listing categories", "Failed to list categories"],
+	["getting category", "Failed to get category"],
+	["updating category", "Failed to update category"],
+	["listing months", "Failed to list months"],
+	["getting month", "Failed to get month data"],
+	["listing payees", "Failed to list payees"],
+	["getting payee", "Failed to get payee"],
+	["listing transactions", "Failed to list transactions"],
+	["getting transaction", "Failed to get transaction"],
+	["creating transaction", "Failed to create transaction"],
+	["updating transaction", "Failed to update transaction"],
+	["deleting transaction", "Failed to delete transaction"],
+	["getting user", "Failed to get user information"],
+];
+
+const YNAB_ERROR_NAME_CODES: ReadonlyArray<
+	readonly [readonly string[], YNABErrorCode]
+> = [
+	[["unauthorized"], YNABErrorCode.UNAUTHORIZED],
+	[["forbidden"], YNABErrorCode.FORBIDDEN],
+	[["not_found"], YNABErrorCode.NOT_FOUND],
+	[["too_many_requests", "rate_limit"], YNABErrorCode.TOO_MANY_REQUESTS],
+	[["internal_server_error"], YNABErrorCode.INTERNAL_SERVER_ERROR],
+];
+
 /**
  * Centralized error handling middleware for all YNAB MCP tools
  */
@@ -104,45 +135,19 @@ export class ErrorHandler {
 	 * Creates a standardized error response based on the error type
 	 */
 	private createErrorResponse(error: unknown, context: string): ErrorResponse {
-		// Handle custom error types
 		if (error instanceof YNABAPIError) {
 			const ynabDetails = this.extractYNABApiError(error.originalError);
 			const detailsToSanitize = ynabDetails?.details || error.originalError;
 			const sanitizedDetails = this.sanitizeErrorDetails(detailsToSanitize);
-			return {
-				error: {
-					code: error.code,
-					message: this.getErrorMessage(error.code, context),
-					userMessage: this.getUserFriendlyMessage(error.code, context),
-					suggestions: this.getErrorSuggestions(error.code, context),
-					...(sanitizedDetails && { details: sanitizedDetails }),
-				},
-			};
+			return this.buildCodedErrorResponse(
+				error.code,
+				context,
+				sanitizedDetails,
+			);
 		}
 
 		if (error instanceof ValidationError) {
-			const sanitizedDetails = error.details
-				? this.sanitizeErrorDetails(error.details)
-				: undefined;
-			const suggestions =
-				error.suggestions && error.suggestions.length > 0
-					? error.suggestions
-					: this.getErrorSuggestions(
-							SecurityErrorCode.VALIDATION_ERROR,
-							context,
-						);
-			return {
-				error: {
-					code: SecurityErrorCode.VALIDATION_ERROR,
-					message: error.message,
-					userMessage: this.getUserFriendlyMessage(
-						SecurityErrorCode.VALIDATION_ERROR,
-						context,
-					),
-					suggestions,
-					...(sanitizedDetails && { details: sanitizedDetails }),
-				},
-			};
+			return this.buildValidationErrorResponse(error, context);
 		}
 
 		const ynabApiError = this.extractYNABApiError(error);
@@ -150,71 +155,32 @@ export class ErrorHandler {
 			const sanitizedDetails = ynabApiError.details
 				? this.sanitizeErrorDetails(ynabApiError.details)
 				: undefined;
-			return {
-				error: {
-					code: ynabApiError.code,
-					message: this.getErrorMessage(ynabApiError.code, context),
-					userMessage: this.getUserFriendlyMessage(ynabApiError.code, context),
-					suggestions: this.getErrorSuggestions(ynabApiError.code, context),
-					...(sanitizedDetails && { details: sanitizedDetails }),
-				},
-			};
+			return this.buildCodedErrorResponse(
+				ynabApiError.code,
+				context,
+				sanitizedDetails,
+			);
 		}
 
-		// Handle generic errors by analyzing the error message
-
-		const httpStatus = this.extractHttpStatus(error);
-		if (httpStatus !== null) {
-			const code = this.mapHttpStatusToErrorCode(httpStatus);
-			if (code) {
-				const details = this.extractHttpStatusDetails(error);
-				return {
-					error: {
-						code,
-						message: this.getErrorMessage(code, context),
-						userMessage: this.getUserFriendlyMessage(code, context),
-						suggestions: this.getErrorSuggestions(code, context),
-						...(details && { details }),
-					},
-				};
-			}
+		const httpCode = this.resolveHttpErrorCode(error);
+		if (httpCode !== null) {
+			return this.buildCodedErrorResponse(
+				httpCode,
+				context,
+				this.extractHttpStatusDetails(error),
+			);
 		}
 
-		// Handle generic errors by analyzing the error message
 		if (error instanceof Error) {
 			const detectedCode = this.detectErrorCode(error);
 			if (detectedCode) {
-				return {
-					error: {
-						code: detectedCode,
-						message: this.getErrorMessage(detectedCode, context),
-						userMessage: this.getUserFriendlyMessage(detectedCode, context),
-						suggestions: this.getErrorSuggestions(detectedCode, context),
-					},
-				};
+				return this.buildCodedErrorResponse(detectedCode, context);
 			}
 		}
 
-		// Fallback for unknown errors
-		// Preserve the original error message for debugging while sanitizing sensitive data
-		let errorMessage: string;
-		if (error instanceof Error) {
-			errorMessage = error.message;
-		} else if (typeof error === "string") {
-			errorMessage = error;
-		} else if (error && typeof error === "object") {
-			// Handle plain objects (e.g., YNAB SDK errors that aren't Error instances)
-			try {
-				errorMessage = JSON.stringify(error, null, 2);
-			} catch {
-				// Circular reference or other JSON issue
-				errorMessage = Object.prototype.toString.call(error);
-			}
-		} else {
-			errorMessage = String(error);
-		}
-		const sanitizedDetails = this.sanitizeErrorDetails(errorMessage);
-
+		const sanitizedDetails = this.sanitizeErrorDetails(
+			this.formatUnknownErrorMessage(error),
+		);
 		return {
 			error: {
 				code: SecurityErrorCode.UNKNOWN_ERROR,
@@ -228,6 +194,73 @@ export class ErrorHandler {
 				...(sanitizedDetails && { details: sanitizedDetails }),
 			},
 		};
+	}
+
+	private buildCodedErrorResponse(
+		code: YNABErrorCode,
+		context: string,
+		details?: string,
+	): ErrorResponse {
+		return {
+			error: {
+				code,
+				message: this.getErrorMessage(code, context),
+				userMessage: this.getUserFriendlyMessage(code, context),
+				suggestions: this.getErrorSuggestions(code, context),
+				...(details && { details }),
+			},
+		};
+	}
+
+	private buildValidationErrorResponse(
+		error: ValidationError,
+		context: string,
+	): ErrorResponse {
+		const sanitizedDetails = error.details
+			? this.sanitizeErrorDetails(error.details)
+			: undefined;
+		const suggestions =
+			error.suggestions && error.suggestions.length > 0
+				? error.suggestions
+				: this.getErrorSuggestions(SecurityErrorCode.VALIDATION_ERROR, context);
+		return {
+			error: {
+				code: SecurityErrorCode.VALIDATION_ERROR,
+				message: error.message,
+				userMessage: this.getUserFriendlyMessage(
+					SecurityErrorCode.VALIDATION_ERROR,
+					context,
+				),
+				suggestions,
+				...(sanitizedDetails && { details: sanitizedDetails }),
+			},
+		};
+	}
+
+	private resolveHttpErrorCode(error: unknown): YNABErrorCode | null {
+		const httpStatus = this.extractHttpStatus(error);
+		return httpStatus !== null
+			? this.mapHttpStatusToErrorCode(httpStatus)
+			: null;
+	}
+
+	private formatUnknownErrorMessage(error: unknown): string {
+		if (error instanceof Error) {
+			return error.message;
+		}
+		if (typeof error === "string") {
+			return error;
+		}
+		if (error && typeof error === "object") {
+			// Handle plain objects (e.g., YNAB SDK errors that aren't Error instances)
+			try {
+				return JSON.stringify(error, null, 2);
+			} catch {
+				// Circular reference or other JSON issue
+				return Object.prototype.toString.call(error);
+			}
+		}
+		return String(error);
 	}
 
 	/**
@@ -475,61 +508,10 @@ export class ErrorHandler {
 	 * Returns context-specific generic error messages
 	 */
 	private getGenericErrorMessage(context: string): string {
-		if (context.includes("listing accounts")) {
-			return "Failed to list accounts";
-		}
-		if (context.includes("getting account")) {
-			return "Failed to get account";
-		}
-		if (context.includes("creating account")) {
-			return "Failed to create account";
-		}
-		if (context.includes("listing budgets")) {
-			return "Failed to list budgets";
-		}
-		if (context.includes("getting budget")) {
-			return "Failed to get budget";
-		}
-		if (context.includes("listing categories")) {
-			return "Failed to list categories";
-		}
-		if (context.includes("getting category")) {
-			return "Failed to get category";
-		}
-		if (context.includes("updating category")) {
-			return "Failed to update category";
-		}
-		if (context.includes("listing months")) {
-			return "Failed to list months";
-		}
-		if (context.includes("getting month")) {
-			return "Failed to get month data";
-		}
-		if (context.includes("listing payees")) {
-			return "Failed to list payees";
-		}
-		if (context.includes("getting payee")) {
-			return "Failed to get payee";
-		}
-		if (context.includes("listing transactions")) {
-			return "Failed to list transactions";
-		}
-		if (context.includes("getting transaction")) {
-			return "Failed to get transaction";
-		}
-		if (context.includes("creating transaction")) {
-			return "Failed to create transaction";
-		}
-		if (context.includes("updating transaction")) {
-			return "Failed to update transaction";
-		}
-		if (context.includes("deleting transaction")) {
-			return "Failed to delete transaction";
-		}
-		if (context.includes("getting user")) {
-			return "Failed to get user information";
-		}
-		return `An error occurred while ${context}`;
+		const match = GENERIC_ERROR_MESSAGES.find(([needle]) =>
+			context.includes(needle),
+		);
+		return match ? match[1] : `An error occurred while ${context}`;
 	}
 
 	/**
@@ -613,12 +595,30 @@ export class ErrorHandler {
 	private extractYNABApiError(
 		error: unknown,
 	): { code: YNABErrorCode; details?: string } | null {
+		const payload = this.extractYNABErrorPayload(error);
+		if (!payload) {
+			return null;
+		}
+
+		const code = this.resolveYNABErrorCode(
+			(payload as { id?: unknown }).id,
+			(payload as { name?: unknown }).name,
+		);
+		if (!code) {
+			return null;
+		}
+
+		const detail = (payload as { detail?: unknown }).detail;
+		const details = this.formatYNABErrorDetail(detail);
+		return details !== undefined ? { code, details } : { code };
+	}
+
+	private extractYNABErrorPayload(error: unknown): object | null {
 		if (!error || typeof error !== "object") {
 			return null;
 		}
 
 		let payload = (error as { error?: unknown }).error;
-
 		if (!payload) {
 			const responseData = (error as { response?: { data?: unknown } }).response
 				?.data;
@@ -627,55 +627,45 @@ export class ErrorHandler {
 			}
 		}
 
-		if (!payload || typeof payload !== "object") {
-			return null;
-		}
+		return payload && typeof payload === "object" ? payload : null;
+	}
 
-		const id = (payload as { id?: unknown }).id;
-		const name = (payload as { name?: unknown }).name;
-		const detail = (payload as { detail?: unknown }).detail;
-
-		let code: YNABErrorCode | null = null;
-
+	private resolveYNABErrorCode(
+		id: unknown,
+		name: unknown,
+	): YNABErrorCode | null {
 		if (typeof id === "string") {
 			const numeric = Number.parseInt(id, 10);
 			if (!Number.isNaN(numeric)) {
-				code = this.mapHttpStatusToErrorCode(numeric);
+				const mapped = this.mapHttpStatusToErrorCode(numeric);
+				if (mapped) {
+					return mapped;
+				}
 			}
 		}
 
-		if (!code && typeof name === "string") {
+		if (typeof name === "string") {
 			const normalized = name.toLowerCase();
-			if (normalized.includes("unauthorized")) {
-				code = YNABErrorCode.UNAUTHORIZED;
-			} else if (normalized.includes("forbidden")) {
-				code = YNABErrorCode.FORBIDDEN;
-			} else if (normalized.includes("not_found")) {
-				code = YNABErrorCode.NOT_FOUND;
-			} else if (
-				normalized.includes("too_many_requests") ||
-				normalized.includes("rate_limit")
-			) {
-				code = YNABErrorCode.TOO_MANY_REQUESTS;
-			} else if (normalized.includes("internal_server_error")) {
-				code = YNABErrorCode.INTERNAL_SERVER_ERROR;
+			const match = YNAB_ERROR_NAME_CODES.find(([patterns]) =>
+				patterns.some((pattern) => normalized.includes(pattern)),
+			);
+			if (match) {
+				return match[1];
 			}
 		}
 
-		if (!code) {
-			return null;
-		}
+		return null;
+	}
 
-		let details = typeof detail === "string" ? detail : undefined;
+	private formatYNABErrorDetail(detail: unknown): string | undefined {
+		if (typeof detail !== "string") {
+			return undefined;
+		}
 		// YNAB reports an unknown but well-formed ID the same way as a malformed one.
-		if (details && /formatted as a uuid/i.test(details)) {
-			details = `${details} (YNAB also returns this for a valid UUID that does not exist in this budget; check the ID with the matching list tool)`;
+		if (/formatted as a uuid/i.test(detail)) {
+			return `${detail} (YNAB also returns this for a valid UUID that does not exist in this budget; check the ID with the matching list tool)`;
 		}
-		const result: { code: YNABErrorCode; details?: string } = { code };
-		if (details !== undefined) {
-			result.details = details;
-		}
-		return result;
+		return detail;
 	}
 
 	/**

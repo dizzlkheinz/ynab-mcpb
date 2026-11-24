@@ -132,152 +132,30 @@ export class DiagnosticManager {
 		};
 
 		if (options.include_server) {
-			const uptimeMs = Math.round(process.uptime() * 1000);
-			diagnostics["server"] = {
-				name: "ynab-mcp-server",
-				version: this.dependencies.serverVersion,
-				node_version: process.version,
-				platform: process.platform,
-				arch: process.arch,
-				pid: process.pid,
-				uptime_ms: uptimeMs,
-				uptime_readable: formatUptime(uptimeMs),
-			};
+			diagnostics["server"] = this.collectServerDiagnostics();
 		}
-
 		if (options.include_memory) {
-			const memUsage = process.memoryUsage();
-			diagnostics["memory"] = {
-				rss_mb: formatBytes(memUsage.rss),
-				heap_used_mb: formatBytes(memUsage.heapUsed),
-				heap_total_mb: formatBytes(memUsage.heapTotal),
-				external_mb: formatBytes(memUsage.external),
-				array_buffers_mb: formatBytes(memUsage.arrayBuffers ?? 0),
-				description: {
-					rss: "Resident Set Size - total memory allocated for the process",
-					heap_used: "Used heap memory (objects, closures, etc.)",
-					heap_total: "Total heap memory allocated",
-					external: "Memory used by C++ objects bound to JavaScript objects",
-					array_buffers:
-						"Memory allocated for ArrayBuffer and SharedArrayBuffer",
-				},
-			};
+			diagnostics["memory"] = this.collectMemoryDiagnostics();
 		}
-
 		if (options.include_environment) {
-			const token = process.env["YNAB_ACCESS_TOKEN"];
-			const envKeys = Object.keys(process.env ?? {});
-			const ynabEnvKeys = envKeys.filter((key) =>
-				key.toUpperCase().includes("YNAB"),
-			);
-			const rawTokenLength = token?.length ?? 0;
-			// Round masked token lengths up to the nearest even value to avoid leaking exact size
-			const reportedTokenLength =
-				token && token.length >= 8
-					? rawTokenLength + (rawTokenLength % 2)
-					: rawTokenLength;
-
-			diagnostics["environment"] = {
-				token_present: !!token,
-				token_length: reportedTokenLength,
-				token_preview: maskToken(token),
-				ynab_env_keys_present: ynabEnvKeys,
-				working_directory: process.cwd(),
-			};
+			diagnostics["environment"] = this.collectEnvironmentDiagnostics();
 		}
-
 		if (options.include_security) {
 			diagnostics["security"] =
 				this.dependencies.securityMiddleware.getSecurityStats();
 		}
-
 		if (options.include_cache) {
-			const cacheStats = this.dependencies.cacheManager.getStats();
-			const estimateCacheSize = () => {
-				try {
-					// Use lightweight metadata instead of full entry data for size estimation
-					const metadata = this.dependencies.cacheManager.getCacheMetadata();
-					const serialized = JSON.stringify(metadata);
-					return Math.round(Buffer.byteLength(serialized, "utf8") / 1024);
-				} catch {
-					return 0;
-				}
-			};
-
-			// Build performance summary
-			const performanceParts = [];
-			if ("hitRate" in cacheStats) {
-				const hitRatePercent = (cacheStats.hitRate * 100).toFixed(1);
-				performanceParts.push(
-					`Hit rate: ${hitRatePercent}% (${cacheStats.hits} hits, ${cacheStats.misses} misses)`,
-				);
-			}
-			if ("evictions" in cacheStats && cacheStats.evictions > 0) {
-				performanceParts.push(`LRU evictions: ${cacheStats.evictions}`);
-			}
-			if ("lastCleanup" in cacheStats && cacheStats.lastCleanup) {
-				const lastCleanupDate = new Date(cacheStats.lastCleanup);
-				const minutesAgo = Math.round(
-					(Date.now() - lastCleanupDate.getTime()) / (60 * 1000),
-				);
-				performanceParts.push(`Last cleanup: ${minutesAgo} minutes ago`);
-			}
-
-			const cacheData: {
-				entries: number;
-				estimated_size_kb: number;
-				keys: string[];
-				hits?: number;
-				misses?: number;
-				evictions?: number;
-				lastCleanup?: string | null;
-				maxEntries?: number;
-				hitRate?: string;
-				performance_summary?: string;
-			} = {
-				entries: cacheStats.size,
-				estimated_size_kb: estimateCacheSize(),
-				keys: cacheStats.keys,
-			};
-
-			// Add enhanced metrics if available
-			if ("hits" in cacheStats) {
-				cacheData.hits = cacheStats.hits;
-				cacheData.misses = cacheStats.misses;
-				cacheData.evictions = cacheStats.evictions;
-				cacheData.lastCleanup = cacheStats.lastCleanup
-					? new Date(cacheStats.lastCleanup).toISOString()
-					: null;
-				cacheData.maxEntries = cacheStats.maxEntries;
-				cacheData.hitRate = `${(cacheStats.hitRate * 100).toFixed(2)}%`;
-
-				if (performanceParts.length > 0) {
-					cacheData.performance_summary = performanceParts.join(", ");
-				}
-			}
-
-			diagnostics["cache"] = cacheData;
+			diagnostics["cache"] = this.collectCacheDiagnostics();
 		}
-
 		if (
 			options.include_delta === true &&
 			this.dependencies.serverKnowledgeStore &&
 			this.dependencies.deltaCache
 		) {
-			const knowledgeStats = this.dependencies.serverKnowledgeStore.getStats();
-			const deltaStats = this.dependencies.deltaCache.getStats();
-			const totalDeltaRequests = deltaStats.deltaHits + deltaStats.deltaMisses;
-			const deltaHitRate =
-				totalDeltaRequests > 0 ? deltaStats.deltaHits / totalDeltaRequests : 0;
-			diagnostics["delta"] = {
-				knowledge_entries: Object.keys(knowledgeStats.entries).length, // Canonical count from entries
-				knowledge_stats: knowledgeStats.entries,
-				delta_hits: deltaStats.deltaHits,
-				delta_misses: deltaStats.deltaMisses,
-				delta_hit_rate: Number(deltaHitRate.toFixed(4)),
-				merge_operations: deltaStats.mergeOperations,
-				knowledge_gap_events: deltaStats.knowledgeGapEvents,
-			};
+			diagnostics["delta"] = this.collectDeltaDiagnostics(
+				this.dependencies.serverKnowledgeStore,
+				this.dependencies.deltaCache,
+			);
 		}
 
 		return {
@@ -287,6 +165,154 @@ export class DiagnosticManager {
 					text: this.dependencies.responseFormatter.format(diagnostics),
 				},
 			],
+		};
+	}
+
+	private collectServerDiagnostics(): Record<string, unknown> {
+		const uptimeMs = Math.round(process.uptime() * 1000);
+		return {
+			name: "ynab-mcp-server",
+			version: this.dependencies.serverVersion,
+			node_version: process.version,
+			platform: process.platform,
+			arch: process.arch,
+			pid: process.pid,
+			uptime_ms: uptimeMs,
+			uptime_readable: formatUptime(uptimeMs),
+		};
+	}
+
+	private collectMemoryDiagnostics(): Record<string, unknown> {
+		const memUsage = process.memoryUsage();
+		return {
+			rss_mb: formatBytes(memUsage.rss),
+			heap_used_mb: formatBytes(memUsage.heapUsed),
+			heap_total_mb: formatBytes(memUsage.heapTotal),
+			external_mb: formatBytes(memUsage.external),
+			array_buffers_mb: formatBytes(memUsage.arrayBuffers ?? 0),
+			description: {
+				rss: "Resident Set Size - total memory allocated for the process",
+				heap_used: "Used heap memory (objects, closures, etc.)",
+				heap_total: "Total heap memory allocated",
+				external: "Memory used by C++ objects bound to JavaScript objects",
+				array_buffers: "Memory allocated for ArrayBuffer and SharedArrayBuffer",
+			},
+		};
+	}
+
+	private collectEnvironmentDiagnostics(): Record<string, unknown> {
+		const token = process.env["YNAB_ACCESS_TOKEN"];
+		const envKeys = Object.keys(process.env ?? {});
+		const ynabEnvKeys = envKeys.filter((key) =>
+			key.toUpperCase().includes("YNAB"),
+		);
+		const rawTokenLength = token?.length ?? 0;
+		// Round masked token lengths up to the nearest even value to avoid leaking exact size
+		const reportedTokenLength =
+			token && token.length >= 8
+				? rawTokenLength + (rawTokenLength % 2)
+				: rawTokenLength;
+
+		return {
+			token_present: !!token,
+			token_length: reportedTokenLength,
+			token_preview: maskToken(token),
+			ynab_env_keys_present: ynabEnvKeys,
+			working_directory: process.cwd(),
+		};
+	}
+
+	private estimateCacheSize(): number {
+		try {
+			// Use lightweight metadata instead of full entry data for size estimation
+			const metadata = this.dependencies.cacheManager.getCacheMetadata();
+			const serialized = JSON.stringify(metadata);
+			return Math.round(Buffer.byteLength(serialized, "utf8") / 1024);
+		} catch {
+			return 0;
+		}
+	}
+
+	private buildCachePerformanceSummary(
+		cacheStats: ReturnType<CacheManager["getStats"]>,
+	): string[] {
+		const performanceParts: string[] = [];
+		if ("hitRate" in cacheStats) {
+			const hitRatePercent = (cacheStats.hitRate * 100).toFixed(1);
+			performanceParts.push(
+				`Hit rate: ${hitRatePercent}% (${cacheStats.hits} hits, ${cacheStats.misses} misses)`,
+			);
+		}
+		if ("evictions" in cacheStats && cacheStats.evictions > 0) {
+			performanceParts.push(`LRU evictions: ${cacheStats.evictions}`);
+		}
+		if ("lastCleanup" in cacheStats && cacheStats.lastCleanup) {
+			const lastCleanupDate = new Date(cacheStats.lastCleanup);
+			const minutesAgo = Math.round(
+				(Date.now() - lastCleanupDate.getTime()) / (60 * 1000),
+			);
+			performanceParts.push(`Last cleanup: ${minutesAgo} minutes ago`);
+		}
+		return performanceParts;
+	}
+
+	private collectCacheDiagnostics(): Record<string, unknown> {
+		const cacheStats = this.dependencies.cacheManager.getStats();
+		const performanceParts = this.buildCachePerformanceSummary(cacheStats);
+
+		const cacheData: {
+			entries: number;
+			estimated_size_kb: number;
+			keys: string[];
+			hits?: number;
+			misses?: number;
+			evictions?: number;
+			lastCleanup?: string | null;
+			maxEntries?: number;
+			hitRate?: string;
+			performance_summary?: string;
+		} = {
+			entries: cacheStats.size,
+			estimated_size_kb: this.estimateCacheSize(),
+			keys: cacheStats.keys,
+		};
+
+		// Add enhanced metrics if available
+		if ("hits" in cacheStats) {
+			cacheData.hits = cacheStats.hits;
+			cacheData.misses = cacheStats.misses;
+			cacheData.evictions = cacheStats.evictions;
+			cacheData.lastCleanup = cacheStats.lastCleanup
+				? new Date(cacheStats.lastCleanup).toISOString()
+				: null;
+			cacheData.maxEntries = cacheStats.maxEntries;
+			cacheData.hitRate = `${(cacheStats.hitRate * 100).toFixed(2)}%`;
+
+			if (performanceParts.length > 0) {
+				cacheData.performance_summary = performanceParts.join(", ");
+			}
+		}
+
+		return cacheData;
+	}
+
+	private collectDeltaDiagnostics(
+		serverKnowledgeStore: ServerKnowledgeStore,
+		deltaCache: DeltaCache,
+	): Record<string, unknown> {
+		const knowledgeStats = serverKnowledgeStore.getStats();
+		const deltaStats = deltaCache.getStats();
+		const totalDeltaRequests = deltaStats.deltaHits + deltaStats.deltaMisses;
+		const deltaHitRate =
+			totalDeltaRequests > 0 ? deltaStats.deltaHits / totalDeltaRequests : 0;
+		return {
+			knowledge_entries: Object.keys(knowledgeStats.entries).length, // Canonical count from entries
+			knowledge_stats: knowledgeStats.entries,
+			delta_hits: deltaStats.deltaHits,
+			delta_misses: deltaStats.deltaMisses,
+			delta_hit_rate: Number(deltaHitRate.toFixed(4)),
+			merge_operations: deltaStats.mergeOperations,
+			knowledge_gap_events: deltaStats.knowledgeGapEvents,
 		};
 	}
 }

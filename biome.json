@@ -1,17 +1,22 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
 	"files": {
 		"includes": [
 			"**",
-			"!**/dist",
-			"!**/coverage",
+			"!!**/dist",
+			"!!**/coverage",
 			"!**/node_modules",
-			"!**/.git",
-			"!**/.tmp",
-			"!**/.claude",
-			"!**/test-results",
+			"!!**/.git",
+			"!!**/.tmp",
+			"!!**/.claude",
+			"!!**/test-results",
 			"!**/test-results.json",
-			"!**/.vitest"
+			"!!**/.vitest"
 		]
 	},
 	"markdown": {
@@ -22,14 +27,70 @@
 		"formatter": { "enabled": false },
 		"linter": { "enabled": false }
 	},
+	"assist": {
+		"enabled": true
+	},
+	"formatter": {
+		"enabled": true
+	},
 	"linter": {
+		"enabled": true,
+		"domains": {
+			"project": "recommended",
+			"types": "recommended"
+		},
 		"rules": {
+			"preset": "recommended",
 			"complexity": {
-				"useLiteralKeys": "off"
+				"useLiteralKeys": "off",
+				"noExcessiveCognitiveComplexity": {
+					"level": "error",
+					"options": {
+						"maxAllowedComplexity": 15
+					}
+				},
+				"noExcessiveNestedCallbacks": "error"
+			},
+			"correctness": {
+				"useImportExtensions": "off",
+				"noUndeclaredDependencies": "off",
+				"noUnresolvedImports": "off",
+				"noUnusedVariables": "error",
+				"noUnusedImports": "error",
+				"noUnusedFunctionParameters": "error",
+				"noUnusedPrivateClassMembers": "error"
+			},
+			"style": {
+				"noParameterAssign": "error",
+				"useDefaultSwitchClause": "error",
+				"useThrowOnlyError": "error"
+			},
+			"suspicious": {
+				"noEvolvingTypes": "error",
+				"noImportCycles": "error",
+				"noShadow": "error",
+				"noVar": "error",
+				"useArraySortCompare": "error",
+				"useErrorMessage": "error"
 			}
 		}
 	},
 	"overrides": [
+		{
+			"includes": ["src/**/*.ts", "!**/*.test.ts", "!**/__tests__/**"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noConsole": {
+							"level": "error",
+							"options": {
+								"allow": ["error", "warn"]
+							}
+						}
+					}
+				}
+			}
+		},
 		{
 			"includes": ["**/*.test.ts", "**/__tests__/**/*.ts"],
 			"linter": {
@@ -42,7 +103,8 @@
 					},
 					"complexity": {
 						"noForEach": "off",
-						"noStaticOnlyClass": "off"
+						"noStaticOnlyClass": "off",
+						"noExcessiveNestedCallbacks": "off"
 					}
 				}
 			}

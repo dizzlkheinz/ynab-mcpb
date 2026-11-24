@@ -322,23 +322,28 @@ export class RequestLogger {
 			);
 		}
 
-		if (typeof obj === "object" && obj !== null) {
-			const sanitized: Record<string, unknown> = {};
-			for (const [key, value] of Object.entries(obj)) {
-				if (this.isSensitiveParameter(key)) {
-					sanitized[key] = "***";
-				} else if (typeof value === "string") {
-					sanitized[key] = this.sanitizeString(value);
-				} else if (typeof value === "object" && value !== null) {
-					sanitized[key] = this.sanitizeObject(value);
-				} else {
-					sanitized[key] = value;
-				}
-			}
-			return sanitized;
+		if (typeof obj !== "object" || obj === null) {
+			return obj;
 		}
 
-		return obj;
+		const sanitized: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(obj)) {
+			sanitized[key] = this.sanitizeEntryValue(key, value);
+		}
+		return sanitized;
+	}
+
+	private sanitizeEntryValue(key: string, value: unknown): unknown {
+		if (this.isSensitiveParameter(key)) {
+			return "***";
+		}
+		if (typeof value === "string") {
+			return this.sanitizeString(value);
+		}
+		if (typeof value === "object" && value !== null) {
+			return this.sanitizeObject(value);
+		}
+		return value;
 	}
 
 	/**

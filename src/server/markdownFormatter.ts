@@ -202,29 +202,40 @@ export interface TransactionsListData {
 	estimated_size_kb?: number;
 }
 
+function formatTransactionRow(
+	t: TransactionRecord,
+	includeStatus: boolean,
+): string {
+	const memo = t.memo ? t.memo.slice(0, 30) : "—";
+	const payee = t.payee_name ?? "—";
+	const cat = t.category_name ?? "—";
+	const base = `| ${t.date ?? "—"} | ${fmtAmt(t.amount)} | ${payee} | ${cat} | ${memo} |`;
+	return includeStatus ? `${base} ${t.cleared ?? "—"} |` : base;
+}
+
+function formatTransactionsPreview(data: TransactionsListData): string {
+	const previewTransactions = data.preview_transactions ?? [];
+	const lines: string[] = [
+		`## Transactions (Preview)`,
+		"",
+		`> ⚠️ ${data.message ?? "Too large to display all."}`,
+		`> ${data.suggestion ?? "Use ynab_export_transactions to save all to file."}`,
+		"",
+		`### ${data.showing ?? `Most recent ${previewTransactions.length} transactions`}`,
+		"",
+		"| Date | Amount | Payee | Category | Memo |",
+		"|------|--------|-------|----------|------|",
+	];
+	for (const t of previewTransactions) {
+		lines.push(formatTransactionRow(t, false));
+	}
+	return lines.join("\n");
+}
+
 export function formatTransactionsList(data: TransactionsListData): string {
 	// Size-limited preview mode
 	if (data.preview_transactions) {
-		const lines: string[] = [
-			`## Transactions (Preview)`,
-			"",
-			`> ⚠️ ${data.message ?? "Too large to display all."}`,
-			`> ${data.suggestion ?? "Use ynab_export_transactions to save all to file."}`,
-			"",
-			`### ${data.showing ?? `Most recent ${data.preview_transactions.length} transactions`}`,
-			"",
-			"| Date | Amount | Payee | Category | Memo |",
-			"|------|--------|-------|----------|------|",
-		];
-		for (const t of data.preview_transactions) {
-			const memo = t.memo ? t.memo.slice(0, 30) : "—";
-			const payee = t.payee_name ?? "—";
-			const cat = t.category_name ?? "—";
-			lines.push(
-				`| ${t.date ?? "—"} | ${fmtAmt(t.amount)} | ${payee} | ${cat} | ${memo} |`,
-			);
-		}
-		return lines.join("\n");
+		return formatTransactionsPreview(data);
 	}
 
 	// Normal paginated mode
@@ -236,13 +247,7 @@ export function formatTransactionsList(data: TransactionsListData): string {
 		"|------|--------|-------|----------|------|--------|",
 	];
 	for (const t of txns) {
-		const memo = t.memo ? t.memo.slice(0, 30) : "—";
-		const payee = t.payee_name ?? "—";
-		const cat = t.category_name ?? "—";
-		const status = t.cleared ?? "—";
-		lines.push(
-			`| ${t.date ?? "—"} | ${fmtAmt(t.amount)} | ${payee} | ${cat} | ${memo} | ${status} |`,
-		);
+		lines.push(formatTransactionRow(t, true));
 	}
 	lines.push(fmtPagination(data));
 	lines.push(fmtCache(data));
